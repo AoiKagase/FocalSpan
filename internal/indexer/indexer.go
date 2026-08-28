@@ -37,6 +37,8 @@ const (
 	PhaseParsing  = "parsing"
 	PhaseWriting  = "writing"
 	PhaseComplete = "complete"
+
+	extractorVersion = "generic-structured-v2"
 )
 
 func New(root string, cfg config.Config, st *store.Store, registry *extract.Registry) *Indexer {
@@ -69,6 +71,11 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 	if err != nil {
 		return model.IndexRun{}, fmt.Errorf("read indexed paths: %w", err)
 	}
+	reindexRequired := full
+	if !reindexRequired {
+		version, versionErr := i.store.Meta(ctx, "extractor_version")
+		reindexRequired = versionErr != nil || version != extractorVersion
+	}
 	current := make(map[string]bool, len(files))
 	toParse := make([]model.SourceFile, 0, len(files))
 	run := model.IndexRun{StartedAt: started.Format(time.RFC3339Nano), FilesSeen: len(files)}
@@ -79,7 +86,7 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 		if err != nil {
 			return model.IndexRun{}, fmt.Errorf("read hash for %s: %w", file.Path, err)
 		}
-		if !full && found && oldHash == file.SHA256 {
+		if !full && !reindexRequired && found && oldHash == file.SHA256 {
 			run.FilesUnchanged++
 			emit(Progress{Phase: PhaseChecking, Completed: index + 1, Total: len(files)})
 			continue
@@ -129,6 +136,7 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 	if err := i.store.ApplyIndex(ctx, deletions, updates, []store.MetaUpdate{
 		{Key: "last_revision", Value: revision},
 		{Key: "configuration_hash", Value: i.config.Hash()},
+		{Key: "extractor_version", Value: extractorVersion},
 		{Key: "last_successful_index", Value: run.CompletedAt},
 	}, run); err != nil {
 		return model.IndexRun{}, err

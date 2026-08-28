@@ -108,6 +108,32 @@ func TestIndexerReportsProgressDuringInitialIndex(t *testing.T) {
 	}
 }
 
+func TestIndexerReindexesWhenExtractorVersionChanges(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "Service.cs"), "public class Service { public bool ValidateToken(string token) { return token.Length > 0; } }\n")
+	cfg := config.Default()
+	s, err := store.Open(root, cfg.IndexDirectory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ix := New(root, cfg, s, extract.NewRegistry(generic.NewExtractor()))
+	if _, err := ix.Run(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetMeta(context.Background(), "extractor_version", "outdated"); err != nil {
+		t.Fatal(err)
+	}
+
+	run, err := ix.Run(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.FilesUnchanged != 0 || run.FilesChanged != 1 {
+		t.Fatalf("run=%+v, want unchanged=0 changed=1 after extractor update", run)
+	}
+}
+
 func TestIndexerCancellationRollsBackPendingChanges(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, "old.go"), "package old\n\nfunc Old() {}\n")
