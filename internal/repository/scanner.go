@@ -73,7 +73,7 @@ func (s *Scanner) Scan(ctx context.Context) ([]model.SourceFile, []model.Diagnos
 			continue
 		}
 		digest := sha256.Sum256(content)
-		files = append(files, model.SourceFile{Path: rel, Language: DetectLanguage(rel), Content: content, SHA256: hex.EncodeToString(digest[:]), SizeBytes: int64(len(content))})
+		files = append(files, model.SourceFile{Path: rel, Language: DetectLanguageContent(rel, content), Content: content, SHA256: hex.EncodeToString(digest[:]), SizeBytes: int64(len(content))})
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	return files, diagnostics, nil
@@ -226,6 +226,8 @@ func DetectLanguage(path string) string {
 		return "typescript"
 	case ".php":
 		return "php"
+	case ".phtml", ".php3", ".php4", ".php5", ".php7", ".php8", ".phps":
+		return "php"
 	case ".py":
 		return "python"
 	case ".rb":
@@ -241,4 +243,39 @@ func DetectLanguage(path string) string {
 	default:
 		return "text"
 	}
+}
+
+func DetectLanguageContent(path string, content []byte) string {
+	if !strings.EqualFold(filepath.Ext(path), ".inc") {
+		return DetectLanguage(path)
+	}
+	if containsPHPTag(content) {
+		return "php"
+	}
+	return "text"
+}
+
+func containsPHPTag(content []byte) bool {
+	lower := strings.ToLower(string(content))
+	for offset := 0; offset+1 < len(lower); offset++ {
+		if lower[offset:offset+2] != "<?" {
+			continue
+		}
+		rest := lower[offset+2:]
+		if strings.HasPrefix(rest, "php") {
+			if len(rest) == 3 || !isIdentifierByte(rest[3]) {
+				return true
+			}
+			continue
+		}
+		if strings.HasPrefix(rest, "xml") {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func isIdentifierByte(value byte) bool {
+	return value >= 'a' && value <= 'z' || value >= '0' && value <= '9' || value == '_'
 }

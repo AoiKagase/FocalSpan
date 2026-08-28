@@ -34,6 +34,42 @@ func TestScannerFiltersBinaryAndSecrets(t *testing.T) {
 	}
 }
 
+func TestDetectLanguageContentPHPAndIncRules(t *testing.T) {
+	tests := []struct {
+		name, path, content, want string
+	}{
+		{"php", "index.php", "", "php"},
+		{"phtml", "template.phtml", "", "php"},
+		{"uppercase-family", "legacy.PHP5", "", "php"},
+		{"inc-php", "auth.inc", "<?php echo 1;", "php"},
+		{"inc-short-echo", "view.inc", "<?= $title ?>", "php"},
+		{"inc-short-tag", "short.inc", "<? echo 1;", "php"},
+		{"inc-xml", "xml.inc", "<?xml version=\"1.0\"?>", "text"},
+		{"inc-plain", "plain.inc", "plain text", "text"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := DetectLanguageContent(tt.path, []byte(tt.content)); got != tt.want {
+				t.Fatalf("DetectLanguageContent(%q)=%q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestScannerDetectsPHPIncContent(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "auth.inc"), []byte("<?PHP echo 1;"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	files, diagnostics, err := NewScanner(root, testConfig()).Scan(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 || files[0].Language != "php" {
+		t.Fatalf("files=%+v diagnostics=%+v", files, diagnostics)
+	}
+}
+
 func testConfig() config.Config {
 	return config.Config{MaxFileBytes: 2 << 20, SecretExcludesEnabled: true, GenericChunkLines: 80, GenericChunkOverlap: 10, MaxCandidates: 200}
 }
