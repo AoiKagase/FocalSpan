@@ -75,6 +75,9 @@ func TestServerListsToolsAndHandlesStatusContextAndValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer service.Close()
+	if _, err := service.Index(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
 	server := New(service, false)
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -105,6 +108,14 @@ func TestServerListsToolsAndHandlesStatusContextAndValidation(t *testing.T) {
 	contextResult, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "code_context", Arguments: map[string]any{"query": "ValidateToken", "token_budget": 512, "mode": "outline"}})
 	if err != nil || contextResult.IsError || contextResult.StructuredContent == nil {
 		t.Fatalf("context=%+v err=%v", contextResult, err)
+	}
+	structured, err := json.Marshal(contextResult.StructuredContent)
+	if err != nil || !strings.Contains(string(structured), "token_savings") {
+		t.Fatalf("context structured=%s err=%v", structured, err)
+	}
+	summary, err := json.Marshal(contextResult.Content)
+	if err != nil || !strings.Contains(string(summary), "saved") {
+		t.Fatalf("context summary=%s err=%v", summary, err)
 	}
 	invalid, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "code_context", Arguments: map[string]any{"query": "   "}})
 	if err != nil || !invalid.IsError {

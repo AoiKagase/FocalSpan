@@ -99,11 +99,18 @@ type PackRequest struct {
 	Candidates    []RankedCandidate
 }
 
+type TokenSavings struct {
+	BaselineTokens int     `json:"baseline_tokens"`
+	SavedTokens    int     `json:"saved_tokens"`
+	SavingsRatio   float64 `json:"savings_ratio"`
+}
+
 type ContextBundle struct {
 	Query           string        `json:"query"`
 	IndexRevision   string        `json:"index_revision"`
 	BudgetTokens    int           `json:"budget_tokens"`
 	EstimatedTokens int           `json:"estimated_tokens"`
+	Savings         *TokenSavings `json:"token_savings,omitempty"`
 	Truncated       bool          `json:"truncated"`
 	Items           []ContextItem `json:"items"`
 	OmittedCount    int           `json:"omitted_count"`

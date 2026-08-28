@@ -51,7 +51,7 @@ func TestIndexStatusAndQueryJSON(t *testing.T) {
 		t.Fatalf("query code=%d stderr=%s", code, errOut.String())
 	}
 	var query map[string]any
-	if err := json.Unmarshal(out.Bytes(), &query); err != nil || query["items"] == nil {
+	if err := json.Unmarshal(out.Bytes(), &query); err != nil || query["items"] == nil || query["token_savings"] == nil {
 		t.Fatalf("query=%v err=%v output=%s", query, err, out.String())
 	}
 }
@@ -63,7 +63,7 @@ func TestQueryDebugScoresPrintsScoreDetails(t *testing.T) {
 	if code := Run(context.Background(), []string{"query", "--root", root, "--query", "ValidateToken", "--budget", "512", "--debug-scores"}, &out, &errOut); code != 0 {
 		t.Fatalf("query code=%d stderr=%s", code, errOut.String())
 	}
-	if !strings.Contains(out.String(), "score:") || !strings.Contains(out.String(), "symbol-exact") {
+	if !strings.Contains(out.String(), "score:") || !strings.Contains(out.String(), "symbol-exact") || !strings.Contains(out.String(), "saved:") {
 		t.Fatalf("debug output=%q", out.String())
 	}
 }

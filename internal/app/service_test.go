@@ -8,7 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/focalspan/focalspan/internal/budget"
 	"github.com/focalspan/focalspan/internal/config"
+	"github.com/focalspan/focalspan/internal/model"
 )
 
 func TestQueryAutoIndexesAndHonorsBudget(t *testing.T) {
@@ -46,7 +48,7 @@ func TestExpandReturnsSelfAndEmptyForUnsupportedRelation(t *testing.T) {
 		t.Fatalf("query=%+v err=%v", bundle, err)
 	}
 	expanded, err := a.Expand(context.Background(), []string{bundle.Items[0].Handle}, "self", 512)
-	if err != nil || len(expanded.Items) != 1 {
+	if err != nil || len(expanded.Items) != 1 || expanded.Savings == nil {
 		t.Fatalf("expanded=%+v err=%v", expanded, err)
 	}
 	empty, err := a.Expand(context.Background(), []string{bundle.Items[0].Handle}, "unknown", 512)
@@ -71,7 +73,7 @@ func TestImpactReturnsChangedSpanWithSyntaxOnlyDiagnostic(t *testing.T) {
 	}
 	writeAppFile(t, filepath.Join(root, "auth.go"), "package auth\n\nfunc ValidateToken() error { return ErrExpired }\n")
 	bundle, err := a.Impact(context.Background(), "", "", 512)
-	if err != nil || len(bundle.Items) == 0 || bundle.Items[0].Path != "auth.go" || len(bundle.Diagnostics) == 0 {
+	if err != nil || len(bundle.Items) == 0 || bundle.Items[0].Path != "auth.go" || bundle.Savings == nil || len(bundle.Diagnostics) == 0 {
 		t.Fatalf("bundle=%+v err=%v", bundle, err)
 	}
 }
@@ -182,6 +184,77 @@ func TestPHPFixtureQueriesReturnRelevantBoundedContext(t *testing.T) {
 				t.Fatalf("expected symbol=%q path=%q in top five: %+v", testCase.expectedSymbol, testCase.expectedPath, bundle.Items)
 			}
 		})
+	}
+}
+
+func TestQueryReportsTokenSavings(t *testing.T) {
+	root := t.TempDir()
+	content := "package auth\n\n// ValidateToken rejects expired tokens.\nfunc ValidateToken(token string) error { return nil }\n" + strings.Repeat("// additional context\n", 30)
+	writeAppFile(t, filepath.Join(root, "auth.go"), content)
+	a, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+
+	bundle, err := a.Query(context.Background(), QueryRequest{Query: "ValidateToken", TokenBudget: 512, Mode: "source"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bundle.Savings == nil {
+		t.Fatalf("expected token savings, bundle=%+v", bundle)
+	}
+	baseline := budget.NewEstimator().Estimate(content)
+	if bundle.Savings.BaselineTokens != baseline {
+		t.Fatalf("baseline=%d, want %d", bundle.Savings.BaselineTokens, baseline)
+	}
+	wantSaved := baseline - bundle.EstimatedTokens
+	if bundle.Savings.SavedTokens != wantSaved {
+		t.Fatalf("saved=%d, want %d", bundle.Savings.SavedTokens, wantSaved)
+	}
+	wantRatio := float64(wantSaved) / float64(baseline)
+	if bundle.Savings.SavingsRatio != wantRatio {
+		t.Fatalf("ratio=%v, want %v", bundle.Savings.SavingsRatio, wantRatio)
+	}
+}
+
+func TestBaselineTokensForCandidatesDeduplicatesPaths(t *testing.T) {
+	root := t.TempDir()
+	content := "package auth\n\nfunc ValidateToken() error { return nil }\n"
+	writeAppFile(t, filepath.Join(root, "auth.go"), content)
+	a, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+
+	got, err := a.baselineTokensForCandidates(context.Background(), []model.RankedCandidate{{Path: "auth.go"}, {Path: "auth.go"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := budget.NewEstimator().Estimate(content)
+	if got != want {
+		t.Fatalf("baseline=%d, want %d", got, want)
+	}
+}
+
+func TestPackWithSavingsOmitsUnreadableBaseline(t *testing.T) {
+	root := t.TempDir()
+	a, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+
+	bundle, err := a.packWithSavings(context.Background(), model.PackRequest{Query: "missing", TokenBudget: 512, Candidates: []model.RankedCandidate{{Path: "missing.go"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bundle.Savings != nil {
+		t.Fatalf("expected savings to be omitted, bundle=%+v", bundle)
+	}
+	if len(bundle.Diagnostics) != 1 || !strings.Contains(bundle.Diagnostics[0], "token savings unavailable") {
+		t.Fatalf("diagnostics=%v", bundle.Diagnostics)
 	}
 }
 

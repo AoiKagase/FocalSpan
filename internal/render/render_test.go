@@ -16,3 +16,17 @@ func TestCompactRenderContainsPathSymbolAndReasons(t *testing.T) {
 		}
 	}
 }
+
+func TestCompactRenderShowsTokenSavings(t *testing.T) {
+	bundle := model.ContextBundle{
+		BudgetTokens:    512,
+		EstimatedTokens: 320,
+		Savings:         &model.TokenSavings{BaselineTokens: 1280, SavedTokens: 960, SavingsRatio: 0.75},
+	}
+	output := Compact(bundle)
+	for _, want := range []string{"estimated: 320", "baseline: 1280", "saved: 960 tokens (75.0%)"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output=%q missing %q", output, want)
+		}
+	}
+}

@@ -66,7 +66,7 @@ func (s *Server) codeContext(ctx context.Context, _ *mcp.CallToolRequest, in Cod
 	if err != nil {
 		return nil, model.ContextBundle{}, userError(err)
 	}
-	return summaryResult(fmt.Sprintf("query: %s; items: %d; estimated: %d", in.Query, len(bundle.Items), bundle.EstimatedTokens)), bundle, nil
+	return summaryResult(withTokenSavings(fmt.Sprintf("query: %s; items: %d; estimated: %d", in.Query, len(bundle.Items), bundle.EstimatedTokens), bundle)), bundle, nil
 }
 
 func (s *Server) codeExpand(ctx context.Context, _ *mcp.CallToolRequest, in CodeExpandInput) (*mcp.CallToolResult, model.ContextBundle, error) {
@@ -77,7 +77,7 @@ func (s *Server) codeExpand(ctx context.Context, _ *mcp.CallToolRequest, in Code
 	if err != nil {
 		return nil, model.ContextBundle{}, userError(err)
 	}
-	return summaryResult(fmt.Sprintf("relation: %s; items: %d; estimated: %d", in.Relation, len(bundle.Items), bundle.EstimatedTokens)), bundle, nil
+	return summaryResult(withTokenSavings(fmt.Sprintf("relation: %s; items: %d; estimated: %d", in.Relation, len(bundle.Items), bundle.EstimatedTokens), bundle)), bundle, nil
 }
 
 func (s *Server) codeImpact(ctx context.Context, _ *mcp.CallToolRequest, in CodeImpactInput) (*mcp.CallToolResult, model.ContextBundle, error) {
@@ -85,7 +85,7 @@ func (s *Server) codeImpact(ctx context.Context, _ *mcp.CallToolRequest, in Code
 	if err != nil {
 		return nil, model.ContextBundle{}, userError(err)
 	}
-	return summaryResult(fmt.Sprintf("impact candidates: %d; estimated: %d", len(bundle.Items), bundle.EstimatedTokens)), bundle, nil
+	return summaryResult(withTokenSavings(fmt.Sprintf("impact candidates: %d; estimated: %d", len(bundle.Items), bundle.EstimatedTokens), bundle)), bundle, nil
 }
 
 func (s *Server) codeStatus(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, model.Status, error) {
@@ -98,6 +98,13 @@ func (s *Server) codeStatus(ctx context.Context, _ *mcp.CallToolRequest, _ struc
 
 func summaryResult(text string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}
+}
+
+func withTokenSavings(text string, bundle model.ContextBundle) string {
+	if bundle.Savings == nil {
+		return text
+	}
+	return fmt.Sprintf("%s; baseline: %d; saved: %d tokens (%.1f%%)", text, bundle.Savings.BaselineTokens, bundle.Savings.SavedTokens, bundle.Savings.SavingsRatio*100)
 }
 
 func userError(err error) error {

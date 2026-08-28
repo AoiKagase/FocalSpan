@@ -13,6 +13,10 @@ func Compact(bundle model.ContextBundle) string {
 	fmt.Fprintf(&b, "query: %s\n", bundle.Query)
 	fmt.Fprintf(&b, "budget: %d\n", bundle.BudgetTokens)
 	fmt.Fprintf(&b, "estimated: %d\n", bundle.EstimatedTokens)
+	if bundle.Savings != nil {
+		fmt.Fprintf(&b, "baseline: %d\n", bundle.Savings.BaselineTokens)
+		fmt.Fprintf(&b, "saved: %d tokens (%.1f%%)\n", bundle.Savings.SavedTokens, bundle.Savings.SavingsRatio*100)
+	}
 	if bundle.IndexRevision != "" {
 		fmt.Fprintf(&b, "revision: %s\n", bundle.IndexRevision)
 	}

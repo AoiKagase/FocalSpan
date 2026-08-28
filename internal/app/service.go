@@ -97,7 +97,7 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (model.ContextBun
 	if err != nil {
 		return model.ContextBundle{}, err
 	}
-	return s.pack(ctx, model.PackRequest{Query: req.Query, TokenBudget: req.TokenBudget, Mode: req.Mode, Candidates: candidates}), nil
+	return s.packWithSavings(ctx, model.PackRequest{Query: req.Query, TokenBudget: req.TokenBudget, Mode: req.Mode, Candidates: candidates})
 }
 
 func (s *Service) Status(ctx context.Context) (model.Status, error) {
@@ -123,7 +123,7 @@ func (s *Service) Expand(ctx context.Context, handles []string, relation string,
 	if err != nil {
 		return model.ContextBundle{}, err
 	}
-	return s.pack(ctx, model.PackRequest{Query: relation, TokenBudget: tokenBudget, Mode: "source", Candidates: candidates}), nil
+	return s.packWithSavings(ctx, model.PackRequest{Query: relation, TokenBudget: tokenBudget, Mode: "source", Candidates: candidates})
 }
 
 func (s *Service) Impact(ctx context.Context, base, head string, tokenBudget int) (model.ContextBundle, error) {
@@ -165,7 +165,10 @@ func (s *Service) Impact(ctx context.Context, base, head string, tokenBudget int
 		}
 	}
 	selected = rank.Rank(selected, nil)
-	bundle := s.pack(ctx, model.PackRequest{Query: "Git impact", TokenBudget: tokenBudget, Mode: "source", Candidates: selected})
+	bundle, err := s.packWithSavings(ctx, model.PackRequest{Query: "Git impact", TokenBudget: tokenBudget, Mode: "source", Candidates: selected})
+	if err != nil {
+		return model.ContextBundle{}, err
+	}
 	bundle.Diagnostics = append(bundle.Diagnostics, "impact analysis is syntax-only; unresolved calls may be omitted")
 	return bundle, nil
 }
@@ -175,6 +178,53 @@ func (s *Service) pack(ctx context.Context, req model.PackRequest) model.Context
 		req.IndexRevision = revision
 	}
 	return s.packer.Pack(req)
+}
+
+func (s *Service) packWithSavings(ctx context.Context, req model.PackRequest) (model.ContextBundle, error) {
+	bundle := s.pack(ctx, req)
+	baseline, err := s.baselineTokensForCandidates(ctx, req.Candidates)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return model.ContextBundle{}, ctxErr
+		}
+		bundle.Diagnostics = append(bundle.Diagnostics, "token savings unavailable: "+err.Error())
+		return bundle, nil
+	}
+	if baseline <= 0 {
+		return bundle, nil
+	}
+	saved := baseline - bundle.EstimatedTokens
+	bundle.Savings = &model.TokenSavings{
+		BaselineTokens: baseline,
+		SavedTokens:    saved,
+		SavingsRatio:   float64(saved) / float64(baseline),
+	}
+	return bundle, nil
+}
+
+func (s *Service) baselineTokensForCandidates(ctx context.Context, candidates []model.RankedCandidate) (int, error) {
+	estimator := budget.NewEstimator()
+	seen := make(map[string]bool)
+	total := 0
+	for _, candidate := range candidates {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		if seen[candidate.Path] {
+			continue
+		}
+		seen[candidate.Path] = true
+		full, err := repository.ContainedPath(s.Root, filepath.Join(s.Root, filepath.FromSlash(candidate.Path)))
+		if err != nil {
+			return 0, fmt.Errorf("resolve candidate %q: %w", candidate.Path, err)
+		}
+		content, err := os.ReadFile(full)
+		if err != nil {
+			return 0, fmt.Errorf("read candidate %q: %w", candidate.Path, err)
+		}
+		total += estimator.Estimate(string(content))
+	}
+	return total, nil
 }
 
 func (s *Service) BaselineTokens(ctx context.Context, query string) (int, error) {
