@@ -5,14 +5,9 @@ natural-language question, Git state, and a token budget into a small,
 deterministic bundle of ranked source spans with paths, line ranges, reasons,
 stable handles, and omission information.
 
-FocalSpan is an independent implementation. It is not Code Review Graph (CRG),
-does not copy CRG code or schemas, and does not claim CRG compatibility.
-
 ## 日本語
 
 FocalSpanは、トークン数を起点にコードのコンテキストを組み立てるコンパイラです。リポジトリ、自然言語の質問、Gitの状態、トークン予算を入力として、関連度順に並べたソース範囲を、パス・行範囲・選定理由・安定したハンドル・省略情報付きの小さなバンドルとして出力します。
-
-FocalSpanは独立した実装です。Code Review Graph（CRG）のコードやスキーマをコピーしておらず、CRG互換も主張しません。
 
 ### ビルドと対応プラットフォーム
 
