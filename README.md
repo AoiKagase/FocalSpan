@@ -8,6 +8,102 @@ stable handles, and omission information.
 FocalSpan is an independent implementation. It is not Code Review Graph (CRG),
 does not copy CRG code or schemas, and does not claim CRG compatibility.
 
+## 日本語
+
+FocalSpanは、トークン数を起点にコードのコンテキストを組み立てるコンパイラです。リポジトリ、自然言語の質問、Gitの状態、トークン予算を入力として、関連度順に並べたソース範囲を、パス・行範囲・選定理由・安定したハンドル・省略情報付きの小さなバンドルとして出力します。
+
+FocalSpanは独立した実装です。Code Review Graph（CRG）のコードやスキーマをコピーしておらず、CRG互換も主張しません。
+
+### ビルドと対応プラットフォーム
+
+必要なものはGo 1.26以降です。コアバイナリは`modernc.org/sqlite`を使用するため、`CGO_ENABLED=0`でWindows amd64、Linux amd64、macOS arm64向けにビルドできます。PythonやNode.jsのランタイムは不要で、ネットワーク通信も行いません。
+
+```text
+go build ./cmd/focalspan
+CGO_ENABLED=0 go build ./cmd/focalspan
+```
+
+生成される実行ファイルは、Windowsでは`focalspan.exe`、その他の環境では`focalspan`です。
+
+### クイックスタート
+
+リポジトリ内で次を実行します。
+
+```text
+focalspan init
+focalspan index
+focalspan query --query "where is an expired authentication token rejected?" --budget 1200
+focalspan status --json
+```
+
+`query`は、インデックスが存在しないか古い場合、既定で差分更新を行います。読み取り専用にする場合は`--no-update`を指定してください。`--root`を指定すると対象ディレクトリを明示的に固定できます。インデックス内のパスはリポジトリ相対かつスラッシュ区切りで保存されます。
+
+よく使うコマンドは次のとおりです。
+
+```text
+focalspan update --if-repo --quiet
+focalspan query --query "what calls ValidateToken?" --mode outline
+focalspan expand --handle chunk_... --relation callers --budget 1200
+focalspan impact --budget 2000 --json
+focalspan eval --cases testdata/eval/cases.jsonl --json
+focalspan doctor --json
+focalspan serve --root C:\src\example-project
+```
+
+`impact`は`--base`/`--head`を省略すると、ステージ前後の変更を使用します。関係解析は構文ベースであり、解決できない呼び出しが省略される可能性を明示します。Gitリポジトリ外で`update --if-repo --quiet`を実行しても、正常終了して何も出力しません。
+
+### 設定とインデックス
+
+`focalspan init`は、既存のファイルを上書きせずに`.focalspan.json`を作成し、`.focalspan/`を作成して`.gitignore`へ追加します。既存設定を置き換える意図がある場合だけ`init --force`を使用してください。
+
+インデックスは`.focalspan/index.db`に保存されます。ソース内容が保持されるため、保持してよい場所と権限を選んでください。CLIオプションは設定ファイルより優先され、トークン予算は256〜64000に収められます。
+
+### 検索と開示範囲
+
+Goファイルは標準ライブラリのASTを使った構文解析を行います。その他の対応プロファイルでは、C系、Python系、Markdown、フォールバックのテキストファイルを保守的に構造化抽出します。解決できない呼び出しは、事実と断定せず信頼度付きの字句関係として保持します。
+
+`outline`はメタデータとシグネチャを返し、`source`は制限されたソース本体を追加します。各項目には`expand`で利用できる安定したハンドルがあり、`self`、`parent`、`children`、`callers`、`callees`、`imports`、`references`、`tests`、`neighbors`の関係を辿れます。ヘッダーとメタデータのコストも含めてから結果を詰めるため、最終的なシリアライズ済み推定値は指定予算内に収まります。
+
+### MCP stdioサーバー
+
+Codexでは次のTOML設定でFocalSpanを登録できます。
+
+```toml
+[mcp_servers.focalspan]
+command = "C:\\Tools\\focalspan.exe"
+args = ["serve", "--root", "C:\\src\\example-project"]
+startup_timeout_sec = 30
+tool_timeout_sec = 60
+enabled_tools = ["code_context", "code_expand", "code_impact", "code_status"]
+```
+
+サーバーが公開するツールは`code_context`、`code_expand`、`code_impact`、`code_status`だけです。標準出力はMCPプロトコル専用で、ログは標準エラー出力へ送られます。サーバーは起動時のルートに束縛され、ツール入力から任意の絶対パスを受け付けません。
+
+### セキュリティとプライバシー
+
+FocalSpanはネットワーク通信、外部LLMの呼び出し、リポジトリコードの実行、ビルド・テスト・パッケージマネージャーの実行を行いません。シンボリックリンクによる脱出、パストラバーサル、バイナリ、無効なUTF-8、サイズ超過ファイル、選択ルート外のファイルは拒否されます。
+
+既定では`.env`、`.env.*`、`*.pem`、`*.key`、`id_rsa`、`id_ed25519`、`credentials.json`、`secrets.json`など、秘密情報を含みそうなパスを除外します。明示的な`include`パターンで再度含めることはできます。インデックスにはソースが保存されるため、`.focalspan/`の権限と保持期間を確認してください。
+
+### 制限とトラブルシューティング
+
+MVPではWeb UI、HTTP MCPトランスポート、埋め込み、ベクトル検索、ウォッチャー、Tree-sitter、SCIPインポート、ビルド／テストの意味解析、完全な多言語呼び出し解決には対応していません。汎用抽出は意図的に近似的で、`impact`も構文ベースです。
+
+データベースが壊れた場合や未対応スキーマの場合は、対象の`.focalspan/index.db`を削除して`focalspan index`を再実行してください。`focalspan doctor --json`では、ルート検出、Git、SQLite/FTS5、設定、MCP、権限、更新状態を確認できます。結果がない場合はインデックスを作成し、secret/excludeパターンを確認したうえで、`--mode outline --json`を試してください。
+
+### 評価と開発
+
+チェックイン済みのフィクスチャは`testdata/repos/authsample`、評価ケースは`testdata/eval/cases.jsonl`です。評価ではhit@1/3/5、シンボル／パス再現率、禁止パス違反、予算遵守、推定値の中央値、削減率、繰り返し実行時の決定性を確認します。
+
+```text
+go test ./...
+go test -race ./...
+go vet ./...
+focalspan eval --root testdata/repos/authsample --cases testdata/eval/cases.jsonl --json
+```
+
+プロジェクト規則とパッケージ境界は`AGENTS.md`、設計・ロードマップ・評価結果の解釈は`docs/design.md`と`docs/evaluation.md`に記載しています。
+
 ## MVP architecture
 
 ```text
