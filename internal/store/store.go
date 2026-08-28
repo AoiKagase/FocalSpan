@@ -27,6 +27,16 @@ type Store struct {
 	mu     sync.RWMutex
 }
 
+type FileUpdate struct {
+	File       model.SourceFile
+	Extraction model.Extraction
+}
+
+type MetaUpdate struct {
+	Key   string
+	Value string
+}
+
 func Open(root, indexDir string) (*Store, error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
@@ -110,66 +120,73 @@ func (s *Store) ReplaceFile(ctx context.Context, file model.SourceFile, extracti
 	if err != nil {
 		return fmt.Errorf("begin replace file: %w", err)
 	}
-	rollback := func(e error) error { _ = tx.Rollback(); return e }
+	if err := s.replaceFileTx(ctx, tx, file, extraction); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit replace file: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) replaceFileTx(ctx context.Context, tx *sql.Tx, file model.SourceFile, extraction model.Extraction) error {
 	var oldID int64
-	err = tx.QueryRowContext(ctx, `SELECT id FROM files WHERE path = ?`, file.Path).Scan(&oldID)
+	err := tx.QueryRowContext(ctx, `SELECT id FROM files WHERE path = ?`, file.Path).Scan(&oldID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return rollback(fmt.Errorf("find file: %w", err))
+		return fmt.Errorf("find file: %w", err)
 	}
 	if err == nil {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM chunk_fts WHERE handle IN (SELECT handle FROM chunks WHERE file_id = ?)`, oldID); err != nil {
-			return rollback(fmt.Errorf("delete FTS rows: %w", err))
+			return fmt.Errorf("delete FTS rows: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM relations WHERE from_handle IN (SELECT handle FROM symbols WHERE file_id = ?) OR to_handle IN (SELECT handle FROM symbols WHERE file_id = ?)`, oldID, oldID); err != nil {
-			return rollback(fmt.Errorf("delete relations: %w", err))
+			return fmt.Errorf("delete relations: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM diagnostics WHERE file_id = ?`, oldID); err != nil {
-			return rollback(fmt.Errorf("delete diagnostics: %w", err))
+			return fmt.Errorf("delete diagnostics: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM chunks WHERE file_id = ?`, oldID); err != nil {
-			return rollback(fmt.Errorf("delete chunks: %w", err))
+			return fmt.Errorf("delete chunks: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM symbols WHERE file_id = ?`, oldID); err != nil {
-			return rollback(fmt.Errorf("delete symbols: %w", err))
+			return fmt.Errorf("delete symbols: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM files WHERE id = ?`, oldID); err != nil {
-			return rollback(fmt.Errorf("delete file: %w", err))
+			return fmt.Errorf("delete file: %w", err)
 		}
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	res, err := tx.ExecContext(ctx, `INSERT INTO files(path, language, sha256, size_bytes, mtime_ns, extractor, indexed_at, diagnostics_count) VALUES(?, ?, ?, ?, 0, ?, ?, ?)`, file.Path, file.Language, file.SHA256, file.SizeBytes, "", now, len(extraction.Diagnostics))
 	if err != nil {
-		return rollback(fmt.Errorf("insert file: %w", err))
+		return fmt.Errorf("insert file: %w", err)
 	}
 	fileID, err := res.LastInsertId()
 	if err != nil {
-		return rollback(fmt.Errorf("file id: %w", err))
+		return fmt.Errorf("file id: %w", err)
 	}
 	for _, symbol := range extraction.Symbols {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO symbols(handle, file_id, kind, name, qualified_name, signature, start_line, end_line, start_byte, end_byte, parent_handle, confidence) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, symbol.Handle, fileID, symbol.Kind, symbol.Name, symbol.QualifiedName, symbol.Signature, symbol.StartLine, symbol.EndLine, symbol.StartByte, symbol.EndByte, nullable(symbol.ParentHandle), symbol.Confidence); err != nil {
-			return rollback(fmt.Errorf("insert symbol: %w", err))
+			return fmt.Errorf("insert symbol: %w", err)
 		}
 	}
 	for _, chunk := range extraction.Chunks {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO chunks(handle, file_id, symbol_handle, kind, symbol_name, signature, start_line, end_line, start_byte, end_byte, content, content_hash, estimated_tokens) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, chunk.Handle, fileID, nullable(chunk.SymbolHandle), chunk.Kind, chunk.SymbolName, chunk.Signature, chunk.StartLine, chunk.EndLine, chunk.StartByte, chunk.EndByte, chunk.Content, chunk.ContentHash, chunk.EstimatedTokens); err != nil {
-			return rollback(fmt.Errorf("insert chunk: %w", err))
+			return fmt.Errorf("insert chunk: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO chunk_fts(path, symbol_name, signature, content, handle) VALUES(?, ?, ?, ?, ?)`, file.Path, chunk.SymbolName, chunk.Signature, chunk.Content, chunk.Handle); err != nil {
-			return rollback(fmt.Errorf("insert FTS row: %w", err))
+			return fmt.Errorf("insert FTS row: %w", err)
 		}
 	}
 	for _, relation := range extraction.Relations {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO relations(from_handle, to_handle, unresolved_to, kind, confidence, source) VALUES(?, ?, ?, ?, ?, ?)`, relation.FromHandle, nullable(relation.ToHandle), nullable(relation.UnresolvedTo), relation.Kind, relation.Confidence, relation.Source); err != nil {
-			return rollback(fmt.Errorf("insert relation: %w", err))
+			return fmt.Errorf("insert relation: %w", err)
 		}
 	}
 	for _, diagnostic := range extraction.Diagnostics {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO diagnostics(file_id, level, code, message, created_at) VALUES(?, ?, ?, ?, ?)`, fileID, diagnostic.Level, diagnostic.Code, diagnostic.Message, now); err != nil {
-			return rollback(fmt.Errorf("insert diagnostic: %w", err))
+			return fmt.Errorf("insert diagnostic: %w", err)
 		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit replace file: %w", err)
 	}
 	return nil
 }
@@ -181,11 +198,18 @@ func (s *Store) DeleteFile(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
+	if err := s.deleteFileTx(ctx, tx, path); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *Store) deleteFileTx(ctx context.Context, tx *sql.Tx, path string) error {
 	var id int64
 	if err := tx.QueryRowContext(ctx, `SELECT id FROM files WHERE path = ?`, path).Scan(&id); errors.Is(err, sql.ErrNoRows) {
-		return tx.Commit()
+		return nil
 	} else if err != nil {
-		_ = tx.Rollback()
 		return err
 	}
 	statements := []string{
@@ -199,11 +223,42 @@ func (s *Store) DeleteFile(ctx context.Context, path string) error {
 			args = []any{id, id}
 		}
 		if _, err := tx.ExecContext(ctx, statement, args...); err != nil {
-			_ = tx.Rollback()
 			return err
 		}
 	}
-	return tx.Commit()
+	return nil
+}
+
+func (s *Store) ApplyIndex(ctx context.Context, deletions []string, updates []FileUpdate, metadata []MetaUpdate, run model.IndexRun) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin index update: %w", err)
+	}
+	rollback := func(e error) error { _ = tx.Rollback(); return e }
+	for _, path := range deletions {
+		if err := s.deleteFileTx(ctx, tx, path); err != nil {
+			return rollback(fmt.Errorf("delete stale file %s: %w", path, err))
+		}
+	}
+	for _, update := range updates {
+		if err := s.replaceFileTx(ctx, tx, update.File, update.Extraction); err != nil {
+			return rollback(fmt.Errorf("store %s: %w", update.File.Path, err))
+		}
+	}
+	for _, update := range metadata {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, update.Key, update.Value); err != nil {
+			return rollback(fmt.Errorf("set metadata %s: %w", update.Key, err))
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO index_runs(started_at, completed_at, files_seen, files_added, files_changed, files_unchanged, files_deleted, parse_failures, duration_ms, revision) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, run.StartedAt, run.CompletedAt, run.FilesSeen, run.FilesAdded, run.FilesChanged, run.FilesUnchanged, run.FilesDeleted, run.ParseFailures, run.DurationMS, run.Revision); err != nil {
+		return rollback(fmt.Errorf("record index run: %w", err))
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit index update: %w", err)
+	}
+	return nil
 }
 
 func nullable(value string) any {
@@ -303,13 +358,23 @@ UNION SELECT to_handle FROM relations
 WHERE from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) AND kind = 'tests'
 )`)
 			args = []any{handle, handle, handle, handle, handle, handle, handle, handle}
-		case "imports", "references", "neighbors":
+		case "neighbors":
 			query = candidateQuery(`c.symbol_handle IN (SELECT from_handle FROM relations WHERE to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) OR from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) UNION SELECT to_handle FROM relations WHERE from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) OR to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?))`)
 			args = []any{handle, handle, handle, handle, handle, handle, handle, handle}
-			if relation != "neighbors" {
-				query = candidateQuery(`c.symbol_handle IN (SELECT from_handle FROM relations WHERE to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) OR from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) UNION SELECT to_handle FROM relations WHERE from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) OR to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) UNION SELECT from_handle FROM relations WHERE kind = ? AND unresolved_to IN (SELECT name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) UNION SELECT qualified_name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) UNION SELECT f.path FROM files f JOIN symbols s ON s.file_id = f.id WHERE s.handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)))`)
-				args = []any{handle, handle, handle, handle, handle, handle, handle, handle, relation, handle, handle, handle, handle, handle, handle}
-			}
+		case "imports", "references":
+			query = candidateQuery(`c.symbol_handle IN (
+SELECT from_handle FROM relations
+WHERE kind = ? AND to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+UNION SELECT to_handle FROM relations
+WHERE kind = ? AND from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+UNION SELECT from_handle FROM relations
+WHERE kind = ? AND unresolved_to IN (
+SELECT name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+UNION SELECT qualified_name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+UNION SELECT f.path FROM files f JOIN symbols s ON s.file_id = f.id
+WHERE s.handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+))`)
+			args = []any{relation, handle, handle, relation, handle, handle, relation, handle, handle, handle, handle, handle, handle}
 		}
 		rows, err := s.db.QueryContext(ctx, query, args...)
 		if err != nil {

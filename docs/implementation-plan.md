@@ -229,11 +229,27 @@
 
 ## Verification checklist
 
-- [ ] `go test ./...`
-- [ ] `go test -race ./...`
-- [ ] `go vet ./...`
-- [ ] `CGO_ENABLED=0 go build ./cmd/focalspan`
-- [ ] `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/focalspan`
-- [ ] `GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/focalspan`
-- [ ] `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/focalspan`
-- [ ] fixture evaluation meets the acceptance thresholds or is reported as incomplete.
+### Completed PHP structural extraction workstream
+
+- [x] Detect `.php`, `.phtml`, `.php3` through `.php8`, `.phps`, and
+  content-aware PHP `.inc` files without executing PHP or Composer.
+- [x] Add stateful PHP lexing, namespace-aware declarations/members, stable
+  symbol and span-aware chunk handles, mixed HTML/PHP fallback chunks, and
+  bounded malformed-source recovery.
+- [x] Add `contains`, `imports`, `references`, `calls`, and `tests` relations,
+  local alias resolution, safe include folding, PHPUnit classification, and
+  unresolved store matching without a schema migration.
+- [x] Register PHP between Go AST and generic extraction; add fixture/eval
+  coverage for PHP, `.inc`, `.phtml`, relations, and deterministic packing.
+- [x] Verify with `go test ./internal/extract/php ./internal/extract`,
+  `go test ./internal/extract ./internal/store ./internal/app`, and the PHP
+  fixture evaluation under `testdata/repos/phpsample`.
+
+- [x] `go test ./...`
+- [ ] `go test -race ./...` (環境未検証: `CGO_ENABLED=1` では `gcc` が未導入)
+- [x] `go vet ./...`
+- [x] `CGO_ENABLED=0 go build ./cmd/focalspan`
+- [x] `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/focalspan`
+- [x] `GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/focalspan`
+- [x] `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/focalspan`
+- [x] fixture evaluation meets the acceptance thresholds; PHP and Go results are recorded in `docs/evaluation.md`.

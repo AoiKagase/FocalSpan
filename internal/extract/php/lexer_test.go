@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/focalspan/focalspan/internal/model"
 )
@@ -84,6 +85,22 @@ func TestLexHonorsCancellation(t *testing.T) {
 		t.Fatalf("err=%v, want context cancellation", err)
 	}
 }
+
+func TestLexerStopsLongCommentScanWhenContextIsCanceled(t *testing.T) {
+	content := []byte("/*" + strings.Repeat("x", 1<<20))
+	lexer := &lexer{ctx: cancelOnFirstCheckContext{}, content: content, line: 1, inPHP: true}
+	lexer.scanPHP()
+	if lexer.offset >= len(content) {
+		t.Fatalf("comment scan consumed canceled input: offset=%d length=%d", lexer.offset, len(content))
+	}
+}
+
+type cancelOnFirstCheckContext struct{}
+
+func (cancelOnFirstCheckContext) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (cancelOnFirstCheckContext) Done() <-chan struct{}       { return nil }
+func (cancelOnFirstCheckContext) Err() error                  { return context.Canceled }
+func (cancelOnFirstCheckContext) Value(any) any               { return nil }
 
 func assertTokenKindText(t *testing.T, tokens []Token, kind Kind, text string) {
 	t.Helper()

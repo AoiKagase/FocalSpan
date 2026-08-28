@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/focalspan/focalspan/internal/model"
 )
@@ -13,9 +14,10 @@ import (
 func TestPHPExtractorCreatesCanonicalSymbolsAndSeparateChunks(t *testing.T) {
 	content := `<?php
 namespace App\Auth;
+use PHPUnit\Framework\TestCase;
 
 #[Service]
-readonly class TokenService extends BaseService implements TokenValidator
+readonly class TokenService extends TestCase implements TokenValidator
 {
     private string|int $token;
     public const TTL = 60;
@@ -160,6 +162,82 @@ func TestPHPExtractorIsDeterministic(t *testing.T) {
 	}
 }
 
+func TestPHPExtractorAssignsDistinctHandlesToRepeatedFallbackChunks(t *testing.T) {
+	content := "<?php\nclass First {}\nclass Second {}\n"
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "repeated.php", Language: "php", Content: []byte(content)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := make(map[string]bool)
+	for _, chunk := range got.Chunks {
+		if seen[chunk.Handle] {
+			t.Fatalf("duplicate chunk handle %q in %+v", chunk.Handle, got.Chunks)
+		}
+		seen[chunk.Handle] = true
+	}
+}
+
+func TestPHPExtractorDoesNotUseFilePathAsFallbackSymbol(t *testing.T) {
+	content := "<?php\nclass First {}\n"
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "src/First.php", Language: "php", Content: []byte(content)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := requireSymbol(t, got.Symbols, "src/First.php", "file")
+	for _, chunk := range got.Chunks {
+		if chunk.SymbolHandle == file.Handle && chunk.SymbolName != "" {
+			t.Fatalf("file-owned fallback chunk has symbol name %q: %+v", chunk.SymbolName, chunk)
+		}
+	}
+}
+
+func TestPHPExtractorUsesBoundedOverlappingFallbackWindows(t *testing.T) {
+	content := "<?php\n" + strings.Repeat("echo 1;\n", 170)
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "procedural.php", Language: "php", Content: []byte(content)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	procedural := make([]model.Chunk, 0)
+	for _, chunk := range got.Chunks {
+		if chunk.Kind == "procedural" {
+			procedural = append(procedural, chunk)
+		}
+	}
+	if len(procedural) < 3 {
+		t.Fatalf("procedural fallback windows=%+v", procedural)
+	}
+	for index, chunk := range procedural {
+		if lines := chunk.EndLine - chunk.StartLine + 1; lines > 80 {
+			t.Fatalf("fallback window %d has %d lines: %+v", index, lines, chunk)
+		}
+		if index > 0 && procedural[index].StartLine > procedural[index-1].EndLine-10 {
+			t.Fatalf("fallback windows do not overlap by ten lines: previous=%+v current=%+v", procedural[index-1], chunk)
+		}
+	}
+}
+
+func TestPHPFallbackMakesProgressPastAnOversizedToken(t *testing.T) {
+	content := strings.Repeat("heredoc body\n", 200)
+	builder := &phpBuilder{
+		ctx:    context.Background(),
+		file:   model.SourceFile{Path: "oversized.php", Language: "php", Content: []byte(content)},
+		parsed: parseResult{Tokens: []Token{{Kind: KindHeredoc, Text: content, StartByte: 0, EndByte: len(content), StartLine: 1, EndLine: 200}}},
+	}
+	done := make(chan struct{})
+	go func() {
+		builder.appendFallbackRange(0, 0, "procedural")
+		close(done)
+	}()
+	select {
+	case <-done:
+		if len(builder.result.Chunks) != 1 {
+			t.Fatalf("oversized token chunks=%+v", builder.result.Chunks)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("fallback range did not make progress past oversized token")
+	}
+}
+
 func TestPHPExtractorBuildsAliasesCallsReferencesAndIncludes(t *testing.T) {
 	content := `<?php
 namespace App\Auth;
@@ -224,6 +302,51 @@ function normalize_token(string $value): string { return $value; }
 	}
 }
 
+func TestPHPExtractorMakesRelativeIncludesSourceRelativeAndRejectsAbsolutePaths(t *testing.T) {
+	content := `<?php
+namespace App\Auth;
+
+final class Loader {
+    public function run(): void {
+        include 'bootstrap.inc';
+        require 'C:\\secrets\\bootstrap.inc';
+        require '\\\\server\\share\\bootstrap.inc';
+    }
+}
+`
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "src/Auth/Loader.php", Language: "php", Content: []byte(content)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := requireSymbol(t, got.Symbols, "App\\Auth\\Loader::run", "method")
+	if !hasUnresolvedRelation(got.Relations, run.Handle, "src/Auth/bootstrap.inc", "imports") {
+		t.Fatalf("relative include missing: %+v", got.Relations)
+	}
+	for _, relation := range got.Relations {
+		if relation.FromHandle != run.Handle || relation.Kind != "imports" {
+			continue
+		}
+		target := strings.ReplaceAll(relation.UnresolvedTo, "\\", "/")
+		if strings.HasPrefix(target, "c:/") || strings.HasPrefix(target, "//") {
+			t.Fatalf("absolute include was accepted: %+v", relation)
+		}
+	}
+}
+
+func TestPHPExtractorRecordsTopLevelIncludesOnFileOwner(t *testing.T) {
+	content := `<?php
+include 'includes/bootstrap.inc';
+`
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "src/Entry.php", Language: "php", Content: []byte(content)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := requireSymbol(t, got.Symbols, "src/Entry.php", "file")
+	if !hasUnresolvedRelation(got.Relations, file.Handle, "src/includes/bootstrap.inc", "imports") {
+		t.Fatalf("top-level include missing: %+v", got.Relations)
+	}
+}
+
 func TestPHPExtractorBuildsTypeAndAttributeReferences(t *testing.T) {
 	content := `<?php
 namespace App;
@@ -232,6 +355,7 @@ class Token {}
 class Base {}
 interface Contract {}
 class Result {}
+class Entity {}
 
 #[Entity(Token::class)]
 class Handler extends Base implements Contract {
@@ -250,6 +374,7 @@ class Handler extends Base implements Contract {
 	base := requireSymbol(t, got.Symbols, "App\\Base", "class")
 	contract := requireSymbol(t, got.Symbols, "App\\Contract", "interface")
 	result := requireSymbol(t, got.Symbols, "App\\Result", "class")
+	entity := requireSymbol(t, got.Symbols, "App\\Entity", "class")
 	handler := requireSymbol(t, got.Symbols, "App\\Handler", "class")
 	property := requireSymbol(t, got.Symbols, "App\\Handler::token", "property")
 	method := requireSymbol(t, got.Symbols, "App\\Handler::run", "method")
@@ -258,6 +383,7 @@ class Handler extends Base implements Contract {
 		name     string
 	}{
 		{handler, token, "class attribute"},
+		{handler, entity, "attribute name"},
 		{handler, base, "extends"},
 		{handler, contract, "implements"},
 		{property, token, "property type"},
@@ -296,6 +422,95 @@ class TokenServiceTest extends TestCase {
 	}
 	if !hasRelation(got.Relations, first.Handle, validate.Handle, "tests") || !hasRelation(got.Relations, second.Handle, validate.Handle, "tests") {
 		t.Fatalf("test relations missing: %+v", got.Relations)
+	}
+}
+
+func TestPHPExtractorLimitsTestClassificationToPHPUnitClassesAndExactAttributes(t *testing.T) {
+	content := `<?php
+namespace App\Tests;
+use PHPUnit\Framework\TestCase;
+
+class PlainClass {
+    public function testLooksLikeATest(): void {}
+    #[Test]
+    public function attributeLooksLikeATest(): void {}
+}
+
+	class RealTest extends TestCase {
+	    public function testByName(): void {}
+	    #[NotATest]
+	    public function namedWithWrongAttribute(): void {}
+	    #[Test]
+	    public function namedByAttribute(): void {}
+}
+`
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "tests/classification.php", Language: "php", Content: []byte(content)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{
+		"App\\Tests\\PlainClass::testLooksLikeATest",
+		"App\\Tests\\PlainClass::attributeLooksLikeATest",
+		"App\\Tests\\RealTest::namedWithWrongAttribute",
+	} {
+		requireSymbol(t, got.Symbols, name, "method")
+	}
+	for _, name := range []string{
+		"App\\Tests\\RealTest::testByName",
+		"App\\Tests\\RealTest::namedByAttribute",
+	} {
+		requireSymbol(t, got.Symbols, name, "test")
+	}
+}
+
+func TestPHPExtractorResolvesNamespacedAndAbsoluteCallsWithoutAmbiguity(t *testing.T) {
+	content := `<?php
+namespace App\Other;
+function helper(): void {}
+final class Utility {
+    public static function ping(): void {}
+}
+
+namespace App\Feature;
+function helper(): void {}
+final class Utility {
+    public static function ping(): void {}
+}
+function caller(): void {
+    helper();
+    \App\Feature\helper();
+    App\Feature\Utility::ping();
+    \App\Feature\Utility::ping();
+}
+function absoluteCaller(): void {
+    \App\Other\helper();
+    \App\Other\Utility::ping();
+}
+`
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "calls.php", Language: "php", Content: []byte(content)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	caller := requireSymbol(t, got.Symbols, "App\\Feature\\caller", "function")
+	absoluteCaller := requireSymbol(t, got.Symbols, "App\\Feature\\absoluteCaller", "function")
+	featureHelper := requireSymbol(t, got.Symbols, "App\\Feature\\helper", "function")
+	utilityPing := requireSymbol(t, got.Symbols, "App\\Feature\\Utility::ping", "method")
+	otherHelper := requireSymbol(t, got.Symbols, "App\\Other\\helper", "function")
+	otherUtilityPing := requireSymbol(t, got.Symbols, "App\\Other\\Utility::ping", "method")
+	if !hasRelation(got.Relations, caller.Handle, featureHelper.Handle, "calls") {
+		t.Fatalf("namespaced calls missing: %+v", got.Relations)
+	}
+	if !hasRelation(got.Relations, caller.Handle, utilityPing.Handle, "calls") {
+		t.Fatalf("qualified static calls missing: %+v", got.Relations)
+	}
+	if !hasRelation(got.Relations, absoluteCaller.Handle, otherHelper.Handle, "calls") || !hasRelation(got.Relations, absoluteCaller.Handle, otherUtilityPing.Handle, "calls") {
+		t.Fatalf("absolute calls missing: %+v", got.Relations)
+	}
+	if hasRelation(got.Relations, caller.Handle, otherHelper.Handle, "calls") || hasRelation(got.Relations, caller.Handle, otherUtilityPing.Handle, "calls") {
+		t.Fatalf("qualified calls leaked into bare caller: %+v", got.Relations)
+	}
+	if hasRelation(got.Relations, caller.Handle, otherHelper.Handle, "calls") {
+		t.Fatalf("ambiguous bare call resolved to wrong namespace: %+v", got.Relations)
 	}
 }
 

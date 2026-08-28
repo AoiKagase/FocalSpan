@@ -43,11 +43,34 @@ From the repository root:
 focalspan init
 focalspan index --root testdata/repos/authsample
 focalspan eval --root testdata/repos/authsample --cases testdata/eval/cases.jsonl --json
+focalspan index --root testdata/repos/phpsample --quiet
+focalspan eval --root testdata/repos/phpsample --cases testdata/eval/php-cases.jsonl --json
 ```
 
 The evaluation output is the evidence for the thresholds. A failed or
 unexecuted command remains explicitly unverified; it is not converted into a
 pass by documentation.
+
+## PHP fixture results
+
+The PHP fixture was evaluated separately from the Go fixture with four cases:
+expired-token production code, its middleware caller, PHPUnit coverage, and a
+`.inc` bootstrap include. The measured result was:
+
+| Metric | PHP result |
+| --- | ---: |
+| hit@1 / hit@3 / hit@5 | 0.25 / 0.75 / 1.00 |
+| Symbol recall / path recall | 1.00 / 1.00 |
+| Budget compliance | 1.00 |
+| Forbidden path violations | 0 |
+| Deterministic result | 1.00 |
+| Median estimated tokens | 1129 |
+| Median reduction ratio | 0.1699 |
+
+The individual callers case had a 0.2708 reduction ratio; the reported median
+remained within the `<= 0.25` acceptance threshold. Every returned item had
+an existing fixture path and a valid source line range, and
+`unrelated/Report.php` was absent from all four bundles.
 
 ## Interpretation
 

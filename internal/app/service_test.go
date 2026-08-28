@@ -5,7 +5,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/focalspan/focalspan/internal/config"
 )
 
 func TestQueryAutoIndexesAndHonorsBudget(t *testing.T) {
@@ -77,6 +80,7 @@ func TestAppIndexesPHPAndIncFilesWithPHPExtractor(t *testing.T) {
 	root := t.TempDir()
 	writeAppFile(t, filepath.Join(root, "Service.php"), "<?php\nnamespace App;\nclass Service { public function run(): void {} }\n")
 	writeAppFile(t, filepath.Join(root, "bootstrap.inc"), "<?php\nfunction bootstrap(): void {}\n")
+	writeAppFile(t, filepath.Join(root, "template.phtml"), "<main><?= htmlspecialchars($title) ?></main><?php function render(): void {} ?>\n")
 	a, err := New(root)
 	if err != nil {
 		t.Fatal(err)
@@ -91,18 +95,93 @@ func TestAppIndexesPHPAndIncFilesWithPHPExtractor(t *testing.T) {
 	}
 	seenPaths := map[string]bool{}
 	seenSymbols := map[string]bool{}
+	seenTemplate := false
 	for _, candidate := range candidates {
 		if candidate.Language != "php" {
 			t.Fatalf("candidate language=%q: %+v", candidate.Language, candidate)
 		}
 		seenPaths[candidate.Path] = true
 		seenSymbols[candidate.Symbol] = true
+		if candidate.Path == "template.phtml" {
+			seenTemplate = true
+			if candidate.Language != "php" {
+				t.Fatalf("mixed PHP template language=%q: %+v", candidate.Language, candidate)
+			}
+		}
 		if candidate.StartLine < 1 || candidate.EndLine < candidate.StartLine {
 			t.Fatalf("invalid candidate span=%+v", candidate)
 		}
 	}
-	if !seenPaths["Service.php"] || !seenPaths["bootstrap.inc"] || !seenSymbols["Service"] || !seenSymbols["bootstrap"] {
+	if !seenPaths["Service.php"] || !seenPaths["bootstrap.inc"] || !seenSymbols["Service"] || !seenSymbols["bootstrap"] || !seenTemplate {
 		t.Fatalf("PHP index paths=%v symbols=%v candidates=%+v", seenPaths, seenSymbols, candidates)
+	}
+}
+
+func TestPHPFixtureQueriesReturnRelevantBoundedContext(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", "..", "testdata", "repos", "phpsample"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name           string
+		query          string
+		expectedSymbol string
+		expectedPath   string
+	}{
+		{name: "expired token", query: "where is an expired PHP authentication token rejected?", expectedSymbol: "validateToken", expectedPath: "src/Auth/TokenService.php"},
+		{name: "token callers", query: "what calls TokenService validateToken?", expectedSymbol: "validateToken", expectedPath: "src/Http/AuthMiddleware.php"},
+		{name: "expired token tests", query: "what tests cover expired PHP tokens?", expectedSymbol: "testExpiredTokenIsRejected", expectedPath: "tests/TokenServiceTest.php"},
+		{name: "bootstrap include", query: "which include file bootstraps authentication?", expectedSymbol: "bootstrap", expectedPath: "includes/bootstrap.inc"},
+	}
+	cfg := config.Default()
+	cfg.IndexDirectory = ".focalspan-php-test"
+	a, err := NewWithConfig(root, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+	t.Cleanup(func() { _ = os.RemoveAll(filepath.Join(root, cfg.IndexDirectory)) })
+	if _, err := a.Index(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			bundle, err := a.Query(context.Background(), QueryRequest{Query: testCase.query, TokenBudget: 1200, NoUpdate: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(bundle.Items) == 0 {
+				t.Fatalf("items=%d bundle=%+v", len(bundle.Items), bundle)
+			}
+			items := bundle.Items
+			if len(items) > 5 {
+				items = items[:5]
+			}
+			foundSymbol, foundPath := false, false
+			for _, item := range items {
+				if item.Path == "unrelated/Report.php" {
+					t.Fatalf("forbidden unrelated item=%+v", item)
+				}
+				fullPath := filepath.Join(root, filepath.FromSlash(item.Path))
+				content, err := os.ReadFile(fullPath)
+				if err != nil {
+					t.Fatalf("item path=%q: %v", item.Path, err)
+				}
+				lineCount := 1 + strings.Count(string(content), "\n")
+				if item.StartLine < 1 || item.EndLine < item.StartLine || item.EndLine > lineCount {
+					t.Fatalf("invalid line range item=%+v lines=%d", item, lineCount)
+				}
+				if item.Symbol == testCase.expectedSymbol {
+					foundSymbol = true
+				}
+				if item.Path == testCase.expectedPath {
+					foundPath = true
+				}
+			}
+			if !foundSymbol || !foundPath {
+				t.Fatalf("expected symbol=%q path=%q in top five: %+v", testCase.expectedSymbol, testCase.expectedPath, bundle.Items)
+			}
+		})
 	}
 }
 

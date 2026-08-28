@@ -93,7 +93,7 @@ user scopeのCodex CLIのoptionや出力はversionによって異なるため、
 
 ### 検索と開示範囲
 
-Goファイルは標準ライブラリのASTを使った構文解析を行います。その他の対応プロファイルでは、C系、Python系、Markdown、フォールバックのテキストファイルを保守的に構造化抽出します。解決できない呼び出しは、事実と断定せず信頼度付きの字句関係として保持します。
+Goファイルは標準ライブラリのASTを使った構文解析を行います。PHPは第一級の構文抽出として、namespace、use、class/interface/trait/enum、function/method、property/constant、include/require、PHPUnitテストを扱います。`.inc`は内容依存でPHPタグがある場合だけPHPとして検出し、`.phtml`などの混在HTML/PHPも検索できます。完全な型推論、動的ディスパッチ、サービスコンテナ解決は行わず、ComposerやPHPランタイムも実行しません。その他の対応プロファイルでは、C系、Python系、Markdown、フォールバックのテキストファイルを保守的に構造化抽出します。解決できない呼び出しは、事実と断定せず信頼度付きの字句関係として保持します。
 
 `outline`はメタデータとシグネチャを返し、`source`は制限されたソース本体を追加します。各項目には`expand`で利用できる安定したハンドルがあり、`self`、`parent`、`children`、`callers`、`callees`、`imports`、`references`、`tests`、`neighbors`の関係を辿れます。ヘッダーとメタデータのコストも含めてから結果を詰めるため、最終的なシリアライズ済み推定値は指定予算内に収まります。
 
@@ -126,13 +126,14 @@ MVPではWeb UI、HTTP MCPトランスポート、埋め込み、ベクトル検
 
 ### 評価と開発
 
-チェックイン済みのフィクスチャは`testdata/repos/authsample`、評価ケースは`testdata/eval/cases.jsonl`です。評価ではhit@1/3/5、シンボル／パス再現率、禁止パス違反、予算遵守、推定値の中央値、削減率、繰り返し実行時の決定性を確認します。
+チェックイン済みのフィクスチャは`testdata/repos/authsample`と`testdata/repos/phpsample`、評価ケースはそれぞれ`testdata/eval/cases.jsonl`と`testdata/eval/php-cases.jsonl`です。評価ではhit@1/3/5、シンボル／パス再現率、禁止パス違反、予算遵守、推定値の中央値、削減率、繰り返し実行時の決定性を確認します。PHP fixtureでは、namespace/use、クラス・メソッド、PHPUnitテスト、`.inc` include、混在HTML/PHPの検索を確認します。
 
 ```text
 go test ./...
 go test -race ./...
 go vet ./...
 focalspan eval --root testdata/repos/authsample --cases testdata/eval/cases.jsonl --json
+focalspan eval --root testdata/repos/phpsample --cases testdata/eval/php-cases.jsonl --json
 ```
 
 プロジェクト規則とパッケージ境界は`AGENTS.md`、設計・ロードマップ・評価結果の解釈は`docs/design.md`と`docs/evaluation.md`に記載しています。
@@ -265,10 +266,16 @@ are clamped to 256..64000.
 
 ## Search and disclosure
 
-Go files use syntax-only standard-library AST extraction. Other supported
-profiles use conservative structural extraction for C-like, Python-like,
-Markdown, and fallback text files. Calls that cannot be resolved are retained
-as lexical relations with confidence rather than being asserted as facts.
+Go files use syntax-only standard-library AST extraction. PHP has a first-class
+structural extractor for namespaces, imports, class-like declarations,
+functions/methods, properties/constants, include/require, and PHPUnit tests.
+`.inc` is detected as PHP only when its content contains a PHP opening tag;
+mixed HTML/PHP such as `.phtml` remains searchable. Complete type inference,
+dynamic dispatch, and service-container resolution are not provided, and
+Composer or the PHP runtime is never executed. Other supported profiles use
+conservative structural extraction for C-like, Python-like, Markdown, and
+fallback text files. Calls that cannot be resolved are retained as lexical
+relations with confidence rather than being asserted as facts.
 
 `outline` returns metadata and signatures. `source` adds bounded source body.
 Every item has a stable handle suitable for `expand`; supported relations are
@@ -343,8 +350,9 @@ secret/exclude patterns, and retry with `--mode outline --json`.
 
 ## Evaluation and development
 
-The checked-in fixture is `testdata/repos/authsample`; cases are in
-`testdata/eval/cases.jsonl`. Evaluation reports hit@1/3/5, symbol/path recall,
+The checked-in fixtures are `testdata/repos/authsample` and
+`testdata/repos/phpsample`; cases are in `testdata/eval/cases.jsonl` and
+`testdata/eval/php-cases.jsonl`. Evaluation reports hit@1/3/5, symbol/path recall,
 forbidden-path violations, budget compliance, median estimate, reduction ratio,
 and repeated-run determinism.
 
@@ -353,6 +361,7 @@ go test ./...
 go test -race ./...
 go vet ./...
 focalspan eval --root testdata/repos/authsample --cases testdata/eval/cases.jsonl --json
+focalspan eval --root testdata/repos/phpsample --cases testdata/eval/php-cases.jsonl --json
 ```
 
 Project rules and package boundaries are in `AGENTS.md`; design, roadmap, and

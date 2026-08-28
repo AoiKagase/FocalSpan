@@ -69,7 +69,7 @@ func (s *Searcher) Search(ctx context.Context, req SearchRequest) ([]model.Ranke
 		candidate.Changed = changed
 		filtered = append(filtered, candidate)
 	}
-	result := rank.Rank(filtered, terms.Words)
+	result := rank.RankWithIdentifiers(filtered, terms.Words, terms.Identifiers)
 	if req.Limit > 0 && len(result) > req.Limit {
 		result = result[:req.Limit]
 	}

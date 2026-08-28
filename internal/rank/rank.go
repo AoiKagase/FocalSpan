@@ -18,6 +18,21 @@ const (
 )
 
 func Rank(candidates []model.RankedCandidate, terms []string) []model.RankedCandidate {
+	return rankCandidates(candidates, terms, nil)
+}
+
+func RankWithIdentifiers(candidates []model.RankedCandidate, terms, identifiers []string) []model.RankedCandidate {
+	identifierTerms := make(map[string]bool, len(identifiers))
+	for _, identifier := range identifiers {
+		identifier = strings.ToLower(strings.TrimSpace(identifier))
+		if identifier != "" {
+			identifierTerms[identifier] = true
+		}
+	}
+	return rankCandidates(candidates, terms, identifierTerms)
+}
+
+func rankCandidates(candidates []model.RankedCandidate, terms []string, identifierTerms map[string]bool) []model.RankedCandidate {
 	result := append([]model.RankedCandidate(nil), candidates...)
 	for i := range result {
 		result[i].Reasons = append([]model.ScoreReason(nil), result[i].Reasons...)
@@ -34,7 +49,7 @@ func Rank(candidates []model.RankedCandidate, terms []string) []model.RankedCand
 			case lowerSymbol == term:
 				result[i].Score += symbolExactWeight
 				result[i].Reasons = append(result[i].Reasons, model.ScoreReason{Code: "symbol-exact", Weight: symbolExactWeight, Detail: "symbol matches a query term"})
-			case lowerSymbol != "" && strings.Contains(lowerSymbol, term):
+			case lowerSymbol != "" && (result[i].Language != "php" || identifierTerms[term]) && strings.Contains(lowerSymbol, term):
 				result[i].Score += prefixWeight
 				result[i].Reasons = append(result[i].Reasons, model.ScoreReason{Code: "symbol-prefix", Weight: prefixWeight, Detail: "symbol contains a query term"})
 			}

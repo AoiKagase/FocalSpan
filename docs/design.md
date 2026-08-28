@@ -58,6 +58,9 @@ diverge in ranking or budget behavior.
 - `internal/extract`: extractor interface and registry.
 - `internal/extract/goast`: syntax-only Go extraction using `go/parser`,
   `go/ast`, and `go/token`.
+- `internal/extract/php`: stateful PHP lexer plus namespace-aware structural
+  extraction for declarations, members, relations, includes, PHPUnit tests,
+  and partial recovery.
 - `internal/extract/generic`: C-like lexer, Python-like indentation chunks,
   Markdown headings, and bounded line-window fallback.
 - `internal/indexer`: bounded parse workers and a single transactional writer;
@@ -122,6 +125,16 @@ const/var declarations, doc comments, calls, selector expressions, identifier
 references, and test/benchmark/example functions. Unresolvable calls remain
 lexical relations with `UnresolvedTo` and confidence; a receiver call is never
 asserted to target an arbitrary same-named method.
+
+PHP files use a stateful lexer so PHP/HTML transitions, comments, quoted and
+heredoc/nowdoc strings, attributes, and malformed tails do not turn braces into
+false declaration boundaries. The PHP extractor records namespace/use aliases,
+class/interface/trait/enum declarations, functions/methods, properties,
+constants, type/attribute references, includes, calls, and PHPUnit test
+relations. Local canonical matches receive handles; unresolved names and safe
+repository-relative include paths remain lexical relations with confidence.
+`.inc` is selected as PHP only when content contains `<?php`, `<?=`, or `<?`;
+XML or tagless `.inc` remains text. Composer and PHP are never run.
 
 Other profiles are intentionally approximate:
 

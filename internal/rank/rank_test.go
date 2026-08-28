@@ -17,6 +17,39 @@ func TestRankPrefersExactSymbolAndKeepsReasons(t *testing.T) {
 	}
 }
 
+func TestRankDoesNotUseNaturalLanguageWordsAsSymbolPrefixes(t *testing.T) {
+	candidates := []model.RankedCandidate{
+		{Handle: "test", Path: "auth_test.php", Language: "php", Symbol: "testExpiredTokenIsRejected", Kind: "test", Content: "a test"},
+		{Handle: "production", Path: "auth.php", Language: "php", Symbol: "validateToken", Kind: "method", Content: "rejects expired authentication tokens"},
+	}
+	got := Rank(candidates, []string{"where", "expired", "token", "rejected"})
+	if len(got) != 2 || got[0].Symbol != "validateToken" {
+		t.Fatalf("ranked=%+v", got)
+	}
+}
+
+func TestRankRetainsIdentifierPrefixesForGoCandidates(t *testing.T) {
+	candidates := []model.RankedCandidate{
+		{Handle: "unrelated", Path: "unrelated/report.go", Language: "go", Symbol: "BuildReport", Content: "rejects expired authentication token records"},
+		{Handle: "production", Path: "auth/service.go", Language: "go", Symbol: "ValidateToken", Kind: "method", Content: "rejects expired authentication tokens"},
+	}
+	got := Rank(candidates, []string{"expired", "token"})
+	if len(got) != 2 || got[0].Symbol != "ValidateToken" {
+		t.Fatalf("ranked=%+v", got)
+	}
+}
+
+func TestRankUsesExplicitPHPIdentifierTermsForSymbolPrefixes(t *testing.T) {
+	candidates := []model.RankedCandidate{
+		{Handle: "unrelated", Path: "unrelated/report.php", Language: "php", Symbol: "BuildReport", Content: "rejects expired authentication token records"},
+		{Handle: "production", Path: "src/Auth/TokenService.php", Language: "php", Symbol: "validateToken", Kind: "method", Content: "rejects expired authentication tokens"},
+	}
+	got := RankWithIdentifiers(candidates, []string{"validate", "token"}, []string{"validateToken"})
+	if len(got) != 2 || got[0].Symbol != "validateToken" {
+		t.Fatalf("ranked=%+v", got)
+	}
+}
+
 func TestRankDeduplicatesContentAndContainedLowerScore(t *testing.T) {
 	candidates := []model.RankedCandidate{
 		{Handle: "whole", Path: "a.go", Symbol: "Run", StartLine: 1, EndLine: 20, ContentHash: "same", Score: 10, Confidence: .8},

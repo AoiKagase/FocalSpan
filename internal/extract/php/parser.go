@@ -53,12 +53,18 @@ func parsePHP(ctx context.Context, file model.SourceFile, tokens []Token, diagno
 	}
 	p := &phpParser{ctx: ctx, file: file, tokens: tokens, result: parseResult{Tokens: tokens, Diagnostics: append([]model.Diagnostic(nil), diagnostics...)}}
 	for index, token := range tokens {
+		if err := p.ctx.Err(); err != nil {
+			return parseResult{}, err
+		}
 		if token.Kind != KindWhitespace && token.Kind != KindLineComment && token.Kind != KindBlockComment && token.Kind != KindDocComment {
 			p.sig = append(p.sig, index)
 		}
 	}
 	p.result.Significant = p.sig
 	if err := p.parseScope(0, len(p.sig), "", nil, false); err != nil {
+		return parseResult{}, err
+	}
+	if err := p.ctx.Err(); err != nil {
 		return parseResult{}, err
 	}
 	return p.result, nil
@@ -173,6 +179,9 @@ func (p *phpParser) parseClassLike(position, end int, namespace string, parent *
 	open := -1
 	semi := -1
 	for cursor := position + 2; cursor < end; cursor++ {
+		if err := p.ctx.Err(); err != nil {
+			return decl, end
+		}
 		text := p.tokens[p.sig[cursor]].Text
 		if text == "{" {
 			open = cursor
@@ -225,6 +234,9 @@ func (p *phpParser) parseFunction(position, end int, namespace string, parent *p
 	decl.Modifiers, decl.Attributes, decl.Doc = p.prefixMetadata(position)
 	openParen := -1
 	for cursor := namePosition + 1; cursor < end; cursor++ {
+		if err := p.ctx.Err(); err != nil {
+			return decl, end
+		}
 		if p.tokens[p.sig[cursor]].Text == "(" {
 			openParen = cursor
 			break
@@ -248,6 +260,9 @@ func (p *phpParser) parseFunction(position, end int, namespace string, parent *p
 	body := -1
 	semi := -1
 	for cursor := closeParen + 1; cursor < end; cursor++ {
+		if err := p.ctx.Err(); err != nil {
+			return decl, end
+		}
 		switch p.tokens[p.sig[cursor]].Text {
 		case "{":
 			body = cursor
@@ -289,6 +304,9 @@ func (p *phpParser) parseClassMembers(position, end int, namespace string, paren
 		return false, position + 1
 	}
 	for cursor := position; cursor < semi; cursor++ {
+		if err := p.ctx.Err(); err != nil {
+			return false, position + 1
+		}
 		text := p.tokens[p.sig[cursor]].Text
 		if text == "(" || text == "{" {
 			return false, position + 1
@@ -306,6 +324,9 @@ func (p *phpParser) parseClassMembers(position, end int, namespace string, paren
 		return false, position + 1
 	}
 	for cursor := position; cursor < semi; cursor++ {
+		if err := p.ctx.Err(); err != nil {
+			return false, position + 1
+		}
 		raw := p.sig[cursor]
 		name := p.tokens[raw].Text
 		if kind == "property" && p.tokens[raw].Kind != KindVariable {
@@ -333,6 +354,9 @@ func (p *phpParser) appendPromotedProperties(method *phpDecl, end int) {
 	}
 	start, finish := rawToSigRange(p.sig, method.Start, method.HeaderEnd)
 	for cursor := start; cursor < finish; cursor++ {
+		if err := p.ctx.Err(); err != nil {
+			return
+		}
 		if p.tokens[p.sig[cursor]].Kind != KindVariable {
 			continue
 		}
@@ -357,6 +381,9 @@ func (p *phpParser) functionNamePosition(position, end int) int {
 
 func (p *phpParser) findStatementDelimiter(start, end int) (int, int) {
 	for cursor := start; cursor < end; cursor++ {
+		if p.ctx.Err() != nil {
+			return -1, -1
+		}
 		text := p.tokens[p.sig[cursor]].Text
 		if text == ";" || text == "{" {
 			return cursor, cursor
@@ -368,6 +395,9 @@ func (p *phpParser) findStatementDelimiter(start, end int) (int, int) {
 func (p *phpParser) findSemicolon(start, end int) int {
 	depth := 0
 	for cursor := start; cursor < end; cursor++ {
+		if p.ctx.Err() != nil {
+			return -1
+		}
 		switch p.tokens[p.sig[cursor]].Text {
 		case "(", "[":
 			depth++
@@ -391,6 +421,9 @@ func (p *phpParser) findSemicolon(start, end int) int {
 func (p *phpParser) matchDelimiter(open, end int, opening, closing string) int {
 	depth := 0
 	for cursor := open; cursor < end; cursor++ {
+		if p.ctx.Err() != nil {
+			return -1
+		}
 		text := p.tokens[p.sig[cursor]].Text
 		if text == opening {
 			depth++
@@ -413,6 +446,9 @@ func (p *phpParser) isPropertyCandidate(position, end int) bool {
 
 func (p *phpParser) containsVariable(start, end int) bool {
 	for cursor := start; cursor < end; cursor++ {
+		if p.ctx.Err() != nil {
+			return false
+		}
 		if p.tokens[p.sig[cursor]].Kind == KindVariable {
 			return true
 		}
@@ -422,6 +458,9 @@ func (p *phpParser) containsVariable(start, end int) bool {
 
 func (p *phpParser) containsIdentifierAfter(start, end int) bool {
 	for cursor := start; cursor < end; cursor++ {
+		if p.ctx.Err() != nil {
+			return false
+		}
 		if p.isIdentifier(p.sig[cursor]) {
 			return true
 		}
@@ -431,6 +470,9 @@ func (p *phpParser) containsIdentifierAfter(start, end int) bool {
 
 func (p *phpParser) containsKeyword(start, end int, keyword string) bool {
 	for cursor := start; cursor < end; cursor++ {
+		if p.ctx.Err() != nil {
+			return false
+		}
 		if strings.EqualFold(p.tokens[p.sig[cursor]].Text, keyword) {
 			return true
 		}

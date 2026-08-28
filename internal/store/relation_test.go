@@ -129,3 +129,46 @@ func hasRelatedPath(candidates []model.RankedCandidate, path string) bool {
 	}
 	return false
 }
+
+func TestRelatedCandidatesFilterImportAndReferenceKinds(t *testing.T) {
+	s, err := Open(t.TempDir(), ".focalspan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	symbols := []model.Symbol{
+		{Handle: "source", FilePath: "source.php", Language: "php", Kind: "function", Name: "source", StartLine: 1, EndLine: 1, Confidence: 1},
+		{Handle: "import", FilePath: "import.php", Language: "php", Kind: "class", Name: "Imported", StartLine: 1, EndLine: 1, Confidence: 1},
+		{Handle: "reference", FilePath: "reference.php", Language: "php", Kind: "class", Name: "Referenced", StartLine: 1, EndLine: 1, Confidence: 1},
+	}
+	chunks := []model.Chunk{
+		{Handle: "source-chunk", FilePath: "source.php", Language: "php", Kind: "function", SymbolHandle: "source", SymbolName: "source", StartLine: 1, EndLine: 1, Content: "function source() {}"},
+		{Handle: "import-chunk", FilePath: "import.php", Language: "php", Kind: "class", SymbolHandle: "import", SymbolName: "Imported", StartLine: 1, EndLine: 1, Content: "class Imported {}"},
+		{Handle: "reference-chunk", FilePath: "reference.php", Language: "php", Kind: "class", SymbolHandle: "reference", SymbolName: "Referenced", StartLine: 1, EndLine: 1, Content: "class Referenced {}"},
+	}
+	if err := s.ReplaceFile(context.Background(), model.SourceFile{Path: "import.php", Language: "php", SHA256: "import"}, model.Extraction{Symbols: symbols[1:2], Chunks: chunks[1:2]}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReplaceFile(context.Background(), model.SourceFile{Path: "reference.php", Language: "php", SHA256: "reference"}, model.Extraction{Symbols: symbols[2:], Chunks: chunks[2:]}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReplaceFile(context.Background(), model.SourceFile{Path: "source.php", Language: "php", SHA256: "source"}, model.Extraction{
+		Symbols: symbols[:1], Chunks: chunks[:1],
+		Relations: []model.Relation{
+			{FromHandle: "source", ToHandle: "import", Kind: "imports", Confidence: 1},
+			{FromHandle: "source", ToHandle: "reference", Kind: "references", Confidence: 1},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	imports, err := s.RelatedCandidates(context.Background(), []string{"source"}, "imports")
+	if err != nil || len(imports) != 1 || imports[0].Symbol != "Imported" {
+		t.Fatalf("imports=%+v err=%v", imports, err)
+	}
+	references, err := s.RelatedCandidates(context.Background(), []string{"source"}, "references")
+	if err != nil || len(references) != 1 || references[0].Symbol != "Referenced" {
+		t.Fatalf("references=%+v err=%v", references, err)
+	}
+}

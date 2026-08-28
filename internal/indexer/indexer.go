@@ -63,24 +63,26 @@ func (i *Indexer) Run(ctx context.Context, full bool) (model.IndexRun, error) {
 		}
 		toParse = append(toParse, file)
 	}
+	deletions := make([]string, 0)
 	for path := range existing {
 		if !current[path] {
-			if err := i.store.DeleteFile(ctx, path); err != nil {
-				return model.IndexRun{}, fmt.Errorf("delete stale file %s: %w", path, err)
-			}
+			deletions = append(deletions, path)
 			run.FilesDeleted++
 		}
 	}
+	sort.Strings(deletions)
 	results := i.parse(ctx, toParse)
+	if err := ctx.Err(); err != nil {
+		return model.IndexRun{}, err
+	}
 	sort.Slice(results, func(a, b int) bool { return results[a].file.Path < results[b].file.Path })
+	updates := make([]store.FileUpdate, 0, len(results))
 	for _, result := range results {
 		if result.err != nil {
 			run.ParseFailures++
 			continue
 		}
-		if err := i.store.ReplaceFile(ctx, result.file, result.extraction); err != nil {
-			return model.IndexRun{}, fmt.Errorf("store %s: %w", result.file.Path, err)
-		}
+		updates = append(updates, store.FileUpdate{File: result.file, Extraction: result.extraction})
 	}
 	for _, diagnostic := range scanDiagnostics {
 		if diagnostic.Level == "warning" {
@@ -88,20 +90,15 @@ func (i *Indexer) Run(ctx context.Context, full bool) (model.IndexRun, error) {
 		}
 	}
 	revision := revisionFor(files)
-	if err := i.store.SetMeta(ctx, "last_revision", revision); err != nil {
-		return model.IndexRun{}, err
-	}
-	if err := i.store.SetMeta(ctx, "configuration_hash", i.config.Hash()); err != nil {
-		return model.IndexRun{}, err
-	}
-	if err := i.store.SetMeta(ctx, "last_successful_index", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
-		return model.IndexRun{}, err
-	}
 	run.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	run.DurationMS = time.Since(started).Milliseconds()
 	run.Revision = revision
-	if err := i.store.RecordRun(ctx, run); err != nil {
-		return model.IndexRun{}, fmt.Errorf("record index run: %w", err)
+	if err := i.store.ApplyIndex(ctx, deletions, updates, []store.MetaUpdate{
+		{Key: "last_revision", Value: revision},
+		{Key: "configuration_hash", Value: i.config.Hash()},
+		{Key: "last_successful_index", Value: run.CompletedAt},
+	}, run); err != nil {
+		return model.IndexRun{}, err
 	}
 	return run, nil
 }
@@ -140,11 +137,12 @@ func (i *Indexer) parse(ctx context.Context, files []model.SourceFile) []extract
 	for n := 0; n < workers; n++ {
 		go worker()
 	}
+sendJobs:
 	for _, file := range files {
 		select {
 		case jobs <- file:
 		case <-ctx.Done():
-			break
+			break sendJobs
 		}
 	}
 	close(jobs)

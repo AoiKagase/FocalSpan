@@ -1,0 +1,4 @@
+{"name":"php-expired-token","query":"where is an expired PHP authentication token rejected?","token_budget":1200,"expected_symbols":["validateToken"],"expected_paths":["src/Auth/TokenService.php"],"forbidden_paths":["unrelated/Report.php"]}
+{"name":"php-token-callers","query":"what calls TokenService validateToken?","token_budget":1200,"expected_symbols":["validateToken"],"expected_paths":["src/Http/AuthMiddleware.php"],"forbidden_paths":["unrelated/Report.php"]}
+{"name":"php-expired-token-tests","query":"what tests cover expired PHP tokens?","token_budget":1200,"expected_symbols":["testExpiredTokenIsRejected"],"expected_paths":["tests/TokenServiceTest.php"],"forbidden_paths":["unrelated/Report.php"]}
+{"name":"php-bootstrap-include","query":"which include file bootstraps authentication?","token_budget":1200,"expected_symbols":["bootstrap"],"expected_paths":["includes/bootstrap.inc"],"forbidden_paths":["unrelated/Report.php"]}

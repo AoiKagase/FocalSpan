@@ -46,6 +46,9 @@ func (l *lexer) scanHTML() {
 	}
 	start := l.offset
 	for l.offset < len(l.content) {
+		if l.ctx.Err() != nil {
+			return
+		}
 		if _, ok := l.openTagAt(l.offset); ok {
 			break
 		}
@@ -68,6 +71,9 @@ func (l *lexer) scanPHP() {
 	}
 	if isPHPWhitespace(l.content[l.offset]) {
 		for l.offset < len(l.content) && isPHPWhitespace(l.content[l.offset]) {
+			if l.ctx.Err() != nil {
+				return
+			}
 			l.offset++
 		}
 		l.emit(KindWhitespace, start, l.offset)
@@ -80,6 +86,9 @@ func (l *lexer) scanPHP() {
 			l.offset++
 		}
 		for l.offset < len(l.content) && l.content[l.offset] != '\n' {
+			if l.ctx.Err() != nil {
+				return
+			}
 			l.offset++
 		}
 		l.emit(KindLineComment, start, l.offset)
@@ -92,6 +101,9 @@ func (l *lexer) scanPHP() {
 		}
 		l.offset += 2
 		for l.offset < len(l.content) && !l.hasPrefix(l.offset, "*/") {
+			if l.ctx.Err() != nil {
+				return
+			}
 			l.offset++
 		}
 		if l.offset >= len(l.content) {
@@ -193,6 +205,9 @@ func (l *lexer) scanQuoted(quote byte) {
 func (l *lexer) scanHeredoc(start int) (int, Kind, bool) {
 	position := start + 3
 	for position < len(l.content) && (l.content[position] == ' ' || l.content[position] == '\t') {
+		if l.ctx.Err() != nil {
+			return 0, KindUnknown, false
+		}
 		position++
 	}
 	kind := KindHeredoc
@@ -207,6 +222,9 @@ func (l *lexer) scanHeredoc(start int) (int, Kind, bool) {
 		return 0, KindUnknown, false
 	}
 	for position < len(l.content) && isASCIIIdentifierPart(l.content[position]) {
+		if l.ctx.Err() != nil {
+			return 0, KindUnknown, false
+		}
 		position++
 	}
 	label := string(l.content[labelStart:position])
@@ -221,8 +239,14 @@ func (l *lexer) scanHeredoc(start int) (int, Kind, bool) {
 		lineStart++
 	}
 	for lineStart <= len(l.content) {
+		if l.ctx.Err() != nil {
+			return 0, KindUnknown, false
+		}
 		lineEnd := lineStart
 		for lineEnd < len(l.content) && l.content[lineEnd] != '\n' {
+			if l.ctx.Err() != nil {
+				return 0, KindUnknown, false
+			}
 			lineEnd++
 		}
 		line := strings.TrimSuffix(string(l.content[lineStart:lineEnd]), "\r")
