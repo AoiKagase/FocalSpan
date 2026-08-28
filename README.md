@@ -45,6 +45,44 @@ focalspan doctor --json
 focalspan serve --root C:\src\example-project
 ```
 
+### Codexへの自動登録
+
+リポジトリ内で次を実行すると、既定のproject scopeへFocalSpan MCPを登録できます。
+
+```text
+focalspan mcp install codex
+focalspan mcp status codex
+```
+
+project scopeは既定値で、`<root>/.codex/config.toml`へFocalSpan管理ブロックだけを追加します。Codexはtrusted projectのproject-local設定だけをロードします。rootごとに登録内容が分離され、既存のCodex sessionでは設定の再読込または新しいsessionが必要になる場合があります。
+
+user scopeを使う場合は、公式Codex CLIを経由して次を実行します。
+
+```text
+focalspan mcp install codex --scope user
+```
+
+user scopeではroot固有のserver名を使い、全projectから見えるユーザー設定へ登録するためCodex CLIが必要です。通常はproject scopeを推奨します。登録前に確認するには次を使えます。
+
+```text
+focalspan mcp print codex
+focalspan mcp install codex --dry-run
+```
+
+削除は次のコマンドです。
+
+```text
+focalspan mcp uninstall codex
+```
+
+例えばWindowsでパスに空白があっても、rootを指定するだけでshell quotingは不要です。
+
+```text
+focalspan mcp install codex --root "C:\Work Spaces\BookStack"
+```
+
+user scopeのCodex CLIのoptionや出力はversionによって異なるため、FocalSpanはproject scopeで未確認のproject-scope flagを使用しません。必要に応じて`codex mcp --help`でインストール済みCLIを確認してください。
+
 `impact`は`--base`/`--head`を省略すると、ステージ前後の変更を使用します。関係解析は構文ベースであり、解決できない呼び出しが省略される可能性を明示します。Gitリポジトリ外で`update --if-repo --quiet`を実行しても、正常終了して何も出力しません。
 
 ### 設定とインデックス
@@ -154,6 +192,48 @@ focalspan serve --root C:\src\example-project
 Its relationship analysis is syntax-only and explicitly reports that
 unresolved calls may be omitted. `update --if-repo --quiet` exits successfully
 and prints nothing when run outside Git, which makes it suitable for a hook.
+
+### Automatic Codex registration
+
+Run these commands from a repository to register the FocalSpan MCP server in
+the project-local Codex configuration:
+
+```text
+focalspan mcp install codex
+focalspan mcp status codex
+```
+
+Project scope is the default and adds only a FocalSpan-managed block to
+`<root>/.codex/config.toml`. Codex loads project-local configuration only for
+trusted projects. Each root has a separate registration, and an existing Codex
+session may need to reload configuration or use a new session.
+
+User scope delegates registration to the official Codex CLI:
+
+```text
+focalspan mcp install codex --scope user
+```
+
+It uses a root-specific server name and is visible from every project, so the
+Codex CLI is required and project scope is generally preferred. Preview or
+remove a registration with:
+
+```text
+focalspan mcp print codex
+focalspan mcp install codex --dry-run
+focalspan mcp uninstall codex
+```
+
+On Windows, a path containing spaces needs no shell quoting when passed as a
+root value to FocalSpan:
+
+```text
+focalspan mcp install codex --root "C:\Work Spaces\BookStack"
+```
+
+Codex CLI options and output can differ by installed version. FocalSpan does
+not assume an unverified project-scope flag; use `codex mcp --help` to inspect
+the installed CLI when troubleshooting.
 
 ## Configuration
 
