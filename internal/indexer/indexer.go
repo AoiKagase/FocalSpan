@@ -1,0 +1,171 @@
+package indexer
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"sort"
+	"sync"
+	"time"
+
+	"github.com/focalspan/focalspan/internal/config"
+	"github.com/focalspan/focalspan/internal/extract"
+	"github.com/focalspan/focalspan/internal/model"
+	"github.com/focalspan/focalspan/internal/repository"
+	"github.com/focalspan/focalspan/internal/store"
+)
+
+type Indexer struct {
+	root     string
+	config   config.Config
+	store    *store.Store
+	registry *extract.Registry
+}
+
+func New(root string, cfg config.Config, st *store.Store, registry *extract.Registry) *Indexer {
+	return &Indexer{root: root, config: cfg, store: st, registry: registry}
+}
+
+type extractionResult struct {
+	file       model.SourceFile
+	extraction model.Extraction
+	err        error
+}
+
+func (i *Indexer) Run(ctx context.Context, full bool) (model.IndexRun, error) {
+	started := time.Now().UTC()
+	files, scanDiagnostics, err := repository.NewScanner(i.root, i.config).Scan(ctx)
+	if err != nil {
+		return model.IndexRun{}, err
+	}
+	existing, err := i.store.Paths(ctx)
+	if err != nil {
+		return model.IndexRun{}, fmt.Errorf("read indexed paths: %w", err)
+	}
+	current := make(map[string]bool, len(files))
+	toParse := make([]model.SourceFile, 0, len(files))
+	run := model.IndexRun{StartedAt: started.Format(time.RFC3339Nano), FilesSeen: len(files)}
+	for _, file := range files {
+		current[file.Path] = true
+		oldHash, found, err := i.store.FileHash(ctx, file.Path)
+		if err != nil {
+			return model.IndexRun{}, fmt.Errorf("read hash for %s: %w", file.Path, err)
+		}
+		if !full && found && oldHash == file.SHA256 {
+			run.FilesUnchanged++
+			continue
+		}
+		if found {
+			run.FilesChanged++
+		} else {
+			run.FilesAdded++
+		}
+		toParse = append(toParse, file)
+	}
+	for path := range existing {
+		if !current[path] {
+			if err := i.store.DeleteFile(ctx, path); err != nil {
+				return model.IndexRun{}, fmt.Errorf("delete stale file %s: %w", path, err)
+			}
+			run.FilesDeleted++
+		}
+	}
+	results := i.parse(ctx, toParse)
+	sort.Slice(results, func(a, b int) bool { return results[a].file.Path < results[b].file.Path })
+	for _, result := range results {
+		if result.err != nil {
+			run.ParseFailures++
+			continue
+		}
+		if err := i.store.ReplaceFile(ctx, result.file, result.extraction); err != nil {
+			return model.IndexRun{}, fmt.Errorf("store %s: %w", result.file.Path, err)
+		}
+	}
+	for _, diagnostic := range scanDiagnostics {
+		if diagnostic.Level == "warning" {
+			run.ParseFailures++
+		}
+	}
+	revision := revisionFor(files)
+	if err := i.store.SetMeta(ctx, "last_revision", revision); err != nil {
+		return model.IndexRun{}, err
+	}
+	if err := i.store.SetMeta(ctx, "configuration_hash", i.config.Hash()); err != nil {
+		return model.IndexRun{}, err
+	}
+	if err := i.store.SetMeta(ctx, "last_successful_index", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+		return model.IndexRun{}, err
+	}
+	run.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	run.DurationMS = time.Since(started).Milliseconds()
+	run.Revision = revision
+	if err := i.store.RecordRun(ctx, run); err != nil {
+		return model.IndexRun{}, fmt.Errorf("record index run: %w", err)
+	}
+	return run, nil
+}
+
+func (i *Indexer) parse(ctx context.Context, files []model.SourceFile) []extractionResult {
+	workers := i.config.WorkerCount()
+	if workers > len(files) && len(files) > 0 {
+		workers = len(files)
+	}
+	if workers < 1 {
+		return nil
+	}
+	jobs := make(chan model.SourceFile)
+	results := make(chan extractionResult, len(files))
+	var wg sync.WaitGroup
+	worker := func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case file, ok := <-jobs:
+				if !ok {
+					return
+				}
+				extraction, err := i.registry.Extract(ctx, file)
+				select {
+				case results <- extractionResult{file: file, extraction: extraction, err: err}:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}
+	wg.Add(workers)
+	for n := 0; n < workers; n++ {
+		go worker()
+	}
+	for _, file := range files {
+		select {
+		case jobs <- file:
+		case <-ctx.Done():
+			break
+		}
+	}
+	close(jobs)
+	wg.Wait()
+	close(results)
+	collected := make([]extractionResult, 0, len(files))
+	for result := range results {
+		collected = append(collected, result)
+	}
+	return collected
+}
+
+func revisionFor(files []model.SourceFile) string {
+	sorted := append([]model.SourceFile(nil), files...)
+	sort.Slice(sorted, func(a, b int) bool { return sorted[a].Path < sorted[b].Path })
+	h := sha256.New()
+	for _, file := range sorted {
+		h.Write([]byte(file.Path))
+		h.Write([]byte{0})
+		h.Write([]byte(file.SHA256))
+		h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil))[:16]
+}

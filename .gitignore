@@ -1,0 +1,6 @@
+.focalspan/
+.gomodcache/
+.gocache/
+.build/
+bin/
+dist/
