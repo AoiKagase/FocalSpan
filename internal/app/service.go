@@ -55,7 +55,22 @@ func NewWithConfig(root string, cfg config.Config) (*Service, error) {
 func (s *Service) Close() error { return s.Store.Close() }
 
 func (s *Service) Index(ctx context.Context, full bool) (model.IndexRun, error) {
-	return s.indexer.Run(ctx, full)
+	return s.IndexWithProgress(ctx, full, nil)
+}
+
+type IndexProgress = indexer.Progress
+type IndexProgressFunc = indexer.ProgressFunc
+
+const (
+	IndexPhaseScanning = indexer.PhaseScanning
+	IndexPhaseChecking = indexer.PhaseChecking
+	IndexPhaseParsing  = indexer.PhaseParsing
+	IndexPhaseWriting  = indexer.PhaseWriting
+	IndexPhaseComplete = indexer.PhaseComplete
+)
+
+func (s *Service) IndexWithProgress(ctx context.Context, full bool, progress IndexProgressFunc) (model.IndexRun, error) {
+	return s.indexer.RunWithProgress(ctx, full, progress)
 }
 
 type QueryRequest struct {

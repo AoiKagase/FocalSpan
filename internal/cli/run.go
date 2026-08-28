@@ -34,7 +34,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	case "init":
 		err = runInit(ctx, args[1:], stdout)
 	case "index":
-		err = runIndex(ctx, args[1:], stdout)
+		err = runIndex(ctx, args[1:], stdout, stderr)
 	case "update":
 		err = runUpdate(ctx, args[1:], stdout, stderr)
 	case "status":
@@ -91,7 +91,7 @@ func runInit(ctx context.Context, args []string, stdout io.Writer) error {
 	return err
 }
 
-func runIndex(ctx context.Context, args []string, stdout io.Writer) error {
+func runIndex(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	fs := newFlagSet("index")
 	rootArg := fs.String("root", ".", "repository root")
 	workers := fs.Int("workers", 0, "parse workers")
@@ -112,14 +112,18 @@ func runIndex(ctx context.Context, args []string, stdout io.Writer) error {
 		cfg.Workers = *workers
 	}
 	for _, warning := range warnings {
-		_, _ = fmt.Fprintf(os.Stderr, "focalspan: warning: %s\n", warning)
+		_, _ = fmt.Fprintf(stderr, "focalspan: warning: %s\n", warning)
 	}
 	service, err := app.NewWithConfig(root, cfg)
 	if err != nil {
 		return err
 	}
 	defer service.Close()
-	run, err := service.Index(ctx, true)
+	var progress app.IndexProgressFunc
+	if !*quiet {
+		progress = newIndexProgressReporter(stderr, "index")
+	}
+	run, err := service.IndexWithProgress(ctx, true, progress)
 	if err != nil {
 		return err
 	}
@@ -162,7 +166,11 @@ func runUpdate(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		return err
 	}
 	defer service.Close()
-	run, err := service.Index(ctx, false)
+	var progress app.IndexProgressFunc
+	if !*quiet {
+		progress = newIndexProgressReporter(stderr, "update")
+	}
+	run, err := service.IndexWithProgress(ctx, false, progress)
 	if err != nil {
 		return err
 	}

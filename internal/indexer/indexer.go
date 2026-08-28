@@ -23,6 +23,22 @@ type Indexer struct {
 	registry *extract.Registry
 }
 
+type Progress struct {
+	Phase     string
+	Completed int
+	Total     int
+}
+
+type ProgressFunc func(Progress)
+
+const (
+	PhaseScanning = "scanning"
+	PhaseChecking = "checking"
+	PhaseParsing  = "parsing"
+	PhaseWriting  = "writing"
+	PhaseComplete = "complete"
+)
+
 func New(root string, cfg config.Config, st *store.Store, registry *extract.Registry) *Indexer {
 	return &Indexer{root: root, config: cfg, store: st, registry: registry}
 }
@@ -34,6 +50,16 @@ type extractionResult struct {
 }
 
 func (i *Indexer) Run(ctx context.Context, full bool) (model.IndexRun, error) {
+	return i.RunWithProgress(ctx, full, nil)
+}
+
+func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress ProgressFunc) (model.IndexRun, error) {
+	emit := func(event Progress) {
+		if progress != nil {
+			progress(event)
+		}
+	}
+	emit(Progress{Phase: PhaseScanning})
 	started := time.Now().UTC()
 	files, scanDiagnostics, err := repository.NewScanner(i.root, i.config).Scan(ctx)
 	if err != nil {
@@ -46,7 +72,8 @@ func (i *Indexer) Run(ctx context.Context, full bool) (model.IndexRun, error) {
 	current := make(map[string]bool, len(files))
 	toParse := make([]model.SourceFile, 0, len(files))
 	run := model.IndexRun{StartedAt: started.Format(time.RFC3339Nano), FilesSeen: len(files)}
-	for _, file := range files {
+	emit(Progress{Phase: PhaseChecking, Total: len(files)})
+	for index, file := range files {
 		current[file.Path] = true
 		oldHash, found, err := i.store.FileHash(ctx, file.Path)
 		if err != nil {
@@ -54,6 +81,7 @@ func (i *Indexer) Run(ctx context.Context, full bool) (model.IndexRun, error) {
 		}
 		if !full && found && oldHash == file.SHA256 {
 			run.FilesUnchanged++
+			emit(Progress{Phase: PhaseChecking, Completed: index + 1, Total: len(files)})
 			continue
 		}
 		if found {
@@ -62,6 +90,7 @@ func (i *Indexer) Run(ctx context.Context, full bool) (model.IndexRun, error) {
 			run.FilesAdded++
 		}
 		toParse = append(toParse, file)
+		emit(Progress{Phase: PhaseChecking, Completed: index + 1, Total: len(files)})
 	}
 	deletions := make([]string, 0)
 	for path := range existing {
@@ -71,7 +100,10 @@ func (i *Indexer) Run(ctx context.Context, full bool) (model.IndexRun, error) {
 		}
 	}
 	sort.Strings(deletions)
-	results := i.parse(ctx, toParse)
+	emit(Progress{Phase: PhaseParsing, Total: len(toParse)})
+	results := i.parse(ctx, toParse, func(completed int) {
+		emit(Progress{Phase: PhaseParsing, Completed: completed, Total: len(toParse)})
+	})
 	if err := ctx.Err(); err != nil {
 		return model.IndexRun{}, err
 	}
@@ -93,6 +125,7 @@ func (i *Indexer) Run(ctx context.Context, full bool) (model.IndexRun, error) {
 	run.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	run.DurationMS = time.Since(started).Milliseconds()
 	run.Revision = revision
+	emit(Progress{Phase: PhaseWriting, Total: 1})
 	if err := i.store.ApplyIndex(ctx, deletions, updates, []store.MetaUpdate{
 		{Key: "last_revision", Value: revision},
 		{Key: "configuration_hash", Value: i.config.Hash()},
@@ -100,10 +133,11 @@ func (i *Indexer) Run(ctx context.Context, full bool) (model.IndexRun, error) {
 	}, run); err != nil {
 		return model.IndexRun{}, err
 	}
+	emit(Progress{Phase: PhaseComplete, Completed: 1, Total: 1})
 	return run, nil
 }
 
-func (i *Indexer) parse(ctx context.Context, files []model.SourceFile) []extractionResult {
+func (i *Indexer) parse(ctx context.Context, files []model.SourceFile, progress func(int)) []extractionResult {
 	workers := i.config.WorkerCount()
 	if workers > len(files) && len(files) > 0 {
 		workers = len(files)
@@ -137,6 +171,10 @@ func (i *Indexer) parse(ctx context.Context, files []model.SourceFile) []extract
 	for n := 0; n < workers; n++ {
 		go worker()
 	}
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
 sendJobs:
 	for _, file := range files {
 		select {
@@ -146,11 +184,12 @@ sendJobs:
 		}
 	}
 	close(jobs)
-	wg.Wait()
-	close(results)
 	collected := make([]extractionResult, 0, len(files))
 	for result := range results {
 		collected = append(collected, result)
+		if progress != nil {
+			progress(len(collected))
+		}
 	}
 	return collected
 }

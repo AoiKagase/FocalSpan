@@ -38,6 +38,11 @@ func TestIndexStatusAndQueryJSON(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &indexResult); err != nil {
 		t.Fatalf("index json=%v output=%s", err, out.String())
 	}
+	for _, want := range []string{"scanning repository", "checking", "parsing", "writing index", "complete"} {
+		if !strings.Contains(errOut.String(), want) {
+			t.Fatalf("index stderr=%q missing %q", errOut.String(), want)
+		}
+	}
 	out.Reset()
 	if code := Run(context.Background(), []string{"status", "--root", root, "--json"}, &out, &errOut); code != 0 {
 		t.Fatalf("status code=%d stderr=%s", code, errOut.String())
@@ -73,6 +78,35 @@ func TestUpdateIfRepoIsQuietOutsideGit(t *testing.T) {
 	var out, errOut bytes.Buffer
 	if code := Run(context.Background(), []string{"update", "--root", root, "--if-repo", "--quiet"}, &out, &errOut); code != 0 || out.Len() != 0 {
 		t.Fatalf("code=%d stdout=%q stderr=%q", code, out.String(), errOut.String())
+	}
+}
+
+func TestIndexQuietSuppressesProgressAndOutput(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "auth.go"), "package auth\n\nfunc ValidateToken() error { return nil }\n")
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"index", "--root", root, "--quiet"}, &out, &errOut); code != 0 {
+		t.Fatalf("index code=%d stdout=%q stderr=%q", code, out.String(), errOut.String())
+	}
+	if out.Len() != 0 || errOut.Len() != 0 {
+		t.Fatalf("quiet stdout=%q stderr=%q", out.String(), errOut.String())
+	}
+}
+
+func TestUpdateReportsProgress(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "auth.go"), "package auth\n\nfunc ValidateToken() error { return nil }\n")
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"update", "--root", root}, &out, &errOut); code != 0 {
+		t.Fatalf("update code=%d stdout=%q stderr=%q", code, out.String(), errOut.String())
+	}
+	if !strings.Contains(out.String(), "updated") {
+		t.Fatalf("update stdout=%q", out.String())
+	}
+	for _, want := range []string{"update: scanning repository", "update: parsing", "update: writing index", "update: complete"} {
+		if !strings.Contains(errOut.String(), want) {
+			t.Fatalf("update stderr=%q missing %q", errOut.String(), want)
+		}
 	}
 }
 

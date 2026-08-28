@@ -18,3 +18,16 @@ func TestHandleAllocatorExtendsCollision(t *testing.T) {
 		t.Fatalf("collision was not extended: %q", first)
 	}
 }
+
+func TestHandleAllocatorDisambiguatesRepeatedIdentity(t *testing.T) {
+	a := NewHandleAllocator()
+	first := a.Allocate("sym", "same")
+	second := a.Allocate("sym", "same")
+	if first == second {
+		t.Fatalf("repeated identity reused handle: %q", first)
+	}
+	third := a.Allocate("sym", "same")
+	if third == first || third == second {
+		t.Fatalf("repeated identity reused handle: %q, %q, %q", first, second, third)
+	}
+}

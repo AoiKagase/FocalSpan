@@ -47,3 +47,27 @@ func TestFallbackWindowsOverlapAndLineSafety(t *testing.T) {
 		}
 	}
 }
+
+func TestFallbackWindowsAssignDistinctSymbolHandlesToRepeatedSignatures(t *testing.T) {
+	lines := make([]string, 151)
+	for i := range lines {
+		lines[i] = "entry-" + string(rune('a'+i%26)) + "-" + strings.Repeat("x", i%7)
+	}
+	lines[0] = "{"
+	lines[70] = "{"
+	content := strings.Join(lines, "\n")
+
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{
+		Path: "internal/discovery/testdata/rust/collections.json", Language: "config", Content: []byte(content),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := make(map[string]bool, len(got.Symbols))
+	for _, symbol := range got.Symbols {
+		if seen[symbol.Handle] {
+			t.Fatalf("duplicate symbol handle %q in %+v", symbol.Handle, got.Symbols)
+		}
+		seen[symbol.Handle] = true
+	}
+}

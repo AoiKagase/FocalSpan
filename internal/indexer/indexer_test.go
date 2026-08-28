@@ -48,6 +48,66 @@ func TestIndexerIncrementalStatsAndDeletion(t *testing.T) {
 	}
 }
 
+func TestIndexerReportsProgressDuringInitialIndex(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "auth.go"), "package auth\n\nfunc ValidateToken() {}\n")
+	write(t, filepath.Join(root, "README.md"), "# Auth\n\nexpired token\n")
+	cfg := config.Default()
+	cfg.Workers = 2
+	s, err := store.Open(root, cfg.IndexDirectory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ix := New(root, cfg, s, extract.NewRegistry(goast.NewExtractor(), generic.NewExtractor()))
+	var events []Progress
+	_, err = ix.RunWithProgress(context.Background(), true, func(event Progress) {
+		events = append(events, event)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) == 0 || events[0].Phase != PhaseScanning {
+		t.Fatalf("events=%+v, want scanning first", events)
+	}
+	seen := map[string]bool{}
+	lastByPhase := map[string]int{}
+	for _, event := range events {
+		seen[event.Phase] = true
+		if event.Phase == PhaseChecking || event.Phase == PhaseParsing {
+			if event.Completed < 0 || event.Completed > event.Total || event.Completed < lastByPhase[event.Phase] {
+				t.Fatalf("non-monotonic progress event=%+v events=%+v", event, events)
+			}
+			lastByPhase[event.Phase] = event.Completed
+		}
+	}
+	for _, phase := range []string{PhaseChecking, PhaseParsing, PhaseWriting, PhaseComplete} {
+		if !seen[phase] {
+			t.Fatalf("events=%+v missing phase %q", events, phase)
+		}
+	}
+	last := events[len(events)-1]
+	if last.Phase != PhaseComplete || last.Completed != 1 || last.Total != 1 {
+		t.Fatalf("last event=%+v", last)
+	}
+
+	var updateEvents []Progress
+	if _, err := ix.RunWithProgress(context.Background(), false, func(event Progress) {
+		updateEvents = append(updateEvents, event)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	checkingComplete := false
+	for _, event := range updateEvents {
+		if event.Phase == PhaseChecking && event.Completed == 2 && event.Total == 2 {
+			checkingComplete = true
+		}
+	}
+	if !checkingComplete {
+		t.Fatalf("update events=%+v missing checking 2/2", updateEvents)
+	}
+}
+
 func TestIndexerCancellationRollsBackPendingChanges(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, "old.go"), "package old\n\nfunc Old() {}\n")

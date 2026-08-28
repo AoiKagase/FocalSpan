@@ -3,6 +3,7 @@ package model
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -48,18 +49,32 @@ func stableHandle(prefix string, length int, fields ...string) string {
 	return prefix + "_" + digest[:length]
 }
 
-type HandleAllocator struct{ used map[string]string }
+type HandleAllocator struct {
+	used        map[string]string
+	occurrences map[string]int
+}
 
-func NewHandleAllocator() *HandleAllocator { return &HandleAllocator{used: make(map[string]string)} }
+func NewHandleAllocator() *HandleAllocator {
+	return &HandleAllocator{used: make(map[string]string), occurrences: make(map[string]int)}
+}
 
 func (a *HandleAllocator) Allocate(prefix string, fields ...string) string {
 	identity := strings.Join(fields, "\x00")
-	for length := 16; length <= 43; length += 4 {
-		handle := StableHandleWithLength(prefix, length, fields...)
-		if old, ok := a.used[handle]; !ok || old == identity {
-			a.used[handle] = identity
-			return handle
+	allocationKey := prefix + "\x00" + identity
+	occurrence := a.occurrences[allocationKey]
+	for {
+		candidateFields := fields
+		if occurrence > 0 {
+			candidateFields = append(append([]string(nil), fields...), strconv.Itoa(occurrence))
 		}
+		for length := 16; length <= 43; length += 4 {
+			handle := StableHandleWithLength(prefix, length, candidateFields...)
+			if _, ok := a.used[handle]; !ok {
+				a.used[handle] = identity
+				a.occurrences[allocationKey] = occurrence + 1
+				return handle
+			}
+		}
+		occurrence++
 	}
-	return StableHandleWithLength(prefix, 43, fields...)
 }
