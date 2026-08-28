@@ -62,6 +62,17 @@ func TestRankDeduplicatesContentAndContainedLowerScore(t *testing.T) {
 	}
 }
 
+func TestRankDropsLowerScoreContainerWhenSpecificChildIsPreferred(t *testing.T) {
+	candidates := []model.RankedCandidate{
+		{Handle: "method", Path: "TokenService.cs", Symbol: "Validate", StartLine: 10, EndLine: 16, ContentHash: "method", Score: 100, Confidence: .55},
+		{Handle: "class", Path: "TokenService.cs", Symbol: "TokenService", StartLine: 1, EndLine: 30, ContentHash: "class", Score: 8, Confidence: .55},
+	}
+	got := Deduplicate(candidates)
+	if len(got) != 1 || got[0].Handle != "method" {
+		t.Fatalf("deduped=%+v", got)
+	}
+}
+
 func TestRankTieBreaksBySpanThenPathThenHandle(t *testing.T) {
 	candidates := []model.RankedCandidate{
 		{Handle: "b", Path: "z.go", StartLine: 1, EndLine: 2, Confidence: .5},

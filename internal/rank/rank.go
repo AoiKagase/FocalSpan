@@ -120,7 +120,10 @@ func Deduplicate(candidates []model.RankedCandidate) []model.RankedCandidate {
 		}
 		contained := false
 		for _, accepted := range result {
-			if candidate.Path == accepted.Path && candidate.StartLine >= accepted.StartLine && candidate.EndLine <= accepted.EndLine && candidate.Score <= accepted.Score {
+			if candidate.Path != accepted.Path || candidate.Score > accepted.Score {
+				continue
+			}
+			if containsSpan(accepted, candidate) || containsSpan(candidate, accepted) {
 				contained = true
 				break
 			}
@@ -134,4 +137,11 @@ func Deduplicate(candidates []model.RankedCandidate) []model.RankedCandidate {
 		result = append(result, candidate)
 	}
 	return result
+}
+
+func containsSpan(outer, inner model.RankedCandidate) bool {
+	if outer.StartLine <= 0 || outer.EndLine < outer.StartLine || inner.StartLine <= 0 || inner.EndLine < inner.StartLine {
+		return false
+	}
+	return outer.StartLine <= inner.StartLine && outer.EndLine >= inner.EndLine
 }

@@ -35,6 +35,48 @@ func TestQueryAutoIndexesAndHonorsBudget(t *testing.T) {
 	}
 }
 
+func TestQueryPrefersSpecificCSharpAndJavaScriptSpans(t *testing.T) {
+	tests := []struct {
+		name, path, language, content, query, symbol string
+	}{
+		{
+			name: "csharp", path: "TokenService.cs", language: "csharp", query: "ValidateToken", symbol: "ValidateToken",
+			content: "namespace Demo {\npublic class TokenService {\n    public bool ValidateToken(string token) { return token.Length > 0; }\n    public void Unrelated() {\n" + strings.Repeat("        // unrelated implementation detail\n", 30) + "    }\n}\n}\n",
+		},
+		{
+			name: "javascript", path: "token-service.js", language: "javascript", query: "validateToken", symbol: "validateToken",
+			content: "export class TokenService {\n    validateToken(token) { return token.length > 0; }\n    unrelated() {\n" + strings.Repeat("        // unrelated implementation detail\n", 30) + "    }\n}\n",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeAppFile(t, filepath.Join(root, test.path), test.content)
+			a, err := New(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer a.Close()
+
+			bundle, err := a.Query(context.Background(), QueryRequest{Query: test.query, TokenBudget: 512, Mode: "source"})
+			if err != nil || len(bundle.Items) == 0 {
+				t.Fatalf("bundle=%+v err=%v", bundle, err)
+			}
+			if bundle.Items[0].Symbol != test.symbol {
+				t.Fatalf("first item=%+v, want symbol %q", bundle.Items[0], test.symbol)
+			}
+			for _, item := range bundle.Items {
+				if item.Symbol == "TokenService" {
+					t.Fatalf("broad class span was retained: %+v", bundle.Items)
+				}
+			}
+			if bundle.Savings == nil || bundle.Savings.SavingsRatio <= 0 {
+				t.Fatalf("savings=%+v bundle=%+v", bundle.Savings, bundle)
+			}
+		})
+	}
+}
+
 func TestExpandReturnsSelfAndEmptyForUnsupportedRelation(t *testing.T) {
 	root := t.TempDir()
 	writeAppFile(t, filepath.Join(root, "auth.go"), "package auth\n\nfunc ValidateToken() error { return nil }\n")
