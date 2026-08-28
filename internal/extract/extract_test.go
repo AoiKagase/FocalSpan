@@ -4,6 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/focalspan/focalspan/internal/extract/generic"
+	"github.com/focalspan/focalspan/internal/extract/goast"
+	"github.com/focalspan/focalspan/internal/extract/php"
 	"github.com/focalspan/focalspan/internal/model"
 )
 
@@ -22,5 +25,13 @@ func TestRegistrySelectsOnlySupportedExtractor(t *testing.T) {
 	}
 	if _, ok := r.For("x.go", "go"); ok {
 		t.Fatal("unexpected extractor")
+	}
+}
+
+func TestRegistryPrefersPHPExtractorOverGeneric(t *testing.T) {
+	r := NewRegistry(goast.NewExtractor(), php.NewExtractor(), generic.NewExtractor())
+	got, ok := r.For("view.PHP", "php")
+	if !ok || got.Name() != "php-structural" {
+		t.Fatalf("extractor=%v ok=%v", got, ok)
 	}
 }

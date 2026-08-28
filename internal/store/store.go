@@ -276,17 +276,40 @@ func (s *Store) RelatedCandidates(ctx context.Context, handles []string, relatio
 			query = candidateQuery(`c.symbol_handle IN (SELECT from_handle FROM relations WHERE to_handle = (SELECT COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) ) AND kind = 'contains')`)
 			args = []any{handle, handle}
 		case "callers":
-			query = candidateQuery(`c.symbol_handle IN (SELECT from_handle FROM relations WHERE kind = 'calls' AND (to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) OR unresolved_to = COALESCE((SELECT name FROM symbols WHERE handle = (SELECT symbol_handle FROM chunks WHERE handle = ?)), (SELECT name FROM symbols WHERE handle = ?))))`)
-			args = []any{handle, handle, handle, handle}
+			query = candidateQuery(`c.symbol_handle IN (
+SELECT from_handle FROM relations
+WHERE kind = 'calls' AND (
+  to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+  OR unresolved_to IN (
+    SELECT name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+    UNION SELECT qualified_name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+  )
+))`)
+			args = []any{handle, handle, handle, handle, handle, handle}
 		case "callees":
 			query = candidateQuery(`c.symbol_handle IN (SELECT to_handle FROM relations WHERE from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) AND kind = 'calls')`)
 			args = []any{handle, handle}
 		case "tests":
-			query = candidateQuery(`c.symbol_handle IN (SELECT from_handle FROM relations WHERE to_handle = (SELECT COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) ) AND kind = 'tests') OR c.symbol_handle IN (SELECT to_handle FROM relations WHERE from_handle = (SELECT COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) ) AND kind = 'tests')`)
-			args = []any{handle, handle, handle, handle}
+			query = candidateQuery(`c.symbol_handle IN (
+SELECT from_handle FROM relations
+WHERE kind = 'tests' AND (
+  to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+  OR unresolved_to IN (
+    SELECT name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+    UNION SELECT qualified_name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+  )
+)
+UNION SELECT to_handle FROM relations
+WHERE from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) AND kind = 'tests'
+)`)
+			args = []any{handle, handle, handle, handle, handle, handle, handle, handle}
 		case "imports", "references", "neighbors":
-			query = candidateQuery(`c.symbol_handle IN (SELECT from_handle FROM relations WHERE to_handle = ? OR from_handle = ? UNION SELECT to_handle FROM relations WHERE from_handle = ? OR to_handle = ?)`)
-			args = []any{handle, handle, handle, handle}
+			query = candidateQuery(`c.symbol_handle IN (SELECT from_handle FROM relations WHERE to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) OR from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) UNION SELECT to_handle FROM relations WHERE from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) OR to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?))`)
+			args = []any{handle, handle, handle, handle, handle, handle, handle, handle}
+			if relation != "neighbors" {
+				query = candidateQuery(`c.symbol_handle IN (SELECT from_handle FROM relations WHERE to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) OR from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) UNION SELECT to_handle FROM relations WHERE from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) OR to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) UNION SELECT from_handle FROM relations WHERE kind = ? AND unresolved_to IN (SELECT name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) UNION SELECT qualified_name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) UNION SELECT f.path FROM files f JOIN symbols s ON s.file_id = f.id WHERE s.handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)))`)
+				args = []any{handle, handle, handle, handle, handle, handle, handle, handle, relation, handle, handle, handle, handle, handle, handle}
+			}
 		}
 		rows, err := s.db.QueryContext(ctx, query, args...)
 		if err != nil {

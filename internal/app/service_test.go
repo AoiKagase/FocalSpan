@@ -73,6 +73,39 @@ func TestImpactReturnsChangedSpanWithSyntaxOnlyDiagnostic(t *testing.T) {
 	}
 }
 
+func TestAppIndexesPHPAndIncFilesWithPHPExtractor(t *testing.T) {
+	root := t.TempDir()
+	writeAppFile(t, filepath.Join(root, "Service.php"), "<?php\nnamespace App;\nclass Service { public function run(): void {} }\n")
+	writeAppFile(t, filepath.Join(root, "bootstrap.inc"), "<?php\nfunction bootstrap(): void {}\n")
+	a, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+	if _, err := a.Index(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	candidates, err := a.Store.AllCandidates(context.Background(), 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seenPaths := map[string]bool{}
+	seenSymbols := map[string]bool{}
+	for _, candidate := range candidates {
+		if candidate.Language != "php" {
+			t.Fatalf("candidate language=%q: %+v", candidate.Language, candidate)
+		}
+		seenPaths[candidate.Path] = true
+		seenSymbols[candidate.Symbol] = true
+		if candidate.StartLine < 1 || candidate.EndLine < candidate.StartLine {
+			t.Fatalf("invalid candidate span=%+v", candidate)
+		}
+	}
+	if !seenPaths["Service.php"] || !seenPaths["bootstrap.inc"] || !seenSymbols["Service"] || !seenSymbols["bootstrap"] {
+		t.Fatalf("PHP index paths=%v symbols=%v candidates=%+v", seenPaths, seenSymbols, candidates)
+	}
+}
+
 func runAppGit(t *testing.T, root string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-C", root}, args...)...)

@@ -58,3 +58,74 @@ func TestRelatedCandidatesResolveUnresolvedCallByTargetSymbolName(t *testing.T) 
 		t.Fatalf("callers=%+v err=%v", got, err)
 	}
 }
+
+func TestRelatedCandidatesResolveUnresolvedPHPRelations(t *testing.T) {
+	s, err := Open(t.TempDir(), ".focalspan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	if err := s.ReplaceFile(context.Background(), model.SourceFile{Path: "src/Auth/TokenService.php", Language: "php", SHA256: "target"}, model.Extraction{
+		Symbols: []model.Symbol{
+			{Handle: "php-class", FilePath: "src/Auth/TokenService.php", Language: "php", Kind: "class", Name: "TokenService", QualifiedName: "App\\Auth\\TokenService", StartLine: 1, EndLine: 8, Confidence: 1},
+			{Handle: "php-method", FilePath: "src/Auth/TokenService.php", Language: "php", Kind: "method", Name: "validateToken", QualifiedName: "App\\Auth\\TokenService::validateToken", StartLine: 2, EndLine: 7, Confidence: 1},
+		},
+		Chunks: []model.Chunk{
+			{Handle: "php-class-chunk", FilePath: "src/Auth/TokenService.php", Language: "php", Kind: "class-outline", SymbolHandle: "php-class", SymbolName: "TokenService", StartLine: 1, EndLine: 1, Content: "class TokenService", ContentHash: "php-class"},
+			{Handle: "php-method-chunk", FilePath: "src/Auth/TokenService.php", Language: "php", Kind: "method", SymbolHandle: "php-method", SymbolName: "validateToken", StartLine: 2, EndLine: 7, Content: "validateToken", ContentHash: "php-method"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReplaceFile(context.Background(), model.SourceFile{Path: "src/Http/AuthMiddleware.php", Language: "php", SHA256: "caller"}, model.Extraction{
+		Symbols: []model.Symbol{{Handle: "php-caller", FilePath: "src/Http/AuthMiddleware.php", Language: "php", Kind: "method", Name: "handle", QualifiedName: "App\\Http\\AuthMiddleware::handle", StartLine: 1, EndLine: 5, Confidence: 1}},
+		Chunks:  []model.Chunk{{Handle: "php-caller-chunk", FilePath: "src/Http/AuthMiddleware.php", Language: "php", Kind: "method", SymbolHandle: "php-caller", SymbolName: "handle", StartLine: 1, EndLine: 5, Content: "TokenService::validateToken", ContentHash: "php-caller"}},
+		Relations: []model.Relation{
+			{FromHandle: "php-caller", UnresolvedTo: "App\\Auth\\TokenService::validateToken", Kind: "calls", Confidence: .3, Source: "php"},
+			{FromHandle: "php-caller", UnresolvedTo: "App\\Auth\\TokenService", Kind: "references", Confidence: .35, Source: "php"},
+			{FromHandle: "php-caller", UnresolvedTo: "includes/bootstrap.inc", Kind: "imports", Confidence: .8, Source: "php"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReplaceFile(context.Background(), model.SourceFile{Path: "tests/TokenServiceTest.php", Language: "php", SHA256: "test"}, model.Extraction{
+		Symbols:   []model.Symbol{{Handle: "php-test", FilePath: "tests/TokenServiceTest.php", Language: "php", Kind: "test", Name: "testExpiredTokenIsRejected", QualifiedName: "App\\Auth\\TokenServiceTest::testExpiredTokenIsRejected", StartLine: 1, EndLine: 5, Confidence: 1}},
+		Chunks:    []model.Chunk{{Handle: "php-test-chunk", FilePath: "tests/TokenServiceTest.php", Language: "php", Kind: "test", SymbolHandle: "php-test", SymbolName: "testExpiredTokenIsRejected", StartLine: 1, EndLine: 5, Content: "validateToken", ContentHash: "php-test"}},
+		Relations: []model.Relation{{FromHandle: "php-test", UnresolvedTo: "App\\Auth\\TokenService::validateToken", Kind: "tests", Confidence: .3, Source: "php"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReplaceFile(context.Background(), model.SourceFile{Path: "includes/bootstrap.inc", Language: "php", SHA256: "include"}, model.Extraction{
+		Symbols: []model.Symbol{{Handle: "php-include", FilePath: "includes/bootstrap.inc", Language: "php", Kind: "file", Name: "includes/bootstrap.inc", QualifiedName: "includes/bootstrap.inc", StartLine: 1, EndLine: 3, Confidence: .7}},
+		Chunks:  []model.Chunk{{Handle: "php-include-chunk", FilePath: "includes/bootstrap.inc", Language: "php", Kind: "procedural", SymbolHandle: "php-include", SymbolName: "includes/bootstrap.inc", StartLine: 1, EndLine: 3, Content: "bootstrap", ContentHash: "php-include"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	callers, err := s.RelatedCandidates(context.Background(), []string{"php-method-chunk"}, "callers")
+	if err != nil || !hasRelatedPath(callers, "src/Http/AuthMiddleware.php") {
+		t.Fatalf("PHP callers=%+v err=%v", callers, err)
+	}
+	tests, err := s.RelatedCandidates(context.Background(), []string{"php-method-chunk"}, "tests")
+	if err != nil || !hasRelatedPath(tests, "tests/TokenServiceTest.php") {
+		t.Fatalf("PHP tests=%+v err=%v", tests, err)
+	}
+	imports, err := s.RelatedCandidates(context.Background(), []string{"php-include-chunk"}, "imports")
+	if err != nil || !hasRelatedPath(imports, "src/Http/AuthMiddleware.php") {
+		t.Fatalf("PHP imports=%+v err=%v", imports, err)
+	}
+	references, err := s.RelatedCandidates(context.Background(), []string{"php-class-chunk"}, "references")
+	if err != nil || !hasRelatedPath(references, "src/Http/AuthMiddleware.php") {
+		t.Fatalf("PHP references=%+v err=%v", references, err)
+	}
+}
+
+func hasRelatedPath(candidates []model.RankedCandidate, path string) bool {
+	for _, candidate := range candidates {
+		if candidate.Path == path {
+			return true
+		}
+	}
+	return false
+}
