@@ -24,11 +24,11 @@ func DetectRoot(ctx context.Context, start string) (string, bool, error) {
 	if gitRoot, ok := gitRoot(ctx, abs); ok {
 		return gitRoot, true, nil
 	}
-	real, err := filepath.EvalSymlinks(abs)
+	real, err := canonicalOrAbsolute(abs)
 	if err != nil {
 		return "", false, fmt.Errorf("resolve root: %w", err)
 	}
-	return filepath.Clean(real), false, nil
+	return real, false, nil
 }
 
 func gitRoot(ctx context.Context, start string) (string, bool) {
@@ -53,11 +53,11 @@ func IsGitRepository(ctx context.Context, root string) bool {
 var errOutsideRoot = errors.New("path is outside repository root")
 
 func ContainedPath(root, candidate string) (string, error) {
-	realRoot, err := filepath.EvalSymlinks(root)
+	realRoot, err := canonicalOrAbsolute(root)
 	if err != nil {
 		return "", fmt.Errorf("resolve repository root: %w", err)
 	}
-	realCandidate, err := filepath.EvalSymlinks(candidate)
+	realCandidate, err := canonicalOrAbsolute(candidate)
 	if err != nil {
 		return "", fmt.Errorf("resolve candidate: %w", err)
 	}
@@ -66,4 +66,21 @@ func ContainedPath(root, candidate string) (string, error) {
 		return "", errOutsideRoot
 	}
 	return filepath.Clean(realCandidate), nil
+}
+
+func canonicalOrAbsolute(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	if real, err := filepath.EvalSymlinks(abs); err == nil {
+		return filepath.Clean(real), nil
+	}
+	if _, err := os.Stat(abs); err != nil {
+		return "", err
+	}
+	// A few Windows-protected temporary locations deny the final-path query
+	// while allowing normal file access. Preserve containment checks with the
+	// absolute path when canonicalization is unavailable.
+	return filepath.Clean(abs), nil
 }

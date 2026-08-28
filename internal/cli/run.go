@@ -10,12 +10,15 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/focalspan/focalspan/internal/app"
 	"github.com/focalspan/focalspan/internal/config"
 	"github.com/focalspan/focalspan/internal/eval"
+	"github.com/focalspan/focalspan/internal/integration/codex"
 	"github.com/focalspan/focalspan/internal/mcpserver"
 	"github.com/focalspan/focalspan/internal/render"
 	"github.com/focalspan/focalspan/internal/repository"
@@ -48,6 +51,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = runDoctor(ctx, args[1:], stdout)
 	case "serve":
 		err = runServe(ctx, args[1:])
+	case "mcp":
+		err = runMCP(ctx, args[1:], stdout)
 	default:
 		err = fmt.Errorf("unknown command %q", args[0])
 	}
@@ -60,7 +65,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 const usage = `focalspan - token-first code context compiler
 
-commands: init index update status query expand impact eval doctor serve`
+commands: init index update status query expand impact eval doctor serve mcp`
 
 func runInit(ctx context.Context, args []string, stdout io.Writer) error {
 	fs := newFlagSet("init")
@@ -410,6 +415,190 @@ func runServe(ctx context.Context, args []string) error {
 	return mcpserver.New(service, !*noAutoUpdate).Run(serveCtx)
 }
 
+func runMCP(ctx context.Context, args []string, stdout io.Writer) error {
+	if len(args) == 0 {
+		return errors.New("mcp subcommand is required: install, status, uninstall, or print")
+	}
+	operation := args[0]
+	if operation != "install" && operation != "status" && operation != "uninstall" && operation != "print" {
+		return fmt.Errorf("unknown mcp subcommand %q", operation)
+	}
+	if len(args) < 2 {
+		return fmt.Errorf("mcp %s requires a client; supported client: codex", operation)
+	}
+	if args[1] != codex.ClientName {
+		return fmt.Errorf("unknown MCP client %q; supported client: codex", args[1])
+	}
+	fs := newFlagSet("mcp " + operation)
+	rootArg := fs.String("root", ".", "repository root")
+	scopeArg := fs.String("scope", codex.ScopeProject, "project or user")
+	nameArg := fs.String("name", "", "MCP server name")
+	jsonOutput := fs.Bool("json", false, "JSON output")
+	commandArg := fs.String("command", "", "FocalSpan executable path")
+	codexCommandArg := fs.String("codex-command", "", "Codex CLI path or command name")
+	noAutoUpdate := fs.Bool("no-auto-update", false, "disable MCP server auto update")
+	dryRun := fs.Bool("dry-run", false, "show changes without writing or running commands")
+	force := fs.Bool("force", false, "replace a conflicting user-scope registration")
+	if err := fs.Parse(args[2:]); err != nil {
+		return err
+	}
+	if remaining := fs.Args(); len(remaining) > 0 {
+		return fmt.Errorf("unexpected mcp argument %q", remaining[0])
+	}
+	if operation == "status" {
+		// These flags are not part of status' public surface; reject accidental
+		// use rather than allowing a misleading status result.
+		if *commandArg != "" || *noAutoUpdate || *dryRun || *force {
+			return errors.New("mcp status accepts --root, --scope, --name, --codex-command, and --json only")
+		}
+	}
+	if operation == "uninstall" && (*commandArg != "" || *noAutoUpdate) {
+		return errors.New("mcp uninstall accepts --root, --scope, --name, --dry-run, --force, --codex-command, and --json only")
+	}
+	if operation == "print" && (*dryRun || *force) {
+		return errors.New("mcp print accepts --root, --scope, --name, --command, --no-auto-update, --codex-command, and --json only")
+	}
+	if *scopeArg != codex.ScopeProject && *scopeArg != codex.ScopeUser {
+		return fmt.Errorf("invalid scope %q: must be project or user", *scopeArg)
+	}
+	root, _, err := resolveRoot(ctx, *rootArg)
+	if err != nil {
+		return err
+	}
+	name := *nameArg
+	if name == "" {
+		name = codex.DefaultServerName(*scopeArg, root)
+	}
+	if err := codex.ValidateName(name); err != nil {
+		return err
+	}
+	req := codex.Request{Root: root, Scope: *scopeArg, Name: name, Command: *commandArg, CodexCommand: *codexCommandArg, NoAutoUpdate: *noAutoUpdate, DryRun: *dryRun, Force: *force}
+	service := codex.NewService(nil)
+	if operation == "status" {
+		status, err := service.Status(ctx, req)
+		if err != nil {
+			return err
+		}
+		if *jsonOutput {
+			return writeJSON(stdout, status)
+		}
+		return writeMCPStatus(stdout, status)
+	}
+	var result codex.OperationResult
+	switch operation {
+	case "install":
+		result, err = service.Install(ctx, req)
+	case "uninstall":
+		result, err = service.Uninstall(ctx, req)
+	case "print":
+		result, err = service.Print(req)
+	}
+	if err != nil {
+		return err
+	}
+	result.Root = root
+	if *jsonOutput {
+		return writeJSON(stdout, result)
+	}
+	return writeMCPOperation(stdout, operation, result)
+}
+
+func writeMCPOperation(w io.Writer, operation string, result codex.OperationResult) error {
+	if _, err := fmt.Fprintf(w, "client: %s\nscope: %s\nserver: %s\nroot: %s\n", result.Client, result.Scope, result.Name, result.Root); err != nil {
+		return err
+	}
+	if result.ConfigPath != "" {
+		if _, err := fmt.Fprintf(w, "config: %s\n", result.ConfigPath); err != nil {
+			return err
+		}
+	}
+	if result.Command != "" {
+		if _, err := fmt.Fprintf(w, "command: %s\nargs: %s\n", result.Command, formatArgs(result.Args)); err != nil {
+			return err
+		}
+	}
+	if result.Action != "" {
+		if _, err := fmt.Fprintf(w, "action: %s\n", result.Action); err != nil {
+			return err
+		}
+	}
+	if operation == "print" && result.Action == "" {
+		if _, err := fmt.Fprintln(w, "action: print"); err != nil {
+			return err
+		}
+	}
+	if result.State != "" {
+		if _, err := fmt.Fprintf(w, "state: %s\n", result.State); err != nil {
+			return err
+		}
+	}
+	if len(result.Argv) > 0 {
+		if _, err := fmt.Fprintf(w, "argv: %s\n", formatCommandLine(result.Argv)); err != nil {
+			return err
+		}
+	}
+	if result.Block != "" {
+		if _, err := fmt.Fprintf(w, "block:\n%s", result.Block); err != nil {
+			return err
+		}
+	}
+	for _, diagnostic := range result.Diagnostics {
+		if _, err := fmt.Fprintf(w, "diagnostic: %s\n", diagnostic); err != nil {
+			return err
+		}
+	}
+	if operation == "print" && result.Scope == codex.ScopeUser && len(result.Argv) == 0 {
+		_, _ = fmt.Fprintln(w, "action: print")
+	}
+	return nil
+}
+
+func writeMCPStatus(w io.Writer, status codex.RegistrationStatus) error {
+	if _, err := fmt.Fprintf(w, "client: %s\nscope: %s\nstate: %s\nserver: %s\nroot: %s\n", status.Client, status.Scope, status.State, status.Name, status.Root); err != nil {
+		return err
+	}
+	if status.ConfigPath != "" {
+		if _, err := fmt.Fprintf(w, "config: %s\n", status.ConfigPath); err != nil {
+			return err
+		}
+	}
+	if status.Command != "" {
+		if _, err := fmt.Fprintf(w, "command: %s\n", status.Command); err != nil {
+			return err
+		}
+	}
+	for _, diagnostic := range status.Diagnostics {
+		if _, err := fmt.Fprintf(w, "diagnostic: %s\n", diagnostic); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func formatArgs(args []string) string {
+	parts := make([]string, len(args))
+	for i, arg := range args {
+		parts[i] = fmt.Sprintf("%q", arg)
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+func formatCommandLine(args []string) string {
+	parts := make([]string, len(args))
+	for i, arg := range args {
+		if arg != "" && !strings.ContainsAny(arg, " \t\r\n\"'") {
+			parts[i] = arg
+			continue
+		}
+		if runtime.GOOS == "windows" {
+			parts[i] = `"` + strings.ReplaceAll(arg, `"`, `\"`) + `"`
+			continue
+		}
+		parts[i] = strconv.Quote(arg)
+	}
+	return strings.Join(parts, " ")
+}
+
 func ensureGitignore(root string) error {
 	path := filepath.Join(root, ".gitignore")
 	b, err := os.ReadFile(path)
@@ -442,7 +631,14 @@ func resolveRoot(ctx context.Context, start string) (string, bool, error) {
 	}
 	real, err := filepath.EvalSymlinks(abs)
 	if err != nil {
-		return "", false, fmt.Errorf("resolve root: %w", err)
+		// Some Windows-protected temporary locations deny the final-path
+		// query even though ordinary directory access is allowed. Keep the
+		// absolute path in that case; symlinks are still resolved whenever the
+		// platform permits it.
+		if _, statErr := os.Stat(abs); statErr != nil {
+			return "", false, fmt.Errorf("resolve root: %w", err)
+		}
+		real = abs
 	}
 	real = filepath.Clean(real)
 	return real, repository.IsGitRepository(ctx, real), nil
