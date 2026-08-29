@@ -50,6 +50,50 @@ func TestRankUsesExplicitPHPIdentifierTermsForSymbolPrefixes(t *testing.T) {
 	}
 }
 
+func TestRankIgnoresSingleLetterLanguageNameAsSymbolPrefix(t *testing.T) {
+	candidates := []model.RankedCandidate{
+		{Handle: "noise", Path: "noise.cpp", Symbol: "C", Content: ""},
+		{Handle: "target", Path: "auth.cpp", Symbol: "ValidateToken", Content: "expired"},
+	}
+	got := RankWithIdentifiers(candidates, []string{"where", "c", "expired"}, []string{"C"})
+	if len(got) == 0 || got[0].Handle != "target" {
+		t.Fatalf("ranked=%+v", got)
+	}
+}
+
+func TestRankDoesNotBoostTestsForDefinitionQuestion(t *testing.T) {
+	candidates := []model.RankedCandidate{
+		{Handle: "test", Path: "auth_test.cpp", Symbol: "RejectsExpiredToken", Kind: "test", Content: "expired token rejected"},
+		{Handle: "production", Path: "auth.cpp", Symbol: "ValidateToken", Kind: "method", Content: "expired token rejected"},
+	}
+	got := Rank(candidates, []string{"where", "expired", "token", "rejected"})
+	if len(got) == 0 || got[0].Handle != "production" {
+		t.Fatalf("ranked=%+v", got)
+	}
+}
+
+func TestRankDoesNotUseDocumentationHeadingAsCodeSymbolPrefix(t *testing.T) {
+	candidates := []model.RankedCandidate{
+		{Handle: "docs", Path: "README.md", Language: "markdown", Kind: "heading", Symbol: "JavaScript and TypeScript", Content: "token"},
+		{Handle: "source", Path: "auth.ts", Language: "typescript", Kind: "function", Symbol: "validateToken", Content: "expired token"},
+	}
+	got := Rank(candidates, []string{"tests", "expired", "TypeScript", "token"})
+	if len(got) == 0 || got[0].Handle != "source" {
+		t.Fatalf("ranked=%+v", got)
+	}
+}
+
+func TestRankKeepsExactOutlineWhenSpecificChunkSharesPath(t *testing.T) {
+	candidates := []model.RankedCandidate{
+		{Handle: "outline", Path: "Auth/TokenService.Partial.cs", Kind: "class-outline", Symbol: "TokenService", Reasons: []model.ScoreReason{{Code: "symbol-exact"}}},
+		{Handle: "method", Path: "Auth/TokenService.Partial.cs", Kind: "method", Symbol: "ValidateForHeader"},
+	}
+	got := Deduplicate(candidates)
+	if len(got) != 2 {
+		t.Fatalf("deduped=%+v", got)
+	}
+}
+
 func TestRankDeduplicatesContentAndContainedLowerScore(t *testing.T) {
 	candidates := []model.RankedCandidate{
 		{Handle: "whole", Path: "a.go", Symbol: "Run", StartLine: 1, EndLine: 20, ContentHash: "same", Score: 10, Confidence: .8},
@@ -58,6 +102,17 @@ func TestRankDeduplicatesContentAndContainedLowerScore(t *testing.T) {
 	}
 	got := Deduplicate(candidates)
 	if len(got) != 1 || got[0].Handle != "whole" {
+		t.Fatalf("deduped=%+v", got)
+	}
+}
+
+func TestRankDropsNonRelationOutlineWhenSpecificChunkExists(t *testing.T) {
+	candidates := []model.RankedCandidate{
+		{Handle: "outline", Path: "auth.cpp", Kind: "translation-unit-outline", StartLine: 1, EndLine: 1, Score: 20},
+		{Handle: "method", Path: "auth.cpp", Kind: "method", Symbol: "ValidateToken", StartLine: 4, EndLine: 8, Score: 10},
+	}
+	got := Deduplicate(candidates)
+	if len(got) != 1 || got[0].Handle != "method" {
 		t.Fatalf("deduped=%+v", got)
 	}
 }

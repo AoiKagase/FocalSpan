@@ -1,0 +1,6 @@
+{"name":"jsts-expired-token","query":"where is an expired TypeScript authentication token rejected?","token_budget":1400,"expected_symbols":["validateToken"],"expected_paths":["src/auth/token-validator.ts"],"forbidden_paths":["unrelated/report.ts"]}
+{"name":"jsts-token-importers","query":"what imports validateToken?","token_budget":1400,"expected_paths":["src/auth/token-service.ts"],"forbidden_paths":["unrelated/report.ts"]}
+{"name":"jsts-token-callers","query":"what calls validateToken?","token_budget":1400,"expected_symbols":["validateToken"],"expected_paths":["src/auth/token-service.ts"],"forbidden_paths":["unrelated/report.ts"]}
+{"name":"jsts-token-tests","query":"what tests cover expired TypeScript tokens?","token_budget":1600,"expected_symbols":["expired token is rejected"],"expected_paths":["tests/token-service.test.ts"],"forbidden_paths":["unrelated/report.ts"]}
+{"name":"jsts-login-form","query":"where is the LoginForm component defined?","token_budget":1400,"expected_symbols":["LoginForm"],"expected_paths":["src/components/LoginForm.tsx"],"forbidden_paths":["unrelated/report.ts"]}
+{"name":"jsts-commonjs","query":"which CommonJS module exports token validation?","token_budget":1400,"expected_paths":["src/commonjs/token-service.cjs"],"forbidden_paths":["unrelated/report.ts"]}

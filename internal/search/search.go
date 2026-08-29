@@ -3,6 +3,7 @@ package search
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 
 	"github.com/focalspan/focalspan/internal/model"
@@ -42,10 +43,7 @@ func (s *Searcher) Search(ctx context.Context, req SearchRequest) ([]model.Ranke
 	}
 	if related, ok := s.store.(relationStore); ok {
 		for _, relation := range queryRelations(terms) {
-			for _, candidate := range candidates {
-				if relation != "imports" && !containsSymbol(terms.Symbols, candidate.Symbol) {
-					continue
-				}
+			for _, candidate := range relationAnchors(candidates, terms) {
 				neighbors, relationErr := related.RelatedCandidates(ctx, []string{candidate.Handle}, relation)
 				if relationErr != nil {
 					return nil, relationErr
@@ -108,6 +106,12 @@ func queryRelations(terms QueryTerms) []string {
 			return []string{"callees"}
 		case "test", "tests", "testing", "coverage", "cover":
 			return []string{"tests"}
+		case "import", "imports":
+			return []string{"imports"}
+		case "export", "exports":
+			return []string{"exports"}
+		case "reference", "references", "interface", "implements", "implemented":
+			return []string{"references"}
 		case "include", "includes", "included", "extends", "extend", "inherit", "inherits", "inherited", "layout", "layouts", "partial", "partials", "template":
 			imports = true
 		}
@@ -118,11 +122,82 @@ func queryRelations(terms QueryTerms) []string {
 	return nil
 }
 
-func containsSymbol(symbols []string, candidate string) bool {
-	for _, symbol := range symbols {
-		if strings.EqualFold(symbol, candidate) {
-			return true
+func relationAnchors(candidates []model.RankedCandidate, terms QueryTerms) []model.RankedCandidate {
+	identifiers := append(append([]string{}, terms.Identifiers...), terms.Symbols...)
+	bestMatch := 0
+	anchors := make([]model.RankedCandidate, 0)
+	for _, candidate := range candidates {
+		match := exactAnchorMatch(candidate, identifiers)
+		if match == 0 {
+			continue
+		}
+		if match > bestMatch {
+			bestMatch = match
+			anchors = anchors[:0]
+		}
+		if match == bestMatch {
+			anchors = append(anchors, candidate)
 		}
 	}
-	return false
+	if len(anchors) == 0 {
+		return nil
+	}
+	bestPriority := 0
+	for _, candidate := range anchors {
+		if priority := anchorKindPriority(candidate); priority > bestPriority {
+			bestPriority = priority
+		}
+	}
+	if bestPriority > 0 {
+		filtered := anchors[:0]
+		for _, candidate := range anchors {
+			if anchorKindPriority(candidate) == bestPriority {
+				filtered = append(filtered, candidate)
+			}
+		}
+		anchors = filtered
+	}
+	sort.SliceStable(anchors, func(i, j int) bool {
+		if anchors[i].Path != anchors[j].Path {
+			return anchors[i].Path < anchors[j].Path
+		}
+		if anchors[i].StartLine != anchors[j].StartLine {
+			return anchors[i].StartLine < anchors[j].StartLine
+		}
+		return anchors[i].Handle < anchors[j].Handle
+	})
+	if len(anchors) > 8 {
+		anchors = anchors[:8]
+	}
+	return anchors
+}
+
+func exactAnchorMatch(candidate model.RankedCandidate, identifiers []string) int {
+	lowerSymbol := strings.ToLower(strings.TrimSpace(candidate.Symbol))
+	lowerPath := strings.ToLower(strings.ReplaceAll(candidate.Path, "\\", "/"))
+	best := 0
+	for _, identifier := range identifiers {
+		identifier = strings.ToLower(strings.TrimSpace(identifier))
+		if len([]rune(identifier)) < 3 {
+			continue
+		}
+		if lowerSymbol == identifier || lowerPath == identifier || strings.HasSuffix(lowerPath, "/"+identifier) {
+			if length := len([]rune(identifier)); length > best {
+				best = length
+			}
+		}
+	}
+	return best
+}
+
+func anchorKindPriority(candidate model.RankedCandidate) int {
+	if strings.HasSuffix(candidate.Kind, "-outline") {
+		return 3
+	}
+	switch candidate.Kind {
+	case "method", "constructor", "destructor", "operator", "property", "event", "function", "function-expression", "arrow_function":
+		return 2
+	default:
+		return 0
+	}
 }

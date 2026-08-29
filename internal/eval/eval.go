@@ -148,10 +148,10 @@ func hitAt(items []model.ContextItem, expectedSymbols, expectedPaths []string, n
 	if len(items) > n {
 		items = items[:n]
 	}
-	if len(expectedSymbols) == 0 {
+	if len(expectedSymbols) > 0 {
 		for _, item := range items {
-			for _, path := range expectedPaths {
-				if item.Path == path {
+			for _, symbol := range expectedSymbols {
+				if item.Symbol == symbol {
 					return 1
 				}
 			}
@@ -159,8 +159,8 @@ func hitAt(items []model.ContextItem, expectedSymbols, expectedPaths []string, n
 		return 0
 	}
 	for _, item := range items {
-		for _, symbol := range expectedSymbols {
-			if item.Symbol == symbol {
+		for _, path := range expectedPaths {
+			if item.Path == path {
 				return 1
 			}
 		}

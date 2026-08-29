@@ -128,6 +128,7 @@ type ContextItem struct {
 	EndLine         int           `json:"end_line"`
 	Score           float64       `json:"score"`
 	Reasons         []ScoreReason `json:"reasons,omitempty"`
+	Relation        string        `json:"relation,omitempty"`
 	EstimatedTokens int           `json:"estimated_tokens"`
 	Content         string        `json:"content,omitempty"`
 	Elided          bool          `json:"elided,omitempty"`

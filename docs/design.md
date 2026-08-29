@@ -66,6 +66,15 @@ diverge in ranking or budget behavior.
 - `internal/extract/template`: stateful Smarty/HTML composite scanning,
   block/function/capture extraction, bounded embedded regions, and conservative
   include/extends/script relations. It never renders a template.
+- `internal/extract/cpp`: pure-Go C/C++ lexer/parser for C and C++ source and
+  header extensions, declarations, namespaces, types, methods, calls,
+  references, includes, tests, and partial recovery.
+- `internal/extract/csharp`: pure-Go C# lexer/parser for namespaces, types,
+  methods, properties/events, calls, references, `using`, tests, and partial
+  recovery.
+- `internal/extract/jsts`: pure-Go JavaScript/TypeScript lexer/parser for
+  ESM/CommonJS modules, namespaces, classes/interfaces/types, functions,
+  methods/arrows, JSX/TSX, calls, references, tests, and partial recovery.
 - `internal/extract/generic`: C-like lexer, Python-like indentation chunks,
   Markdown headings, and bounded line-window fallback.
 - `internal/indexer`: bounded parse workers and a single transactional writer;
@@ -170,6 +179,39 @@ retained as opaque source, including the double-curly form above. Mixed PHP insi
 `embedded-php` bounded region rather than being executed or re-parsed by a
 second PHP implementation.
 
+The C/C++, C#, and JavaScript/TypeScript profiles are also first-class
+structural extractors, but remain syntax-oriented rather than compiler
+frontends. Their stateful lexers ignore strings and comments; the C/C++ and C#
+lexers also track inactive preprocessor branches when locating declarations.
+Their parsers produce exact
+UTF-8-safe byte/line spans and one source chunk per concrete function/method;
+class, namespace, module, and type chunks are bounded outlines so a container
+does not duplicate every child body. The symbol identity includes normalized
+path, language, kind, qualified name, and signature, while chunk identity also
+includes its span/content identity.
+
+- C/C++ covers C and common C/C++ header/module extensions, namespaces,
+  class/struct/union/enum declarations, free functions, methods,
+  constructors/destructors/operators, macros, `#include`/module imports,
+  calls, type references, and test functions.
+- C# covers namespace blocks and file-scoped namespaces, class/struct/
+  interface/enum/record declarations, methods, constructors, properties,
+  events, `using` imports, calls, type references, partial source, and test
+  methods.
+- JavaScript/TypeScript covers `.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, and
+  `.cjs`, ESM imports/exports, CommonJS `require`/exports, classes,
+  interfaces, enums, type aliases, functions, methods, arrow functions,
+  JSX/TSX bodies, and nested test suites.
+
+All three profiles add `contains`, `imports`/`exports`, `calls`/`tests`, and
+`references` relations. Unique same-file qualified/name matches become
+resolved handles. Ambiguous or external targets remain confidence-labeled
+`UnresolvedTo` lexical relations; relation expansion can still match those
+targets without claiming semantic resolution. Malformed input yields the
+valid prefix and a diagnostic instead of discarding the whole file. The
+extractors never invoke Clang, Roslyn, the TypeScript Compiler API, a package
+manager, or repository code.
+
 Other profiles are intentionally approximate:
 
 - C-like files use a small stateful lexer that ignores braces in strings,
@@ -219,7 +261,11 @@ The reranker uses named weights: qualified exact 120, symbol exact 100, prefix
 70, lexical overlap 0-40, normalized BM25 0-40, path 0-20, changed-line 25,
 changed-file 15, test/production pairing 15, resolved relation confidence
 times 25, unresolved lexical relation confidence times 12, same package 10,
-and a generated/low-density penalty. Reasons are preserved as
+and a generated/low-density penalty. Relation queries first choose exact
+structural symbol/path anchors, preferring concrete functions/methods over
+generic text or unrelated same-token matches, then rank the one-hop relation
+candidates. Short natural-language words are not treated as symbols merely
+because they appear in documentation. Reasons are preserved as
 `ScoreReason{Code, Weight, Detail}`. Ties sort by confidence descending, span
 size ascending, path, start line, then handle.
 
@@ -243,13 +289,19 @@ The packer reserves header/footer cost, prioritizes exact symbols, allows an
 outline/signature when a body does not fit, caps ordinary items at 40% of the
 budget, elides oversized symbols to signature plus query-hit windows, cuts only
 at UTF-8 and line boundaries, and marks elision. It promotes appropriate
-definition/test neighbors and file diversity. It re-renders and re-estimates
-the final payload, dropping the lowest-utility items until the estimate is at
-or below the budget. Budgets are clamped to 256..64000, with a default of 4000.
-An extreme budget or source request gracefully degrades to outline content.
+definition/test neighbors and file diversity, limits ordinary test queries to
+the most useful test relation candidates, and shortens repeated relation
+content to signatures. It re-renders and re-estimates the final payload,
+including metadata, dropping the lowest-utility items until the serialized
+estimate is at or below the budget. Reported `EstimatedTokens` is the
+source-oriented estimate used for reduction comparisons; the hard packing
+check includes the full structured output. Budgets are clamped to 256..64000,
+with a default of 4000. An extreme budget or source request gracefully
+degrades to outline content.
 
 `outline` items contain handle, path, language, kind, symbol, signature, line
 range, score, and reasons without source body. `source` includes bounded content.
+Relation-expanded items also retain the relation name in structured output.
 Relations supported by `expand` are `self`, `parent`, `children`, `callers`,
 `callees`, `imports`, `references`, `tests`, and `neighbors`; unsupported
 relations return an empty result.
@@ -296,15 +348,24 @@ allowing safe read transactions.
    spans/handles instead of copying a second JavaScript parser. Mixed PHP is a
    bounded searchable region because full PHP delegation would destabilize the
    existing PHP extractor and is not needed for first-class template coverage.
+8. Promote C/C++, C#, and JavaScript/TypeScript to dedicated pure-Go
+   structural extractors rather than extending `generic`: exact spans and
+   language-specific recovery are required for useful relation anchors.
+9. Keep container declarations as outline chunks and concrete methods/
+   functions as source chunks; this prevents class-level and child-body
+   duplication while preserving hierarchy through `contains` relations.
+10. Treat unresolved calls, imports/exports/includes, and references as
+   confidence-labeled lexical relations. This makes them searchable without
+   presenting heuristic resolution as compiler semantics.
 
 ## Roadmap (design only)
 
 1. SCIP semantic index importer.
 2. Official Tree-sitter Go binding adapter.
-3. C/C++ semantic provider.
-4. C# semantic provider.
+3. C/C++ semantic provider beyond the syntax extractor.
+4. C# semantic provider beyond the syntax extractor.
 5. Rust semantic provider.
-6. Python/TypeScript semantic provider.
+6. Python/TypeScript semantic provider beyond the syntax extractor.
 7. Model-specific tokenizer.
 8. MMR or a learned reranker.
 9. Streamable HTTP transport.

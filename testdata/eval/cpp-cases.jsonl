@@ -1,0 +1,5 @@
+{"name":"cpp-expired-token","query":"where is an expired C++ authentication token rejected?","token_budget":1400,"expected_symbols":["ValidateToken"],"expected_paths":["src/token_service.cpp"],"forbidden_paths":["unrelated/report.cpp"]}
+{"name":"cpp-token-callers","query":"what calls TokenService ValidateToken?","token_budget":1400,"expected_symbols":["ValidateToken"],"expected_paths":["src/auth_middleware.cpp"],"forbidden_paths":["unrelated/report.cpp"]}
+{"name":"cpp-token-tests","query":"what tests cover expired C++ tokens?","token_budget":1400,"expected_symbols":["RejectsExpiredToken"],"expected_paths":["tests/token_service_test.cpp"],"forbidden_paths":["unrelated/report.cpp"]}
+{"name":"cpp-token-include","query":"which source file includes token_service.hpp?","token_budget":1400,"expected_symbols":["src/auth_middleware.cpp"],"expected_paths":["src/auth_middleware.cpp"],"forbidden_paths":["unrelated/report.cpp"]}
+{"name":"cpp-legacy-c","query":"where is the legacy C token validation function?","token_budget":1200,"expected_symbols":["legacy_validate_token"],"expected_paths":["src/legacy_auth.c"],"forbidden_paths":["unrelated/report.cpp"]}

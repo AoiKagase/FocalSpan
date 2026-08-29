@@ -4,8 +4,11 @@ import (
 	"context"
 	"testing"
 
+	"github.com/focalspan/focalspan/internal/extract/cpp"
+	"github.com/focalspan/focalspan/internal/extract/csharp"
 	"github.com/focalspan/focalspan/internal/extract/generic"
 	"github.com/focalspan/focalspan/internal/extract/goast"
+	"github.com/focalspan/focalspan/internal/extract/jsts"
 	"github.com/focalspan/focalspan/internal/extract/php"
 	templateextract "github.com/focalspan/focalspan/internal/extract/template"
 	"github.com/focalspan/focalspan/internal/model"
@@ -46,5 +49,16 @@ func TestRegistryPrefersTemplateExtractorOverGeneric(t *testing.T) {
 	got, ok = r.For("views/plain.tpl", "template")
 	if !ok || got.Name() != "template-structural" {
 		t.Fatalf("plain extractor=%v ok=%v", got, ok)
+	}
+}
+
+func TestRegistryPrefersFirstClassLanguageExtractorsOverGeneric(t *testing.T) {
+	r := NewRegistry(goast.NewExtractor(), php.NewExtractor(), cpp.NewExtractor(), csharp.NewExtractor(), jsts.NewExtractor(), generic.NewExtractor())
+	tests := []struct{ path, language, want string }{{"x.cpp", "cpp", "cpp-structural"}, {"x.cs", "csharp", "csharp-structural"}, {"x.tsx", "typescript", "jsts-structural"}}
+	for _, tt := range tests {
+		got, ok := r.For(tt.path, tt.language)
+		if !ok || got.Name() != tt.want {
+			t.Fatalf("For(%q,%q)=%v ok=%v, want %s", tt.path, tt.language, got, ok, tt.want)
+		}
 	}
 }

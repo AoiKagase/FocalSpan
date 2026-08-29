@@ -49,3 +49,26 @@ func TestSearchAddsCallerRelationsForExplicitCallQuestion(t *testing.T) {
 	}
 	t.Fatalf("caller relation missing: %+v", got)
 }
+
+func TestSearchOnlyExpandsExactStructuralAnchor(t *testing.T) {
+	s := New(relationFakeStore{
+		fakeStore: fakeStore{results: []model.RankedCandidate{
+			{Handle: "target", Path: "auth/service.go", Symbol: "ValidateToken", Content: "expired token"},
+			{Handle: "noise", Path: "docs/readme.md", Symbol: "Readme", Content: "ValidateToken is documented here"},
+		}},
+		related: []model.RankedCandidate{{Handle: "caller", Path: "http/middleware.go", Symbol: "Authenticate"}},
+	})
+	got, err := s.Search(context.Background(), SearchRequest{Query: "what calls ValidateToken?"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, candidate := range got {
+		if candidate.Relation == "callers" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("relation candidates=%d, got=%+v", count, got)
+	}
+}

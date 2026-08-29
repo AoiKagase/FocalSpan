@@ -11,8 +11,11 @@ import (
 	"github.com/focalspan/focalspan/internal/budget"
 	"github.com/focalspan/focalspan/internal/config"
 	"github.com/focalspan/focalspan/internal/extract"
+	"github.com/focalspan/focalspan/internal/extract/cpp"
+	"github.com/focalspan/focalspan/internal/extract/csharp"
 	"github.com/focalspan/focalspan/internal/extract/generic"
 	"github.com/focalspan/focalspan/internal/extract/goast"
+	"github.com/focalspan/focalspan/internal/extract/jsts"
 	"github.com/focalspan/focalspan/internal/extract/php"
 	templateextract "github.com/focalspan/focalspan/internal/extract/template"
 	"github.com/focalspan/focalspan/internal/gitx"
@@ -46,7 +49,7 @@ func NewWithConfig(root string, cfg config.Config) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	registry := extract.NewRegistry(goast.NewExtractor(), php.NewExtractor(), templateextract.NewExtractor(), generic.NewExtractor())
+	registry := extract.NewRegistry(goast.NewExtractor(), php.NewExtractor(), cpp.NewExtractor(), csharp.NewExtractor(), jsts.NewExtractor(), templateextract.NewExtractor(), generic.NewExtractor())
 	service := &Service{Root: root, Config: cfg, Store: st, packer: budget.NewPacker(budget.NewEstimator())}
 	service.indexer = indexer.New(root, cfg, st, registry)
 	service.searcher = search.New(st)
