@@ -49,7 +49,7 @@ func (s *Service) codexRunner(req Request) (CommandRunner, string, error) {
 	if err != nil {
 		return nil, "", ErrCodexNotFound
 	}
-	return s.runner, found, nil
+	return execRunner{}, found, nil
 }
 
 func (s *Service) userGet(ctx context.Context, req Request, name string) (userRegistration, bool, string, error) {

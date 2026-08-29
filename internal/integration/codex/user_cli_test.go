@@ -15,6 +15,24 @@ type fakeCommandCall struct {
 	Args []string
 }
 
+func TestCodexRunnerUsesExecRunnerForDiscoveredCommand(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test executable: %v", err)
+	}
+
+	runner, command, err := NewService(nil).codexRunner(Request{CodexCommand: executable})
+	if err != nil {
+		t.Fatalf("codexRunner() error = %v", err)
+	}
+	if runner == nil {
+		t.Fatal("codexRunner() runner = nil, want executable command runner")
+	}
+	if command == "" {
+		t.Fatal("codexRunner() command is empty")
+	}
+}
+
 type fakeCommandRunner struct {
 	calls []fakeCommandCall
 	fn    func(context.Context, string, []string) (CommandResult, error)
