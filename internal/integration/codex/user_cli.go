@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -67,7 +68,7 @@ func (s *Service) userGet(ctx context.Context, req Request, name string) (userRe
 		if isMissingRegistration(result, runErr) {
 			return userRegistration{}, false, codexCommand, nil
 		}
-		return userRegistration{}, false, codexCommand, errors.New("Codex MCP get failed")
+		return userRegistration{}, false, codexCommand, commandFailure("get", name, result, runErr)
 	}
 	if err := commandContextError(commandCtx, runErr); err != nil {
 		return userRegistration{}, false, codexCommand, err
@@ -102,7 +103,7 @@ func (s *Service) userAdd(ctx context.Context, req Request, name string, spec Re
 		return commandCtx.Err()
 	}
 	if runErr != nil || result.ExitCode != 0 {
-		return fmt.Errorf("Codex MCP add failed for server %q", name)
+		return commandFailure("add", name, result, runErr)
 	}
 	return nil
 }
@@ -122,7 +123,7 @@ func (s *Service) userRemove(ctx context.Context, req Request, name string, code
 		return commandCtx.Err()
 	}
 	if runErr != nil || result.ExitCode != 0 {
-		return fmt.Errorf("Codex MCP remove failed for server %q", name)
+		return commandFailure("remove", name, result, runErr)
 	}
 	return nil
 }
@@ -132,6 +133,21 @@ func commandContextError(ctx context.Context, runErr error) error {
 		return ctx.Err()
 	}
 	return runErr
+}
+
+func commandFailure(operation, name string, result CommandResult, runErr error) error {
+	detail := strings.TrimSpace(string(result.Stderr))
+	if len(detail) > 2048 {
+		detail = detail[:2048] + "..."
+	}
+	message := fmt.Sprintf("Codex MCP %s failed for server %q (exit %d)", operation, name, result.ExitCode)
+	if detail != "" {
+		message += ": " + detail
+	}
+	if runErr != nil {
+		message += ": " + runErr.Error()
+	}
+	return errors.New(message)
 }
 
 func isMissingRegistration(result CommandResult, runErr error) bool {
@@ -148,6 +164,25 @@ func isMissingRegistration(result CommandResult, runErr error) bool {
 
 func sameUserRegistration(current userRegistration, expected RegistrationSpec) bool {
 	return current.Command == expected.Command && stringSlicesEqual(current.Args, expected.Args)
+}
+
+func managedUserRegistration(current userRegistration, root string) bool {
+	return managedFocalSpanCommand(current.Command) && managedServeArgs(current.Args, root)
+}
+
+func managedFocalSpanCommand(command string) bool {
+	base := filepath.Base(filepath.Clean(command))
+	return strings.EqualFold(base, "focalspan") || strings.EqualFold(base, "focalspan.exe")
+}
+
+func managedServeArgs(args []string, root string) bool {
+	if len(args) != 3 && len(args) != 4 {
+		return false
+	}
+	if args[0] != "serve" || args[1] != "--root" || filepath.Clean(args[2]) != filepath.Clean(root) {
+		return false
+	}
+	return len(args) == 3 || args[3] == "--no-auto-update" || args[3] == "--auto-update=false"
 }
 
 func userArgv(codexCommand, name string, spec RegistrationSpec) []string {

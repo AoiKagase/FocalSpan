@@ -166,16 +166,16 @@ func (s *Server) codeImpact(ctx context.Context, _ *mcp.CallToolRequest, in Code
 	return summaryResult(withTokenSavings(fmt.Sprintf("impact candidates: %d; estimated: %d", len(bundle.Items), bundle.EstimatedTokens), bundle)), bundle, nil
 }
 
-func (s *Server) codeStatus(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, model.Status, error) {
+func (s *Server) codeStatus(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, model.HealthStatus, error) {
 	s.mu.RLock()
 	if s.service == nil {
 		s.mu.RUnlock()
-		return nil, model.Status{}, fmt.Errorf("MCP server is closed")
+		return nil, model.HealthStatus{}, fmt.Errorf("MCP server is closed")
 	}
-	status, err := s.service.Status(ctx)
+	status, err := s.service.Health(ctx)
 	s.mu.RUnlock()
 	if err != nil {
-		return nil, model.Status{}, userError(err)
+		return nil, model.HealthStatus{}, userError(err)
 	}
 	return summaryResult(fmt.Sprintf("files: %d; symbols: %d; chunks: %d", status.FileCount, status.SymbolCount, status.ChunkCount)), status, nil
 }

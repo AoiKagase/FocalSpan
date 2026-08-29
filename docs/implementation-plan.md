@@ -180,19 +180,20 @@
 - [ ] Implement render-estimate-drop-re-render loop and assert no source body is duplicated in structured plus text MCP representations.
 - [ ] Run focused tests and `go test ./internal/budget ./internal/render`.
 
-### Task 10: CLI commands and doctor
+### Task 10: Minimal CLI commands and integrated status
 
 **Files:**
 - Create: `internal/cli/run.go`, `internal/cli/flags.go`, `internal/cli/commands.go`, `internal/cli/cli_test.go`
 - Modify: `cmd/focalspan/main.go`, `.gitignore`
 
 **Interfaces:**
-- Produces `focalspan init`, `index`, `update`, `status`, `query`, `expand`, `impact`, `eval`, `doctor`, and `serve` dispatch with documented flags.
+- Produces the minimal public dispatch: positional query, `setup`, `update`,
+  `status`, and `mcp`; internal `serve` remains registration-only.
 - Uses stdout for compact/JSON command output and stderr for errors; `update --if-repo --quiet` is a zero-output no-op outside Git.
 
-- [ ] Write command-boundary tests for init safety/force, no-update, JSON status/query, budget/mode validation, quiet if-repo, path rejection, and doctor checks.
+- [ ] Write command-boundary tests for idempotent setup, auto-update control, JSON status/query, budget/mode validation, quiet if-repo, and path rejection.
 - [ ] Run CLI tests and the built binary against a temporary root; confirm failures.
-- [ ] Implement standard-library flag parsing, root/config resolution, command exit codes, init `.focalspan.json` and `.gitignore` handling, and doctor checks including FTS5/MCP initialization.
+- [ ] Implement standard-library flag parsing, root/config resolution, command exit codes, setup of `.focalspan.json` and `.gitignore`, and integrated status checks including FTS5/MCP initialization.
 - [ ] Run `go test ./internal/cli`, build `go build ./cmd/focalspan`, and execute the fixture command sequence.
 
 ### Task 11: MCP server and integration tests
@@ -232,7 +233,7 @@
 - [ ] Add natural fixture code and implement evaluation baseline as estimated tokens for candidate files returned in the query, not a hard-coded symbol special case.
 - [ ] Run `gofmt` on every Go file, `go test ./...`, `go test -race ./...`, and `go vet ./...`.
 - [ ] Run `CGO_ENABLED=0 go build ./cmd/focalspan`, plus Windows amd64, Linux amd64, and Darwin arm64 cross-builds using explicit output paths under a temporary build directory.
-- [ ] Run the fixture sequence: `index`, `status --json`, budgeted JSON `query`, `update`, `impact --json`, `doctor`, and bounded `serve` smoke test.
+- [ ] Run the fixture sequence: `setup`, `status --json`, a budgeted positional JSON query, `update`, MCP impact coverage, and a bounded `serve` smoke test.
 - [ ] Record measured metrics and any environment-blocked verification in `docs/evaluation.md` and README; run `git diff --check`.
 
 ### Task 13: Codex MCP registration integration
@@ -242,9 +243,10 @@
 - Modify: `internal/cli/run.go`, `README.md`, `docs/design.md`
 
 **Interfaces:**
-- Produces `focalspan install|uninstall` global MCP shortcuts and
-  `focalspan mcp install|status|uninstall|print [codex]` with project
-  scope as the default and user scope delegated to the official Codex CLI.
+- Produces only `focalspan mcp install|status|uninstall`, with global user
+  scope as the default and explicit `--project` for project-local registration.
+- The Codex client positional argument, top-level aliases, and `mcp print` are
+  removed; `install --dry-run` is the single preview path.
 - Project scope uses a validated, atomic, marked TOML block and preserves all
   unmanaged content; user scope uses an injectable no-shell command runner.
 
@@ -285,7 +287,8 @@ retrievers. Weighted reciprocal-rank fusion combines their ranked lists before
 the existing intent-aware ranking, deduplication, and token packer. Evaluation
 2.0 measures intent, relation, kind, hit@N, budget, forbidden paths, reduction,
 and repeated-run determinism, with `full`, `fts-only`, and `no-relations`
-ablations. `focalspan explain` is a CLI-only, source-free retrieval trace.
+ablations. Evaluation runs through the development-only `focalspan-eval`
+binary; retrieval tracing is no longer a public CLI operation.
 
 The v0.2 implementation does not add translation, embeddings, compiler-grade
 cross-file resolution, a schema migration, or an MCP debug tool. The current

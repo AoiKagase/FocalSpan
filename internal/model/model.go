@@ -163,3 +163,17 @@ type Status struct {
 	Stale           bool   `json:"stale"`
 	LastDurationMS  int64  `json:"last_index_duration_ms"`
 }
+
+type HealthStatus struct {
+	Status
+	RepositoryDetected bool     `json:"repository_detected"`
+	ConfigValid        bool     `json:"config_valid"`
+	DBOpen             bool     `json:"db_open"`
+	FTS5               bool     `json:"fts5"`
+	PathPermissions    bool     `json:"path_permissions"`
+	MCPReady           bool     `json:"mcp_ready"`
+	IndexFresh         bool     `json:"index_fresh"`
+	Ready              bool     `json:"ready"`
+	ConfigWarnings     []string `json:"config_warnings,omitempty"`
+	Diagnostics        []string `json:"diagnostics,omitempty"`
+}

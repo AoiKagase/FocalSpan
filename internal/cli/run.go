@@ -17,59 +17,53 @@ import (
 
 	"github.com/focalspan/focalspan/internal/app"
 	"github.com/focalspan/focalspan/internal/config"
-	"github.com/focalspan/focalspan/internal/eval"
 	"github.com/focalspan/focalspan/internal/integration/codex"
 	"github.com/focalspan/focalspan/internal/mcpserver"
+	"github.com/focalspan/focalspan/internal/model"
 	"github.com/focalspan/focalspan/internal/render"
 	"github.com/focalspan/focalspan/internal/repository"
-	"github.com/focalspan/focalspan/internal/search"
 )
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
+	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
 		_, _ = fmt.Fprintln(stdout, usage)
+		return 0
+	}
+	if args[0] == "help" {
+		if err := writeCommandHelp(stdout, args[1:]); err != nil {
+			_, _ = fmt.Fprintf(stderr, "focalspan: %v\n", err)
+			return 1
+		}
+		return 0
+	}
+	if helpRequested(args[1:]) && args[0] != "--" {
+		helpArgs := args[:1]
+		if args[0] == "mcp" && len(args) > 1 {
+			helpArgs = args[:2]
+		}
+		if err := writeCommandHelp(stdout, helpArgs); err != nil {
+			_, _ = fmt.Fprintf(stderr, "focalspan: %v\n", err)
+			return 1
+		}
 		return 0
 	}
 	var err error
 	switch args[0] {
-	case "init":
-		err = runInit(ctx, args[1:], stdout)
-	case "index":
-		err = runIndex(ctx, args[1:], stdout, stderr)
+	case "setup":
+		err = runSetup(ctx, args[1:], stdout, stderr)
 	case "update":
 		err = runUpdate(ctx, args[1:], stdout, stderr)
 	case "status":
 		err = runStatus(ctx, args[1:], stdout, stderr)
-	case "query":
-		err = runQuery(ctx, args[1:], stdout)
-	case "explain":
-		err = runExplain(ctx, args[1:], stdout)
-	case "expand":
-		err = runExpand(ctx, args[1:], stdout)
-	case "impact":
-		err = runImpact(ctx, args[1:], stdout)
-	case "eval":
-		err = runEval(ctx, args[1:], stdout)
-	case "doctor":
-		err = runDoctor(ctx, args[1:], stdout)
 	case "serve":
 		err = runServe(ctx, args[1:])
-	case "q", "search":
-		err = runQuery(ctx, args[1:], stdout)
-	case "install":
-		err = runGlobalMCP(ctx, "install", args[1:], stdout)
-	case "uninstall":
-		err = runGlobalMCP(ctx, "uninstall", args[1:], stdout)
 	case "mcp":
 		err = runMCP(ctx, args[1:], stdout)
 	default:
-		if strings.HasPrefix(args[0], "-") {
-			err = runQuery(ctx, args, stdout)
+		if retiredCommand(args[0]) {
+			err = fmt.Errorf("unknown command %q", args[0])
 		} else {
-			// A bare query is the shortest useful invocation and keeps the
-			// established subcommand form available for scripts.
-			queryArgs := append([]string{"--query", args[0]}, args[1:]...)
-			err = runQuery(ctx, queryArgs, stdout)
+			err = runQuery(ctx, args, stdout)
 		}
 	}
 	if err != nil {
@@ -81,17 +75,68 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 const usage = `focalspan - token-first code context compiler
 
-commands: init index update status query explain expand impact eval doctor serve mcp install uninstall
+usage:
+  focalspan [query flags] [--] <question...>
+  focalspan setup [--root PATH] [--json]
+  focalspan update [--root PATH] [--rebuild] [--json]
+  focalspan status [--root PATH] [--json]
+  focalspan mcp <install|status|uninstall> [options]
 
-shortcuts: focalspan "your question" | focalspan query "your question" | focalspan q "your question"
-global MCP: focalspan install [--root PATH] [--dry-run]`
+commands: setup update status mcp
+run "focalspan help <command>" for command-specific help`
 
-func runInit(ctx context.Context, args []string, stdout io.Writer) error {
-	fs := newFlagSet("init")
+var retiredCommands = map[string]struct{}{
+	"init": {}, "index": {}, "query": {}, "q": {}, "search": {},
+	"explain": {}, "expand": {}, "impact": {}, "eval": {}, "doctor": {},
+	"install": {}, "uninstall": {},
+}
+
+func retiredCommand(name string) bool {
+	_, retired := retiredCommands[name]
+	return retired
+}
+
+func helpRequested(args []string) bool {
+	for _, arg := range args {
+		if arg == "--help" || arg == "-h" {
+			return true
+		}
+	}
+	return false
+}
+
+func writeCommandHelp(w io.Writer, args []string) error {
+	name := ""
+	if len(args) > 0 {
+		name = strings.Join(args, " ")
+	}
+	help := map[string]string{
+		"":              usage,
+		"setup":         "usage: focalspan setup [--root PATH] [--json]",
+		"update":        "usage: focalspan update [--root PATH] [--rebuild] [--if-repo] [--quiet] [--json]",
+		"status":        "usage: focalspan status [--root PATH] [--if-repo] [--json]",
+		"mcp":           "usage: focalspan mcp <install|status|uninstall> [--project] [--root PATH] [options]",
+		"mcp install":   "usage: focalspan mcp install [--project] [--root PATH] [--codex PATH] [--auto-update=false] [--dry-run] [--force] [--json]",
+		"mcp status":    "usage: focalspan mcp status [--project] [--root PATH] [--codex PATH] [--json]",
+		"mcp uninstall": "usage: focalspan mcp uninstall [--project] [--root PATH] [--codex PATH] [--dry-run] [--force] [--json]",
+	}
+	text, ok := help[name]
+	if !ok {
+		return fmt.Errorf("unknown command %q", name)
+	}
+	_, err := fmt.Fprintln(w, text)
+	return err
+}
+
+func runSetup(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	fs := newFlagSet("setup")
 	rootArg := fs.String("root", ".", "repository root")
-	force := fs.Bool("force", false, "overwrite existing config")
+	jsonOutput := fs.Bool("json", false, "JSON output")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if remaining := fs.Args(); len(remaining) > 0 {
+		return fmt.Errorf("unexpected setup argument %q", remaining[0])
 	}
 	root, _, err := resolveRoot(ctx, *rootArg)
 	if err != nil {
@@ -100,35 +145,22 @@ func runInit(ctx context.Context, args []string, stdout io.Writer) error {
 	if err := os.MkdirAll(filepath.Join(root, ".focalspan"), 0o700); err != nil {
 		return err
 	}
-	if err := config.WriteDefault(root, *force); err != nil {
+	configPath := filepath.Join(root, config.FileName)
+	if _, err := os.Stat(configPath); errors.Is(err, os.ErrNotExist) {
+		if err := config.WriteDefault(root, false); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	} else if _, _, err := config.Load(root); err != nil {
 		return err
 	}
 	if err := ensureGitignore(root); err != nil {
 		return err
 	}
-	_, err = fmt.Fprintln(stdout, root)
-	return err
-}
-
-func runIndex(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	fs := newFlagSet("index")
-	rootArg := fs.String("root", ".", "repository root")
-	workers := fs.Int("workers", 0, "parse workers")
-	jsonOutput := fs.Bool("json", false, "JSON output")
-	quiet := fs.Bool("quiet", false, "suppress normal output")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	root, _, err := resolveRoot(ctx, *rootArg)
-	if err != nil {
-		return err
-	}
 	cfg, warnings, err := config.Load(root)
 	if err != nil {
 		return err
-	}
-	if *workers > 0 {
-		cfg.Workers = *workers
 	}
 	for _, warning := range warnings {
 		_, _ = fmt.Fprintf(stderr, "focalspan: warning: %s\n", warning)
@@ -138,31 +170,24 @@ func runIndex(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		return err
 	}
 	defer service.Close()
-	var progress app.IndexProgressFunc
-	if !*quiet {
-		progress = newIndexProgressReporter(stderr, "index")
-	}
-	run, err := service.IndexWithProgress(ctx, true, progress)
+	run, err := service.IndexWithProgress(ctx, true, newIndexProgressReporter(stderr, "setup"))
 	if err != nil {
 		return err
-	}
-	if *quiet {
-		return nil
 	}
 	if *jsonOutput {
 		return writeJSON(stdout, run)
 	}
-	_, err = fmt.Fprintf(stdout, "indexed %d files (added=%d changed=%d unchanged=%d)\n", run.FilesSeen, run.FilesAdded, run.FilesChanged, run.FilesUnchanged)
+	_, err = fmt.Fprintf(stdout, "ready: %s (%d files indexed)\n", root, run.FilesSeen)
 	return err
 }
 
 func runUpdate(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	fs := newFlagSet("update")
 	rootArg := fs.String("root", ".", "repository root")
-	workers := fs.Int("workers", 0, "parse workers")
 	jsonOutput := fs.Bool("json", false, "JSON output")
 	quiet := fs.Bool("quiet", false, "suppress normal output")
 	ifRepo := fs.Bool("if-repo", false, "no-op outside Git")
+	rebuild := fs.Bool("rebuild", false, "rebuild the complete index")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -177,9 +202,6 @@ func runUpdate(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	if err != nil {
 		return err
 	}
-	if *workers > 0 {
-		cfg.Workers = *workers
-	}
 	service, err := app.NewWithConfig(root, cfg)
 	if err != nil {
 		return err
@@ -189,7 +211,7 @@ func runUpdate(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	if !*quiet {
 		progress = newIndexProgressReporter(stderr, "update")
 	}
-	run, err := service.IndexWithProgress(ctx, false, progress)
+	run, err := service.IndexWithProgress(ctx, *rebuild, progress)
 	if err != nil {
 		return err
 	}
@@ -211,6 +233,9 @@ func runStatus(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if remaining := fs.Args(); len(remaining) > 0 {
+		return fmt.Errorf("unexpected status argument %q", remaining[0])
+	}
 	root, isGit, err := resolveRoot(ctx, *rootArg)
 	if err != nil {
 		return err
@@ -218,20 +243,41 @@ func runStatus(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	if *ifRepo && !isGit {
 		return nil
 	}
-	service, err := app.New(root)
-	if err != nil {
-		return err
-	}
-	defer service.Close()
-	status, err := service.Status(ctx)
-	if err != nil {
-		return err
+	report := model.HealthStatus{Status: model.Status{Root: root}, RepositoryDetected: isGit}
+	cfg, warnings, configErr := config.Load(root)
+	report.ConfigWarnings = warnings
+	if configErr != nil {
+		report.Diagnostics = append(report.Diagnostics, configErr.Error())
+	} else {
+		service, serviceErr := app.NewWithConfig(root, cfg)
+		if serviceErr != nil {
+			report.ConfigValid = true
+			report.Diagnostics = append(report.Diagnostics, serviceErr.Error())
+		} else {
+			health, healthErr := service.Health(ctx)
+			_ = service.Close()
+			report = health
+			report.RepositoryDetected = isGit
+			report.ConfigWarnings = warnings
+			if healthErr != nil && len(report.Diagnostics) == 0 {
+				report.Diagnostics = append(report.Diagnostics, healthErr.Error())
+			}
+		}
 	}
 	if *jsonOutput {
-		return writeJSON(stdout, status)
+		if err := writeJSON(stdout, report); err != nil {
+			return err
+		}
+	} else {
+		_, err = fmt.Fprintf(stdout, "root: %s\nready: %t\nconfig: %t\ndatabase: %t\nfts5: %t\nindex_fresh: %t\nfiles: %d\nsymbols: %d\nchunks: %d\nrevision: %s\n", report.Root, report.Ready, report.ConfigValid, report.DBOpen, report.FTS5, report.IndexFresh, report.FileCount, report.SymbolCount, report.ChunkCount, report.LastRevision)
+		if err != nil {
+			return err
+		}
 	}
-	_, err = fmt.Fprintf(stdout, "root: %s\nfiles: %d\nsymbols: %d\nchunks: %d\nrevision: %s\n", status.Root, status.FileCount, status.SymbolCount, status.ChunkCount, status.LastRevision)
-	return err
+	if !report.Ready {
+		return errors.New("repository is not ready")
+	}
+	return nil
 }
 
 func runQuery(ctx context.Context, args []string, stdout io.Writer) error {
@@ -239,13 +285,13 @@ func runQuery(ctx context.Context, args []string, stdout io.Writer) error {
 	fs := newFlagSet("query")
 	rootArg := fs.String("root", ".", "repository root")
 	query := fs.String("query", "", "natural-language query")
-	budget := fs.Int("budget", 0, "token budget")
+	budget := fs.Int("token-budget", 0, "token budget")
 	mode := fs.String("mode", "source", "outline or source")
 	changedOnly := fs.Bool("changed-only", false, "restrict to changed spans")
-	pathFilter := fs.String("path", "", "repository-relative path prefix")
+	var pathFilters stringList
+	fs.Var(&pathFilters, "path", "repository-relative path prefix; repeatable")
 	jsonOutput := fs.Bool("json", false, "JSON output")
-	debugScores := fs.Bool("debug-scores", false, "show ranking scores")
-	noUpdate := fs.Bool("no-update", false, "disable auto update")
+	autoUpdate := fs.Bool("auto-update", true, "automatically update the index")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -273,306 +319,55 @@ func runQuery(ctx context.Context, args []string, stdout io.Writer) error {
 		return err
 	}
 	defer service.Close()
-	paths := []string{}
-	if *pathFilter != "" {
-		paths = append(paths, *pathFilter)
-	}
-	bundle, err := service.Query(ctx, app.QueryRequest{Query: *query, TokenBudget: *budget, Mode: *mode, ChangedOnly: *changedOnly, Paths: paths, NoUpdate: *noUpdate})
+	bundle, err := service.Query(ctx, app.QueryRequest{Query: *query, TokenBudget: *budget, Mode: *mode, ChangedOnly: *changedOnly, Paths: []string(pathFilters), NoUpdate: !*autoUpdate})
 	if err != nil {
 		return err
 	}
 	if *jsonOutput {
 		return writeJSON(stdout, bundle)
 	}
-	if *debugScores {
-		_, err = fmt.Fprint(stdout, render.CompactDebug(bundle))
-	} else {
-		_, err = fmt.Fprint(stdout, render.Compact(bundle))
-	}
+	_, err = fmt.Fprint(stdout, render.Compact(bundle))
 	return err
 }
 
 func normalizeQueryArgs(args []string) []string {
-	for _, arg := range args {
-		if arg == "--query" || arg == "-query" || strings.HasPrefix(arg, "--query=") || strings.HasPrefix(arg, "-query=") {
-			return args
+	valueFlags := map[string]bool{"--root": true, "-root": true, "--token-budget": true, "-token-budget": true, "--mode": true, "-mode": true, "--path": true, "-path": true}
+	options := make([]string, 0, len(args))
+	question := make([]string, 0, len(args))
+	for index := 0; index < len(args); index++ {
+		arg := args[index]
+		if arg == "--" {
+			question = append(question, args[index+1:]...)
+			break
 		}
-	}
-	valueFlags := map[string]bool{"--root": true, "-root": true, "--budget": true, "-budget": true, "--mode": true, "-mode": true, "--path": true, "-path": true}
-	skipValue := false
-	for index, arg := range args {
-		if skipValue {
-			skipValue = false
+		if valueFlags[arg] {
+			options = append(options, arg)
+			if index+1 < len(args) {
+				index++
+				options = append(options, args[index])
+			}
 			continue
 		}
 		if strings.HasPrefix(arg, "-") {
-			if valueFlags[arg] && index+1 < len(args) {
-				skipValue = true
-				continue
-			}
+			options = append(options, arg)
 			continue
 		}
-		normalized := make([]string, 0, len(args)+2)
-		normalized = append(normalized, "--query", arg)
-		normalized = append(normalized, args[:index]...)
-		normalized = append(normalized, args[index+1:]...)
-		return normalized
+		question = append(question, arg)
 	}
-	return args
-}
-
-func runExplain(ctx context.Context, args []string, stdout io.Writer) error {
-	fs := newFlagSet("explain")
-	rootArg := fs.String("root", ".", "repository root")
-	queryArg := fs.String("query", "", "natural-language query")
-	var paths stringList
-	fs.Var(&paths, "path", "repository-relative path prefix")
-	changedOnly := fs.Bool("changed-only", false, "restrict to changed spans")
-	noUpdate := fs.Bool("no-update", false, "disable auto update")
-	limit := fs.Int("limit", 20, "maximum candidates")
-	ablation := fs.String("ablation", "full", "full, fts-only, or no-relations")
-	jsonOutput := fs.Bool("json", false, "JSON output")
-	if err := fs.Parse(args); err != nil {
-		return err
+	if len(question) == 0 {
+		return options
 	}
-	if strings.TrimSpace(*queryArg) == "" {
-		return errors.New("--query is required")
-	}
-	modes, err := parseAblation(*ablation)
-	if err != nil {
-		return err
-	}
-	if *ablation == "all" {
-		return errors.New("explain does not support --ablation all")
-	}
-	root, _, err := resolveRoot(ctx, *rootArg)
-	if err != nil {
-		return err
-	}
-	service, err := app.New(root)
-	if err != nil {
-		return err
-	}
-	defer service.Close()
-	result, err := service.Explain(ctx, app.ExplainRequest{Query: *queryArg, Paths: []string(paths), ChangedOnly: *changedOnly, NoUpdate: *noUpdate, Limit: *limit, RetrievalMode: modes[0]})
-	if err != nil {
-		return err
-	}
-	if *jsonOutput {
-		return writeJSON(stdout, result)
-	}
-	return writeExplain(stdout, result)
-}
-
-func writeExplain(w io.Writer, result app.ExplainResult) error {
-	if _, err := fmt.Fprintf(w, "query: %s\nintent: %s\nanchors: %s\nrelations: %s\nmode: %s\n", result.Plan.RawQuery, result.Plan.PrimaryIntent, strings.Join(result.Plan.Anchors, ", "), strings.Join(result.Plan.Relations, ", "), result.Mode); err != nil {
-		return err
-	}
-	for index, candidate := range result.Candidates {
-		if _, err := fmt.Fprintf(w, "\n%d. %s:%d %s\n   final=%.1f fusion=%.3f\n", index+1, candidate.Path, candidateLine(candidate), candidate.Symbol, candidate.FinalScore, candidate.FusionScore); err != nil {
-			return err
-		}
-		sources := make([]string, 0, len(candidate.Contributions))
-		for _, contribution := range candidate.Contributions {
-			sources = append(sources, fmt.Sprintf("%s#%d", contribution.Retriever, contribution.Rank))
-		}
-		reasons := make([]string, 0, len(candidate.Reasons))
-		for _, reason := range candidate.Reasons {
-			reasons = append(reasons, reason.Code)
-		}
-		if _, err := fmt.Fprintf(w, "   sources=%s\n   reasons=%s\n", strings.Join(sources, ", "), strings.Join(reasons, ", ")); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func candidateLine(candidate search.CandidateTrace) int {
-	return candidate.StartLine
-}
-
-func runExpand(ctx context.Context, args []string, stdout io.Writer) error {
-	fs := newFlagSet("expand")
-	rootArg := fs.String("root", ".", "repository root")
-	var handles stringList
-	fs.Var(&handles, "handle", "chunk or symbol handle; repeatable")
-	relation := fs.String("relation", "self", "relation")
-	budget := fs.Int("budget", 0, "token budget")
-	jsonOutput := fs.Bool("json", false, "JSON output")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if len(handles) == 0 {
-		return errors.New("--handle is required")
-	}
-	root, _, err := resolveRoot(ctx, *rootArg)
-	if err != nil {
-		return err
-	}
-	service, err := app.New(root)
-	if err != nil {
-		return err
-	}
-	defer service.Close()
-	bundle, err := service.Expand(ctx, handles, *relation, *budget)
-	if err != nil {
-		return err
-	}
-	if *jsonOutput {
-		return writeJSON(stdout, bundle)
-	}
-	_, err = fmt.Fprint(stdout, render.Compact(bundle))
-	return err
-}
-
-func runImpact(ctx context.Context, args []string, stdout io.Writer) error {
-	fs := newFlagSet("impact")
-	rootArg := fs.String("root", ".", "repository root")
-	base := fs.String("base", "", "base Git ref")
-	head := fs.String("head", "", "head Git ref")
-	budget := fs.Int("budget", 0, "token budget")
-	jsonOutput := fs.Bool("json", false, "JSON output")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	root, _, err := resolveRoot(ctx, *rootArg)
-	if err != nil {
-		return err
-	}
-	service, err := app.New(root)
-	if err != nil {
-		return err
-	}
-	defer service.Close()
-	bundle, err := service.Impact(ctx, *base, *head, *budget)
-	if err != nil {
-		return err
-	}
-	if *jsonOutput {
-		return writeJSON(stdout, bundle)
-	}
-	_, err = fmt.Fprint(stdout, render.Compact(bundle))
-	return err
-}
-
-func runEval(ctx context.Context, args []string, stdout io.Writer) error {
-	fs := newFlagSet("eval")
-	rootArg := fs.String("root", ".", "repository root")
-	casesPath := fs.String("cases", "testdata/eval/cases.jsonl", "evaluation cases")
-	ablation := fs.String("ablation", "full", "full, fts-only, no-relations, or all")
-	jsonOutput := fs.Bool("json", false, "JSON output")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	modes, err := parseAblation(*ablation)
-	if err != nil {
-		return err
-	}
-	root, _, err := resolveRoot(ctx, *rootArg)
-	if err != nil {
-		return err
-	}
-	cases, err := eval.LoadCases(*casesPath)
-	if err != nil {
-		return err
-	}
-	service, err := app.New(root)
-	if err != nil {
-		return err
-	}
-	defer service.Close()
-	reports := make(map[string]eval.Report, len(modes))
-	for _, mode := range modes {
-		report, evaluateErr := eval.EvaluateMode(ctx, service, cases, mode)
-		if evaluateErr != nil {
-			return evaluateErr
-		}
-		reports[string(mode)] = report
-	}
-	if *ablation == "all" {
-		if *jsonOutput {
-			return writeJSON(stdout, struct {
-				Reports map[string]eval.Report `json:"reports"`
-			}{Reports: reports})
-		}
-		for _, mode := range modes {
-			if err := writeEvalReport(stdout, mode, reports[string(mode)]); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	report := reports[string(modes[0])]
-	if *jsonOutput {
-		return writeJSON(stdout, report)
-	}
-	return writeEvalReport(stdout, modes[0], report)
-}
-
-func parseAblation(value string) ([]search.RetrievalMode, error) {
-	if value == "all" {
-		return []search.RetrievalMode{search.RetrievalFull, search.RetrievalFTSOnly, search.RetrievalNoRelations}, nil
-	}
-	for _, mode := range []search.RetrievalMode{search.RetrievalFull, search.RetrievalFTSOnly, search.RetrievalNoRelations} {
-		if value == string(mode) {
-			return []search.RetrievalMode{mode}, nil
-		}
-	}
-	return nil, fmt.Errorf("unknown ablation %q", value)
-}
-
-func writeEvalReport(w io.Writer, mode search.RetrievalMode, report eval.Report) error {
-	_, err := fmt.Fprintf(w, "mode: %s\ncases: %d\nhit@5: %.2f\nbudget compliance: %.2f\nreduction ratio: %.2f\ndeterministic: %.2f\n", mode, len(report.Cases), report.HitAt5, report.BudgetCompliance, report.MedianReductionRatio, report.DeterministicOutput)
-	return err
-}
-
-func runDoctor(ctx context.Context, args []string, stdout io.Writer) error {
-	fs := newFlagSet("doctor")
-	rootArg := fs.String("root", ".", "repository root")
-	jsonOutput := fs.Bool("json", false, "JSON output")
-	ifRepo := fs.Bool("if-repo", false, "no-op outside Git")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	root, isGit, err := resolveRoot(ctx, *rootArg)
-	if err != nil {
-		return err
-	}
-	if *ifRepo && !isGit {
-		return nil
-	}
-	report := map[string]any{"repository_root": root, "repository_detected": true, "git_available": isGit, "config_valid": false, "db_open": false, "fts5": false, "path_permissions": false, "mcp_initialized": false, "index_fresh": false}
-	cfg, warnings, configErr := config.Load(root)
-	report["config_warnings"] = warnings
-	if configErr == nil {
-		report["config_valid"] = true
-		if info, statErr := os.Stat(root); statErr == nil && info.IsDir() {
-			report["path_permissions"] = true
-		}
-		service, serviceErr := app.NewWithConfig(root, cfg)
-		if serviceErr == nil {
-			report["db_open"], report["fts5"] = true, true
-			report["mcp_initialized"] = mcpserver.New(service, false) != nil
-			status, statusErr := service.Status(ctx)
-			if statusErr == nil {
-				report["index_fresh"] = !status.Stale
-			}
-			_ = service.Close()
-		}
-	}
-	if *jsonOutput {
-		return writeJSON(stdout, report)
-	}
-	for _, key := range []string{"repository_root", "git_available", "config_valid", "db_open", "fts5", "path_permissions", "mcp_initialized", "index_fresh"} {
-		_, _ = fmt.Fprintf(stdout, "%s: %v\n", key, report[key])
-	}
-	return nil
+	normalized := make([]string, 0, len(options)+2)
+	normalized = append(normalized, options...)
+	normalized = append(normalized, "--query", strings.Join(question, " "))
+	return normalized
 }
 
 func runServe(ctx context.Context, args []string) error {
 	fs := newFlagSet("serve")
 	rootArg := fs.String("root", ".", "repository root")
-	noAutoUpdate := fs.Bool("no-auto-update", false, "disable auto update")
+	autoUpdate := fs.Bool("auto-update", true, "automatically update the index")
+	legacyNoAutoUpdate := fs.Bool("no-auto-update", false, "disable auto update")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -584,86 +379,59 @@ func runServe(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	server := mcpserver.New(service, !*noAutoUpdate)
+	server := mcpserver.New(service, *autoUpdate && !*legacyNoAutoUpdate)
 	defer server.Close()
 	serveCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return server.Run(serveCtx)
 }
 
-func runGlobalMCP(ctx context.Context, operation string, args []string, stdout io.Writer) error {
-	if operation != "install" && operation != "uninstall" {
-		return fmt.Errorf("unsupported global MCP operation %q", operation)
-	}
-	delegated := append([]string{operation, codex.ClientName}, args...)
-	delegated = append(delegated, "--global")
-	return runMCP(ctx, delegated, stdout)
-}
-
 func runMCP(ctx context.Context, args []string, stdout io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("mcp subcommand is required: install, status, uninstall, or print")
+		return errors.New("mcp subcommand is required: install, status, or uninstall")
 	}
 	operation := args[0]
-	if operation != "install" && operation != "status" && operation != "uninstall" && operation != "print" {
+	if operation != "install" && operation != "status" && operation != "uninstall" {
 		return fmt.Errorf("unknown mcp subcommand %q", operation)
-	}
-	if len(args) < 2 || strings.HasPrefix(args[1], "-") {
-		// Codex is currently the only supported client, so the client name is
-		// optional for the short form: `mcp install --global`.
-		args = append([]string{args[0], codex.ClientName}, args[1:]...)
-	}
-	if args[1] != codex.ClientName {
-		return fmt.Errorf("unknown MCP client %q; supported client: codex", args[1])
 	}
 	fs := newFlagSet("mcp " + operation)
 	rootArg := fs.String("root", ".", "repository root")
-	scopeArg := fs.String("scope", codex.ScopeProject, "project or user")
-	globalArg := fs.Bool("global", false, "use the global Codex user scope")
-	nameArg := fs.String("name", "", "MCP server name")
+	project := fs.Bool("project", false, "use project-local Codex configuration")
 	jsonOutput := fs.Bool("json", false, "JSON output")
-	commandArg := fs.String("command", "", "FocalSpan executable path")
-	codexCommandArg := fs.String("codex-command", "", "Codex CLI path or command name")
-	noAutoUpdate := fs.Bool("no-auto-update", false, "disable MCP server auto update")
+	codexCommandArg := fs.String("codex", "", "Codex CLI path or command name")
+	autoUpdate := fs.Bool("auto-update", true, "automatically update the index")
 	dryRun := fs.Bool("dry-run", false, "show changes without writing or running commands")
 	force := fs.Bool("force", false, "replace a conflicting user-scope registration")
-	if err := fs.Parse(args[2:]); err != nil {
+	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
 	if remaining := fs.Args(); len(remaining) > 0 {
 		return fmt.Errorf("unexpected mcp argument %q", remaining[0])
 	}
-	if *globalArg {
-		*scopeArg = codex.ScopeUser
+	visited := map[string]bool{}
+	fs.Visit(func(flag *flag.Flag) { visited[flag.Name] = true })
+	if operation != "install" && visited["auto-update"] {
+		return fmt.Errorf("mcp %s does not accept --auto-update", operation)
 	}
-	if operation == "status" {
-		// These flags are not part of status' public surface; reject accidental
-		// use rather than allowing a misleading status result.
-		if *commandArg != "" || *noAutoUpdate || *dryRun || *force {
-			return errors.New("mcp status accepts --root, --scope, --global, --name, --codex-command, and --json only")
-		}
+	if operation == "status" && (*dryRun || *force) {
+		return errors.New("mcp status does not accept --dry-run or --force")
 	}
-	if operation == "uninstall" && (*commandArg != "" || *noAutoUpdate) {
-		return errors.New("mcp uninstall accepts --root, --scope, --global, --name, --dry-run, --force, --codex-command, and --json only")
-	}
-	if operation == "print" && (*dryRun || *force) {
-		return errors.New("mcp print accepts --root, --scope, --global, --name, --command, --no-auto-update, --codex-command, and --json only")
-	}
-	if *scopeArg != codex.ScopeProject && *scopeArg != codex.ScopeUser {
-		return fmt.Errorf("invalid scope %q: must be project or user", *scopeArg)
+	if *project && (*codexCommandArg != "" || *force) {
+		return errors.New("--codex and --force are available only for global MCP registration")
 	}
 	root, _, err := resolveRoot(ctx, *rootArg)
 	if err != nil {
 		return err
 	}
-	name := *nameArg
-	if name == "" {
-		name = codex.DefaultServerName(*scopeArg, root)
+	scope := codex.ScopeUser
+	if *project {
+		scope = codex.ScopeProject
 	}
+	name := codex.DefaultServerName(scope, root)
 	if err := codex.ValidateName(name); err != nil {
 		return err
 	}
-	req := codex.Request{Root: root, Scope: *scopeArg, Name: name, Command: *commandArg, CodexCommand: *codexCommandArg, NoAutoUpdate: *noAutoUpdate, DryRun: *dryRun, Force: *force}
+	req := codex.Request{Root: root, Scope: scope, Name: name, CodexCommand: *codexCommandArg, NoAutoUpdate: !*autoUpdate, DryRun: *dryRun, Force: *force}
 	service := codex.NewService(nil)
 	if operation == "status" {
 		status, err := service.Status(ctx, req)
@@ -681,8 +449,6 @@ func runMCP(ctx context.Context, args []string, stdout io.Writer) error {
 		result, err = service.Install(ctx, req)
 	case "uninstall":
 		result, err = service.Uninstall(ctx, req)
-	case "print":
-		result, err = service.Print(req)
 	}
 	if err != nil {
 		return err
@@ -691,10 +457,10 @@ func runMCP(ctx context.Context, args []string, stdout io.Writer) error {
 	if *jsonOutput {
 		return writeJSON(stdout, result)
 	}
-	return writeMCPOperation(stdout, operation, result)
+	return writeMCPOperation(stdout, result)
 }
 
-func writeMCPOperation(w io.Writer, operation string, result codex.OperationResult) error {
+func writeMCPOperation(w io.Writer, result codex.OperationResult) error {
 	if _, err := fmt.Fprintf(w, "client: %s\nscope: %s\nserver: %s\nroot: %s\n", result.Client, result.Scope, result.Name, result.Root); err != nil {
 		return err
 	}
@@ -710,11 +476,6 @@ func writeMCPOperation(w io.Writer, operation string, result codex.OperationResu
 	}
 	if result.Action != "" {
 		if _, err := fmt.Fprintf(w, "action: %s\n", result.Action); err != nil {
-			return err
-		}
-	}
-	if operation == "print" && result.Action == "" {
-		if _, err := fmt.Fprintln(w, "action: print"); err != nil {
 			return err
 		}
 	}
@@ -737,9 +498,6 @@ func writeMCPOperation(w io.Writer, operation string, result codex.OperationResu
 		if _, err := fmt.Fprintf(w, "diagnostic: %s\n", diagnostic); err != nil {
 			return err
 		}
-	}
-	if operation == "print" && result.Scope == codex.ScopeUser && len(result.Argv) == 0 {
-		_, _ = fmt.Fprintln(w, "action: print")
 	}
 	return nil
 }

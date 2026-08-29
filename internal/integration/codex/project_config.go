@@ -94,12 +94,13 @@ func StatusProject(configPath, root, name string, spec RegistrationSpec) Registr
 	if obs.serverFound {
 		status.Command, status.Args = tableIdentity(obs.server)
 	}
+	managedMatch := obs.serverFound && managedFocalSpanCommand(status.Command) && managedServeArgs(status.Args, root)
 	switch {
-	case obs.managed && obs.serverFound && tableMatches(obs.server, spec):
+	case obs.managed && managedMatch:
 		status.State, status.Matches = StateManagedMatch, true
 	case obs.managed:
 		status.State = StateManagedDrift
-	case obs.serverFound && tableMatches(obs.server, spec):
+	case managedMatch:
 		status.State, status.Matches = StateUnmanagedMatch, true
 	case obs.serverFound:
 		status.State = StateConflict

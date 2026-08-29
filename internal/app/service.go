@@ -100,22 +100,6 @@ type QueryRequest struct {
 	RetrievalMode search.RetrievalMode
 }
 
-type ExplainRequest struct {
-	Query         string
-	Paths         []string
-	ChangedOnly   bool
-	NoUpdate      bool
-	Limit         int
-	RetrievalMode search.RetrievalMode
-}
-
-type ExplainResult struct {
-	Plan       query.Plan                `json:"plan"`
-	Mode       search.RetrievalMode      `json:"mode"`
-	Lists      []search.RetrieverSummary `json:"lists"`
-	Candidates []search.CandidateTrace   `json:"candidates"`
-}
-
 func (s *Service) Query(ctx context.Context, req QueryRequest) (model.ContextBundle, error) {
 	if strings.TrimSpace(req.Query) == "" {
 		return model.ContextBundle{}, errors.New("query must not be blank")
@@ -141,40 +125,6 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (model.ContextBun
 		return model.ContextBundle{}, err
 	}
 	return s.packWithSavings(ctx, model.PackRequest{Query: req.Query, TokenBudget: req.TokenBudget, Mode: req.Mode, Candidates: result.Candidates, IntentHints: result.Plan.IntentStrings()})
-}
-
-func (s *Service) Explain(ctx context.Context, req ExplainRequest) (ExplainResult, error) {
-	if strings.TrimSpace(req.Query) == "" {
-		return ExplainResult{}, errors.New("query must not be blank")
-	}
-	if req.Limit <= 0 {
-		req.Limit = 20
-	}
-	if req.Limit > 100 {
-		req.Limit = 100
-	}
-	if req.RetrievalMode == "" {
-		req.RetrievalMode = search.RetrievalFull
-	}
-	if !req.NoUpdate && s.Config.AutoUpdateBeforeQuery {
-		if _, err := s.Index(ctx, false); err != nil {
-			return ExplainResult{}, fmt.Errorf("auto-update index: %w", err)
-		}
-	}
-	result, err := s.searcher.SearchDetailed(ctx, search.SearchRequest{
-		Query: req.Query, Paths: req.Paths, ChangedOnly: req.ChangedOnly,
-		Changed: s.changedRanges(ctx, req.ChangedOnly), Limit: req.Limit,
-		Mode: req.RetrievalMode, Trace: true,
-	})
-	if err != nil {
-		return ExplainResult{}, err
-	}
-	explain := ExplainResult{Plan: result.Plan, Mode: req.RetrievalMode}
-	if result.Trace != nil {
-		explain.Lists = result.Trace.Lists
-		explain.Candidates = result.Trace.Candidates
-	}
-	return explain, nil
 }
 
 func (s *Service) changedRanges(ctx context.Context, changedOnly bool) map[string][]search.LineRange {
@@ -204,6 +154,28 @@ func (s *Service) Status(ctx context.Context) (model.Status, error) {
 		status.Stale = hash != "" && hash != s.Config.Hash()
 	}
 	return status, nil
+}
+
+func (s *Service) Health(ctx context.Context) (model.HealthStatus, error) {
+	status, err := s.Status(ctx)
+	report := model.HealthStatus{
+		Status:             status,
+		RepositoryDetected: repository.IsGitRepository(ctx, s.Root),
+		ConfigValid:        true,
+		DBOpen:             true,
+		FTS5:               true,
+		MCPReady:           true,
+	}
+	if info, statErr := os.Stat(s.Root); statErr == nil && info.IsDir() {
+		report.PathPermissions = true
+	}
+	if err != nil {
+		report.Diagnostics = append(report.Diagnostics, err.Error())
+		return report, err
+	}
+	report.IndexFresh = status.LastRevision != "" && !status.Stale
+	report.Ready = report.ConfigValid && report.DBOpen && report.FTS5 && report.PathPermissions && report.MCPReady && report.IndexFresh
+	return report, nil
 }
 
 func (s *Service) Expand(ctx context.Context, handles []string, relation string, tokenBudget int) (model.ContextBundle, error) {

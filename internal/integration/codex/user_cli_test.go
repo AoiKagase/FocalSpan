@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -38,6 +39,32 @@ type fakeCommandRunner struct {
 	fn    func(context.Context, string, []string) (CommandResult, error)
 }
 
+func TestManagedServeArgsAcceptsBinaryAndAutoUpdateVariants(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repo")
+	for _, args := range [][]string{
+		{"serve", "--root", root},
+		{"serve", "--root", root, "--auto-update=false"},
+		{"serve", "--root", root, "--no-auto-update"},
+	} {
+		if !managedUserRegistration(userRegistration{Command: filepath.Join(t.TempDir(), "focalspan.exe"), Args: args}, root) {
+			t.Fatalf("managed registration rejected: %v", args)
+		}
+	}
+	if managedUserRegistration(userRegistration{Command: "other", Args: []string{"serve", "--root", filepath.Join(root, "other")}}, root) {
+		t.Fatal("registration for another root was accepted")
+	}
+	if managedUserRegistration(userRegistration{Command: "other", Args: []string{"serve", "--root", root}}, root) {
+		t.Fatal("non-FocalSpan command was accepted")
+	}
+}
+
+func TestCommandFailureIncludesExitCodeAndStderr(t *testing.T) {
+	err := commandFailure("add", "focalspan-test", CommandResult{ExitCode: 7, Stderr: []byte("invalid option")}, nil)
+	if !strings.Contains(err.Error(), "exit 7") || !strings.Contains(err.Error(), "invalid option") {
+		t.Fatalf("error=%q", err)
+	}
+}
+
 func (f *fakeCommandRunner) Run(ctx context.Context, name string, args ...string) (CommandResult, error) {
 	f.calls = append(f.calls, fakeCommandCall{Name: name, Args: append([]string(nil), args...)})
 	return f.fn(ctx, name, args)
@@ -61,7 +88,7 @@ func TestUserInstallUsesSeparatedCodexArgv(t *testing.T) {
 	if result.Action != "create" {
 		t.Fatalf("action=%q", result.Action)
 	}
-	want := []string{"mcp", "add", "focalspan-test", "--", command, "serve", "--root", `C:\repo with spaces`, "--no-auto-update"}
+	want := []string{"mcp", "add", "focalspan-test", "--", command, "serve", "--root", `C:\repo with spaces`, "--auto-update=false"}
 	if len(fake.calls) != 2 || fake.calls[0].Name != "codex" || !reflect.DeepEqual(fake.calls[1].Args, want) {
 		t.Fatalf("calls=%+v", fake.calls)
 	}

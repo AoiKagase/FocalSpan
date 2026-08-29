@@ -49,7 +49,7 @@ func ResolveExecutable(command string, allowGoBuild bool) (string, string, error
 	}
 	if isGoBuildPath(path) {
 		if !allowGoBuild {
-			return "", "", fmt.Errorf("refusing temporary go-build executable %q; build or install a persistent binary and pass it with --command", path)
+			return "", "", fmt.Errorf("refusing temporary go-build executable %q; build or install and run a persistent focalspan binary", path)
 		}
 	}
 	info, err := os.Stat(path)

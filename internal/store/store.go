@@ -102,7 +102,7 @@ func (s *Store) configureAndMigrate() error {
 	}
 	if version != schemaVersion {
 		tx.Rollback()
-		return fmt.Errorf("unsupported schema version %q; remove %s and run focalspan index to rebuild", version, s.dbPath)
+		return fmt.Errorf("unsupported schema version %q; remove %s, then run focalspan update --rebuild", version, s.dbPath)
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit migration: %w", err)

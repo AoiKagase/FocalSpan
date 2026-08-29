@@ -279,7 +279,8 @@ all base retrievers but skips relation expansion.
 
 Weighted reciprocal-rank fusion combines lists using
 `score(candidate) += weight / (60 + rank)`. Fixed profile weights are selected
-once per query plan and the resulting contribution is retained for `explain`.
+once per query plan and the resulting contribution is retained for evaluation
+and diagnostics.
 The final candidate set is then passed to the intent-aware reranker.
 
 The reranker uses named weights: qualified exact 120, symbol exact 100, prefix
@@ -333,20 +334,22 @@ relations return an empty result.
 
 ## CLI and MCP
 
-The CLI has `init`, `index`, `update`, `status`, `query`, `expand`, `impact`,
-`eval`, `doctor`, `serve`, `install`, `uninstall`, and
-`mcp install|status|uninstall|print [codex]`. A query can also be supplied as the
-first positional argument or through the `q`/`search` aliases. `install` and
-`uninstall` are global MCP shortcuts and delegate to Codex user scope.
-`update --if-repo --quiet` returns zero without stdout outside Git. `query`
-auto-indexes an absent index unless `--no-update` is set. All user paths are
-root-relative or validated under the selected root.
+The public CLI has one query form plus `setup`, `update`, `status`, and
+`mcp install|status|uninstall`. A question is supplied directly as positional
+words; there is no query subcommand or alias. `setup` combines configuration
+initialization with the first full index, while `update --rebuild` is the only
+explicit rebuild path. `status` combines index statistics and health checks.
+`update --if-repo --quiet` returns zero without stdout outside Git. Queries
+auto-index unless `--auto-update=false` is set. Evaluation is isolated in the
+development-only `focalspan-eval` binary. The internal `serve` entrypoint is
+kept out of public help so existing MCP registrations remain runnable.
 
 Codex project scope writes a deterministic marked block to the canonical
 root's `.codex/config.toml` after validating both the old and new TOML. The
 unmarked portion is preserved byte-for-byte, managed updates are idempotent,
-and an unmanaged same-name table is a conflict even with `--force`. User scope
-uses separated arguments with the installed `codex mcp` CLI; FocalSpan never
+and an unmanaged same-name table is a conflict. Global user scope is the MCP
+default; project scope requires `--project`. User scope uses separated
+arguments with the installed `codex mcp` CLI; FocalSpan never
 edits the user Codex config directly. Project trust and existing Codex session
 reload state are intentionally not changed or guessed.
 
@@ -396,8 +399,8 @@ writes while allowing safe read transactions.
 14. Keep the existing MCP structured contract and schema version 1; the
     current checkout's existing `code_restart` extension remains in its
     five-tool MCP surface.
-15. Keep `explain` CLI-only and source-free so retrieval decisions can be
-    inspected without adding source content to the debug payload.
+15. Keep advanced retrieval operations on the MCP surface; the public CLI
+    remains limited to a positional question and repository maintenance.
 
 ## Roadmap (design only)
 
