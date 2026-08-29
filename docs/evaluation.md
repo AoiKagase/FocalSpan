@@ -51,6 +51,11 @@ The evaluation output is the evidence for the thresholds. A failed or
 unexecuted command remains explicitly unverified; it is not converted into a
 pass by documentation.
 
+`go test -race ./...` remains environment-blocked in this Windows run: the
+default environment reports `CGO_ENABLED=0`, `CC=gcc`, and no `gcc` executable.
+The normal test, vet, and CGO-free native/cross-build checks are recorded
+separately and do not imply race-test coverage.
+
 ## PHP fixture results
 
 The PHP fixture was evaluated separately from the Go fixture with four cases:
@@ -71,6 +76,26 @@ The individual callers case had a 0.2708 reduction ratio; the reported median
 remained within the `<= 0.25` acceptance threshold. Every returned item had
 an existing fixture path and a valid source line range, and
 `unrelated/Report.php` was absent from all four bundles.
+
+## Template fixture results
+
+The template fixture is `testdata/repos/templatesample` and its cases are in
+`testdata/eval/template-cases.jsonl`. The verified run after indexing produced:
+
+| Metric | Template result |
+| --- | ---: |
+| hit@1 / hit@3 / hit@5 | 0.80 / 1.00 / 1.00 |
+| Symbol recall / path recall | 1.00 / 1.00 |
+| Budget compliance | 1.00 |
+| Forbidden path violations | 0 |
+| Deterministic result | 1.00 |
+| Median estimated tokens | 834 |
+| Median reduction ratio | 0.20 |
+
+Path-only cases use `expected_paths` for hit@N when no expected symbol is
+declared; path recall still requires every expected path. The run verified
+embedded JavaScript source lines against the original `.tpl`, static imports
+and inheritance candidates, and no full `unrelated/report.tpl` result.
 
 ## Interpretation
 

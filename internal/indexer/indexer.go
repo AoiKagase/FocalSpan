@@ -38,7 +38,7 @@ const (
 	PhaseWriting  = "writing"
 	PhaseComplete = "complete"
 
-	extractorVersion = "generic-structured-v2"
+	extractorVersion = "extractors-v3"
 )
 
 func New(root string, cfg config.Config, st *store.Store, registry *extract.Registry) *Indexer {

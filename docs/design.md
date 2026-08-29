@@ -18,6 +18,8 @@ LLM, or requiring CGO.
 - Module path: `github.com/focalspan/focalspan`.
 - SQLite driver: `modernc.org/sqlite v1.57.0`.
 - MCP SDK: `github.com/modelcontextprotocol/go-sdk v1.7.0`.
+- TOML validation: `github.com/pelletier/go-toml/v2 v2.2.4`; existing config is
+  never reserialized.
 - SQLite access goes through `database/sql`; migrations are embedded with
   `go:embed`.
 - Logging uses `log/slog` and is directed to stderr by the CLI and MCP server.
@@ -61,6 +63,9 @@ diverge in ranking or budget behavior.
 - `internal/extract/php`: stateful PHP lexer plus namespace-aware structural
   extraction for declarations, members, relations, includes, PHPUnit tests,
   and partial recovery.
+- `internal/extract/template`: stateful Smarty/HTML composite scanning,
+  block/function/capture extraction, bounded embedded regions, and conservative
+  include/extends/script relations. It never renders a template.
 - `internal/extract/generic`: C-like lexer, Python-like indentation chunks,
   Markdown headings, and bounded line-window fallback.
 - `internal/indexer`: bounded parse workers and a single transactional writer;
@@ -75,6 +80,9 @@ diverge in ranking or budget behavior.
 - `internal/render`: compact human output and typed JSON/MCP payloads.
 - `internal/mcpserver`: official SDK server setup, four typed tools, and
   protocol-safe stdio behavior.
+- `internal/integration/codex`: Codex project-config managed blocks, user-scope
+  `codex mcp` subprocess adapter, registration status, and safe executable
+  resolution. It never reserializes an existing TOML document.
 - `internal/eval`: JSON/JSONL cases and repeatable retrieval metrics.
 - `internal/cli`: flag parsing and command orchestration only.
 
@@ -136,6 +144,32 @@ repository-relative include paths remain lexical relations with confidence.
 `.inc` is selected as PHP only when content contains `<?php`, `<?=`, or `<?`;
 XML or tagless `.inc` remains text. Composer and PHP are never run.
 
+Smarty `.tpl` and `.smarty` files use a pure-Go stateful scanner. `.tpl` is
+classified as `smarty` when a default-delimiter Smarty marker is present, as
+`php` when it is PHP-like without a Smarty marker, and otherwise as `template`.
+`.smarty` is always classified as `smarty`. The template extractor creates a
+template outline plus `template-block`, `template-function`, and
+`template-capture` symbols; full named bodies, static markup, style bodies,
+data scripts, and embedded PHP are bounded source chunks. JavaScript and
+TypeScript bodies delegate to the existing generic structural extractor, then
+remap its line/byte spans and handles into a template namespace. Static
+`include`/`extends` and external script targets are unresolved imports until a
+later repository-aware lookup can prove a unique path. Dynamic targets and
+remote URLs are never resolved. Smarty comments and literal blocks are opaque;
+malformed input produces diagnostics and bounded recovery chunks.
+
+Double-curly `{{...}}` tags are treated as opaque template tags. They remain
+in searchable source and do not create Smarty symbols; quoted `}}` content is
+kept inside the tag when its closing boundary is found.
+
+This is not a complete Smarty, HTML, JavaScript, CSS, or PHP semantic parser.
+Smarty semantic parsing uses only the default `{}` delimiters; custom
+delimiters, plugin semantics, rendering, variable data-flow, and full
+DOM/semantic resolution are out of scope. Other template syntaxes can still be
+retained as opaque source, including the double-curly form above. Mixed PHP inside a Smarty file remains searchable as an
+`embedded-php` bounded region rather than being executed or re-parsed by a
+second PHP implementation.
+
 Other profiles are intentionally approximate:
 
 - C-like files use a small stateful lexer that ignores braces in strings,
@@ -193,6 +227,11 @@ Deduplication removes duplicate content hashes, contained lower-score spans,
 duplicate outline/body choices, and excessive same-file candidates. A raw text
 hit is not allowed to crowd out a source span for the same symbol.
 
+Template `imports` relations are expanded for natural-language include,
+extends, layout, and partial queries, and receive the same explainable
+relation score path as other relation candidates. Template outlines are kept
+small so a full template body is not duplicated in every result.
+
 ## Token budget and progressive disclosure
 
 `TokenEstimator` is deterministic and conservative: it considers UTF-8 byte
@@ -218,9 +257,18 @@ relations return an empty result.
 ## CLI and MCP
 
 The CLI has `init`, `index`, `update`, `status`, `query`, `expand`, `impact`,
-`eval`, `doctor`, and `serve`. `update --if-repo --quiet` returns zero without
-stdout outside Git. `query` auto-indexes an absent index unless `--no-update`
-is set. All user paths are root-relative or validated under the selected root.
+`eval`, `doctor`, `serve`, and `mcp install|status|uninstall|print codex`.
+`update --if-repo --quiet` returns zero without stdout outside Git. `query`
+auto-indexes an absent index unless `--no-update` is set. All user paths are
+root-relative or validated under the selected root.
+
+Codex project scope writes a deterministic marked block to the canonical
+root's `.codex/config.toml` after validating both the old and new TOML. The
+unmarked portion is preserved byte-for-byte, managed updates are idempotent,
+and an unmanaged same-name table is a conflict even with `--force`. User scope
+uses separated arguments with the installed `codex mcp` CLI; FocalSpan never
+edits the user Codex config directly. Project trust and existing Codex session
+reload state are intentionally not changed or guessed.
 
 The MCP server binds one startup root and exposes exactly `code_context`,
 `code_expand`, `code_impact`, and `code_status`. Handlers validate typed input,
@@ -243,6 +291,11 @@ allowing safe read transactions.
    state is more important than unsafe parallel writes.
 6. Keep all scoring deterministic and explainable; no network, embeddings, or
    learned reranker is needed to establish the MVP measurement loop.
+7. Treat Smarty templates as composite source: scan them locally, delegate
+   embedded JavaScript/TypeScript to the existing generic extractor, and remap
+   spans/handles instead of copying a second JavaScript parser. Mixed PHP is a
+   bounded searchable region because full PHP delegation would destabilize the
+   existing PHP extractor and is not needed for first-class template coverage.
 
 ## Roadmap (design only)
 

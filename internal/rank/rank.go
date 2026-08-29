@@ -77,7 +77,7 @@ func rankCandidates(candidates []model.RankedCandidate, terms []string, identifi
 			result[i].Reasons = append(result[i].Reasons, model.ScoreReason{Code: "changed-file", Weight: changedFileWeight, Detail: "file is changed in the selected Git state"})
 		}
 		if result[i].Relation != "" {
-			weight := map[string]float64{"callers": 150, "callees": 100, "tests": 90}[result[i].Relation]
+			weight := map[string]float64{"callers": 150, "callees": 100, "tests": 90, "imports": 80}[result[i].Relation]
 			if weight > 0 {
 				result[i].Score += weight
 				result[i].Reasons = append(result[i].Reasons, model.ScoreReason{Code: "relation-" + result[i].Relation, Weight: weight, Detail: "candidate was reached through the query's explicit relation intent"})

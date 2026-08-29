@@ -11,6 +11,7 @@ import (
 	"github.com/focalspan/focalspan/internal/extract"
 	"github.com/focalspan/focalspan/internal/extract/generic"
 	"github.com/focalspan/focalspan/internal/extract/goast"
+	templateextract "github.com/focalspan/focalspan/internal/extract/template"
 	"github.com/focalspan/focalspan/internal/model"
 	"github.com/focalspan/focalspan/internal/store"
 )
@@ -131,6 +132,38 @@ func TestIndexerReindexesWhenExtractorVersionChanges(t *testing.T) {
 	}
 	if run.FilesUnchanged != 0 || run.FilesChanged != 1 {
 		t.Fatalf("run=%+v, want unchanged=0 changed=1 after extractor update", run)
+	}
+}
+
+func TestIndexerReindexesOldTemplateWindowsAfterExtractorVersionChanges(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "view.tpl"), `{block name="content"}Hello{/block}`)
+	cfg := config.Default()
+	s, err := store.Open(root, cfg.IndexDirectory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	old := New(root, cfg, s, extract.NewRegistry(generic.NewExtractor()))
+	if _, err := old.Run(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetMeta(context.Background(), "extractor_version", "generic-structured-v2"); err != nil {
+		t.Fatal(err)
+	}
+	current := New(root, cfg, s, extract.NewRegistry(templateextract.NewExtractor(), generic.NewExtractor()))
+	run, err := current.Run(context.Background(), false)
+	if err != nil || run.FilesChanged != 1 || run.FilesUnchanged != 0 {
+		t.Fatalf("run=%+v err=%v", run, err)
+	}
+	candidates, err := s.SearchFTS(context.Background(), `"content"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range candidates {
+		if candidate.Path == "view.tpl" && candidate.Kind == "window" {
+			t.Fatalf("old generic window remained: %+v", candidates)
+		}
 	}
 }
 

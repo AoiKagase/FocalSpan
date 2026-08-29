@@ -1,0 +1,5 @@
+{"name":"template-login-content","query":"where is the login page content block defined?","token_budget":1400,"expected_symbols":["content"],"expected_paths":["pages/login.tpl"],"forbidden_paths":["unrelated/report.tpl"]}
+{"name":"template-function","query":"where is the renderAlert template function defined?","token_budget":1200,"expected_symbols":["renderAlert"],"expected_paths":["components/alerts.tpl"],"forbidden_paths":["unrelated/report.tpl"]}
+{"name":"template-inheritance","query":"which template extends the base layout?","token_budget":1200,"expected_paths":["pages/login.tpl","layouts/base.tpl"],"forbidden_paths":["unrelated/report.tpl"]}
+{"name":"template-include","query":"which template includes the errors partial?","token_budget":1200,"expected_paths":["pages/login.tpl","partials/errors.tpl"],"forbidden_paths":["unrelated/report.tpl"]}
+{"name":"template-embedded-javascript","query":"where is the validateLogin JavaScript handler?","token_budget":1400,"expected_symbols":["validateLogin"],"expected_paths":["pages/login.tpl"],"forbidden_paths":["unrelated/report.tpl"]}

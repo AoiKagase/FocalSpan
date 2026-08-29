@@ -43,7 +43,7 @@ func (s *Searcher) Search(ctx context.Context, req SearchRequest) ([]model.Ranke
 	if related, ok := s.store.(relationStore); ok {
 		for _, relation := range queryRelations(terms) {
 			for _, candidate := range candidates {
-				if !containsSymbol(terms.Symbols, candidate.Symbol) {
+				if relation != "imports" && !containsSymbol(terms.Symbols, candidate.Symbol) {
 					continue
 				}
 				neighbors, relationErr := related.RelatedCandidates(ctx, []string{candidate.Handle}, relation)
@@ -99,6 +99,7 @@ func overlaps(path string, start, end int, changed map[string][]LineRange) bool 
 func SortedWords(terms QueryTerms) []string { return sortedUnique(terms.Words) }
 
 func queryRelations(terms QueryTerms) []string {
+	imports := false
 	for _, word := range terms.Words {
 		switch word {
 		case "call", "calls", "caller", "callers":
@@ -107,7 +108,12 @@ func queryRelations(terms QueryTerms) []string {
 			return []string{"callees"}
 		case "test", "tests", "testing", "coverage", "cover":
 			return []string{"tests"}
+		case "include", "includes", "included", "extends", "extend", "inherit", "inherits", "inherited", "layout", "layouts", "partial", "partials", "template":
+			imports = true
 		}
+	}
+	if imports {
+		return []string{"imports"}
 	}
 	return nil
 }

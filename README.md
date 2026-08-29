@@ -93,7 +93,13 @@ user scopeのCodex CLIのoptionや出力はversionによって異なるため、
 
 ### 検索と開示範囲
 
-Goファイルは標準ライブラリのASTを使った構文解析を行います。PHPは第一級の構文抽出として、namespace、use、class/interface/trait/enum、function/method、property/constant、include/require、PHPUnitテストを扱います。`.inc`は内容依存でPHPタグがある場合だけPHPとして検出し、`.phtml`などの混在HTML/PHPも検索できます。完全な型推論、動的ディスパッチ、サービスコンテナ解決は行わず、ComposerやPHPランタイムも実行しません。その他の対応プロファイルでは、C系、Python系、Markdown、フォールバックのテキストファイルを保守的に構造化抽出します。解決できない呼び出しは、事実と断定せず信頼度付きの字句関係として保持します。
+Goファイルは標準ライブラリのASTを使った構文解析を行います。PHPは第一級の構文抽出として、namespace、use、class/interface/trait/enum、function/method、property/constant、include/require、PHPUnitテストを扱います。`.inc`は内容依存でPHPタグがある場合だけPHPとして検出し、`.phtml`などの混在HTML/PHPも検索できます。
+
+`.tpl`および`.smarty`はSmartyを主対象とする第一級の複合テンプレート抽出です。default `{}` delimiterだけを認識し、`{block}`、`{function}`、`{capture}`をsymbol化し、`{extends}`と`{include}`をimports relationとして保持します。`{{...}}`形式のタグは別系統のopaque template tagとしてsource/search対象に保持しますが、Smarty symbolや意味解析は行いません。HTML/static markup、boundedな`<style>`領域、埋め込みJavaScript/TypeScript、外部script依存を元ファイルの行・byte spanで検索できます。Smarty markerのない`.tpl`も`template`として保持し、Smarty markerのないPHP主体の`.tpl`はPHPへ渡します。部分的なPHPは安全な`embedded-php` source chunkとして保持します。
+
+これは完全なSmarty parserではありません。templateをrenderまたは実行せず、custom delimiter、custom plugin semantics、完全なHTML/JavaScript/PHP意味解析、変数data-flowには対応しません。malformed templateはbest-effort recoveryし、source contentは他の言語と同じくSQLite indexへ保存されます。
+
+完全な型推論、動的ディスパッチ、サービスコンテナ解決は行わず、ComposerやPHPランタイムも実行しません。その他の対応プロファイルでは、C系、C#、Python系、Markdown、フォールバックのテキストファイルを保守的に構造化抽出します。解決できない呼び出しは、事実と断定せず信頼度付きの字句関係として保持します。
 
 `outline`はメタデータとシグネチャを返し、`source`は制限されたソース本体を追加します。各項目には`expand`で利用できる安定したハンドルがあり、`self`、`parent`、`children`、`callers`、`callees`、`imports`、`references`、`tests`、`neighbors`の関係を辿れます。ヘッダーとメタデータのコストも含めてから結果を詰めるため、最終的なシリアライズ済み推定値は指定予算内に収まります。
 
@@ -120,13 +126,13 @@ FocalSpanはネットワーク通信、外部LLMの呼び出し、リポジト�
 
 ### 制限とトラブルシューティング
 
-MVPではWeb UI、HTTP MCPトランスポート、埋め込み、ベクトル検索、ウォッチャー、Tree-sitter、SCIPインポート、ビルド／テストの意味解析、完全な多言語呼び出し解決には対応していません。汎用抽出は意図的に近似的で、`impact`も構文ベースです。
+MVPではWeb UI、HTTP MCPトランスポート、ベクトル検索、ウォッチャー、Tree-sitter、SCIPインポート、ビルド／テストの意味解析、完全な多言語呼び出し解決には対応していません。Smartyのcustom delimiter/plugin semantics、complete DOM/parser semantics、template variable data-flowも対象外です。汎用抽出は意図的に近似的で、`impact`も構文ベースです。
 
 データベースが壊れた場合や未対応スキーマの場合は、対象の`.focalspan/index.db`を削除して`focalspan index`を再実行してください。`focalspan doctor --json`では、ルート検出、Git、SQLite/FTS5、設定、MCP、権限、更新状態を確認できます。結果がない場合はインデックスを作成し、secret/excludeパターンを確認したうえで、`--mode outline --json`を試してください。
 
 ### 評価と開発
 
-チェックイン済みのフィクスチャは`testdata/repos/authsample`と`testdata/repos/phpsample`、評価ケースはそれぞれ`testdata/eval/cases.jsonl`と`testdata/eval/php-cases.jsonl`です。評価ではhit@1/3/5、シンボル／パス再現率、禁止パス違反、予算遵守、推定値の中央値、削減率、繰り返し実行時の決定性を確認します。PHP fixtureでは、namespace/use、クラス・メソッド、PHPUnitテスト、`.inc` include、混在HTML/PHPの検索を確認します。
+チェックイン済みのフィクスチャは`testdata/repos/authsample`、`testdata/repos/phpsample`、`testdata/repos/templatesample`、評価ケースはそれぞれ`testdata/eval/cases.jsonl`、`testdata/eval/php-cases.jsonl`、`testdata/eval/template-cases.jsonl`です。評価ではhit@1/3/5、シンボル／パス再現率、禁止パス違反、予算遵守、推定値の中央値、削減率、繰り返し実行時の決定性を確認します。PHP fixtureでは、namespace/use、クラス・メソッド、PHPUnitテスト、`.inc` include、混在HTML/PHPの検索を確認し、template fixtureではblock/function、include/extends、埋め込みJavaScript、bounded style、malformed recoveryを確認します。
 
 ```text
 go test ./...
@@ -134,6 +140,8 @@ go test -race ./...
 go vet ./...
 focalspan eval --root testdata/repos/authsample --cases testdata/eval/cases.jsonl --json
 focalspan eval --root testdata/repos/phpsample --cases testdata/eval/php-cases.jsonl --json
+focalspan index --root testdata/repos/templatesample --quiet
+focalspan eval --root testdata/repos/templatesample --cases testdata/eval/template-cases.jsonl --json
 ```
 
 プロジェクト規則とパッケージ境界は`AGENTS.md`、設計・ロードマップ・評価結果の解釈は`docs/design.md`と`docs/evaluation.md`に記載しています。
@@ -277,6 +285,13 @@ conservative structural extraction for C-like, Python-like, Markdown, and
 fallback text files. Calls that cannot be resolved are retained as lexical
 relations with confidence rather than being asserted as facts.
 
+`.tpl` and `.smarty` files also have first-class composite extraction for
+Smarty-like templates. Named `{block}`, `{function}`, and `{capture}` regions
+become symbols, while includes, inheritance, bounded embedded scripts, and
+static source remain searchable. `{{...}}` tags are preserved as opaque
+template source and are not interpreted as Smarty symbols; quoted `}}` does
+not terminate such a tag.
+
 `outline` returns metadata and signatures. `source` adds bounded source body.
 Every item has a stable handle suitable for `expand`; supported relations are
 `self`, `parent`, `children`, `callers`, `callees`, `imports`,
@@ -350,11 +365,12 @@ secret/exclude patterns, and retry with `--mode outline --json`.
 
 ## Evaluation and development
 
-The checked-in fixtures are `testdata/repos/authsample` and
-`testdata/repos/phpsample`; cases are in `testdata/eval/cases.jsonl` and
-`testdata/eval/php-cases.jsonl`. Evaluation reports hit@1/3/5, symbol/path recall,
-forbidden-path violations, budget compliance, median estimate, reduction ratio,
-and repeated-run determinism.
+The checked-in fixtures are `testdata/repos/authsample`,
+`testdata/repos/phpsample`, and `testdata/repos/templatesample`; cases are in
+`testdata/eval/cases.jsonl`, `testdata/eval/php-cases.jsonl`, and
+`testdata/eval/template-cases.jsonl`. Evaluation reports hit@1/3/5,
+symbol/path recall, forbidden-path violations, budget compliance, median
+estimate, reduction ratio, and repeated-run determinism.
 
 ```text
 go test ./...
@@ -362,6 +378,8 @@ go test -race ./...
 go vet ./...
 focalspan eval --root testdata/repos/authsample --cases testdata/eval/cases.jsonl --json
 focalspan eval --root testdata/repos/phpsample --cases testdata/eval/php-cases.jsonl --json
+focalspan index --root testdata/repos/templatesample --quiet
+focalspan eval --root testdata/repos/templatesample --cases testdata/eval/template-cases.jsonl --json
 ```
 
 Project rules and package boundaries are in `AGENTS.md`; design, roadmap, and

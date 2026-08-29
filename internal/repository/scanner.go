@@ -246,13 +246,143 @@ func DetectLanguage(path string) string {
 }
 
 func DetectLanguageContent(path string, content []byte) string {
-	if !strings.EqualFold(filepath.Ext(path), ".inc") {
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".tpl":
+		if containsSmartyMarker(content) {
+			return "smarty"
+		}
+		if containsPHPTag(content) {
+			return "php"
+		}
+		return "template"
+	case ".smarty":
+		return "smarty"
+	case ".inc":
+		if containsPHPTag(content) {
+			return "php"
+		}
+		return "text"
+	default:
 		return DetectLanguage(path)
 	}
-	if containsPHPTag(content) {
-		return "php"
+}
+
+func containsSmartyMarker(content []byte) bool {
+	for index := 0; index+1 < len(content); index++ {
+		if bytesHasPrefixFold(content, index, "<!--") {
+			if end := bytesIndexFold(content, index+4, "-->"); end >= 0 {
+				index = end + 2
+				continue
+			}
+			return false
+		}
+		if bytesHasPrefixFold(content, index, "<script") || bytesHasPrefixFold(content, index, "<style") {
+			name := "script"
+			if !bytesHasPrefixFold(content, index, "<script") {
+				name = "style"
+			}
+			if end := bytesIndexFold(content, index, "</"+name); end >= 0 {
+				index = end + len(name) + 1
+				continue
+			}
+			return false
+		}
+		if content[index] != '{' {
+			continue
+		}
+		if index+1 < len(content) && content[index+1] == '{' {
+			if end := findDoubleCurlyEnd(content, index); end >= 0 {
+				index = end + 1
+			} else {
+				index = len(content)
+			}
+			continue
+		}
+		if content[index+1] == '*' {
+			return true
+		}
+		if content[index+1] == '$' {
+			return true
+		}
+		if content[index+1] == '/' && index+2 < len(content) && isSmartyTagName(content[index+2:]) {
+			return true
+		}
+		if isASCIIAlpha(content[index+1]) {
+			end := index + 1
+			for end < len(content) && (isASCIIAlpha(content[end]) || content[end] == '_') {
+				end++
+			}
+			name := strings.ToLower(string(content[index+1 : end]))
+			switch name {
+			case "block", "extends", "include", "function", "foreach", "section", "if", "for", "while", "capture", "call", "elseif", "else", "ldelim", "rdelim":
+				if end == len(content) || content[end] == '}' || content[end] == ' ' || content[end] == '\t' || content[end] == '\r' || content[end] == '\n' {
+					return true
+				}
+			}
+		}
 	}
-	return "text"
+	return false
+}
+
+func findDoubleCurlyEnd(content []byte, at int) int {
+	quote := byte(0)
+	escaped := false
+	for index := at + 2; index+1 < len(content); index++ {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if quote != 0 {
+			if content[index] == '\\' {
+				escaped = true
+			} else if content[index] == quote {
+				quote = 0
+			}
+			continue
+		}
+		if content[index] == '\'' || content[index] == '"' {
+			quote = content[index]
+			continue
+		}
+		if content[index] == '}' && content[index+1] == '}' {
+			return index
+		}
+	}
+	return -1
+}
+
+func isSmartyTagName(content []byte) bool {
+	end := 0
+	for end < len(content) && isASCIIAlpha(content[end]) {
+		end++
+	}
+	if end == 0 {
+		return false
+	}
+	name := strings.ToLower(string(content[:end]))
+	switch name {
+	case "block", "extends", "include", "function", "foreach", "section", "if", "for", "while", "capture", "call", "elseif", "else", "ldelim", "rdelim":
+		return true
+	}
+	return false
+}
+
+func isASCIIAlpha(value byte) bool {
+	return value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z'
+}
+
+func bytesHasPrefixFold(source []byte, at int, value string) bool {
+	return at >= 0 && at+len(value) <= len(source) && strings.EqualFold(string(source[at:at+len(value)]), value)
+}
+
+func bytesIndexFold(source []byte, at int, value string) int {
+	for index := at; index+len(value) <= len(source); index++ {
+		if bytesHasPrefixFold(source, index, value) {
+			return index
+		}
+	}
+	return -1
 }
 
 func containsPHPTag(content []byte) bool {

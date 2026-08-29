@@ -5,3 +5,6 @@
 .build/
 bin/
 dist/
+*.exe
+/.codex
+/.serena

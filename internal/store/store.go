@@ -373,6 +373,10 @@ SELECT name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chun
 UNION SELECT qualified_name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
 UNION SELECT f.path FROM files f JOIN symbols s ON s.file_id = f.id
 WHERE s.handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+
+)) AND (c.kind = 'template-outline' OR NOT EXISTS (
+SELECT 1 FROM chunks outline
+WHERE outline.symbol_handle = c.symbol_handle AND outline.kind = 'template-outline'
 ))`)
 			args = []any{relation, handle, handle, relation, handle, handle, relation, handle, handle, handle, handle, handle, handle}
 		}

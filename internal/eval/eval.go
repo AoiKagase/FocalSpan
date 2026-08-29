@@ -104,9 +104,9 @@ func Evaluate(ctx context.Context, queryer Queryer, cases []Case) (Report, error
 		if item.TokenBudget <= 0 || first.EstimatedTokens <= item.TokenBudget {
 			result.BudgetCompliant = 1
 		}
-		result.HitAt1 = hitAt(first.Items, item.ExpectedSymbols, 1)
-		result.HitAt3 = hitAt(first.Items, item.ExpectedSymbols, 3)
-		result.HitAt5 = hitAt(first.Items, item.ExpectedSymbols, 5)
+		result.HitAt1 = hitAt(first.Items, item.ExpectedSymbols, item.ExpectedPaths, 1)
+		result.HitAt3 = hitAt(first.Items, item.ExpectedSymbols, item.ExpectedPaths, 3)
+		result.HitAt5 = hitAt(first.Items, item.ExpectedSymbols, item.ExpectedPaths, 5)
 		result.SymbolRecall = recallSymbols(first.Items, item.ExpectedSymbols)
 		result.PathRecall = recallPaths(first.Items, item.ExpectedPaths)
 		result.ForbiddenViolations = forbidden(first.Items, item.ForbiddenPaths)
@@ -144,12 +144,22 @@ func Evaluate(ctx context.Context, queryer Queryer, cases []Case) (Report, error
 	return report, nil
 }
 
-func hitAt(items []model.ContextItem, expected []string, n int) int {
+func hitAt(items []model.ContextItem, expectedSymbols, expectedPaths []string, n int) int {
 	if len(items) > n {
 		items = items[:n]
 	}
+	if len(expectedSymbols) == 0 {
+		for _, item := range items {
+			for _, path := range expectedPaths {
+				if item.Path == path {
+					return 1
+				}
+			}
+		}
+		return 0
+	}
 	for _, item := range items {
-		for _, symbol := range expected {
+		for _, symbol := range expectedSymbols {
 			if item.Symbol == symbol {
 				return 1
 			}

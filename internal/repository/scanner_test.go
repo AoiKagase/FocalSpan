@@ -56,6 +56,34 @@ func TestDetectLanguageContentPHPAndIncRules(t *testing.T) {
 	}
 }
 
+func TestDetectLanguageContentTemplates(t *testing.T) {
+	tests := []struct {
+		name, path, content, want string
+	}{
+		{"smarty block", "login.tpl", `{block name="content"}{/block}`, "smarty"},
+		{"smarty variable", "header.tpl", `{$title}`, "smarty"},
+		{"plain html", "plain.tpl", `<p>Hello</p>`, "template"},
+		{"plain text", "mail.tpl", "Hello from a template", "template"},
+		{"double curly tag", "double.tpl", `{{ user.name }}`, "template"},
+		{"double curly Smarty-looking tag", "double-block.tpl", `{{block}}`, "template"},
+		{"php only", "legacy.tpl", `<?php echo $title; ?>`, "php"},
+		{"xml declaration", "document.tpl", `<?xml version="1.0"?><root/>`, "template"},
+		{"smarty extension", "theme.SMARTY", `plain text`, "smarty"},
+		{"uppercase tpl", "page.HTML.TPL", `<p>{$title}</p>`, "smarty"},
+		{"javascript braces", "script.tpl", `<script>function f() { return {}; }</script>`, "template"},
+		{"javascript string marker", "script-string.tpl", `<script>const marker = "{block}";</script>`, "template"},
+		{"css braces", "style.tpl", `<style>.x { color: red; }</style>`, "template"},
+		{"comment marker", "comment.tpl", `{* {block name="fake"} *}`, "smarty"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := DetectLanguageContent(tt.path, []byte(tt.content)); got != tt.want {
+				t.Fatalf("DetectLanguageContent(%q)=%q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestScannerDetectsPHPIncContent(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "auth.inc"), []byte("<?PHP echo 1;"), 0o600); err != nil {

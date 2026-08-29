@@ -6,7 +6,7 @@
 
 **Architecture:** Keep repository scanning, extraction, storage, retrieval, ranking, packing, rendering, CLI, and MCP behind small package boundaries. Parse workers return immutable results to one SQLite writer; CLI and MCP call the same application service.
 
-**Tech Stack:** Go 1.26+, `database/sql`, `modernc.org/sqlite v1.57.0` with real FTS5, `github.com/modelcontextprotocol/go-sdk v1.7.0`, standard-library AST/parser, embedded SQL migrations, `log/slog`.
+**Tech Stack:** Go 1.26+, `database/sql`, `modernc.org/sqlite v1.57.0` with real FTS5, `github.com/modelcontextprotocol/go-sdk v1.7.0`, `github.com/pelletier/go-toml/v2 v2.2.4` for validation-only parsing, standard-library AST/parser, embedded SQL migrations, `log/slog`.
 
 **Spec:** `docs/design.md`
 
@@ -226,6 +226,45 @@
 - [ ] Run `CGO_ENABLED=0 go build ./cmd/focalspan`, plus Windows amd64, Linux amd64, and Darwin arm64 cross-builds using explicit output paths under a temporary build directory.
 - [ ] Run the fixture sequence: `index`, `status --json`, budgeted JSON `query`, `update`, `impact --json`, `doctor`, and bounded `serve` smoke test.
 - [ ] Record measured metrics and any environment-blocked verification in `docs/evaluation.md` and README; run `git diff --check`.
+
+### Task 13: Codex MCP registration integration
+
+**Files:**
+- Create: `internal/integration/codex/*.go`, focused project/user adapter tests
+- Modify: `internal/cli/run.go`, `README.md`, `docs/design.md`
+
+**Interfaces:**
+- Produces `focalspan mcp install|status|uninstall|print codex` with project
+  scope as the default and user scope delegated to the official Codex CLI.
+- Project scope uses a validated, atomic, marked TOML block and preserves all
+  unmanaged content; user scope uses an injectable no-shell command runner.
+
+- [x] Resolve FocalSpan executables canonically and reject temporary `go-build`
+  binaries for permanent registration.
+- [x] Add idempotent managed-block install/uninstall, collision detection,
+  read-only status, dry-run output, and separated JSON command/args.
+- [x] Add deterministic tests for path escaping, project preservation, user
+  argv ordering, force/remove safety, cancellation, and CLI dispatch.
+- [ ] Run the full test, vet, race, cross-build, and temporary-repository
+  acceptance checklist before marking the integration complete.
+
+### Task 14: Opaque double-curly template tags
+
+**Files:**
+- Modify: `internal/repository/scanner.go`, `internal/extract/template/`
+- Modify: `README.md`, `docs/design.md`
+
+**Interfaces:**
+- Treat `{{...}}` as an opaque template tag so `.tpl` files using a
+  non-Smarty double-curly syntax remain `template` files unless they also
+  contain an actual Smarty marker.
+- Preserve double-curly tags in searchable source and never create Smarty
+  structural symbols from their contents; quoted `}}` is not a boundary.
+
+- [x] Add scanner, language-detection, and extraction regression tests.
+- [x] Keep malformed double-curly input bounded and report a diagnostic.
+- [ ] Run the full test, vet, race, cross-build, and fixture acceptance
+  checklist before marking the integration complete.
 
 ## Verification checklist
 
