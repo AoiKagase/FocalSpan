@@ -430,7 +430,7 @@ Windows PowerShellでは`.focalspan-plan-bin.exe`へ読み替える。
 
 `docs/evaluation.md`へ`Retrieval Quality v0.2 pre-change baseline`表を追加する。実行結果だけを記載し、未実行値を補完しない。
 
-- [ ] **Step 8: Remove the temporary binary and commit**
+- [x] **Step 8: Remove the temporary binary and commit**
 
 ```text
 git add internal/app/service.go internal/app/service_test.go docs/evaluation.md PLAN.md
@@ -568,7 +568,7 @@ func TestBuildFTSEscapesSyntax(t *testing.T) {
 
 移行後に同じ実装を`internal/search/query.go`へ残さない。互換wrapperを一時的に置く場合も、このTaskの最後に全call siteを更新して削除する。
 
-- [ ] **Step 7: Run tests and commit**
+- [x] **Step 7: Run tests and commit**
 
 ```text
 gofmt -w internal/query internal/search
@@ -716,7 +716,7 @@ Test:
 - PHP qualified name
 - C# dotted name
 
-- [ ] **Step 6: Run tests and commit**
+- [x] **Step 6: Run tests and commit**
 
 ```text
 gofmt -w internal/query
@@ -856,7 +856,7 @@ Tests must show:
 - duplicate input terms do not duplicate rows
 - all returned line ranges are valid
 
-- [ ] **Step 7: Run tests and commit**
+- [x] **Step 7: Run tests and commit**
 
 ```text
 gofmt -w internal/store internal/app internal/search internal/eval
@@ -1029,7 +1029,7 @@ Tests:
 - candidate cap is enforced after fusion
 - fts-only never calls relation store
 
-- [ ] **Step 9: Run tests and commit**
+- [x] **Step 9: Run tests and commit**
 
 ```text
 gofmt -w internal/search
@@ -1152,7 +1152,7 @@ start line ASC
 handle ASC
 ```
 
-- [ ] **Step 7: Run tests and commit**
+- [x] **Step 7: Run tests and commit**
 
 ```text
 gofmt -w internal/rank
@@ -1310,7 +1310,7 @@ plan := query.Plan{
 - no source appears in trace
 - final budget remains compliant
 
-- [ ] **Step 9: Run tests and commit**
+- [x] **Step 9: Run tests and commit**
 
 ```text
 gofmt -w internal/model internal/search internal/app internal/budget
