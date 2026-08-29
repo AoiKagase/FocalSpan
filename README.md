@@ -93,7 +93,7 @@ user scopeのCodex CLIのoptionや出力はversionによって異なるため、
 
 ### 検索と開示範囲
 
-Goファイルは標準ライブラリのASTを使った構文解析を行います。PHPは第一級の構文抽出として、namespace、use、class/interface/trait/enum、function/method、property/constant、include/require、PHPUnitテストを扱います。`.inc`は内容依存でPHPタグがある場合だけPHPとして検出し、`.phtml`などの混在HTML/PHPも検索できます。完全な型推論、動的ディスパッチ、サービスコンテナ解決は行わず、ComposerやPHPランタイムも実行しません。その他の対応プロファイルでは、C系、Python系、Markdown、フォールバックのテキストファイルを保守的に構造化抽出します。解決できない呼び出しは、事実と断定せず信頼度付きの字句関係として保持します。
+Goファイルは標準ライブラリのASTを使った構文解析を行います。PHPに加え、C/C++（`.c`、`.h`、`.cc`、`.cpp`など）、C#（`.cs`）、JavaScript/JSX/TypeScript/TSX（`.js`、`.jsx`、`.ts`、`.tsx`、`.mjs`、`.cjs`）には専用の第一級構造抽出器があります。これらは専用lexer/parserで正確なbyte・行spanを切り出し、namespace/module/type階層、class全体と重複しないmethod/function単位のchunk、include/import/export、caller/callee、type/reference、test relation、stable handle、malformed sourceからの部分回復を扱います。C/C++はnamespace、class/struct/union/enum、宣言・定義、method/constructor/destructor/operator、macroを、C#はnamespace、class/struct/interface/enum/record、method/constructor/property/eventを、JS/TSはnamespace、class/interface/enum/type、function/method/arrow、test、ESM/CommonJSのmodule relationを対象にします。完全な型推論、動的ディスパッチ、サービスコンテナ解決は行わず、ComposerやPHPランタイム、Clang、Roslyn、TypeScript Compiler APIは実行しません。その他の対応プロファイルでは、Python系、Markdown、フォールバックのテキストファイルを保守的に構造化抽出します。解決できない呼び出し・import/include・referenceは、事実と断定せず信頼度付きのunresolved lexical relationとして保持します。
 
 `outline`はメタデータとシグネチャを返し、`source`は制限されたソース本体を追加します。各項目には`expand`で利用できる安定したハンドルがあり、`self`、`parent`、`children`、`callers`、`callees`、`imports`、`references`、`tests`、`neighbors`の関係を辿れます。ヘッダーとメタデータのコストも含めてから結果を詰めるため、最終的なシリアライズ済み推定値は指定予算内に収まります。
 
@@ -126,7 +126,7 @@ MVPではWeb UI、HTTP MCPトランスポート、埋め込み、ベクトル検
 
 ### 評価と開発
 
-チェックイン済みのフィクスチャは`testdata/repos/authsample`と`testdata/repos/phpsample`、評価ケースはそれぞれ`testdata/eval/cases.jsonl`と`testdata/eval/php-cases.jsonl`です。評価ではhit@1/3/5、シンボル／パス再現率、禁止パス違反、予算遵守、推定値の中央値、削減率、繰り返し実行時の決定性を確認します。PHP fixtureでは、namespace/use、クラス・メソッド、PHPUnitテスト、`.inc` include、混在HTML/PHPの検索を確認します。
+チェックイン済みのフィクスチャは`testdata/repos/authsample`、`testdata/repos/phpsample`、`testdata/repos/cppsample`、`testdata/repos/csharpsample`、`testdata/repos/jstssample`です。評価ケースはそれぞれ`testdata/eval/cases.jsonl`、`php-cases.jsonl`、`cpp-cases.jsonl`、`csharp-cases.jsonl`、`jsts-cases.jsonl`です。評価ではhit@1/3/5、シンボル／パス再現率、禁止パス違反、予算遵守、推定値の中央値、削減率、繰り返し実行時の決定性を確認します。PHPではnamespace/use、クラス・メソッド、PHPUnitテスト、`.inc` include、混在HTML/PHPを、C/C++・C#・JS/TSでは専用構造抽出、relation、malformed recovery、stable handle、重複を抑えたchunkを確認します。測定値の詳細は`docs/evaluation.md`に記載しています。
 
 ```text
 go test ./...
@@ -134,9 +134,13 @@ go test -race ./...
 go vet ./...
 focalspan eval --root testdata/repos/authsample --cases testdata/eval/cases.jsonl --json
 focalspan eval --root testdata/repos/phpsample --cases testdata/eval/php-cases.jsonl --json
+focalspan eval --root testdata/repos/cppsample --cases testdata/eval/cpp-cases.jsonl --json
+focalspan eval --root testdata/repos/csharpsample --cases testdata/eval/csharp-cases.jsonl --json
+focalspan eval --root testdata/repos/jstssample --cases testdata/eval/jsts-cases.jsonl --json
 ```
 
 プロジェクト規則とパッケージ境界は`AGENTS.md`、設計・ロードマップ・評価結果の解釈は`docs/design.md`と`docs/evaluation.md`に記載しています。
+現在の検証では`go test ./...`と`go vet ./...`、3対象のCGO-freeクロスビルド、全fixtureのCLI smokeを確認済みです。`go test -race ./...`はこのWindows環境に`gcc`がないため未検証です。詳細な測定値と受入境界は`docs/evaluation.md`を参照してください。
 
 ## MVP architecture
 
@@ -269,13 +273,23 @@ are clamped to 256..64000.
 Go files use syntax-only standard-library AST extraction. PHP has a first-class
 structural extractor for namespaces, imports, class-like declarations,
 functions/methods, properties/constants, include/require, and PHPUnit tests.
+C/C++, C#, and JavaScript/JSX/TypeScript/TSX also have dedicated first-class
+lexers/parsers. They emit exact byte/line spans, method/function-oriented
+chunks, namespace/module/type hierarchy, include/import/export relations,
+caller/callee and type/reference candidates, test relations, stable handles,
+and bounded malformed-source recovery. C/C++ covers C extensions and
+namespace/class/struct/union/enum plus method/constructor/destructor/operator
+declarations; C# covers namespace/class/struct/interface/enum/record plus
+method/constructor/property/event declarations; JS/TS covers ESM/CommonJS,
+class/interface/enum/type, functions/methods/arrows, JSX/TSX, and tests.
 `.inc` is detected as PHP only when its content contains a PHP opening tag;
 mixed HTML/PHP such as `.phtml` remains searchable. Complete type inference,
 dynamic dispatch, and service-container resolution are not provided, and
-Composer or the PHP runtime is never executed. Other supported profiles use
-conservative structural extraction for C-like, Python-like, Markdown, and
-fallback text files. Calls that cannot be resolved are retained as lexical
-relations with confidence rather than being asserted as facts.
+Composer, the PHP runtime, Clang, Roslyn, and the TypeScript Compiler API are
+never executed. Other supported profiles use conservative structural
+extraction for Python-like, Markdown, and fallback text files. Calls,
+imports/includes, and references that cannot be resolved are retained as
+confidence-labeled lexical relations rather than being asserted as facts.
 
 `outline` returns metadata and signatures. `source` adds bounded source body.
 Every item has a stable handle suitable for `expand`; supported relations are
@@ -350,11 +364,13 @@ secret/exclude patterns, and retry with `--mode outline --json`.
 
 ## Evaluation and development
 
-The checked-in fixtures are `testdata/repos/authsample` and
-`testdata/repos/phpsample`; cases are in `testdata/eval/cases.jsonl` and
-`testdata/eval/php-cases.jsonl`. Evaluation reports hit@1/3/5, symbol/path recall,
-forbidden-path violations, budget compliance, median estimate, reduction ratio,
-and repeated-run determinism.
+The checked-in fixtures are `testdata/repos/authsample`,
+`testdata/repos/phpsample`, `testdata/repos/cppsample`,
+`testdata/repos/csharpsample`, and `testdata/repos/jstssample`; cases are in
+the matching files under `testdata/eval/` (`cases.jsonl`, `php-cases.jsonl`,
+`cpp-cases.jsonl`, `csharp-cases.jsonl`, and `jsts-cases.jsonl`). Evaluation
+reports hit@1/3/5, symbol/path recall, forbidden-path violations, budget
+compliance, median estimate, reduction ratio, and repeated-run determinism.
 
 ```text
 go test ./...
@@ -362,10 +378,17 @@ go test -race ./...
 go vet ./...
 focalspan eval --root testdata/repos/authsample --cases testdata/eval/cases.jsonl --json
 focalspan eval --root testdata/repos/phpsample --cases testdata/eval/php-cases.jsonl --json
+focalspan eval --root testdata/repos/cppsample --cases testdata/eval/cpp-cases.jsonl --json
+focalspan eval --root testdata/repos/csharpsample --cases testdata/eval/csharp-cases.jsonl --json
+focalspan eval --root testdata/repos/jstssample --cases testdata/eval/jsts-cases.jsonl --json
 ```
 
 Project rules and package boundaries are in `AGENTS.md`; design, roadmap, and
 evaluation interpretation are in `docs/design.md` and `docs/evaluation.md`.
+The current verification passed `go test ./...`, `go vet ./...`, the three
+CGO-free cross-builds, and the fixture CLI smoke flow. `go test -race ./...`
+remains unverified because this Windows environment has no `gcc`; see
+`docs/evaluation.md` for measured results and acceptance boundaries.
 
 ## Future extension points
 

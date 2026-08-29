@@ -63,3 +63,39 @@ func TestPackerOmitsLowUtilityCandidateWhenBudgetIsTight(t *testing.T) {
 		t.Fatalf("higher utility candidate was omitted: %+v", bundle)
 	}
 }
+
+func TestPackerLimitsTestIntentToFocusedTestChunks(t *testing.T) {
+	candidates := []model.RankedCandidate{
+		{Handle: "one", Path: "tests/one.test.ts", Kind: "test", Symbol: "expired token is rejected", Score: 100, Content: "test(\"expired token is rejected\", () => {});"},
+		{Handle: "docs", Path: "README.md", Language: "markdown", Kind: "heading", Score: 90, Content: "tests and TypeScript"},
+		{Handle: "two", Path: "tests/two.test.ts", Kind: "test", Symbol: "accepts live token", Score: 80, Content: "test(\"accepts live token\", () => {});"},
+		{Handle: "three", Path: "tests/three.test.ts", Kind: "test", Symbol: "rejects empty token", Score: 70, Content: "test(\"rejects empty token\", () => {});"},
+	}
+	bundle := NewPacker(NewEstimator()).Pack(model.PackRequest{Query: "what tests cover expired tokens?", TokenBudget: 512, Mode: "source", Candidates: candidates})
+	if len(bundle.Items) != 2 || bundle.Items[0].Path != "tests/one.test.ts" || bundle.Items[1].Path != "tests/two.test.ts" {
+		t.Fatalf("bundle=%+v", bundle)
+	}
+}
+
+func TestPackerPreservesRelationMetadata(t *testing.T) {
+	bundle := NewPacker(NewEstimator()).Pack(model.PackRequest{
+		Query:       "what calls Handle?",
+		TokenBudget: 512,
+		Mode:        "source",
+		Candidates: []model.RankedCandidate{{
+			Handle:   "caller",
+			Path:     "http/middleware.go",
+			Language: "go",
+			Kind:     "function",
+			Symbol:   "Handle",
+			Relation: "callers",
+			Content:  "func Handle() {}",
+		}},
+	})
+	if len(bundle.Items) != 1 {
+		t.Fatalf("items=%+v", bundle.Items)
+	}
+	if bundle.Items[0].Relation != "callers" {
+		t.Fatalf("relation=%q, want callers", bundle.Items[0].Relation)
+	}
+}

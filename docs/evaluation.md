@@ -1,14 +1,28 @@
-# FocalSpan MVP Evaluation
+# FocalSpan Structural Extraction Evaluation
 
 ## Dataset
 
-The checked-in fixture is `testdata/repos/authsample`. It contains an
-authentication service with `ValidateToken`, an expired-token branch, a
-middleware caller, an expired-token test, configuration, documentation, and a
-larger unrelated report file. Cases are in `testdata/eval/cases.jsonl`.
+The checked-in fixtures cover the original Go/PHP behavior and the three
+first-class structural profiles:
 
-The fixture is intentionally ordinary Go code. Production ranking contains no
-fixture-specific names or query branches.
+- `testdata/repos/authsample`: Go authentication service, caller, test,
+  configuration, documentation, and an unrelated report.
+- `testdata/repos/phpsample`: PHP namespace/use, classes and methods, PHPUnit,
+  `.inc`, and mixed HTML/PHP coverage.
+- `testdata/repos/cppsample`: C and C++ authentication code, headers/includes,
+  callers, tests, and a legacy `.c` function.
+- `testdata/repos/csharpsample`: C# namespace/types, interface references,
+  partial class declarations, callers, and xUnit/NUnit/MSTest-style tests.
+- `testdata/repos/jstssample`: JavaScript/TypeScript, JSX/TSX, ESM/CommonJS,
+  imports/exports, callers, nested tests, and an unrelated report.
+
+The matching cases are `testdata/eval/cases.jsonl`, `php-cases.jsonl`,
+`cpp-cases.jsonl`, `csharp-cases.jsonl`, and `jsts-cases.jsonl` under
+`testdata/eval/`.
+
+The original Go fixture is intentionally ordinary code, and production ranking
+contains no fixture-specific names or query branches. The added language
+fixtures use the same evaluator and do not add fixture-specific ranking rules.
 
 ## Metrics
 
@@ -45,6 +59,12 @@ focalspan index --root testdata/repos/authsample
 focalspan eval --root testdata/repos/authsample --cases testdata/eval/cases.jsonl --json
 focalspan index --root testdata/repos/phpsample --quiet
 focalspan eval --root testdata/repos/phpsample --cases testdata/eval/php-cases.jsonl --json
+focalspan index --root testdata/repos/cppsample --quiet
+focalspan eval --root testdata/repos/cppsample --cases testdata/eval/cpp-cases.jsonl --json
+focalspan index --root testdata/repos/csharpsample --quiet
+focalspan eval --root testdata/repos/csharpsample --cases testdata/eval/csharp-cases.jsonl --json
+focalspan index --root testdata/repos/jstssample --quiet
+focalspan eval --root testdata/repos/jstssample --cases testdata/eval/jsts-cases.jsonl --json
 ```
 
 The evaluation output is the evidence for the thresholds. A failed or
@@ -72,9 +92,40 @@ remained within the `<= 0.25` acceptance threshold. Every returned item had
 an existing fixture path and a valid source line range, and
 `unrelated/Report.php` was absent from all four bundles.
 
+## First-class structural profile results
+
+The following measurements were rerun from the current checkout with the
+matching fixture and JSONL cases. Each case is queried twice by the evaluator.
+
+| Profile | Cases | hit@1 / hit@3 / hit@5 | Symbol / path recall | Budget | Forbidden | Deterministic | Median tokens | Median reduction |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| C/C++ (includes C) | 5 | 0.40 / 0.80 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 146 | 0.1667 |
+| C# | 5 | 0.60 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 92 | 0.1215 |
+| JavaScript/TypeScript | 6 | 0.83 / 0.83 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 145 | 0.2020 |
+
+All three profiles meet the existing thresholds: hit@5 100%, budget
+compliance 100%, no forbidden-path violations, deterministic output, and
+median reduction at or below 0.25. The cases validate structural symbol/path
+recall and relation retrieval; they do not claim compiler-grade type
+inference, overload resolution, virtual dispatch, or package/module graph
+resolution.
+
+## Verification status
+
+The current worktree also passed `go test ./...`, `go vet ./...`, and the
+fixture CLI flow (`index`, `status --json`, budgeted JSON `query`, quiet
+`update`, `impact --json`, `doctor --json`, and a bounded stdio `serve` startup
+smoke). `CGO_ENABLED=0` builds passed for Windows amd64, Linux amd64, and
+Darwin arm64. `go test -race ./...` remains unverified because this Windows
+environment has no `gcc` C compiler (`runtime/cgo: C compiler "gcc" not
+found`); this is an environment limitation, not a reported test assertion.
+
 ## Interpretation
 
-The fixture measures retrieval, deduplication, and packing, not semantic call
-resolution. Go relations are syntax-only and unresolved calls are labeled with
-their lexical target and confidence. Future semantic providers may improve
-recall without changing the packer or output contract.
+The fixtures measure retrieval, structural relation use, deduplication, and
+packing, not semantic call resolution. The C/C++, C#, and JavaScript/TypeScript
+extractors use pure-Go lexers/parsers and bounded recovery. Resolved relations
+are limited to unique local qualified/name matches; unresolved calls,
+imports/includes/exports, and references are labeled with their lexical target
+and confidence. Future semantic providers may improve recall without changing
+the packer or output contract.

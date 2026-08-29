@@ -26,7 +26,9 @@
 
 - Create `go.mod`, `.gitignore`, `AGENTS.md`, and `cmd/focalspan/main.go` for the executable boundary.
 - Create `internal/model`, `internal/config`, `internal/repository`, and `internal/gitx` for safe input and domain values.
-- Create `internal/extract`, `internal/extract/goast`, and `internal/extract/generic` for extraction.
+- Create `internal/extract`, `internal/extract/goast`, `internal/extract/php`,
+  `internal/extract/cpp`, `internal/extract/csharp`, `internal/extract/jsts`,
+  `internal/extract/sourceutil`, and `internal/extract/generic` for extraction.
 - Create `internal/store/migrations`, `internal/store`, and `internal/indexer` for SQLite and incremental indexing.
 - Create `internal/search`, `internal/rank`, `internal/budget`, and `internal/render` for context selection.
 - Create `internal/cli`, `internal/mcpserver`, and `internal/eval` for adapters and measurement.
@@ -213,10 +215,14 @@
 **Files:**
 - Create: `testdata/repos/authsample/auth/service.go`, `auth/service_test.go`, `http/middleware.go`, `config/config.go`, `unrelated/report.go`, `README.md`
 - Create: `testdata/eval/cases.jsonl`, `internal/eval/eval.go`, `internal/eval/eval_test.go`
+- Create: `internal/extract/cpp`, `internal/extract/csharp`,
+  `internal/extract/jsts`, `internal/extract/sourceutil`,
+  `testdata/repos/cppsample`, `testdata/repos/csharpsample`,
+  `testdata/repos/jstssample`, and their matching evaluation JSONL files.
 - Modify: `docs/evaluation.md`, `README.md`, `AGENTS.md`
 
 **Interfaces:**
-- Produces JSON/JSONL evaluation with hit@1/3/5, symbol/path recall, forbidden violations, budget compliance, median estimate, reduction ratio, and repeated-run determinism.
+- Produces JSON/JSONL evaluation with hit@1/3/5, symbol/path recall, forbidden violations, budget compliance, median estimate, reduction ratio, and repeated-run determinism. The same evaluator covers Go, PHP, C/C++, C#, and JavaScript/TypeScript fixtures.
 - Documents all CLI/MCP/config/security/platform limitations and the exact acceptance workflow.
 
 - [ ] Write fixture/eval tests first and assert `ValidateToken` top 5, related test top 5, no forbidden report path, 100% budget compliance, and deterministic serialization.
@@ -244,6 +250,25 @@
 - [x] Verify with `go test ./internal/extract/php ./internal/extract`,
   `go test ./internal/extract ./internal/store ./internal/app`, and the PHP
   fixture evaluation under `testdata/repos/phpsample`.
+
+### Completed C/C++, C#, and JavaScript/TypeScript structural workstream
+
+- [x] Detect C and common C/C++ header/module extensions, C# `.cs`, and
+  JavaScript/TypeScript `.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, and `.cjs` files.
+- [x] Add pure-Go stateful lexers and bounded parsers with exact UTF-8-safe
+  byte/line spans, namespace/module/type hierarchy, stable handles, and
+  malformed-source diagnostics and prefix recovery.
+- [x] Add method/function-oriented chunks, container outlines, include/import/
+  export relations, caller/callee candidates, type/reference candidates, and
+  test relations without class/body duplication.
+- [x] Add unresolved relation matching and relation-aware search anchors while
+  retaining confidence labels instead of claiming compiler-grade resolution.
+- [x] Add C/C++, C#, and JavaScript/TypeScript fixtures and evaluations covering
+  C, C++ headers/includes, C# interfaces/partial classes, ESM/CommonJS,
+  JSX/TSX, tests, forbidden paths, budget compliance, and determinism.
+- [x] Verify focused extractor/ranking/search/packing tests and the three
+  fixture evaluations; measured hit@5 is 1.00 for all three profiles and
+  median reduction is 0.1667, 0.1215, and 0.2020 respectively.
 
 - [x] `go test ./...`
 - [ ] `go test -race ./...` (環境未検証: `CGO_ENABLED=1` では `gcc` が未導入)

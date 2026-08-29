@@ -56,6 +56,14 @@ func TestDetectLanguageContentPHPAndIncRules(t *testing.T) {
 	}
 }
 
+func TestDetectLanguageCPlusPlusAndModuleExtensions(t *testing.T) {
+	for _, item := range []struct{ path, want string }{{"x.c", "c"}, {"x.c++", "cpp"}, {"x.hh", "cpp"}, {"x.inl", "cpp"}, {"x.ipp", "cpp"}, {"x.tpp", "cpp"}, {"x.ixx", "cpp"}, {"x.cppm", "cpp"}, {"x.mjs", "javascript"}, {"x.cjs", "javascript"}} {
+		if got := DetectLanguage(item.path); got != item.want {
+			t.Errorf("DetectLanguage(%q)=%q, want %q", item.path, got, item.want)
+		}
+	}
+}
+
 func TestScannerDetectsPHPIncContent(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "auth.inc"), []byte("<?PHP echo 1;"), 0o600); err != nil {

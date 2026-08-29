@@ -212,7 +212,7 @@ func DetectLanguage(path string) string {
 		return "go"
 	case ".c":
 		return "c"
-	case ".cc", ".cpp", ".cxx", ".h", ".hpp":
+	case ".cc", ".cpp", ".cxx", ".c++", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp", ".tpp", ".ixx", ".cppm":
 		return "cpp"
 	case ".cs":
 		return "csharp"
@@ -220,7 +220,7 @@ func DetectLanguage(path string) string {
 		return "rust"
 	case ".java":
 		return "java"
-	case ".js", ".jsx":
+	case ".js", ".jsx", ".mjs", ".cjs":
 		return "javascript"
 	case ".ts", ".tsx":
 		return "typescript"

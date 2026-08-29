@@ -30,3 +30,14 @@ func TestEvaluateReportsHitsBudgetReductionAndDeterminism(t *testing.T) {
 		t.Fatalf("query calls=%d, want repeated run", queryer.calls)
 	}
 }
+
+func TestEvaluateUsesExpectedPathWhenNoExpectedSymbolIsProvided(t *testing.T) {
+	queryer := &fakeQueryer{}
+	report, err := Evaluate(context.Background(), queryer, []Case{{Name: "imports", Query: "imports", TokenBudget: 100, ExpectedPaths: []string{"auth/service.go"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Cases[0].HitAt1 != 1 || report.Cases[0].HitAt5 != 1 {
+		t.Fatalf("report=%+v", report)
+	}
+}

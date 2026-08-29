@@ -19,6 +19,13 @@ func TestBuildFTSQueryQuotesSpecialCharacters(t *testing.T) {
 	}
 }
 
+func TestQueryRelationsDoesNotTreatTypeScriptAsTypeRelation(t *testing.T) {
+	terms := NormalizeQuery("where is an expired TypeScript token rejected?")
+	if got := queryRelations(terms); len(got) != 0 {
+		t.Fatalf("relations=%v, want none", got)
+	}
+}
+
 func contains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

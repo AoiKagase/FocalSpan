@@ -310,7 +310,7 @@ func (s *Store) RelatedCandidates(ctx context.Context, handles []string, relatio
 	if relation == "" {
 		relation = "neighbors"
 	}
-	allowed := map[string]bool{"self": true, "parent": true, "children": true, "callers": true, "callees": true, "imports": true, "references": true, "tests": true, "neighbors": true}
+	allowed := map[string]bool{"self": true, "parent": true, "children": true, "callers": true, "callees": true, "imports": true, "exports": true, "references": true, "tests": true, "neighbors": true}
 	if !allowed[relation] {
 		return []model.RankedCandidate{}, nil
 	}
@@ -332,49 +332,88 @@ func (s *Store) RelatedCandidates(ctx context.Context, handles []string, relatio
 			args = []any{handle, handle}
 		case "callers":
 			query = candidateQuery(`c.symbol_handle IN (
-SELECT from_handle FROM relations
-WHERE kind = 'calls' AND (
-  to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
-  OR unresolved_to IN (
-    SELECT name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
-    UNION SELECT qualified_name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+SELECT r.from_handle FROM relations r
+WHERE r.kind = 'calls' AND (
+  r.to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+  OR EXISTS (
+    SELECT 1 FROM symbols target
+    WHERE target.handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+      AND (
+        lower(r.unresolved_to) = lower(target.name)
+        OR lower(r.unresolved_to) = lower(target.qualified_name)
+        OR lower(r.unresolved_to) LIKE '%.' || lower(target.name)
+        OR lower(r.unresolved_to) LIKE '%::' || lower(target.name)
+        OR lower(r.unresolved_to) LIKE '%->' || lower(target.name)
+      )
   )
 ))`)
-			args = []any{handle, handle, handle, handle, handle, handle}
+			args = []any{handle, handle, handle, handle}
 		case "callees":
-			query = candidateQuery(`c.symbol_handle IN (SELECT to_handle FROM relations WHERE from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) AND kind = 'calls')`)
-			args = []any{handle, handle}
+			query = candidateQuery(`c.symbol_handle IN (
+SELECT r.to_handle FROM relations r
+WHERE r.from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) AND r.kind = 'calls' AND r.to_handle IS NOT NULL
+UNION SELECT target.handle FROM relations r
+JOIN symbols target ON lower(r.unresolved_to) = lower(target.name) OR lower(r.unresolved_to) = lower(target.qualified_name)
+WHERE r.from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) AND r.kind = 'calls' AND r.to_handle IS NULL
+)`)
+			args = []any{handle, handle, handle, handle}
 		case "tests":
 			query = candidateQuery(`c.symbol_handle IN (
-SELECT from_handle FROM relations
-WHERE kind = 'tests' AND (
-  to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
-  OR unresolved_to IN (
-    SELECT name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
-    UNION SELECT qualified_name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+SELECT r.from_handle FROM relations r
+WHERE r.kind = 'tests' AND (
+  r.to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+  OR EXISTS (
+    SELECT 1 FROM symbols target
+    WHERE target.handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+      AND (
+        lower(r.unresolved_to) = lower(target.name)
+        OR lower(r.unresolved_to) = lower(target.qualified_name)
+        OR lower(r.unresolved_to) LIKE '%.' || lower(target.name)
+        OR lower(r.unresolved_to) LIKE '%::' || lower(target.name)
+        OR lower(r.unresolved_to) LIKE '%->' || lower(target.name)
+      )
   )
 )
-UNION SELECT to_handle FROM relations
-WHERE from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) AND kind = 'tests'
+UNION SELECT r.to_handle FROM relations r
+WHERE r.from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) AND r.kind = 'tests' AND r.to_handle IS NOT NULL
+UNION SELECT target.handle FROM relations r
+JOIN symbols target ON lower(r.unresolved_to) = lower(target.name) OR lower(r.unresolved_to) = lower(target.qualified_name)
+WHERE r.from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) AND r.kind = 'tests' AND r.to_handle IS NULL
 )`)
 			args = []any{handle, handle, handle, handle, handle, handle, handle, handle}
 		case "neighbors":
 			query = candidateQuery(`c.symbol_handle IN (SELECT from_handle FROM relations WHERE to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) OR from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) UNION SELECT to_handle FROM relations WHERE from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) OR to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?))`)
 			args = []any{handle, handle, handle, handle, handle, handle, handle, handle}
-		case "imports", "references":
+		case "imports", "exports", "references":
 			query = candidateQuery(`c.symbol_handle IN (
-SELECT from_handle FROM relations
-WHERE kind = ? AND to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
-UNION SELECT to_handle FROM relations
-WHERE kind = ? AND from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
-UNION SELECT from_handle FROM relations
-WHERE kind = ? AND unresolved_to IN (
-SELECT name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
-UNION SELECT qualified_name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
-UNION SELECT f.path FROM files f JOIN symbols s ON s.file_id = f.id
-WHERE s.handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
-))`)
-			args = []any{relation, handle, handle, relation, handle, handle, relation, handle, handle, handle, handle, handle, handle}
+SELECT r.from_handle FROM relations r
+WHERE r.kind = ? AND (
+  r.to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+  OR EXISTS (
+    SELECT 1 FROM symbols target JOIN files target_file ON target.file_id = target_file.id
+    WHERE target.handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+      AND (
+        lower(r.unresolved_to) = lower(target.name)
+        OR lower(r.unresolved_to) = lower(target.qualified_name)
+        OR lower(r.unresolved_to) = lower(target_file.path)
+        OR lower(target_file.path) LIKE '%/' || lower(r.unresolved_to)
+      )
+  )
+)
+UNION SELECT r.to_handle FROM relations r
+WHERE r.kind = ? AND r.from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) AND r.to_handle IS NOT NULL
+UNION SELECT target.handle FROM relations r
+JOIN symbols target ON lower(r.unresolved_to) = lower(target.name) OR lower(r.unresolved_to) = lower(target.qualified_name)
+JOIN files target_file ON target.file_id = target_file.id
+WHERE r.kind = ? AND r.from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) AND r.to_handle IS NULL
+  AND (
+    lower(r.unresolved_to) = lower(target.name)
+    OR lower(r.unresolved_to) = lower(target.qualified_name)
+    OR lower(r.unresolved_to) = lower(target_file.path)
+    OR lower(target_file.path) LIKE '%/' || lower(r.unresolved_to)
+  )
+)`)
+			args = []any{relation, handle, handle, handle, handle, relation, handle, handle, relation, handle, handle}
 		}
 		rows, err := s.db.QueryContext(ctx, query, args...)
 		if err != nil {
