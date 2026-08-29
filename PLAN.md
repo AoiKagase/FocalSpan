@@ -1791,7 +1791,7 @@ Check:
 14. no generated binary is staged
 15. no pre-existing user change was lost
 
-- [ ] **Step 12: Remove build artifacts and commit**
+- [x] **Step 12: Remove build artifacts and commit**
 
 ```text
 git add README.md docs PLAN.md
