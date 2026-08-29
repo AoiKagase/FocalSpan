@@ -87,8 +87,8 @@ diverge in ranking or budget behavior.
   and overlap/content-hash deduplication.
 - `internal/budget`: conservative token estimator, elision, and budget packer.
 - `internal/render`: compact human output and typed JSON/MCP payloads.
-- `internal/mcpserver`: official SDK server setup, four typed tools, and
-  protocol-safe stdio behavior.
+- `internal/mcpserver`: official SDK server setup, five typed tools including
+  the in-process restart API, and protocol-safe stdio behavior.
 - `internal/integration/codex`: Codex project-config managed blocks, user-scope
   `codex mcp` subprocess adapter, registration status, and safe executable
   resolution. It never reserializes an existing TOML document.
@@ -247,15 +247,40 @@ publishes its revision as successful.
 
 ## Retrieval and ranking
 
-Query normalization produces lowercase terms, original-case identifiers,
-quoted phrases, path fragments, snake/camel/Pascal splits, namespace and
-receiver variants, and probable symbol names. FTS input is built from escaped
-tokens and never receives the raw query as syntax.
+The v0.2 query pipeline is deliberately local and deterministic:
 
-Retrieval stages are exact qualified symbol, exact symbol, prefix/substring,
-identifier overlap, FTS5 BM25, path tokens, changed-line overlap, one-hop
-relations, and same-file/package proximity. Each stage has an explicit cap and
-the final candidate set is capped at 200.
+```text
+raw query
+  -> Unicode normalization
+  -> deterministic Query Plan
+  -> independent retrievers
+  -> weighted RRF
+  -> intent-aware reranker
+  -> existing deduplication
+  -> existing token packer
+```
+
+`internal/query` performs the single normalization pass and produces lowercase
+lexical terms, original-case identifiers, quoted phrases, path fragments,
+snake/camel/Pascal splits, namespace and receiver variants, probable symbol
+names, and Japanese Unicode runs. The planner preserves code identifiers in
+mixed Japanese/code queries and selects ordered intents, anchors, relations,
+and a ranking profile. FTS input is built from escaped terms and never receives
+the raw query as syntax. Japanese support is intent and lexical normalization;
+it is not translation, semantic embedding, or compiler-grade resolution.
+
+Independent retrievers are exact qualified symbol, exact symbol, symbol prefix,
+FTS5 BM25, path hints, and one-hop relations. Their caps are 50, 50, 50, 100,
+50, and 100 respectively; fusion keeps at most 400 candidates before path and
+changed-line filters. Exact symbol lookup does not depend on an FTS anchor.
+Relation expansion starts from exact structural anchors and falls back to FTS
+anchors only when needed. `fts-only` invokes only FTS; `no-relations` invokes
+all base retrievers but skips relation expansion.
+
+Weighted reciprocal-rank fusion combines lists using
+`score(candidate) += weight / (60 + rank)`. Fixed profile weights are selected
+once per query plan and the resulting contribution is retained for `explain`.
+The final candidate set is then passed to the intent-aware reranker.
 
 The reranker uses named weights: qualified exact 120, symbol exact 100, prefix
 70, lexical overlap 0-40, normalized BM25 0-40, path 0-20, changed-line 25,
@@ -309,7 +334,10 @@ relations return an empty result.
 ## CLI and MCP
 
 The CLI has `init`, `index`, `update`, `status`, `query`, `expand`, `impact`,
-`eval`, `doctor`, `serve`, and `mcp install|status|uninstall|print codex`.
+`eval`, `doctor`, `serve`, `install`, `uninstall`, and
+`mcp install|status|uninstall|print [codex]`. A query can also be supplied as the
+first positional argument or through the `q`/`search` aliases. `install` and
+`uninstall` are global MCP shortcuts and delegate to Codex user scope.
 `update --if-repo --quiet` returns zero without stdout outside Git. `query`
 auto-indexes an absent index unless `--no-update` is set. All user paths are
 root-relative or validated under the selected root.
@@ -323,11 +351,13 @@ edits the user Codex config directly. Project trust and existing Codex session
 reload state are intentionally not changed or guessed.
 
 The MCP server binds one startup root and exposes exactly `code_context`,
-`code_expand`, `code_impact`, and `code_status`. Handlers validate typed input,
-pass cancellation through the service, and hide internal stack traces. Source
-appears once in canonical structured output; text content is only a short
-summary. Logs go to stderr, and concurrent calls serialize DB writes while
-allowing safe read transactions.
+`code_expand`, `code_impact`, `code_restart`, and `code_status`. Handlers
+validate typed input, pass cancellation through the service, and hide internal
+stack traces. `code_restart` reloads configuration and atomically swaps the
+application service after active calls finish; it does not terminate the MCP
+process. Source appears once in canonical structured output; text content is
+only a short summary. Logs go to stderr, and concurrent calls serialize DB
+writes while allowing safe read transactions.
 
 ## Decision log
 
@@ -355,8 +385,19 @@ allowing safe read transactions.
    functions as source chunks; this prevents class-level and child-body
    duplication while preserving hierarchy through `contains` relations.
 10. Treat unresolved calls, imports/exports/includes, and references as
-   confidence-labeled lexical relations. This makes them searchable without
-   presenting heuristic resolution as compiler semantics.
+    confidence-labeled lexical relations. This makes them searchable without
+    presenting heuristic resolution as compiler semantics.
+11. Keep the planner deterministic and local; Japanese handling is intent and
+    lexical normalization rather than automatic translation or semantic search.
+12. Let exact symbol retrieval operate independently of FTS, and let relation
+    expansion anchor exact structural lookup before FTS fallback.
+13. Use weighted RRF to combine ranks rather than comparing raw BM25 and
+    heuristic score scales.
+14. Keep the existing MCP structured contract and schema version 1; the
+    current checkout's existing `code_restart` extension remains in its
+    five-tool MCP surface.
+15. Keep `explain` CLI-only and source-free so retrieval decisions can be
+    inspected without adding source content to the debug payload.
 
 ## Roadmap (design only)
 

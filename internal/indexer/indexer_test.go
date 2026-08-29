@@ -156,7 +156,7 @@ func TestIndexerReindexesOldTemplateWindowsAfterExtractorVersionChanges(t *testi
 	if err != nil || run.FilesChanged != 1 || run.FilesUnchanged != 0 {
 		t.Fatalf("run=%+v err=%v", run, err)
 	}
-	candidates, err := s.SearchFTS(context.Background(), `"content"`)
+	candidates, err := s.SearchFTS(context.Background(), `"content"`, 100)
 	if err != nil {
 		t.Fatal(err)
 	}

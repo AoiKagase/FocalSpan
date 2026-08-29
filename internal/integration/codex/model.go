@@ -23,7 +23,7 @@ const (
 	StateUnknown        = "unknown"
 )
 
-var EnabledTools = []string{"code_context", "code_expand", "code_impact", "code_status"}
+var EnabledTools = []string{"code_context", "code_expand", "code_impact", "code_restart", "code_status"}
 
 var ErrCodexNotFound = errors.New("Codex CLI was not found on PATH")
 

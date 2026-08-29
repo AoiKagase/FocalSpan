@@ -86,6 +86,7 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 			}
 		}
 	}
+	resolveTestRelations(result.Symbols, result.Relations)
 	sort.Slice(result.Symbols, func(i, j int) bool {
 		return result.Symbols[i].StartByte < result.Symbols[j].StartByte || result.Symbols[i].Name < result.Symbols[j].Name
 	})
@@ -102,6 +103,68 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 		return result.Relations[i].UnresolvedTo < result.Relations[j].UnresolvedTo
 	})
 	return result, nil
+}
+
+func resolveTestRelations(symbols []model.Symbol, relations []model.Relation) {
+	for index := range relations {
+		relation := &relations[index]
+		if relation.Kind != "tests" || relation.UnresolvedTo == "" {
+			continue
+		}
+		var matches []model.Symbol
+		for _, symbol := range symbols {
+			if symbol.Kind == "test" || !testTargetMatches(symbol.Name, relation.UnresolvedTo) {
+				continue
+			}
+			matches = append(matches, symbol)
+		}
+		if len(matches) == 1 {
+			relation.ToHandle = matches[0].Handle
+			relation.UnresolvedTo = ""
+		}
+	}
+}
+
+func testTargetMatches(target, unresolved string) bool {
+	if strings.EqualFold(target, unresolved) {
+		return true
+	}
+	targetParts := identifierParts(target)
+	testParts := identifierParts(unresolved)
+	if len(targetParts) == 0 || len(testParts) == 0 || len(targetParts) > len(testParts) {
+		return false
+	}
+	position := 0
+	for _, targetPart := range targetParts {
+		found := false
+		for position < len(testParts) {
+			if strings.EqualFold(targetPart, testParts[position]) {
+				found = true
+				position++
+				break
+			}
+			position++
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func identifierParts(value string) []string {
+	var parts []string
+	start := 0
+	for index, r := range value {
+		if index > start && r >= 'A' && r <= 'Z' {
+			parts = append(parts, value[start:index])
+			start = index
+		}
+	}
+	if start < len(value) {
+		parts = append(parts, value[start:])
+	}
+	return parts
 }
 
 type sourceSpan struct{ line, offset int }

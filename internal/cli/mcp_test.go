@@ -64,3 +64,48 @@ func TestMCPDispatchValidationAndStdoutSeparation(t *testing.T) {
 		t.Fatalf("invalid scope code=%d stdout=%q stderr=%s", code, out.String(), errOut.String())
 	}
 }
+
+func TestGlobalInstallShortcutUsesCodexUserScope(t *testing.T) {
+	root := t.TempDir()
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"install", "--root", root, "--dry-run", "--json"}, &out, &errOut); code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, errOut.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatalf("invalid JSON: %v; output=%s", err, out.String())
+	}
+	if result["scope"] != "user" || result["action"] != "create" || result["dry_run"] != true {
+		t.Fatalf("result=%v", result)
+	}
+}
+
+func TestMCPGlobalFlagUsesCodexUserScope(t *testing.T) {
+	root := t.TempDir()
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"mcp", "install", "codex", "--root", root, "--global", "--dry-run", "--json"}, &out, &errOut); code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, errOut.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatalf("invalid JSON: %v; output=%s", err, out.String())
+	}
+	if result["scope"] != "user" {
+		t.Fatalf("result=%v", result)
+	}
+}
+
+func TestMCPDefaultsTheOnlySupportedClient(t *testing.T) {
+	root := t.TempDir()
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"mcp", "install", "--root", root, "--global", "--dry-run", "--json"}, &out, &errOut); code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, errOut.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatalf("invalid JSON: %v; output=%s", err, out.String())
+	}
+	if result["client"] != "codex" || result["scope"] != "user" {
+		t.Fatalf("result=%v", result)
+	}
+}

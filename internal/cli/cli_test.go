@@ -73,6 +73,30 @@ func TestQueryDebugScoresPrintsScoreDetails(t *testing.T) {
 	}
 }
 
+func TestQueryAcceptsAPositionalQuery(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "auth.go"), "package auth\n\nfunc ValidateToken() error { return nil }\n")
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"query", "ValidateToken", "--root", root, "--budget", "512", "--json"}, &out, &errOut); code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "ValidateToken") {
+		t.Fatalf("output=%q", out.String())
+	}
+}
+
+func TestBareQueryUsesTheSimpleCLIShortcut(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "auth.go"), "package auth\n\nfunc ValidateToken() error { return nil }\n")
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"ValidateToken", "--root", root, "--budget", "512", "--json"}, &out, &errOut); code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "ValidateToken") {
+		t.Fatalf("output=%q", out.String())
+	}
+}
+
 func TestUpdateIfRepoIsQuietOutsideGit(t *testing.T) {
 	root := t.TempDir()
 	var out, errOut bytes.Buffer
@@ -131,6 +155,57 @@ func TestImpactAndEvalJSONCommands(t *testing.T) {
 	var evaluation map[string]any
 	if err := json.Unmarshal(out.Bytes(), &evaluation); err != nil || evaluation["cases"] == nil {
 		t.Fatalf("evaluation=%v err=%v output=%s", evaluation, err, out.String())
+	}
+}
+
+func TestEvalAblationAllJSONAndRejectsUnknownMode(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "auth.go"), "package auth\n\nfunc ValidateToken() error { return nil }\n")
+	casesPath := filepath.Join(root, "cases.jsonl")
+	writeCLIFile(t, casesPath, "{\"name\":\"token\",\"query\":\"ValidateToken\",\"token_budget\":512}\n")
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"eval", "--root", root, "--cases", casesPath, "--ablation", "all", "--json"}, &out, &errOut); code != 0 {
+		t.Fatalf("all code=%d stderr=%s", code, errOut.String())
+	}
+	var all struct {
+		Reports map[string]json.RawMessage `json:"reports"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &all); err != nil || len(all.Reports) != 3 {
+		t.Fatalf("all=%v err=%v output=%s", all.Reports, err, out.String())
+	}
+	for _, mode := range []string{"full", "fts-only", "no-relations"} {
+		if _, ok := all.Reports[mode]; !ok {
+			t.Fatalf("mode %q missing from %s", mode, out.String())
+		}
+	}
+	out.Reset()
+	errOut.Reset()
+	if code := Run(context.Background(), []string{"eval", "--root", root, "--cases", casesPath, "--ablation", "invalid"}, &out, &errOut); code == 0 || !strings.Contains(errOut.String(), "unknown ablation") {
+		t.Fatalf("invalid code=%d stdout=%q stderr=%q", code, out.String(), errOut.String())
+	}
+}
+
+func TestExplainJSONAndHumanOutputAreSourceFree(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "auth.go"), "package auth\n\nfunc ValidateToken() error { return secretSourceMarker() }\n")
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"explain", "--root", root, "--query", "what calls ValidateToken?", "--json"}, &out, &errOut); code != 0 {
+		t.Fatalf("explain code=%d stderr=%s", code, errOut.String())
+	}
+	if strings.Contains(out.String(), "secretSourceMarker") || !strings.Contains(out.String(), "\"plan\"") || !strings.Contains(out.String(), "\"candidates\"") {
+		t.Fatalf("source or fields missing in explain JSON=%q", out.String())
+	}
+	out.Reset()
+	if code := Run(context.Background(), []string{"explain", "--root", root, "--query", "ValidateToken", "--limit", "1"}, &out, &errOut); code != 0 {
+		t.Fatalf("human explain code=%d stderr=%s", code, errOut.String())
+	}
+	for _, want := range []string{"query:", "intent:", "mode:", "final=", "fusion="} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("human explain=%q missing %q", out.String(), want)
+		}
+	}
+	if !strings.Contains(out.String(), "auth.go:3") {
+		t.Fatalf("human explain=%q missing source span", out.String())
 	}
 }
 

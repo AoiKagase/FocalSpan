@@ -21,6 +21,7 @@ import (
 	"github.com/focalspan/focalspan/internal/gitx"
 	"github.com/focalspan/focalspan/internal/indexer"
 	"github.com/focalspan/focalspan/internal/model"
+	"github.com/focalspan/focalspan/internal/query"
 	"github.com/focalspan/focalspan/internal/rank"
 	"github.com/focalspan/focalspan/internal/repository"
 	"github.com/focalspan/focalspan/internal/search"
@@ -49,11 +50,23 @@ func NewWithConfig(root string, cfg config.Config) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	registry := extract.NewRegistry(goast.NewExtractor(), php.NewExtractor(), cpp.NewExtractor(), csharp.NewExtractor(), jsts.NewExtractor(), templateextract.NewExtractor(), generic.NewExtractor())
+	registry := newExtractorRegistry()
 	service := &Service{Root: root, Config: cfg, Store: st, packer: budget.NewPacker(budget.NewEstimator())}
 	service.indexer = indexer.New(root, cfg, st, registry)
 	service.searcher = search.New(st)
 	return service, nil
+}
+
+func newExtractorRegistry() *extract.Registry {
+	return extract.NewRegistry(
+		goast.NewExtractor(),
+		php.NewExtractor(),
+		cpp.NewExtractor(),
+		csharp.NewExtractor(),
+		jsts.NewExtractor(),
+		templateextract.NewExtractor(),
+		generic.NewExtractor(),
+	)
 }
 
 func (s *Service) Close() error { return s.Store.Close() }
@@ -78,12 +91,29 @@ func (s *Service) IndexWithProgress(ctx context.Context, full bool, progress Ind
 }
 
 type QueryRequest struct {
-	Query       string
-	TokenBudget int
-	Mode        string
-	ChangedOnly bool
-	Paths       []string
-	NoUpdate    bool
+	Query         string
+	TokenBudget   int
+	Mode          string
+	ChangedOnly   bool
+	Paths         []string
+	NoUpdate      bool
+	RetrievalMode search.RetrievalMode
+}
+
+type ExplainRequest struct {
+	Query         string
+	Paths         []string
+	ChangedOnly   bool
+	NoUpdate      bool
+	Limit         int
+	RetrievalMode search.RetrievalMode
+}
+
+type ExplainResult struct {
+	Plan       query.Plan                `json:"plan"`
+	Mode       search.RetrievalMode      `json:"mode"`
+	Lists      []search.RetrieverSummary `json:"lists"`
+	Candidates []search.CandidateTrace   `json:"candidates"`
 }
 
 func (s *Service) Query(ctx context.Context, req QueryRequest) (model.ContextBundle, error) {
@@ -101,22 +131,67 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (model.ContextBun
 			return model.ContextBundle{}, fmt.Errorf("auto-update index: %w", err)
 		}
 	}
-	changed := map[string][]search.LineRange{}
-	if req.ChangedOnly {
-		files, err := gitx.NewClient(s.Root).Diff(ctx, gitx.DiffRequest{})
-		if err == nil {
-			for _, file := range files {
-				for _, r := range file.Ranges {
-					changed[file.Path] = append(changed[file.Path], search.LineRange{Start: r.Start, End: r.End})
-				}
-			}
-		}
+	changed := s.changedRanges(ctx, req.ChangedOnly)
+	retrievalMode := req.RetrievalMode
+	if retrievalMode == "" {
+		retrievalMode = search.RetrievalFull
 	}
-	candidates, err := s.searcher.Search(ctx, search.SearchRequest{Query: req.Query, Paths: req.Paths, ChangedOnly: req.ChangedOnly, Changed: changed, Limit: s.Config.MaxCandidates})
+	result, err := s.searcher.SearchDetailed(ctx, search.SearchRequest{Query: req.Query, Paths: req.Paths, ChangedOnly: req.ChangedOnly, Changed: changed, Limit: s.Config.MaxCandidates, Mode: retrievalMode})
 	if err != nil {
 		return model.ContextBundle{}, err
 	}
-	return s.packWithSavings(ctx, model.PackRequest{Query: req.Query, TokenBudget: req.TokenBudget, Mode: req.Mode, Candidates: candidates})
+	return s.packWithSavings(ctx, model.PackRequest{Query: req.Query, TokenBudget: req.TokenBudget, Mode: req.Mode, Candidates: result.Candidates, IntentHints: result.Plan.IntentStrings()})
+}
+
+func (s *Service) Explain(ctx context.Context, req ExplainRequest) (ExplainResult, error) {
+	if strings.TrimSpace(req.Query) == "" {
+		return ExplainResult{}, errors.New("query must not be blank")
+	}
+	if req.Limit <= 0 {
+		req.Limit = 20
+	}
+	if req.Limit > 100 {
+		req.Limit = 100
+	}
+	if req.RetrievalMode == "" {
+		req.RetrievalMode = search.RetrievalFull
+	}
+	if !req.NoUpdate && s.Config.AutoUpdateBeforeQuery {
+		if _, err := s.Index(ctx, false); err != nil {
+			return ExplainResult{}, fmt.Errorf("auto-update index: %w", err)
+		}
+	}
+	result, err := s.searcher.SearchDetailed(ctx, search.SearchRequest{
+		Query: req.Query, Paths: req.Paths, ChangedOnly: req.ChangedOnly,
+		Changed: s.changedRanges(ctx, req.ChangedOnly), Limit: req.Limit,
+		Mode: req.RetrievalMode, Trace: true,
+	})
+	if err != nil {
+		return ExplainResult{}, err
+	}
+	explain := ExplainResult{Plan: result.Plan, Mode: req.RetrievalMode}
+	if result.Trace != nil {
+		explain.Lists = result.Trace.Lists
+		explain.Candidates = result.Trace.Candidates
+	}
+	return explain, nil
+}
+
+func (s *Service) changedRanges(ctx context.Context, changedOnly bool) map[string][]search.LineRange {
+	changed := map[string][]search.LineRange{}
+	if !changedOnly {
+		return changed
+	}
+	files, err := gitx.NewClient(s.Root).Diff(ctx, gitx.DiffRequest{})
+	if err != nil {
+		return changed
+	}
+	for _, file := range files {
+		for _, r := range file.Ranges {
+			changed[file.Path] = append(changed[file.Path], search.LineRange{Start: r.Start, End: r.End})
+		}
+	}
+	return changed
 }
 
 func (s *Service) Status(ctx context.Context) (model.Status, error) {
@@ -142,7 +217,7 @@ func (s *Service) Expand(ctx context.Context, handles []string, relation string,
 	if err != nil {
 		return model.ContextBundle{}, err
 	}
-	return s.packWithSavings(ctx, model.PackRequest{Query: relation, TokenBudget: tokenBudget, Mode: "source", Candidates: candidates})
+	return s.packWithSavings(ctx, model.PackRequest{Query: relation, TokenBudget: tokenBudget, Mode: "source", Candidates: candidates, IntentHints: []string{relation}})
 }
 
 func (s *Service) Impact(ctx context.Context, base, head string, tokenBudget int) (model.ContextBundle, error) {
@@ -183,7 +258,8 @@ func (s *Service) Impact(ctx context.Context, base, head string, tokenBudget int
 			break
 		}
 	}
-	selected = rank.Rank(selected, nil)
+	plan := query.Plan{RawQuery: "Git impact", Intents: []query.Intent{query.IntentImpact}, PrimaryIntent: query.IntentImpact, Profile: "impact"}
+	selected = rank.RankWithPlan(selected, plan)
 	bundle, err := s.packWithSavings(ctx, model.PackRequest{Query: "Git impact", TokenBudget: tokenBudget, Mode: "source", Candidates: selected})
 	if err != nil {
 		return model.ContextBundle{}, err
@@ -246,8 +322,16 @@ func (s *Service) baselineTokensForCandidates(ctx context.Context, candidates []
 	return total, nil
 }
 
-func (s *Service) BaselineTokens(ctx context.Context, query string) (int, error) {
-	candidates, err := s.Store.SearchFTS(ctx, search.BuildFTSQuery(query))
+func (s *Service) BaselineTokens(ctx context.Context, rawQuery string) (int, error) {
+	return s.BaselineTokensForRequest(ctx, QueryRequest{Query: rawQuery})
+}
+
+func (s *Service) BaselineTokensForRequest(ctx context.Context, req QueryRequest) (int, error) {
+	retrievalMode := req.RetrievalMode
+	if retrievalMode == "" {
+		retrievalMode = search.RetrievalFull
+	}
+	candidates, err := s.searcher.Search(ctx, search.SearchRequest{Query: req.Query, Paths: req.Paths, ChangedOnly: req.ChangedOnly, Changed: s.changedRanges(ctx, req.ChangedOnly), Limit: s.Config.MaxCandidates, Mode: retrievalMode})
 	if err != nil {
 		return 0, err
 	}

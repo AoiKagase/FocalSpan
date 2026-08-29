@@ -84,6 +84,7 @@ type RankedCandidate struct {
 	Content         string
 	ContentHash     string
 	Score           float64
+	RetrievalScore  float64
 	Confidence      float64
 	Reasons         []ScoreReason
 	EstimatedTokens int
@@ -97,6 +98,7 @@ type PackRequest struct {
 	TokenBudget   int
 	Mode          string
 	Candidates    []RankedCandidate
+	IntentHints   []string
 }
 
 type TokenSavings struct {

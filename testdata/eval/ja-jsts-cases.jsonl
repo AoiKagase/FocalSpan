@@ -1,0 +1,3 @@
+{"name":"ja-ts-callers","query":"validateToken の呼び出し元を探して","token_budget":1400,"expected_paths":["src/http/auth-middleware.ts"],"forbidden_paths":["unrelated/report.ts"],"expected_intents":["callers"],"expected_relations":["callers"]}
+{"name":"ja-ts-tests","query":"期限切れtokenを検証するテスト","token_budget":1400,"expected_paths":["tests/token-service.test.ts"],"forbidden_paths":["unrelated/report.ts"],"expected_intents":["tests"],"expected_relations":["tests"],"expected_kinds":["test"]}
+{"name":"ja-ts-imports","query":"token-serviceを読み込んでいるmodule","token_budget":1400,"expected_paths":["src/http/auth-middleware.ts"],"forbidden_paths":["unrelated/report.ts"],"expected_intents":["imports"],"expected_relations":["imports"]}

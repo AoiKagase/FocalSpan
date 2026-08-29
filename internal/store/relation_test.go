@@ -59,6 +59,28 @@ func TestRelatedCandidatesResolveUnresolvedCallByTargetSymbolName(t *testing.T) 
 	}
 }
 
+func TestRelatedCandidatesResolveCamelCaseGoTestName(t *testing.T) {
+	s := openTestStore(t)
+	if err := s.ReplaceFile(context.Background(), model.SourceFile{Path: "auth.go", Language: "go", SHA256: "auth"}, model.Extraction{
+		Symbols: []model.Symbol{{Handle: "target", FilePath: "auth.go", Language: "go", Kind: "method", Name: "ValidateToken", Signature: "func ValidateToken", StartLine: 1, EndLine: 2, Confidence: 1}},
+		Chunks:  []model.Chunk{{Handle: "target-chunk", FilePath: "auth.go", Language: "go", Kind: "method", SymbolHandle: "target", SymbolName: "ValidateToken", Signature: "func ValidateToken", StartLine: 1, EndLine: 2, Content: "return nil", ContentHash: "target"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReplaceFile(context.Background(), model.SourceFile{Path: "auth_test.go", Language: "go", SHA256: "test"}, model.Extraction{
+		Symbols:   []model.Symbol{{Handle: "test", FilePath: "auth_test.go", Language: "go", Kind: "test", Name: "TestValidateExpiredToken", Signature: "func TestValidateExpiredToken", StartLine: 1, EndLine: 2, Confidence: 1}},
+		Chunks:    []model.Chunk{{Handle: "test-chunk", FilePath: "auth_test.go", Language: "go", Kind: "test", SymbolHandle: "test", SymbolName: "TestValidateExpiredToken", Signature: "func TestValidateExpiredToken", StartLine: 1, EndLine: 2, Content: "ValidateToken", ContentHash: "test"}},
+		Relations: []model.Relation{{FromHandle: "test", UnresolvedTo: "ValidateExpiredToken", Kind: "tests", Confidence: .4, Source: "go-ast"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.RelatedCandidates(context.Background(), []string{"target-chunk"}, "tests")
+	if err != nil || len(got) != 1 || got[0].Symbol != "TestValidateExpiredToken" {
+		t.Fatalf("tests=%+v err=%v", got, err)
+	}
+}
+
 func TestRelatedCandidatesResolveUnresolvedPHPRelations(t *testing.T) {
 	s, err := Open(t.TempDir(), ".focalspan")
 	if err != nil {

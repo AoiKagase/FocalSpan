@@ -135,15 +135,97 @@ recall and relation retrieval; they do not claim compiler-grade type
 inference, overload resolution, virtual dispatch, or package/module graph
 resolution.
 
+## Retrieval Quality v0.2 pre-change baseline
+
+This baseline was measured from the current checkout on 2026-08-29 before
+the v0.2 retrieval changes. Each fixture was indexed immediately before its
+case set was evaluated with the existing FTS-first implementation.
+
+| Profile | Cases | hit@1 / hit@3 / hit@5 | Symbol / path recall | Budget | Forbidden | Deterministic | Median tokens | Median reduction |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Go/auth | 4 | 0.75 / 1.00 / 1.00 | 1.00 / 0.875 | 1.00 | 1 | 1.00 | 157 | 0.03597 |
+| PHP | 4 | 0.50 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 173 | 0.05364 |
+| Smarty/template | 5 | 0.80 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 88 | 0.04449 |
+| C/C++ | 5 | 0.40 / 0.80 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 146 | 0.16667 |
+| C# | 5 | 0.60 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 92 | 0.12153 |
+| JavaScript/TypeScript | 6 | 0.8333 / 0.8333 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 145 | 0.20195 |
+
+The Go/auth result includes one forbidden-path violation in the existing
+baseline. The v0.2 acceptance record must report whether that regression is
+removed or remains; it must not silently replace this baseline. Full per-case
+JSON output is retained in the rollout evidence for this run.
+
+## Retrieval Quality v0.2 post-change acceptance
+
+This is the measured result from the current checkout on 2026-08-29. Each
+fixture root was indexed immediately before its case set, and each case was
+queried twice by the evaluator. The unresolved Go test-name matching regression
+test is included in this run.
+
+| Profile | Cases | hit@1 / hit@3 / hit@5 | Symbol / path recall | Budget | Forbidden | Deterministic | Median tokens | Median reduction |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Go/auth | 4 | 0.50 / 1.00 / 1.00 | 1.00 / 0.875 | 1.00 | 0 | 1.00 | 175 | 0.04009 |
+| PHP | 4 | 0.25 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 179 | 0.05550 |
+| Smarty/template | 5 | 0.80 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 110 | 0.02456 |
+| C/C++ | 5 | 0.40 / 0.80 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 137 | 0.14952 |
+| C# | 5 | 0.20 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 93 | 0.13559 |
+| JavaScript/TypeScript | 6 | 0.8333 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 138 | 0.17602 |
+
+Every existing full-mode profile meets the hit@5, budget, forbidden-path,
+determinism, and median-reduction thresholds. Go/auth path recall remains
+0.875 because the impact case expects two paths while its syntax-only impact
+result returns one; this is recorded rather than hidden by changing the case or
+threshold.
+
+Compared with the pre-change table, hit@1 decreased for Go/auth (0.75 to
+0.50), PHP (0.50 to 0.25), and C# (0.60 to 0.20). The new fusion and intent
+profiles move structurally supported relation candidates ahead of some former
+first-place lexical candidates; hit@3/hit@5, symbol/path recall, budget
+compliance, and determinism remain within the recorded acceptance results. No
+case or threshold was removed to conceal these ordering changes.
+
+### Japanese ablation comparison
+
+The following reports are the actual `--ablation all --json` results. Aggregate
+relation recall counts cases without an expected relation as 1.0; the
+relation-bearing cases themselves are shown separately in the final column.
+
+| Cases | Mode | hit@3 | hit@5 | intent recall | relation recall | relation-bearing recall |
+|---|---|---:|---:|---:|---:|---:|
+| ja-auth (3) | full | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| ja-auth (3) | fts-only | 0.6667 | 0.6667 | 1.0000 | 0.3333 | 0.0000 |
+| ja-auth (3) | no-relations | 0.6667 | 0.6667 | 1.0000 | 0.3333 | 0.0000 |
+| ja-jsts (3) | full | 0.6667 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| ja-jsts (3) | fts-only | 0.3333 | 0.3333 | 1.0000 | 0.0000 | 0.0000 |
+| ja-jsts (3) | no-relations | 0.3333 | 0.3333 | 1.0000 | 0.0000 | 0.0000 |
+
+The full Go result returns `http/middleware.go` for callers and
+`auth/service_test.go` for tests; the latter depends on the camel-case
+`ValidateExpiredToken` to `ValidateToken` unresolved relation match. The full
+JS/TS result returns `src/http/auth-middleware.ts` for both callers and
+imports, while FTS-only and no-relations miss those relation-bearing paths.
+All Japanese modes remained budget-compliant and deterministic.
+
 ## Verification status
 
-The current worktree also passed `go test ./...`, `go vet ./...`, and the
-fixture CLI flow (`index`, `status --json`, budgeted JSON `query`, quiet
-`update`, `impact --json`, `doctor --json`, and a bounded stdio `serve` startup
-smoke). `CGO_ENABLED=0` builds passed for Windows amd64, Linux amd64, and
-Darwin arm64. `go test -race ./...` remains unverified because this Windows
-environment has no `gcc` C compiler (`runtime/cgo: C compiler "gcc" not
-found`); this is an environment limitation, not a reported test assertion.
+On 2026-08-29 the current checkout passed `gofmt`, `go test ./...`, and
+`go vet ./...`. CGO-free builds passed for the native host plus Windows amd64,
+Linux amd64, and Darwin arm64. `go test -race ./...` first failed because the
+environment has `CGO_ENABLED=0`; the explicit `CGO_ENABLED=1 go test -race
+./...` then failed before package tests because `gcc` is not installed
+(`cgo: C compiler "gcc" not found`). Race coverage is therefore unverified,
+not a pass. Pointing `CC` at the available `C:\\cygwin64\\bin\\gcc.exe` was
+also rejected by Go because Cygwin GCC cannot build native Windows programs
+(`don't use the cygwin compiler to build native Windows programs; use MinGW
+instead`).
+
+The fixture CLI flow passed with each root indexed immediately before
+evaluation: `index`, `status --json`, budgeted JSON `query`, quiet `update`,
+`impact --json`, and `doctor --json`. MCP integration tests and a bounded stdio
+startup smoke also passed with protocol-only stdout. The current checkout
+retains five MCP tools (`code_context`, `code_expand`, `code_impact`,
+`code_restart`, and `code_status`); this is the existing restart extension and
+does not claim the original four-tool MVP surface.
 
 ## Interpretation
 

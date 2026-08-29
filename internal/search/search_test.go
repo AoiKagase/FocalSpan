@@ -2,15 +2,64 @@ package search
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/focalspan/focalspan/internal/model"
+	"github.com/focalspan/focalspan/internal/query"
 )
+
+func TestSearchDetailedReturnsPlanAndOptionalSourceFreeTrace(t *testing.T) {
+	store := fakeStore{results: []model.RankedCandidate{{Handle: "target", Path: "auth.go", Symbol: "ValidateToken", Kind: "function", Content: "secret source body"}}}
+	s := New(store)
+	withoutTrace, err := s.SearchDetailed(context.Background(), SearchRequest{Query: "ValidateToken", Mode: RetrievalFull})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withoutTrace.Plan.PrimaryIntent != query.IntentDefinition || withoutTrace.Trace != nil {
+		t.Fatalf("without trace=%+v", withoutTrace)
+	}
+	withTrace, err := s.SearchDetailed(context.Background(), SearchRequest{Query: "ValidateToken", Mode: RetrievalFull, Trace: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withTrace.Trace == nil || len(withTrace.Trace.Candidates) == 0 || withTrace.Trace.Candidates[0].FinalScore <= 0 {
+		t.Fatalf("trace=%+v", withTrace.Trace)
+	}
+	payload, err := json.Marshal(withTrace.Trace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(payload), "secret source body") {
+		t.Fatalf("trace contains source content: %s", payload)
+	}
+}
 
 type fakeStore struct{ results []model.RankedCandidate }
 
-func (f fakeStore) SearchFTS(context.Context, string) ([]model.RankedCandidate, error) {
+func (f fakeStore) SearchFTS(context.Context, string, int) ([]model.RankedCandidate, error) {
 	return append([]model.RankedCandidate(nil), f.results...), nil
+}
+
+func (f fakeStore) SearchQualifiedSymbols(context.Context, []string, int) ([]model.RankedCandidate, error) {
+	return append([]model.RankedCandidate(nil), f.results...), nil
+}
+
+func (f fakeStore) SearchExactSymbols(context.Context, []string, int) ([]model.RankedCandidate, error) {
+	return append([]model.RankedCandidate(nil), f.results...), nil
+}
+
+func (f fakeStore) SearchSymbolPrefixes(context.Context, []string, int) ([]model.RankedCandidate, error) {
+	return append([]model.RankedCandidate(nil), f.results...), nil
+}
+
+func (f fakeStore) SearchPaths(context.Context, []string, int) ([]model.RankedCandidate, error) {
+	return append([]model.RankedCandidate(nil), f.results...), nil
+}
+
+func (f fakeStore) RelatedCandidates(context.Context, []string, string) ([]model.RankedCandidate, error) {
+	return nil, nil
 }
 
 type relationFakeStore struct {

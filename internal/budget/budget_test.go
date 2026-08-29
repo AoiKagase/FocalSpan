@@ -36,6 +36,23 @@ func TestPackerKeepsFinalPayloadWithinBudgetAndCutsWholeLines(t *testing.T) {
 	}
 }
 
+func TestPackerOmitsContentOnlyNoiseWhenAConcreteStructuralMatchExists(t *testing.T) {
+	bundle := NewPacker(NewEstimator()).Pack(model.PackRequest{
+		Query:       "where is an expired authentication token rejected?",
+		TokenBudget: 1200,
+		Mode:        "source",
+		Candidates: []model.RankedCandidate{
+			{Handle: "target", Path: "auth/service.go", Language: "go", Kind: "function", Symbol: "ValidateToken", Score: 80, Reasons: []model.ScoreReason{{Code: "symbol-prefix"}}, Content: "func ValidateToken() error { return ErrExpired }"},
+			{Handle: "noise", Path: "unrelated/report.go", Language: "go", Kind: "function", Symbol: "BuildReport", Score: 55, Reasons: []model.ScoreReason{{Code: "lexical"}}, Content: "func BuildReport() {}"},
+		},
+	})
+	for _, item := range bundle.Items {
+		if item.Path == "unrelated/report.go" {
+			t.Fatalf("content-only noise was retained: %+v", bundle.Items)
+		}
+	}
+}
+
 func TestOutlineModeOmitsSourceBody(t *testing.T) {
 	bundle := NewPacker(NewEstimator()).Pack(model.PackRequest{Query: "token", TokenBudget: 512, Mode: "outline", Candidates: []model.RankedCandidate{{Handle: "h", Path: "a.go", Symbol: "Run", Signature: "func Run", StartLine: 2, EndLine: 4, Content: "secret source"}}})
 	if len(bundle.Items) != 1 || bundle.Items[0].Content != "" {
@@ -62,6 +79,39 @@ func TestPackerOmitsLowUtilityCandidateWhenBudgetIsTight(t *testing.T) {
 	if !foundSecond {
 		t.Fatalf("higher utility candidate was omitted: %+v", bundle)
 	}
+}
+
+func TestPackerKeepsStructuredAnchorAlongsideRelationCandidate(t *testing.T) {
+	candidates := []model.RankedCandidate{
+		{Handle: "caller", Path: "src/http/middleware.php", Language: "php", Kind: "method", Symbol: "handle", Score: 524, Relation: "imports", Content: "require 'includes/bootstrap.inc';"},
+		{Handle: "anchor", Path: "includes/bootstrap.inc", Language: "php", Kind: "function", Symbol: "bootstrap", Score: 36, Reasons: []model.ScoreReason{{Code: "symbol-prefix", Weight: 24}}, Content: "function bootstrap(): void {}"},
+	}
+	bundle := NewPacker(NewEstimator()).Pack(model.PackRequest{Query: "which include file bootstraps authentication?", TokenBudget: 1200, Mode: "source", Candidates: candidates})
+	for _, item := range bundle.Items {
+		if item.Symbol == "bootstrap" && item.Path == "includes/bootstrap.inc" {
+			return
+		}
+	}
+	t.Fatalf("structured anchor was omitted: %+v", bundle)
+}
+
+func TestPackerUsesJapaneseTestIntentHint(t *testing.T) {
+	bundle := NewPacker(NewEstimator()).Pack(model.PackRequest{
+		Query:       "ValidateTokenを検証するテスト",
+		TokenBudget: 1200,
+		Mode:        "source",
+		IntentHints: []string{"tests"},
+		Candidates: []model.RankedCandidate{
+			{Handle: "production", Path: "auth/token.go", Language: "go", Kind: "function", Symbol: "ValidateToken", Score: 100, Content: "return nil"},
+			{Handle: "test", Path: "tests/token_test.go", Language: "go", Kind: "test", Symbol: "TestValidateToken", Relation: "tests", Score: 90, Content: "ValidateToken test"},
+		},
+	})
+	for _, item := range bundle.Items {
+		if item.Kind == "test" {
+			return
+		}
+	}
+	t.Fatalf("test candidate was dropped despite tests intent: %+v", bundle)
 }
 
 func TestPackerLimitsTestIntentToFocusedTestChunks(t *testing.T) {

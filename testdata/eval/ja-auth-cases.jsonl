@@ -1,0 +1,3 @@
+{"name":"ja-go-callers","query":"ValidateToken の呼び出し元はどこですか","token_budget":1200,"expected_paths":["http/middleware.go"],"forbidden_paths":["unrelated/report.go"],"expected_intents":["callers"],"expected_relations":["callers"]}
+{"name":"ja-go-tests","query":"ValidateTokenを検証するテストを探して","token_budget":1200,"expected_paths":["auth/service_test.go"],"forbidden_paths":["unrelated/report.go"],"expected_intents":["tests"],"expected_relations":["tests"],"expected_kinds":["test"]}
+{"name":"ja-go-definition","query":"期限切れ認証トークンを拒否するValidateTokenの実装","token_budget":1200,"expected_symbols":["ValidateToken"],"expected_paths":["auth/service.go"],"forbidden_paths":["unrelated/report.go"],"expected_intents":["definition"]}

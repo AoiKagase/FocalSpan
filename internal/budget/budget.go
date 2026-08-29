@@ -70,15 +70,19 @@ func (p *Packer) Pack(req model.PackRequest) model.ContextBundle {
 		mode = "source"
 	}
 	bundle := model.ContextBundle{Query: req.Query, IndexRevision: req.IndexRevision, BudgetTokens: budget, Items: make([]model.ContextItem, 0)}
-	testIntent := hasTestIntent(req.Query)
+	testIntent := hasTestIntent(req.Query, req.IntentHints)
 	hasTestCandidate := false
 	hasNonDocumentationCandidate := false
+	hasStructuralCandidate := false
 	for _, candidate := range req.Candidates {
 		if isTestCandidate(candidate) {
 			hasTestCandidate = true
 		}
 		if !isDocumentationCandidate(candidate) {
 			hasNonDocumentationCandidate = true
+		}
+		if hasStructuralSignal(candidate) {
+			hasStructuralCandidate = true
 		}
 	}
 	testItems := 0
@@ -92,6 +96,11 @@ func (p *Packer) Pack(req model.PackRequest) model.ContextBundle {
 	}
 	for index, candidate := range req.Candidates {
 		if hasNonDocumentationCandidate && isDocumentationCandidate(candidate) {
+			bundle.OmittedCount++
+			bundle.Truncated = true
+			continue
+		}
+		if hasStructuralCandidate && index > 0 && !hasStructuralSignal(candidate) {
 			bundle.OmittedCount++
 			bundle.Truncated = true
 			continue
@@ -173,10 +182,14 @@ func (p *Packer) Pack(req model.PackRequest) model.ContextBundle {
 
 func lowUtilityUnderPressure(estimator TokenEstimator, bundle model.ContextBundle, item model.ContextItem, candidate, top model.RankedCandidate, budget int) bool {
 	for _, reason := range candidate.Reasons {
-		if reason.Code == "symbol-exact" {
+		if reason.Code == "symbol-exact" || reason.Code == "symbol-prefix" {
 			return false
 		}
 	}
+	// A concrete symbol match is a useful structural anchor even when a
+	// relation candidate has a much larger intent score. Keep it available so
+	// an include/import question can return both the importer and imported
+	// definition instead of only the relation source.
 	if candidate.Relation == "" && candidate.Score > 0 && top.Score > 0 && candidate.Score*2 < top.Score {
 		return true
 	}
@@ -189,7 +202,12 @@ func lowUtilityUnderPressure(estimator TokenEstimator, bundle model.ContextBundl
 	return true
 }
 
-func hasTestIntent(query string) bool {
+func hasTestIntent(query string, hints []string) bool {
+	for _, hint := range hints {
+		if strings.EqualFold(strings.TrimSpace(hint), "tests") {
+			return true
+		}
+	}
 	for _, term := range strings.Fields(strings.ToLower(query)) {
 		term = strings.Trim(term, ".,?!:;()[]{}")
 		switch term {
@@ -202,6 +220,15 @@ func hasTestIntent(query string) bool {
 
 func isDocumentationCandidate(candidate model.RankedCandidate) bool {
 	return candidate.Kind == "heading" || candidate.Language == "markdown" || candidate.Language == "text"
+}
+
+func hasStructuralSignal(candidate model.RankedCandidate) bool {
+	for _, reason := range candidate.Reasons {
+		if reason.Code == "symbol-exact" || reason.Code == "symbol-prefix" || reason.Code == "path" || reason.Code == "changed-file" || reason.Code == "test-pair" || strings.HasPrefix(reason.Code, "relation-") {
+			return true
+		}
+	}
+	return false
 }
 
 func isTestCandidate(candidate model.RankedCandidate) bool {

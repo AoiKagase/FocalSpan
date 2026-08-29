@@ -67,7 +67,7 @@ func validateTOMLValues(spec RegistrationSpec) error {
 		return errors.New("MCP registration timeouts must be positive")
 	}
 	if !stringSlicesEqual(spec.EnabledTools, EnabledTools) {
-		return errors.New("MCP registration must expose exactly the four FocalSpan tools")
+		return errors.New("MCP registration must expose exactly the five FocalSpan tools")
 	}
 	return nil
 }

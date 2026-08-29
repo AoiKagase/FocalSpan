@@ -10,20 +10,25 @@ import (
 
 	"github.com/focalspan/focalspan/internal/app"
 	"github.com/focalspan/focalspan/internal/model"
+	"github.com/focalspan/focalspan/internal/query"
+	"github.com/focalspan/focalspan/internal/search"
 )
 
 type Case struct {
-	Name            string   `json:"name"`
-	Query           string   `json:"query"`
-	TokenBudget     int      `json:"token_budget"`
-	ExpectedSymbols []string `json:"expected_symbols"`
-	ExpectedPaths   []string `json:"expected_paths"`
-	ForbiddenPaths  []string `json:"forbidden_paths"`
+	Name              string   `json:"name"`
+	Query             string   `json:"query"`
+	TokenBudget       int      `json:"token_budget"`
+	ExpectedSymbols   []string `json:"expected_symbols"`
+	ExpectedPaths     []string `json:"expected_paths"`
+	ForbiddenPaths    []string `json:"forbidden_paths"`
+	ExpectedIntents   []string `json:"expected_intents,omitempty"`
+	ExpectedRelations []string `json:"expected_relations,omitempty"`
+	ExpectedKinds     []string `json:"expected_kinds,omitempty"`
 }
 
 type Queryer interface {
 	Query(context.Context, app.QueryRequest) (model.ContextBundle, error)
-	BaselineTokens(context.Context, string) (int, error)
+	BaselineTokensForRequest(context.Context, app.QueryRequest) (int, error)
 }
 
 type CaseResult struct {
@@ -38,20 +43,35 @@ type CaseResult struct {
 	EstimatedTokens     int     `json:"estimated_tokens"`
 	ReductionRatio      float64 `json:"reduction_ratio"`
 	Deterministic       int     `json:"deterministic"`
+	IntentRecall        float64 `json:"intent_recall,omitempty"`
+	RelationRecall      float64 `json:"relation_recall,omitempty"`
+	KindRecall          float64 `json:"kind_recall,omitempty"`
+	RetrievalMode       string  `json:"retrieval_mode"`
+}
+
+type IntentReport struct {
+	Cases          int     `json:"cases"`
+	IntentRecall   float64 `json:"intent_recall"`
+	RelationRecall float64 `json:"relation_recall"`
+	KindRecall     float64 `json:"kind_recall"`
 }
 
 type Report struct {
-	Cases                   []CaseResult `json:"cases"`
-	HitAt1                  float64      `json:"hit_at_1"`
-	HitAt3                  float64      `json:"hit_at_3"`
-	HitAt5                  float64      `json:"hit_at_5"`
-	SymbolRecall            float64      `json:"symbol_recall"`
-	PathRecall              float64      `json:"path_recall"`
-	BudgetCompliance        float64      `json:"budget_compliance"`
-	ForbiddenPathViolations int          `json:"forbidden_path_violations"`
-	MedianEstimatedTokens   int          `json:"median_estimated_tokens"`
-	MedianReductionRatio    float64      `json:"median_reduction_ratio"`
-	DeterministicOutput     float64      `json:"deterministic_output"`
+	Cases                   []CaseResult            `json:"cases"`
+	HitAt1                  float64                 `json:"hit_at_1"`
+	HitAt3                  float64                 `json:"hit_at_3"`
+	HitAt5                  float64                 `json:"hit_at_5"`
+	SymbolRecall            float64                 `json:"symbol_recall"`
+	PathRecall              float64                 `json:"path_recall"`
+	BudgetCompliance        float64                 `json:"budget_compliance"`
+	ForbiddenPathViolations int                     `json:"forbidden_path_violations"`
+	MedianEstimatedTokens   int                     `json:"median_estimated_tokens"`
+	MedianReductionRatio    float64                 `json:"median_reduction_ratio"`
+	DeterministicOutput     float64                 `json:"deterministic_output"`
+	IntentRecall            float64                 `json:"intent_recall,omitempty"`
+	RelationRecall          float64                 `json:"relation_recall,omitempty"`
+	KindRecall              float64                 `json:"kind_recall,omitempty"`
+	ByPrimaryIntent         map[string]IntentReport `json:"by_primary_intent,omitempty"`
 }
 
 func LoadCases(path string) ([]Case, error) {
@@ -84,9 +104,19 @@ func LoadCases(path string) ([]Case, error) {
 }
 
 func Evaluate(ctx context.Context, queryer Queryer, cases []Case) (Report, error) {
+	return EvaluateMode(ctx, queryer, cases, search.RetrievalFull)
+}
+
+func EvaluateMode(ctx context.Context, queryer Queryer, cases []Case, mode search.RetrievalMode) (Report, error) {
+	if mode == "" {
+		mode = search.RetrievalFull
+	}
+	if mode != search.RetrievalFull && mode != search.RetrievalFTSOnly && mode != search.RetrievalNoRelations {
+		return Report{}, fmt.Errorf("unknown retrieval mode %q", mode)
+	}
 	report := Report{Cases: make([]CaseResult, 0, len(cases))}
 	for _, item := range cases {
-		request := app.QueryRequest{Query: item.Query, TokenBudget: item.TokenBudget, Mode: "source"}
+		request := app.QueryRequest{Query: item.Query, TokenBudget: item.TokenBudget, Mode: "source", RetrievalMode: mode}
 		first, err := queryer.Query(ctx, request)
 		if err != nil {
 			return report, fmt.Errorf("evaluate %s: %w", item.Name, err)
@@ -97,7 +127,7 @@ func Evaluate(ctx context.Context, queryer Queryer, cases []Case) (Report, error
 		}
 		firstJSON, _ := json.Marshal(first)
 		secondJSON, _ := json.Marshal(second)
-		result := CaseResult{Name: item.Name, EstimatedTokens: first.EstimatedTokens}
+		result := CaseResult{Name: item.Name, EstimatedTokens: first.EstimatedTokens, RetrievalMode: string(mode)}
 		if string(firstJSON) == string(secondJSON) {
 			result.Deterministic = 1
 		}
@@ -110,7 +140,11 @@ func Evaluate(ctx context.Context, queryer Queryer, cases []Case) (Report, error
 		result.SymbolRecall = recallSymbols(first.Items, item.ExpectedSymbols)
 		result.PathRecall = recallPaths(first.Items, item.ExpectedPaths)
 		result.ForbiddenViolations = forbidden(first.Items, item.ForbiddenPaths)
-		baseline, err := queryer.BaselineTokens(ctx, item.Query)
+		plan := query.PlanQuery(item.Query)
+		result.IntentRecall = recallStrings(plan.IntentStrings(), item.ExpectedIntents)
+		result.RelationRecall = recallStrings(itemRelations(first.Items), item.ExpectedRelations)
+		result.KindRecall = recallStrings(itemKinds(first.Items), item.ExpectedKinds)
+		baseline, err := queryer.BaselineTokensForRequest(ctx, request)
 		if err != nil {
 			return report, err
 		}
@@ -126,6 +160,9 @@ func Evaluate(ctx context.Context, queryer Queryer, cases []Case) (Report, error
 			report.HitAt5 += float64(item.HitAt5)
 			report.SymbolRecall += item.SymbolRecall
 			report.PathRecall += item.PathRecall
+			report.IntentRecall += item.IntentRecall
+			report.RelationRecall += item.RelationRecall
+			report.KindRecall += item.KindRecall
 			report.BudgetCompliance += float64(item.BudgetCompliant)
 			report.DeterministicOutput += float64(item.Deterministic)
 			report.ForbiddenPathViolations += item.ForbiddenViolations
@@ -136,12 +173,71 @@ func Evaluate(ctx context.Context, queryer Queryer, cases []Case) (Report, error
 		report.HitAt5 /= count
 		report.SymbolRecall /= count
 		report.PathRecall /= count
+		report.IntentRecall /= count
+		report.RelationRecall /= count
+		report.KindRecall /= count
 		report.BudgetCompliance /= count
 		report.DeterministicOutput /= count
 		report.MedianEstimatedTokens = medianInts(report.Cases, func(item CaseResult) int { return item.EstimatedTokens })
 		report.MedianReductionRatio = medianFloats(report.Cases, func(item CaseResult) float64 { return item.ReductionRatio })
+		report.ByPrimaryIntent = make(map[string]IntentReport)
+		for index, item := range cases {
+			plan := query.PlanQuery(item.Query)
+			key := string(plan.PrimaryIntent)
+			intentReport := report.ByPrimaryIntent[key]
+			intentReport.Cases++
+			caseResult := report.Cases[index]
+			intentReport.IntentRecall += caseResult.IntentRecall
+			intentReport.RelationRecall += caseResult.RelationRecall
+			intentReport.KindRecall += caseResult.KindRecall
+			report.ByPrimaryIntent[key] = intentReport
+		}
+		for key, intentReport := range report.ByPrimaryIntent {
+			count := float64(intentReport.Cases)
+			intentReport.IntentRecall /= count
+			intentReport.RelationRecall /= count
+			intentReport.KindRecall /= count
+			report.ByPrimaryIntent[key] = intentReport
+		}
 	}
 	return report, nil
+}
+
+func recallStrings(found, expected []string) float64 {
+	if len(expected) == 0 {
+		return 1
+	}
+	seen := make(map[string]bool, len(found))
+	for _, value := range found {
+		seen[strings.ToLower(strings.TrimSpace(value))] = true
+	}
+	foundCount := 0
+	for _, value := range expected {
+		if seen[strings.ToLower(strings.TrimSpace(value))] {
+			foundCount++
+		}
+	}
+	return float64(foundCount) / float64(len(expected))
+}
+
+func itemRelations(items []model.ContextItem) []string {
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.Relation != "" {
+			result = append(result, item.Relation)
+		}
+	}
+	return result
+}
+
+func itemKinds(items []model.ContextItem) []string {
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.Kind != "" {
+			result = append(result, item.Kind)
+		}
+	}
+	return result
 }
 
 func hitAt(items []model.ContextItem, expectedSymbols, expectedPaths []string, n int) int {

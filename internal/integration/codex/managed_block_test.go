@@ -34,7 +34,7 @@ func TestBuildManagedBlockEscapesPathsAndIsDeterministic(t *testing.T) {
 	if !strings.Contains(first, `args = ["serve", "--root", "H:\\source code\\日本語\\repo", "--no-auto-update"]`) {
 		t.Fatalf("args were not TOML escaped: %s", first)
 	}
-	if strings.Count(first, "code_") != 4 {
+	if strings.Count(first, "code_") != 5 {
 		t.Fatalf("unexpected enabled tools: %s", first)
 	}
 	var parsed map[string]any

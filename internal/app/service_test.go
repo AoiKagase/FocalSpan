@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,7 +12,35 @@ import (
 	"github.com/focalspan/focalspan/internal/budget"
 	"github.com/focalspan/focalspan/internal/config"
 	"github.com/focalspan/focalspan/internal/model"
+	"github.com/focalspan/focalspan/internal/query"
+	"github.com/focalspan/focalspan/internal/search"
 )
+
+func TestNewExtractorRegistrySelectsDedicatedExtractors(t *testing.T) {
+	registry := newExtractorRegistry()
+	tests := []struct {
+		name, path, language, want string
+	}{
+		{name: "go", path: "auth.go", language: "go", want: "go-ast"},
+		{name: "php", path: "src/Auth/TokenService.php", language: "php", want: "php-structural"},
+		{name: "cpp", path: "src/token_service.cpp", language: "cpp", want: "cpp-structural"},
+		{name: "csharp", path: "Auth/TokenService.cs", language: "csharp", want: "csharp-structural"},
+		{name: "javascript", path: "src/auth/token-service.ts", language: "typescript", want: "jsts-structural"},
+		{name: "template", path: "pages/login.tpl", language: "smarty", want: "template-structural"},
+		{name: "generic", path: "README.txt", language: "text", want: "generic-structural"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			extractor, ok := registry.For(test.path, test.language)
+			if !ok {
+				t.Fatalf("registry.For(%q, %q) did not find an extractor", test.path, test.language)
+			}
+			if extractor.Name() != test.want {
+				t.Fatalf("registry.For(%q, %q) = %q, want %q", test.path, test.language, extractor.Name(), test.want)
+			}
+		})
+	}
+}
 
 func TestQueryAutoIndexesAndHonorsBudget(t *testing.T) {
 	root := t.TempDir()
@@ -278,6 +307,60 @@ func TestBaselineTokensForCandidatesDeduplicatesPaths(t *testing.T) {
 	if got != want {
 		t.Fatalf("baseline=%d, want %d", got, want)
 	}
+}
+
+func TestExplainReturnsDeterministicSourceFreeTraceForEachMode(t *testing.T) {
+	root := t.TempDir()
+	writeAppFile(t, filepath.Join(root, "auth.go"), "package auth\n\nfunc ValidateToken() error { return nil }\n")
+	writeAppFile(t, filepath.Join(root, "middleware.go"), "package auth\n\nfunc Authenticate() error { return ValidateToken() }\n")
+	a, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+	full, err := a.Explain(context.Background(), ExplainRequest{Query: "what calls ValidateToken?", Limit: 200, RetrievalMode: search.RetrievalFull})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if full.Mode != search.RetrievalFull || full.Plan.PrimaryIntent != query.IntentCallers || len(full.Candidates) == 0 || len(full.Candidates) > 100 {
+		t.Fatalf("full=%+v", full)
+	}
+	fullJSON, err := json.Marshal(full)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repeated, err := a.Explain(context.Background(), ExplainRequest{Query: "what calls ValidateToken?", Limit: 200, RetrievalMode: search.RetrievalFull, NoUpdate: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repeatedJSON, err := json.Marshal(repeated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(fullJSON) != string(repeatedJSON) {
+		t.Fatalf("explain is not deterministic:\nfirst=%s\nsecond=%s", fullJSON, repeatedJSON)
+	}
+	if strings.Contains(string(fullJSON), "ValidateToken() error { return nil }") {
+		t.Fatalf("source content leaked into explain: %s", fullJSON)
+	}
+	ftsOnly, err := a.Explain(context.Background(), ExplainRequest{Query: "what calls ValidateToken?", Limit: 10, RetrievalMode: search.RetrievalFTSOnly, NoUpdate: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasTraceRetriever(full.Candidates, search.RetrieverRelation) == false || hasTraceRetriever(ftsOnly.Candidates, search.RetrieverRelation) {
+		t.Fatalf("relation trace mode mismatch: full=%+v fts=%+v", full, ftsOnly)
+	}
+}
+
+func hasTraceRetriever(candidates []search.CandidateTrace, retriever search.RetrieverID) bool {
+	for _, candidate := range candidates {
+		for _, contribution := range candidate.Contributions {
+			if contribution.Retriever == retriever {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func TestPackWithSavingsOmitsUnreadableBaseline(t *testing.T) {

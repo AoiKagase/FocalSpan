@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -268,10 +269,11 @@ func nullable(value string) any {
 	return value
 }
 
-func (s *Store) SearchFTS(ctx context.Context, query string) ([]model.RankedCandidate, error) {
+func (s *Store) SearchFTS(ctx context.Context, query string, limit int) ([]model.RankedCandidate, error) {
+	limit = retrievalLimit(limit, 100, 500)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	rows, err := s.db.QueryContext(ctx, `SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature, c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash, bm25(chunk_fts) FROM chunk_fts JOIN chunks c ON c.handle = chunk_fts.handle JOIN files f ON f.id = c.file_id WHERE chunk_fts MATCH ? ORDER BY bm25(chunk_fts), f.path, c.start_line, c.handle LIMIT 200`, query)
+	rows, err := s.db.QueryContext(ctx, `SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature, c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash, bm25(chunk_fts) FROM chunk_fts JOIN chunks c ON c.handle = chunk_fts.handle JOIN files f ON f.id = c.file_id WHERE chunk_fts MATCH ? ORDER BY bm25(chunk_fts), f.path, c.start_line, c.handle LIMIT ?`, query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("FTS search: %w", err)
 	}
@@ -287,6 +289,205 @@ func (s *Store) SearchFTS(ctx context.Context, query string) ([]model.RankedCand
 		results = append(results, candidate)
 	}
 	return results, rows.Err()
+}
+
+func retrievalLimit(value, fallback, maximum int) int {
+	if fallback <= 0 {
+		fallback = 1
+	}
+	if maximum < fallback {
+		maximum = fallback
+	}
+	if value <= 0 {
+		return fallback
+	}
+	if value > maximum {
+		return maximum
+	}
+	return value
+}
+
+const rankedCandidateProjection = `SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature, c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash, COALESCE(symbol.confidence, 0) FROM chunks c JOIN files f ON f.id = c.file_id LEFT JOIN symbols symbol ON symbol.handle = c.symbol_handle WHERE `
+
+func (s *Store) SearchExactSymbols(ctx context.Context, values []string, limit int) ([]model.RankedCandidate, error) {
+	values = lookupValues(values)
+	if len(values) == 0 {
+		return []model.RankedCandidate{}, nil
+	}
+	limit = retrievalLimit(limit, 100, 500)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]model.RankedCandidate, 0)
+	seen := make(map[string]bool)
+	for _, value := range values {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		rows, err := s.db.QueryContext(ctx, rankedCandidateProjection+`lower(symbol.name) = lower(?) ORDER BY CASE WHEN c.kind LIKE '%-outline' OR c.kind = 'test-suite' THEN 1 ELSE 0 END, symbol.confidence DESC, c.end_line - c.start_line ASC, f.path ASC, c.start_line ASC, c.handle ASC`, value)
+		if err != nil {
+			return nil, fmt.Errorf("exact symbol search: %w", err)
+		}
+		items, scanErr := scanRankedCandidates(rows)
+		rows.Close()
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		appendCandidates(&result, seen, items, limit)
+		if len(result) >= limit {
+			break
+		}
+	}
+	return result, nil
+}
+
+func (s *Store) SearchQualifiedSymbols(ctx context.Context, values []string, limit int) ([]model.RankedCandidate, error) {
+	values = lookupValues(values)
+	if len(values) == 0 {
+		return []model.RankedCandidate{}, nil
+	}
+	limit = retrievalLimit(limit, 100, 500)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]model.RankedCandidate, 0)
+	seen := make(map[string]bool)
+	for _, value := range values {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		queries := []struct {
+			condition string
+			args      []any
+		}{
+			{condition: `symbol.qualified_name = ?`, args: []any{value}},
+			{condition: `lower(symbol.qualified_name) = lower(?)`, args: []any{value}},
+		}
+		for queryIndex, candidateQuery := range queries {
+			rows, err := s.db.QueryContext(ctx, rankedCandidateProjection+candidateQuery.condition+` ORDER BY CASE WHEN c.kind LIKE '%-outline' OR c.kind = 'test-suite' THEN 1 ELSE 0 END, symbol.confidence DESC, c.end_line - c.start_line ASC, f.path ASC, c.start_line ASC, c.handle ASC`, candidateQuery.args...)
+			if err != nil {
+				return nil, fmt.Errorf("qualified symbol search: %w", err)
+			}
+			items, scanErr := scanRankedCandidates(rows)
+			rows.Close()
+			if scanErr != nil {
+				return nil, scanErr
+			}
+			before := len(result)
+			appendCandidates(&result, seen, items, limit)
+			if len(result) >= limit || len(result) > before || queryIndex == len(queries)-1 {
+				break
+			}
+		}
+		if len(result) >= limit {
+			break
+		}
+	}
+	return result, nil
+}
+
+func (s *Store) SearchSymbolPrefixes(ctx context.Context, values []string, limit int) ([]model.RankedCandidate, error) {
+	values = lookupValues(values)
+	if len(values) == 0 {
+		return []model.RankedCandidate{}, nil
+	}
+	limit = retrievalLimit(limit, 100, 500)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]model.RankedCandidate, 0)
+	seen := make(map[string]bool)
+	for _, value := range values {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		escaped := escapeLike(strings.ToLower(value))
+		rows, err := s.db.QueryContext(ctx, rankedCandidateProjection+`(lower(symbol.name) LIKE ? || '%' ESCAPE '\' OR lower(symbol.qualified_name) LIKE ? || '%' ESCAPE '\') ORDER BY CASE WHEN lower(symbol.name) = lower(?) THEN 0 ELSE 1 END, symbol.confidence DESC, c.end_line - c.start_line ASC, f.path ASC, c.start_line ASC, c.handle ASC`, escaped, escaped, value)
+		if err != nil {
+			return nil, fmt.Errorf("symbol prefix search: %w", err)
+		}
+		items, scanErr := scanRankedCandidates(rows)
+		rows.Close()
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		appendCandidates(&result, seen, items, limit)
+		if len(result) >= limit {
+			break
+		}
+	}
+	return result, nil
+}
+
+func (s *Store) SearchPaths(ctx context.Context, hints []string, limit int) ([]model.RankedCandidate, error) {
+	hints = lookupValues(hints)
+	if len(hints) == 0 {
+		return []model.RankedCandidate{}, nil
+	}
+	limit = retrievalLimit(limit, 100, 500)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]model.RankedCandidate, 0)
+	seen := make(map[string]bool)
+	for _, hint := range hints {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		hint = strings.ReplaceAll(hint, "\\", "/")
+		escaped := escapeLike(strings.ToLower(hint))
+		rows, err := s.db.QueryContext(ctx, rankedCandidateProjection+`(lower(f.path) = ? OR lower(f.path) LIKE '%' || '/' || ? ESCAPE '\' OR lower(f.path) LIKE ? || '/%' ESCAPE '\' OR lower(f.path) LIKE '%' || ? || '%' ESCAPE '\') ORDER BY CASE WHEN lower(f.path) = ? THEN 0 WHEN lower(f.path) LIKE '%' || '/' || ? ESCAPE '\' THEN 1 WHEN lower(f.path) LIKE ? || '/%' ESCAPE '\' THEN 2 ELSE 3 END, COALESCE(symbol.confidence, 0) DESC, c.end_line - c.start_line ASC, f.path ASC, c.start_line ASC, c.handle ASC`, escaped, escaped, escaped, escaped, escaped, escaped, escaped)
+		if err != nil {
+			return nil, fmt.Errorf("path search: %w", err)
+		}
+		items, scanErr := scanRankedCandidates(rows)
+		rows.Close()
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		appendCandidates(&result, seen, items, limit)
+		if len(result) >= limit {
+			break
+		}
+	}
+	return result, nil
+}
+
+func lookupValues(values []string) []string {
+	result := make([]string, 0, len(values))
+	seen := make(map[string]bool, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		key := strings.ToLower(value)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		result = append(result, value)
+	}
+	return result
+}
+
+func escapeLike(value string) string {
+	value = strings.ReplaceAll(value, `\`, `\\`)
+	value = strings.ReplaceAll(value, `%`, `\%`)
+	return strings.ReplaceAll(value, `_`, `\_`)
+}
+
+func appendCandidates(result *[]model.RankedCandidate, seen map[string]bool, items []model.RankedCandidate, limit int) {
+	for _, item := range items {
+		key := item.Handle
+		if key == "" {
+			key = fmt.Sprintf("%s\x00%d\x00%d\x00%s\x00%s", item.Path, item.StartByte, item.EndByte, item.Kind, item.Symbol)
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		*result = append(*result, item)
+		if len(*result) >= limit {
+			return
+		}
+	}
 }
 
 func (s *Store) AllCandidates(ctx context.Context, limit int) ([]model.RankedCandidate, error) {
@@ -320,6 +521,14 @@ func (s *Store) RelatedCandidates(ctx context.Context, handles []string, relatio
 	for _, handle := range handles {
 		var query string
 		var args []any
+		camelCasePattern := ""
+		if relation == "callers" || relation == "tests" {
+			var patternErr error
+			camelCasePattern, patternErr = s.camelCaseRelationPattern(ctx, handle)
+			if patternErr != nil {
+				return nil, patternErr
+			}
+		}
 		switch relation {
 		case "self":
 			query = candidateQuery(`c.symbol_handle = ? OR c.handle = ?`)
@@ -344,10 +553,11 @@ WHERE r.kind = 'calls' AND (
         OR lower(r.unresolved_to) LIKE '%.' || lower(target.name)
         OR lower(r.unresolved_to) LIKE '%::' || lower(target.name)
         OR lower(r.unresolved_to) LIKE '%->' || lower(target.name)
+        OR lower(r.unresolved_to) LIKE ?
       )
   )
 ))`)
-			args = []any{handle, handle, handle, handle}
+			args = []any{handle, handle, handle, handle, camelCasePattern}
 		case "callees":
 			query = candidateQuery(`c.symbol_handle IN (
 SELECT r.to_handle FROM relations r
@@ -371,6 +581,7 @@ WHERE r.kind = 'tests' AND (
         OR lower(r.unresolved_to) LIKE '%.' || lower(target.name)
         OR lower(r.unresolved_to) LIKE '%::' || lower(target.name)
         OR lower(r.unresolved_to) LIKE '%->' || lower(target.name)
+        OR lower(r.unresolved_to) LIKE ?
       )
   )
 )
@@ -380,7 +591,7 @@ UNION SELECT target.handle FROM relations r
 JOIN symbols target ON lower(r.unresolved_to) = lower(target.name) OR lower(r.unresolved_to) = lower(target.qualified_name)
 WHERE r.from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) AND r.kind = 'tests' AND r.to_handle IS NULL
 )`)
-			args = []any{handle, handle, handle, handle, handle, handle, handle, handle}
+			args = []any{handle, handle, handle, handle, camelCasePattern, handle, handle, handle, handle}
 		case "neighbors":
 			query = candidateQuery(`c.symbol_handle IN (SELECT from_handle FROM relations WHERE to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) OR from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) UNION SELECT to_handle FROM relations WHERE from_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?) OR to_handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?))`)
 			args = []any{handle, handle, handle, handle, handle, handle, handle, handle}
@@ -432,6 +643,42 @@ WHERE outline.symbol_handle = c.symbol_handle AND outline.kind = 'template-outli
 	return result, nil
 }
 
+func (s *Store) camelCaseRelationPattern(ctx context.Context, handle string) (string, error) {
+	var name string
+	err := s.db.QueryRowContext(ctx, `SELECT name FROM symbols WHERE handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)`, handle, handle).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("find relation target: %w", err)
+	}
+	return camelCaseLikePattern(name), nil
+}
+
+func camelCaseLikePattern(value string) string {
+	parts := make([]string, 0, len(value))
+	start := 0
+	for index, r := range value {
+		if index > start && r >= 'A' && r <= 'Z' {
+			parts = append(parts, value[start:index])
+			start = index
+		}
+	}
+	if start < len(value) {
+		parts = append(parts, value[start:])
+	}
+	if len(parts) < 2 {
+		return ""
+	}
+	var pattern strings.Builder
+	pattern.WriteByte('%')
+	for _, part := range parts {
+		pattern.WriteString(strings.ToLower(part))
+		pattern.WriteByte('%')
+	}
+	return pattern.String()
+}
+
 func candidateQuery(condition string) string {
 	return `SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature, c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash FROM chunks c JOIN files f ON f.id = c.file_id WHERE ` + condition + ` ORDER BY f.path, c.start_line, c.handle`
 }
@@ -441,6 +688,18 @@ func scanCandidates(rows *sql.Rows) ([]model.RankedCandidate, error) {
 	for rows.Next() {
 		var candidate model.RankedCandidate
 		if err := rows.Scan(&candidate.Handle, &candidate.Path, &candidate.Language, &candidate.Kind, &candidate.Symbol, &candidate.Signature, &candidate.StartLine, &candidate.EndLine, &candidate.StartByte, &candidate.EndByte, &candidate.Content, &candidate.ContentHash); err != nil {
+			return nil, err
+		}
+		result = append(result, candidate)
+	}
+	return result, rows.Err()
+}
+
+func scanRankedCandidates(rows *sql.Rows) ([]model.RankedCandidate, error) {
+	result := make([]model.RankedCandidate, 0)
+	for rows.Next() {
+		var candidate model.RankedCandidate
+		if err := rows.Scan(&candidate.Handle, &candidate.Path, &candidate.Language, &candidate.Kind, &candidate.Symbol, &candidate.Signature, &candidate.StartLine, &candidate.EndLine, &candidate.StartByte, &candidate.EndByte, &candidate.Content, &candidate.ContentHash, &candidate.Confidence); err != nil {
 			return nil, err
 		}
 		result = append(result, candidate)

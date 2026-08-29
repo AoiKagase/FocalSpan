@@ -51,3 +51,25 @@ func TestGoExtractionIsDeterministicAndHandlesCRLF(t *testing.T) {
 		t.Fatalf("not deterministic: first=%+v second=%+v", first.Symbols, second.Symbols)
 	}
 }
+
+func TestGoTestRelationResolvesCamelCaseTargetWithInsertedQualifier(t *testing.T) {
+	content := []byte("package auth\n\nfunc ValidateToken() {}\n\nfunc TestValidateExpiredToken(t *testing.T) { ValidateToken() }\n")
+	extraction, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "auth/service_test.go", Language: "go", Content: content})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := findSymbol(extraction.Symbols, "ValidateToken")
+	testSymbol := findSymbol(extraction.Symbols, "TestValidateExpiredToken")
+	if target == nil || testSymbol == nil {
+		t.Fatalf("symbols=%+v", extraction.Symbols)
+	}
+	for _, relation := range extraction.Relations {
+		if relation.FromHandle == testSymbol.Handle && relation.Kind == "tests" {
+			if relation.ToHandle != target.Handle || relation.UnresolvedTo != "" {
+				t.Fatalf("test relation=%+v target=%+v", relation, *target)
+			}
+			return
+		}
+	}
+	t.Fatalf("resolved test relation missing: %+v", extraction.Relations)
+}

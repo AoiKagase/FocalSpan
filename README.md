@@ -38,12 +38,30 @@ focalspan status --json
 ```text
 focalspan update --if-repo --quiet
 focalspan query --query "what calls ValidateToken?" --mode outline
+focalspan "what calls ValidateToken?"
+focalspan q "what calls ValidateToken?" --mode outline
 focalspan expand --handle chunk_... --relation callers --budget 1200
 focalspan impact --budget 2000 --json
 focalspan eval --cases testdata/eval/cases.jsonl --json
 focalspan doctor --json
 focalspan serve --root C:\src\example-project
 ```
+
+v0.2では、質問を決定的なQuery Planへ変換し、構造symbol、FTS、path、
+relationを独立に検索してweighted RRFで統合します。日本語のrelation intentと
+コードidentifierを含む混在queryにも対応します。
+
+```text
+focalspan query --query "ValidateToken の呼び出し元はどこですか" --budget 1200
+focalspan query --query "ValidateTokenを検証するテスト" --budget 1200
+focalspan explain --query "ValidateToken の呼び出し元" --json
+focalspan eval --root testdata/repos/authsample --cases testdata/eval/ja-auth-cases.jsonl --ablation all --json
+```
+
+`explain`はCLI専用のsource-free traceです。retrieverごとの件数、候補へのRRF
+寄与、最終順位の理由を表示します。自動翻訳、compiler-gradeのcross-file
+resolution、embedding/vector searchは行いません。日本語だけの概念検索は
+lexical検索の範囲です。
 
 ### Codexへの自動登録
 
@@ -63,6 +81,13 @@ focalspan mcp install codex --scope user
 ```
 
 user scopeではroot固有のserver名を使い、全projectから見えるユーザー設定へ登録するためCodex CLIが必要です。通常はproject scopeを推奨します。登録前に確認するには次を使えます。
+
+グローバル登録を短く実行する場合は、次のaliasを使えます。これは公式Codex CLIのuser scopeへ登録します。
+
+```text
+focalspan install --root "C:\Work Spaces\BookStack"
+focalspan mcp install --global --root "C:\Work Spaces\BookStack"
+```
 
 ```text
 focalspan mcp print codex
@@ -111,10 +136,10 @@ command = "C:\\Tools\\focalspan.exe"
 args = ["serve", "--root", "C:\\src\\example-project"]
 startup_timeout_sec = 30
 tool_timeout_sec = 60
-enabled_tools = ["code_context", "code_expand", "code_impact", "code_status"]
+enabled_tools = ["code_context", "code_expand", "code_impact", "code_restart", "code_status"]
 ```
 
-サーバーが公開するツールは`code_context`、`code_expand`、`code_impact`、`code_status`だけです。標準出力はMCPプロトコル専用で、ログは標準エラー出力へ送られます。サーバーは起動時のルートに束縛され、ツール入力から任意の絶対パスを受け付けません。
+サーバーが公開するツールは`code_context`、`code_expand`、`code_impact`、`code_restart`、`code_status`です。`code_restart`はプロセスを終了させず、設定を再読込してインデックスサービスを安全に再オープンします。標準出力はMCPプロトコル専用で、ログは標準エラー出力へ送られます。サーバーは起動時のルートに束縛され、ツール入力から任意の絶対パスを受け付けません。
 
 ### セキュリティとプライバシー
 
@@ -188,6 +213,13 @@ missing. Use `--no-update` to make it read-only. `--root` binds a command to
 the explicitly supplied directory; paths in the index remain repository-
 relative and slash-normalized.
 
+For a short query, pass it directly or use the `q` alias:
+
+```text
+focalspan "what calls ValidateToken?"
+focalspan q "what calls ValidateToken?" --mode outline
+```
+
 Useful commands:
 
 ```text
@@ -199,6 +231,25 @@ focalspan eval --cases testdata/eval/cases.jsonl --json
 focalspan doctor --json
 focalspan serve --root C:\src\example-project
 ```
+
+Retrieval Quality v0.2 builds one deterministic Query Plan, runs structural
+symbol, FTS, path, and relation retrievers independently, combines their ranks
+with weighted reciprocal-rank fusion, and then applies intent-aware ranking.
+Mixed Japanese/code queries preserve the code identifier, and Japanese
+relation intents are supported.
+
+```text
+focalspan query --query "ValidateToken の呼び出し元はどこですか" --budget 1200
+focalspan query --query "ValidateTokenを検証するテスト" --budget 1200
+focalspan explain --query "ValidateToken の呼び出し元" --json
+focalspan eval --root testdata/repos/authsample --cases testdata/eval/ja-auth-cases.jsonl --ablation all --json
+```
+
+`explain` is CLI-only and returns a source-free trace of the plan, retriever
+counts, RRF contributions, and final ranking reasons. FocalSpan does not
+automatically translate queries, provide compiler-grade cross-file resolution,
+or run embedding/vector search; Japanese-only conceptual search remains
+lexical.
 
 `impact` uses unstaged and staged changes when `--base`/`--head` are omitted.
 Its relationship analysis is syntax-only and explicitly reports that
@@ -234,6 +285,13 @@ remove a registration with:
 focalspan mcp print codex
 focalspan mcp install codex --dry-run
 focalspan mcp uninstall codex
+```
+
+For a shorter global registration, use either of these equivalent commands:
+
+```text
+focalspan install --root "C:\Work Spaces\BookStack"
+focalspan mcp install --global --root "C:\Work Spaces\BookStack"
 ```
 
 On Windows, a path containing spaces needs no shell quoting when passed as a
@@ -322,7 +380,7 @@ command = "C:\\Tools\\focalspan.exe"
 args = ["serve", "--root", "C:\\src\\example-project"]
 startup_timeout_sec = 30
 tool_timeout_sec = 60
-enabled_tools = ["code_context", "code_expand", "code_impact", "code_status"]
+enabled_tools = ["code_context", "code_expand", "code_impact", "code_restart", "code_status"]
 ```
 
 On Linux or macOS:
@@ -333,13 +391,14 @@ command = "/usr/local/bin/focalspan"
 args = ["serve", "--root", "/src/example-project"]
 startup_timeout_sec = 30
 tool_timeout_sec = 60
-enabled_tools = ["code_context", "code_expand", "code_impact", "code_status"]
+enabled_tools = ["code_context", "code_expand", "code_impact", "code_restart", "code_status"]
 ```
 
-The server exposes exactly `code_context`, `code_expand`, `code_impact`, and
-`code_status`. stdout is reserved for MCP protocol messages; logs go to
-stderr. The server is bound to its startup root and does not accept arbitrary
-absolute paths from tool input.
+The server exposes `code_context`, `code_expand`, `code_impact`, `code_restart`,
+and `code_status`. `code_restart` reloads configuration and safely reopens the
+index service without terminating the MCP process. stdout is reserved for MCP
+protocol messages; logs go to stderr. The server is bound to its startup root
+and does not accept arbitrary absolute paths from tool input.
 
 A hook can update an index without producing normal output:
 

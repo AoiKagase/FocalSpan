@@ -74,11 +74,11 @@ func TestServerListsToolsAndHandlesStatusContextAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer service.Close()
 	if _, err := service.Index(context.Background(), true); err != nil {
 		t.Fatal(err)
 	}
 	server := New(service, false)
+	defer server.Close()
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -98,12 +98,20 @@ func TestServerListsToolsAndHandlesStatusContextAndValidation(t *testing.T) {
 		names = append(names, tool.Name)
 	}
 	sort.Strings(names)
-	if got := names; len(got) != 4 || got[0] != "code_context" || got[1] != "code_expand" || got[2] != "code_impact" || got[3] != "code_status" {
+	if got := names; len(got) != 5 || got[0] != "code_context" || got[1] != "code_expand" || got[2] != "code_impact" || got[3] != "code_restart" || got[4] != "code_status" {
 		t.Fatalf("tools=%v", got)
 	}
 	status, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "code_status"})
 	if err != nil || status.IsError || status.StructuredContent == nil {
 		t.Fatalf("status=%+v err=%v", status, err)
+	}
+	restarted, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "code_restart"})
+	if err != nil || restarted.IsError || restarted.StructuredContent == nil {
+		t.Fatalf("restart=%+v err=%v", restarted, err)
+	}
+	restartedJSON, err := json.Marshal(restarted.StructuredContent)
+	if err != nil || !strings.Contains(string(restartedJSON), `"restarted":true`) {
+		t.Fatalf("restart structured=%s err=%v", restartedJSON, err)
 	}
 	contextResult, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "code_context", Arguments: map[string]any{"query": "ValidateToken", "token_budget": 512, "mode": "outline"}})
 	if err != nil || contextResult.IsError || contextResult.StructuredContent == nil {
@@ -125,5 +133,34 @@ func TestServerListsToolsAndHandlesStatusContextAndValidation(t *testing.T) {
 	cancelCall()
 	if _, err := session.CallTool(canceled, &mcp.CallToolParams{Name: "code_status"}); err == nil {
 		t.Fatal("expected cancellation")
+	}
+}
+
+func TestRestartToolReloadsTheService(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "auth.go"), []byte("package auth\n\nfunc ValidateToken() error { return nil }\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	service, err := app.New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".focalspan.json"), []byte(`{"index_directory":".focalspan-restarted"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	server := New(service, false)
+	defer server.Close()
+	if err := server.Restart(context.Background()); err != nil {
+		t.Fatalf("restart: %v", err)
+	}
+	status, err := server.service.Status(context.Background())
+	if err != nil {
+		t.Fatalf("status after restart: %v", err)
+	}
+	if status.Root != root {
+		t.Fatalf("root after restart=%q, want %q", status.Root, root)
+	}
+	if server.service.Config.IndexDirectory != ".focalspan-restarted" {
+		t.Fatalf("config after restart=%q", server.service.Config.IndexDirectory)
 	}
 }

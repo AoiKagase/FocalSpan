@@ -22,6 +22,7 @@ import (
 	"github.com/focalspan/focalspan/internal/mcpserver"
 	"github.com/focalspan/focalspan/internal/render"
 	"github.com/focalspan/focalspan/internal/repository"
+	"github.com/focalspan/focalspan/internal/search"
 )
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -41,6 +42,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = runStatus(ctx, args[1:], stdout, stderr)
 	case "query":
 		err = runQuery(ctx, args[1:], stdout)
+	case "explain":
+		err = runExplain(ctx, args[1:], stdout)
 	case "expand":
 		err = runExpand(ctx, args[1:], stdout)
 	case "impact":
@@ -51,10 +54,23 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = runDoctor(ctx, args[1:], stdout)
 	case "serve":
 		err = runServe(ctx, args[1:])
+	case "q", "search":
+		err = runQuery(ctx, args[1:], stdout)
+	case "install":
+		err = runGlobalMCP(ctx, "install", args[1:], stdout)
+	case "uninstall":
+		err = runGlobalMCP(ctx, "uninstall", args[1:], stdout)
 	case "mcp":
 		err = runMCP(ctx, args[1:], stdout)
 	default:
-		err = fmt.Errorf("unknown command %q", args[0])
+		if strings.HasPrefix(args[0], "-") {
+			err = runQuery(ctx, args, stdout)
+		} else {
+			// A bare query is the shortest useful invocation and keeps the
+			// established subcommand form available for scripts.
+			queryArgs := append([]string{"--query", args[0]}, args[1:]...)
+			err = runQuery(ctx, queryArgs, stdout)
+		}
 	}
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "focalspan: %v\n", err)
@@ -65,7 +81,10 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 const usage = `focalspan - token-first code context compiler
 
-commands: init index update status query expand impact eval doctor serve mcp`
+commands: init index update status query explain expand impact eval doctor serve mcp install uninstall
+
+shortcuts: focalspan "your question" | focalspan query "your question" | focalspan q "your question"
+global MCP: focalspan install [--root PATH] [--dry-run]`
 
 func runInit(ctx context.Context, args []string, stdout io.Writer) error {
 	fs := newFlagSet("init")
@@ -216,6 +235,7 @@ func runStatus(ctx context.Context, args []string, stdout, stderr io.Writer) err
 }
 
 func runQuery(ctx context.Context, args []string, stdout io.Writer) error {
+	args = normalizeQueryArgs(args)
 	fs := newFlagSet("query")
 	rootArg := fs.String("root", ".", "repository root")
 	query := fs.String("query", "", "natural-language query")
@@ -230,7 +250,16 @@ func runQuery(ctx context.Context, args []string, stdout io.Writer) error {
 		return err
 	}
 	if strings.TrimSpace(*query) == "" {
-		return errors.New("--query is required")
+		remaining := fs.Args()
+		if len(remaining) == 1 {
+			*query = remaining[0]
+		} else if len(remaining) > 1 {
+			return fmt.Errorf("unexpected query argument %q", remaining[1])
+		} else {
+			return errors.New("--query is required")
+		}
+	} else if len(fs.Args()) > 0 {
+		return fmt.Errorf("unexpected query argument %q", fs.Args()[0])
 	}
 	if *mode != "source" && *mode != "outline" {
 		return errors.New("--mode must be outline or source")
@@ -261,6 +290,105 @@ func runQuery(ctx context.Context, args []string, stdout io.Writer) error {
 		_, err = fmt.Fprint(stdout, render.Compact(bundle))
 	}
 	return err
+}
+
+func normalizeQueryArgs(args []string) []string {
+	for _, arg := range args {
+		if arg == "--query" || arg == "-query" || strings.HasPrefix(arg, "--query=") || strings.HasPrefix(arg, "-query=") {
+			return args
+		}
+	}
+	valueFlags := map[string]bool{"--root": true, "-root": true, "--budget": true, "-budget": true, "--mode": true, "-mode": true, "--path": true, "-path": true}
+	skipValue := false
+	for index, arg := range args {
+		if skipValue {
+			skipValue = false
+			continue
+		}
+		if strings.HasPrefix(arg, "-") {
+			if valueFlags[arg] && index+1 < len(args) {
+				skipValue = true
+				continue
+			}
+			continue
+		}
+		normalized := make([]string, 0, len(args)+2)
+		normalized = append(normalized, "--query", arg)
+		normalized = append(normalized, args[:index]...)
+		normalized = append(normalized, args[index+1:]...)
+		return normalized
+	}
+	return args
+}
+
+func runExplain(ctx context.Context, args []string, stdout io.Writer) error {
+	fs := newFlagSet("explain")
+	rootArg := fs.String("root", ".", "repository root")
+	queryArg := fs.String("query", "", "natural-language query")
+	var paths stringList
+	fs.Var(&paths, "path", "repository-relative path prefix")
+	changedOnly := fs.Bool("changed-only", false, "restrict to changed spans")
+	noUpdate := fs.Bool("no-update", false, "disable auto update")
+	limit := fs.Int("limit", 20, "maximum candidates")
+	ablation := fs.String("ablation", "full", "full, fts-only, or no-relations")
+	jsonOutput := fs.Bool("json", false, "JSON output")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*queryArg) == "" {
+		return errors.New("--query is required")
+	}
+	modes, err := parseAblation(*ablation)
+	if err != nil {
+		return err
+	}
+	if *ablation == "all" {
+		return errors.New("explain does not support --ablation all")
+	}
+	root, _, err := resolveRoot(ctx, *rootArg)
+	if err != nil {
+		return err
+	}
+	service, err := app.New(root)
+	if err != nil {
+		return err
+	}
+	defer service.Close()
+	result, err := service.Explain(ctx, app.ExplainRequest{Query: *queryArg, Paths: []string(paths), ChangedOnly: *changedOnly, NoUpdate: *noUpdate, Limit: *limit, RetrievalMode: modes[0]})
+	if err != nil {
+		return err
+	}
+	if *jsonOutput {
+		return writeJSON(stdout, result)
+	}
+	return writeExplain(stdout, result)
+}
+
+func writeExplain(w io.Writer, result app.ExplainResult) error {
+	if _, err := fmt.Fprintf(w, "query: %s\nintent: %s\nanchors: %s\nrelations: %s\nmode: %s\n", result.Plan.RawQuery, result.Plan.PrimaryIntent, strings.Join(result.Plan.Anchors, ", "), strings.Join(result.Plan.Relations, ", "), result.Mode); err != nil {
+		return err
+	}
+	for index, candidate := range result.Candidates {
+		if _, err := fmt.Fprintf(w, "\n%d. %s:%d %s\n   final=%.1f fusion=%.3f\n", index+1, candidate.Path, candidateLine(candidate), candidate.Symbol, candidate.FinalScore, candidate.FusionScore); err != nil {
+			return err
+		}
+		sources := make([]string, 0, len(candidate.Contributions))
+		for _, contribution := range candidate.Contributions {
+			sources = append(sources, fmt.Sprintf("%s#%d", contribution.Retriever, contribution.Rank))
+		}
+		reasons := make([]string, 0, len(candidate.Reasons))
+		for _, reason := range candidate.Reasons {
+			reasons = append(reasons, reason.Code)
+		}
+		if _, err := fmt.Fprintf(w, "   sources=%s\n   reasons=%s\n", strings.Join(sources, ", "), strings.Join(reasons, ", ")); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func candidateLine(candidate search.CandidateTrace) int {
+	return candidate.StartLine
 }
 
 func runExpand(ctx context.Context, args []string, stdout io.Writer) error {
@@ -331,8 +459,13 @@ func runEval(ctx context.Context, args []string, stdout io.Writer) error {
 	fs := newFlagSet("eval")
 	rootArg := fs.String("root", ".", "repository root")
 	casesPath := fs.String("cases", "testdata/eval/cases.jsonl", "evaluation cases")
+	ablation := fs.String("ablation", "full", "full, fts-only, no-relations, or all")
 	jsonOutput := fs.Bool("json", false, "JSON output")
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	modes, err := parseAblation(*ablation)
+	if err != nil {
 		return err
 	}
 	root, _, err := resolveRoot(ctx, *rootArg)
@@ -348,14 +481,48 @@ func runEval(ctx context.Context, args []string, stdout io.Writer) error {
 		return err
 	}
 	defer service.Close()
-	report, err := eval.Evaluate(ctx, service, cases)
-	if err != nil {
-		return err
+	reports := make(map[string]eval.Report, len(modes))
+	for _, mode := range modes {
+		report, evaluateErr := eval.EvaluateMode(ctx, service, cases, mode)
+		if evaluateErr != nil {
+			return evaluateErr
+		}
+		reports[string(mode)] = report
 	}
+	if *ablation == "all" {
+		if *jsonOutput {
+			return writeJSON(stdout, struct {
+				Reports map[string]eval.Report `json:"reports"`
+			}{Reports: reports})
+		}
+		for _, mode := range modes {
+			if err := writeEvalReport(stdout, mode, reports[string(mode)]); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	report := reports[string(modes[0])]
 	if *jsonOutput {
 		return writeJSON(stdout, report)
 	}
-	_, err = fmt.Fprintf(stdout, "cases: %d\nhit@5: %.2f\nbudget compliance: %.2f\nreduction ratio: %.2f\ndeterministic: %.2f\n", len(report.Cases), report.HitAt5, report.BudgetCompliance, report.MedianReductionRatio, report.DeterministicOutput)
+	return writeEvalReport(stdout, modes[0], report)
+}
+
+func parseAblation(value string) ([]search.RetrievalMode, error) {
+	if value == "all" {
+		return []search.RetrievalMode{search.RetrievalFull, search.RetrievalFTSOnly, search.RetrievalNoRelations}, nil
+	}
+	for _, mode := range []search.RetrievalMode{search.RetrievalFull, search.RetrievalFTSOnly, search.RetrievalNoRelations} {
+		if value == string(mode) {
+			return []search.RetrievalMode{mode}, nil
+		}
+	}
+	return nil, fmt.Errorf("unknown ablation %q", value)
+}
+
+func writeEvalReport(w io.Writer, mode search.RetrievalMode, report eval.Report) error {
+	_, err := fmt.Fprintf(w, "mode: %s\ncases: %d\nhit@5: %.2f\nbudget compliance: %.2f\nreduction ratio: %.2f\ndeterministic: %.2f\n", mode, len(report.Cases), report.HitAt5, report.BudgetCompliance, report.MedianReductionRatio, report.DeterministicOutput)
 	return err
 }
 
@@ -417,10 +584,20 @@ func runServe(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer service.Close()
+	server := mcpserver.New(service, !*noAutoUpdate)
+	defer server.Close()
 	serveCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return mcpserver.New(service, !*noAutoUpdate).Run(serveCtx)
+	return server.Run(serveCtx)
+}
+
+func runGlobalMCP(ctx context.Context, operation string, args []string, stdout io.Writer) error {
+	if operation != "install" && operation != "uninstall" {
+		return fmt.Errorf("unsupported global MCP operation %q", operation)
+	}
+	delegated := append([]string{operation, codex.ClientName}, args...)
+	delegated = append(delegated, "--global")
+	return runMCP(ctx, delegated, stdout)
 }
 
 func runMCP(ctx context.Context, args []string, stdout io.Writer) error {
@@ -431,8 +608,10 @@ func runMCP(ctx context.Context, args []string, stdout io.Writer) error {
 	if operation != "install" && operation != "status" && operation != "uninstall" && operation != "print" {
 		return fmt.Errorf("unknown mcp subcommand %q", operation)
 	}
-	if len(args) < 2 {
-		return fmt.Errorf("mcp %s requires a client; supported client: codex", operation)
+	if len(args) < 2 || strings.HasPrefix(args[1], "-") {
+		// Codex is currently the only supported client, so the client name is
+		// optional for the short form: `mcp install --global`.
+		args = append([]string{args[0], codex.ClientName}, args[1:]...)
 	}
 	if args[1] != codex.ClientName {
 		return fmt.Errorf("unknown MCP client %q; supported client: codex", args[1])
@@ -440,6 +619,7 @@ func runMCP(ctx context.Context, args []string, stdout io.Writer) error {
 	fs := newFlagSet("mcp " + operation)
 	rootArg := fs.String("root", ".", "repository root")
 	scopeArg := fs.String("scope", codex.ScopeProject, "project or user")
+	globalArg := fs.Bool("global", false, "use the global Codex user scope")
 	nameArg := fs.String("name", "", "MCP server name")
 	jsonOutput := fs.Bool("json", false, "JSON output")
 	commandArg := fs.String("command", "", "FocalSpan executable path")
@@ -453,18 +633,21 @@ func runMCP(ctx context.Context, args []string, stdout io.Writer) error {
 	if remaining := fs.Args(); len(remaining) > 0 {
 		return fmt.Errorf("unexpected mcp argument %q", remaining[0])
 	}
+	if *globalArg {
+		*scopeArg = codex.ScopeUser
+	}
 	if operation == "status" {
 		// These flags are not part of status' public surface; reject accidental
 		// use rather than allowing a misleading status result.
 		if *commandArg != "" || *noAutoUpdate || *dryRun || *force {
-			return errors.New("mcp status accepts --root, --scope, --name, --codex-command, and --json only")
+			return errors.New("mcp status accepts --root, --scope, --global, --name, --codex-command, and --json only")
 		}
 	}
 	if operation == "uninstall" && (*commandArg != "" || *noAutoUpdate) {
-		return errors.New("mcp uninstall accepts --root, --scope, --name, --dry-run, --force, --codex-command, and --json only")
+		return errors.New("mcp uninstall accepts --root, --scope, --global, --name, --dry-run, --force, --codex-command, and --json only")
 	}
 	if operation == "print" && (*dryRun || *force) {
-		return errors.New("mcp print accepts --root, --scope, --name, --command, --no-auto-update, --codex-command, and --json only")
+		return errors.New("mcp print accepts --root, --scope, --global, --name, --command, --no-auto-update, --codex-command, and --json only")
 	}
 	if *scopeArg != codex.ScopeProject && *scopeArg != codex.ScopeUser {
 		return fmt.Errorf("invalid scope %q: must be project or user", *scopeArg)

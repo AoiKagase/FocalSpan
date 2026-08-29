@@ -202,7 +202,9 @@
 - Modify: `internal/cli/commands.go`, `README.md`
 
 **Interfaces:**
-- Produces official SDK stdio server with exactly `code_context`, `code_expand`, `code_impact`, and `code_status`.
+- Produces official SDK stdio server with `code_context`, `code_expand`,
+  `code_impact`, `code_restart`, and `code_status`; `code_restart` reloads the
+  service in-process without terminating the MCP transport.
 - Typed inputs are `CodeContextInput`, `CodeExpandInput`, and `CodeImpactInput`; invalid/blank inputs return typed validation errors without stack traces.
 
 - [ ] Write in-memory/client integration tests for server initialization, tools list, status, context, validation error, cancellation, concurrent calls, and stdout cleanliness.
@@ -240,7 +242,8 @@
 - Modify: `internal/cli/run.go`, `README.md`, `docs/design.md`
 
 **Interfaces:**
-- Produces `focalspan mcp install|status|uninstall|print codex` with project
+- Produces `focalspan install|uninstall` global MCP shortcuts and
+  `focalspan mcp install|status|uninstall|print [codex]` with project
   scope as the default and user scope delegated to the official Codex CLI.
 - Project scope uses a validated, atomic, marked TOML block and preserves all
   unmanaged content; user scope uses an injectable no-shell command runner.
@@ -271,6 +274,29 @@
 - [x] Keep malformed double-curly input bounded and report a diagnostic.
 - [ ] Run the full test, vet, race, cross-build, and fixture acceptance
   checklist before marking the integration complete.
+
+## Retrieval Quality v0.2 completion
+
+The v0.2 retrieval work is implemented in the current checkout. A single
+deterministic planner in `internal/query` normalizes Unicode and mixed
+Japanese/code queries, preserves identifiers, selects intent and relation
+profiles, and feeds independent structural, FTS, path, and relation
+retrievers. Weighted reciprocal-rank fusion combines their ranked lists before
+the existing intent-aware ranking, deduplication, and token packer. Evaluation
+2.0 measures intent, relation, kind, hit@N, budget, forbidden paths, reduction,
+and repeated-run determinism, with `full`, `fts-only`, and `no-relations`
+ablations. `focalspan explain` is a CLI-only, source-free retrieval trace.
+
+The v0.2 implementation does not add translation, embeddings, compiler-grade
+cross-file resolution, a schema migration, or an MCP debug tool. The current
+checkout retains its existing `code_restart` MCP extension, so its verified
+MCP surface is five tools rather than the four-tool surface described by the
+original MVP plan.
+
+Measured acceptance results and environment-specific verification status are
+recorded in `docs/evaluation.md`. The next-stage roadmap remains design-only:
+semantic zoom and evidence spans (v0.3), repository linking (v0.4), and
+optional semantic facts (v0.5).
 
 ## Verification checklist
 
@@ -310,7 +336,7 @@
   median reduction is 0.1667, 0.1215, and 0.2020 respectively.
 
 - [x] `go test ./...`
-- [ ] `go test -race ./...` (環境未検証: `CGO_ENABLED=1` では `gcc` が未導入)
+- [ ] `go test -race ./...` (環境未検証: PATH上に`gcc`がなく、`C:\\cygwin64\\bin\\gcc.exe`もnative Windows向けにはGoが拒否)
 - [x] `go vet ./...`
 - [x] `CGO_ENABLED=0 go build ./cmd/focalspan`
 - [x] `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/focalspan`
