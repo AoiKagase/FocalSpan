@@ -1703,7 +1703,7 @@ go test -race ./...
 
 Windows環境でC compilerがなく実行不能なら、PASSと書かない。command、error、未検証範囲を記録する。
 今回の環境では`CGO_ENABLED=1`指定でもPATH上に`gcc`がなく未検証。
-`C:\\cygwin64\\bin\\gcc.exe`を`CC`へ指定しても、GoがCygwin compilerをnative Windows向けに拒否した。
+`C:\cygwin64\bin\gcc.exe`を`CC`へ指定しても、GoがCygwin compilerをnative Windows向けに拒否した。
 
 - [x] **Step 6: Run CGO-free builds**
 

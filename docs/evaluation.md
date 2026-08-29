@@ -214,7 +214,7 @@ Linux amd64, and Darwin arm64. `go test -race ./...` first failed because the
 environment has `CGO_ENABLED=0`; the explicit `CGO_ENABLED=1 go test -race
 ./...` then failed before package tests because `gcc` is not installed
 (`cgo: C compiler "gcc" not found`). Race coverage is therefore unverified,
-not a pass. Pointing `CC` at the available `C:\\cygwin64\\bin\\gcc.exe` was
+not a pass. Pointing `CC` at the available `C:\cygwin64\bin\gcc.exe` was
 also rejected by Go because Cygwin GCC cannot build native Windows programs
 (`don't use the cygwin compiler to build native Windows programs; use MinGW
 instead`).

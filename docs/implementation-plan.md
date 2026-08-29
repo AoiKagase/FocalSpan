@@ -336,7 +336,7 @@ optional semantic facts (v0.5).
   median reduction is 0.1667, 0.1215, and 0.2020 respectively.
 
 - [x] `go test ./...`
-- [ ] `go test -race ./...` (環境未検証: PATH上に`gcc`がなく、`C:\\cygwin64\\bin\\gcc.exe`もnative Windows向けにはGoが拒否)
+- [ ] `go test -race ./...` (環境未検証: PATH上に`gcc`がなく、`C:\cygwin64\bin\gcc.exe`もnative Windows向けにはGoが拒否)
 - [x] `go vet ./...`
 - [x] `CGO_ENABLED=0 go build ./cmd/focalspan`
 - [x] `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/focalspan`
