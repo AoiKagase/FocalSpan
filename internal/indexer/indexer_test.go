@@ -167,6 +167,35 @@ func TestIndexerReindexesOldTemplateWindowsAfterExtractorVersionChanges(t *testi
 	}
 }
 
+func TestIndexerLinksUniqueCrossFileCallAfterApplyIndex(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "auth.go"), "package auth\n\nfunc ValidateToken() bool { return true }\n")
+	write(t, filepath.Join(root, "http.go"), "package auth\n\nfunc Authenticate() bool { return ValidateToken() }\n")
+	cfg := config.Default()
+	s, err := store.Open(root, cfg.IndexDirectory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ix := New(root, cfg, s, extract.NewRegistry(goast.NewExtractor(), generic.NewExtractor()))
+	if _, err := ix.Run(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	relations, err := s.Relations(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	linked := false
+	for _, relation := range relations {
+		if relation.Kind == "calls" && relation.ToHandle != "" && relation.UnresolvedTo == "" {
+			linked = true
+		}
+	}
+	if !linked {
+		t.Fatalf("cross-file call was not linked: %+v", relations)
+	}
+}
+
 func TestIndexerCancellationRollsBackPendingChanges(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, "old.go"), "package old\n\nfunc Old() {}\n")

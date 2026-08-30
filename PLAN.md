@@ -1961,7 +1961,7 @@ func (l *Linker) Link(ctx context.Context, facts []Fact) error
 
 実際の型は既存設計へ合わせてよいが、metadata parsingとsymbol linkingを分離する。
 
-- [ ] **Step 1: Add project metadata parser tests**
+- [x] **Step 1: Add project metadata parser tests**
 
 Read-only parsing only:
 
@@ -1982,7 +1982,7 @@ build.zig.zon
 
 XML/TOML/JSONは既存dependencyまたは標準ライブラリでparseする。外部commandを起動しない。
 
-- [ ] **Step 2: Implement minimum metadata facts**
+- [x] **Step 2: Implement minimum metadata facts**
 
 Go:
 
@@ -2084,7 +2084,7 @@ static path dependencies
 module root paths that can be read without evaluating build.zig
 ```
 
-- [ ] **Step 3: Add linker store queries**
+- [x] **Step 3: Add linker store queries**
 
 Add deterministic indexed lookups for:
 
@@ -2099,13 +2099,13 @@ declaration/definition signature
 
 Do not choose the first of multiple ambiguous matches.
 
-- [ ] **Step 4: Run linker after file updates**
+- [x] **Step 4: Run linker after file updates**
 
 After `ApplyIndex` succeeds, or inside the same safe index transaction if current architecture permits, resolve only exact/scoped facts. If linking fails, do not mark index run successful without reporting the error.
 
 No schema change is preferred. Existing `relations` rows may be replaced/rebuilt deterministically. If schema change becomes unavoidable, document and test migration before implementation.
 
-- [ ] **Step 5: Resolution precedence**
+- [x] **Step 5: Resolution precedence**
 
 ```text
 exact static path
@@ -2118,7 +2118,7 @@ ambiguous -> unresolved
 
 Simple repository-wide uniqueness may resolve only when no scope/module information contradicts it.
 
-- [ ] **Step 6: Add cross-file tests**
+- [x] **Step 6: Add cross-file tests**
 
 Minimum:
 
@@ -2139,7 +2139,7 @@ Nim import -> module
 Zig @import -> file
 ```
 
-- [ ] **Step 7: Verify all relation directions**
+- [x] **Step 7: Verify all relation directions**
 
 `expand imports`、`callers`、`callees`、`references`、`tests`でforward/reverse candidateが実用的に返る。
 
