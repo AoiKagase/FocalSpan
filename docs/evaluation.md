@@ -83,13 +83,13 @@ expired-token production code, its middleware caller, PHPUnit coverage, and a
 
 | Metric | PHP result |
 | --- | ---: |
-| hit@1 / hit@3 / hit@5 | 0.25 / 0.75 / 1.00 |
+| hit@1 / hit@3 / hit@5 | 0.25 / 1.00 / 1.00 |
 | Symbol recall / path recall | 1.00 / 1.00 |
 | Budget compliance | 1.00 |
 | Forbidden path violations | 0 |
 | Deterministic result | 1.00 |
-| Median estimated tokens | 1129 |
-| Median reduction ratio | 0.1699 |
+| Median estimated tokens | 179 |
+| Median reduction ratio | 0.05550387596899225 |
 
 The individual callers case had a 0.2708 reduction ratio; the reported median
 remained within the `<= 0.25` acceptance threshold. Every returned item had
@@ -108,8 +108,8 @@ The template fixture is `testdata/repos/templatesample` and its cases are in
 | Budget compliance | 1.00 |
 | Forbidden path violations | 0 |
 | Deterministic result | 1.00 |
-| Median estimated tokens | 834 |
-| Median reduction ratio | 0.20 |
+| Median estimated tokens | 87 |
+| Median reduction ratio | 0.026568430453226165 |
 
 Path-only cases use `expected_paths` for hit@N when no expected symbol is
 declared; path recall still requires every expected path. The run verified

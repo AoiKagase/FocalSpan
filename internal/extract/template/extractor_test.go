@@ -134,6 +134,66 @@ func TestExtractorKeepsDoubleCurlyTagsSearchableWithoutSmartySymbols(t *testing.
 	}
 }
 
+func TestExtractorCoversCaptureMultipleScriptsAndOpaquePluginTags(t *testing.T) {
+	source := `{capture name="notice"}<p>{$message}</p>{/capture}
+{custom_widget value=$message}
+<script type="text/typescript">
+export function validateSettings(value: string): boolean { return value.length > 0; }
+</script>
+<script>
+function secondHandler(value) { return value; }
+</script>
+{literal}{$notSmarty}{/literal}`
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "components/settings.tpl", Language: "smarty", Content: []byte(source)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if findSymbol(got.Symbols, "notice", "template-capture").Handle == "" {
+		t.Fatalf("capture symbol missing: %+v", got.Symbols)
+	}
+	if findSymbol(got.Symbols, "custom_widget", "template-custom_widget").Handle != "" {
+		t.Fatalf("custom plugin tag became a structural symbol: %+v", got.Symbols)
+	}
+	if !hasChunkKind(got.Chunks, "literal") || !hasChunkKind(got.Chunks, "static") {
+		t.Fatalf("literal/static coverage missing: %+v", got.Chunks)
+	}
+	for _, name := range []string{"validateSettings", "secondHandler"} {
+		found := false
+		for _, symbol := range got.Symbols {
+			if symbol.Name == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("embedded script symbol %q missing: %+v", name, got.Symbols)
+		}
+	}
+}
+
+func TestExtractorTreatsVerbatimAsOpaqueLiteral(t *testing.T) {
+	source := `{verbatim}{block name="not-a-block"}{$raw}{/block}{/verbatim}`
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "verbatim.tpl", Language: "smarty", Content: []byte(source)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if findSymbol(got.Symbols, "not-a-block", "template-block").Handle != "" {
+		t.Fatalf("verbatim content became a structural block: %+v", got.Symbols)
+	}
+	if !hasChunkKind(got.Chunks, "literal") {
+		t.Fatalf("verbatim content was not retained as literal: %+v", got.Chunks)
+	}
+	found := false
+	for _, chunk := range got.Chunks {
+		if chunk.Kind == "literal" && strings.Contains(chunk.Content, source) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("verbatim source was not retained: %+v", got.Chunks)
+	}
+}
+
 func findSymbol(symbols []model.Symbol, name, kind string) model.Symbol {
 	for _, symbol := range symbols {
 		if symbol.Name == name && symbol.Kind == kind {

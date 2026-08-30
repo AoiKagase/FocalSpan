@@ -1030,7 +1030,7 @@ git commit -m "feat: add WinForms and WPF structural coverage"
 - Modify: `testdata/eval/php-cases.jsonl`
 - Modify: `testdata/eval/template-cases.jsonl`
 
-- [ ] **Step 1: Add failing PHP tests**
+- [x] **Step 1: Add failing PHP tests**
 
 Cover:
 
@@ -1051,15 +1051,15 @@ Pest test(...)
 malformed heredoc recovery
 ```
 
-- [ ] **Step 2: Strengthen `.inc` behavior**
+- [x] **Step 2: Strengthen `.inc` behavior**
 
 `language_overrides`を優先し、PHP marker付き`.inc`はPHP、Pawn score付き`.inc`はPawn、曖昧なものはtext。READMEへ規則を書く。
 
-- [ ] **Step 3: Improve PHP relations**
+- [x] **Step 3: Improve PHP relations**
 
 Trait adaptation、base/interface、attribute、parameter/return/property type、static include pathを保守的に保持。Container、magic method、dynamic includeを確定しない。
 
-- [ ] **Step 4: Add failing Smarty tests**
+- [x] **Step 4: Add failing Smarty tests**
 
 Cover:
 
@@ -1077,11 +1077,11 @@ double-curly opaque tag
 malformed close recovery
 ```
 
-- [ ] **Step 5: Reduce template duplication**
+- [x] **Step 5: Reduce template duplication**
 
 Template outline、named block/function、script/style、unclaimed fragmentのcoverageを測り、同一sourceの過剰な三重複を防ぐ。
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 ```text
 go test ./internal/extract/php ./internal/extract/template -v
@@ -1092,7 +1092,7 @@ focalspan index --root testdata/repos/templatesample --quiet
 focalspan eval --root testdata/repos/templatesample --cases testdata/eval/template-cases.jsonl --json
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```text
 git add internal/extract/php internal/extract/template testdata/repos/phpsample testdata/repos/templatesample testdata/eval/php-cases.jsonl testdata/eval/template-cases.jsonl
