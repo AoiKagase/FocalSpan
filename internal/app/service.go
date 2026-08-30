@@ -17,7 +17,9 @@ import (
 	"github.com/focalspan/focalspan/internal/extract/goast"
 	"github.com/focalspan/focalspan/internal/extract/jsts"
 	"github.com/focalspan/focalspan/internal/extract/php"
+	"github.com/focalspan/focalspan/internal/extract/resx"
 	templateextract "github.com/focalspan/focalspan/internal/extract/template"
+	"github.com/focalspan/focalspan/internal/extract/xaml"
 	"github.com/focalspan/focalspan/internal/gitx"
 	"github.com/focalspan/focalspan/internal/indexer"
 	"github.com/focalspan/focalspan/internal/model"
@@ -65,6 +67,8 @@ func newExtractorRegistry() *extract.Registry {
 		csharp.NewExtractor(),
 		jsts.NewExtractor(),
 		templateextract.NewExtractor(),
+		xaml.NewExtractor(),
+		resx.NewExtractor(),
 		generic.NewExtractor(),
 	)
 }

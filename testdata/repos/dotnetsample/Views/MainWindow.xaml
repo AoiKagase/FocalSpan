@@ -1,0 +1,12 @@
+<Window x:Class="DotNetSample.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Main window">
+  <Window.Resources>
+    <ResourceDictionary Source="../Resources/Colors.xaml" />
+  </Window.Resources>
+  <Grid DataContext="{x:Bind ViewModel}">
+    <Button x:Name="SaveButton" Click="SaveButton_Click" Background="{StaticResource PrimaryBrush}" />
+    <TextBox Name="UserNameBox" Text="{Binding UserName}" />
+  </Grid>
+</Window>

@@ -1,0 +1,14 @@
+{
+  "index_directory": ".focalspan",
+  "default_token_budget": 4000,
+  "max_file_bytes": 2097152,
+  "workers": 0,
+  "auto_update_before_query": true,
+  "include": [],
+  "exclude": [],
+  "secret_excludes_enabled": true,
+  "generic_chunk_lines": 80,
+  "generic_chunk_overlap": 10,
+  "max_candidates": 200,
+  "language_overrides": {}
+}

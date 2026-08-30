@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <data name="saveButton.Text" type="System.String"><value>Save</value></data>
+  <data name="MainForm.Icon" mimetype="application/octet-stream"><value>AAECAwQF</value></data>
+  <metadata name="GeneratedBy"><value>FocalSpan fixture</value></metadata>
+</root>

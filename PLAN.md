@@ -860,7 +860,7 @@ git commit -m "feat: strengthen C and C++ extraction"
 - Adds `xaml-structural`
 - Adds `resx-structural`
 
-- [ ] **Step 1: Add failing C# tests**
+- [x] **Step 1: Add failing C# tests**
 
 Cover:
 
@@ -886,7 +886,7 @@ WPF code-behind partial class
 xUnit/NUnit/MSTest
 ```
 
-- [ ] **Step 2: Add XAML scanner tests**
+- [x] **Step 2: Add XAML scanner tests**
 
 Cover:
 
@@ -909,7 +909,7 @@ UTF-8/CRLF
 malformed tag recovery
 ```
 
-- [ ] **Step 3: Implement XAML symbols**
+- [x] **Step 3: Implement XAML symbols**
 
 Kinds:
 
@@ -934,7 +934,7 @@ dictionary -> Source              imports
 
 `ToHandle`は同一file内のresourceだけを確定し、code-behindや別resourceは`UnresolvedTo`にする。
 
-- [ ] **Step 4: Add RESX and .settings structural extraction**
+- [x] **Step 4: Add RESX and .settings structural extraction**
 
 `resx-structural`はXMLを実行せず、次を抽出する。
 
@@ -957,7 +957,7 @@ settings document -> generated setting name references
 
 Base64/blob本文はchunkへ複製しない。長いbinary-like valueはsignatureと短いpreviewだけを保持する。`.resources`と`.frx`はbinaryとしてskipする。
 
-- [ ] **Step 5: Improve C# WinForms relations**
+- [x] **Step 5: Improve C# WinForms relations**
 
 Recognize:
 
@@ -971,7 +971,7 @@ resources.ApplyResources(...);
 
 Handlerが同一partial declaration内で一意なら`references`または`calls`として解決する。Designer code全体とhandler sourceを重複返却しない。
 
-- [ ] **Step 6: Add dotnet fixture**
+- [x] **Step 6: Add dotnet fixture**
 
 Minimum:
 
@@ -989,7 +989,7 @@ unrelated/ReportWindow.xaml
 unrelated/ReportService.cs
 ```
 
-- [ ] **Step 7: Add evaluation cases**
+- [x] **Step 7: Add evaluation cases**
 
 Queries:
 
@@ -1002,7 +1002,7 @@ what method handles the WinForms Load event?
 what tests cover MainViewModel validation?
 ```
 
-- [ ] **Step 8: Verify**
+- [x] **Step 8: Verify**
 
 ```text
 go test ./internal/extract/csharp ./internal/extract/xaml ./internal/extract/resx -v
@@ -1011,7 +1011,7 @@ focalspan index --root testdata/repos/dotnetsample --quiet
 focalspan eval --root testdata/repos/dotnetsample --cases testdata/eval/dotnet-cases.jsonl --json
 ```
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```text
 git add internal/extract/csharp internal/extract/xaml internal/extract/resx internal/app testdata/repos/dotnetsample testdata/eval/dotnet-cases.jsonl

@@ -18,7 +18,8 @@ type Extractor struct{}
 func NewExtractor() Extractor  { return Extractor{} }
 func (Extractor) Name() string { return "csharp-structural" }
 func (Extractor) Supports(path, language string) bool {
-	return language == "csharp" || strings.EqualFold(filepath.Ext(path), ".cs")
+	ext := strings.ToLower(filepath.Ext(path))
+	return language == "csharp" || ext == ".cs" || ext == ".csx"
 }
 
 func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extraction, error) {
@@ -199,7 +200,22 @@ func (b *builder) buildBodyRelations(index symbolIndex, decl *declaration, from 
 			return
 		}
 		token := b.parsed.Tokens[position]
-		if !token.significant() || token.Text != "(" {
+		if !token.significant() {
+			continue
+		}
+		if token.Text == "+=" {
+			handlerPosition := nextSignificant(b.parsed.Tokens, position)
+			if handlerPosition >= 0 && handlerPosition < decl.BodyClose && b.parsed.Tokens[handlerPosition].Kind == Identifier {
+				name := b.parsed.Tokens[handlerPosition].Text
+				if target, ok := b.resolveCall(index, decl, name, ""); ok {
+					b.addRelation(model.Relation{FromHandle: from.Handle, ToHandle: target.Handle, Kind: "references", Confidence: .95, Source: "csharp-event"})
+				} else {
+					b.addRelation(model.Relation{FromHandle: from.Handle, UnresolvedTo: name, Kind: "references", Confidence: .25, Source: "csharp-event"})
+				}
+			}
+			continue
+		}
+		if token.Text != "(" {
 			continue
 		}
 		previous := previousSignificant(b.parsed.Tokens, position)
@@ -331,6 +347,15 @@ func unique(values map[string][]model.Symbol, key string) (model.Symbol, bool) {
 }
 func previousSignificant(tokens []Token, position int) int {
 	for position--; position >= 0; position-- {
+		if tokens[position].significant() {
+			return position
+		}
+	}
+	return -1
+}
+
+func nextSignificant(tokens []Token, position int) int {
+	for position++; position < len(tokens); position++ {
 		if tokens[position].significant() {
 			return position
 		}

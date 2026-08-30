@@ -259,3 +259,23 @@ are limited to unique local qualified/name matches; unresolved calls,
 imports/includes/exports, and references are labeled with their lexical target
 and confidence. Future semantic providers may improve recall without changing
 the packer or output contract.
+
+## .NET WinForms/WPF/XAML Task 5 result
+
+The `dotnetsample` fixture was indexed with `focalspan setup` and evaluated
+with `go run ./cmd/focalspan-eval --root testdata/repos/dotnetsample
+--cases testdata/eval/dotnet-cases.jsonl --json` on 2026-08-30. The public CLI
+does not expose the retired `index`/`eval` commands, so the development
+evaluator was used after the fixture index was rebuilt. Each of the six cases
+was queried twice.
+
+| Profile | Cases | hit@1 / hit@3 / hit@5 | Symbol / path recall | Budget | Forbidden | Deterministic | Median tokens | Median reduction |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| .NET WinForms/WPF/XAML/RESX | 6 | 0.8333 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 105 | 0.22410147991543342 |
+
+The six cases cover the WPF code-behind handler and binding, XAML resource
+dictionary, WinForms designer initializer and load handler, and a ViewModel
+validation test. All returned paths existed and no unrelated fixture path was
+returned. The fixture also exercises RESX keys, metadata, type/mimetype
+references, and binary-value omission; those resource assertions are covered
+by the package tests rather than a separate evaluation query.
