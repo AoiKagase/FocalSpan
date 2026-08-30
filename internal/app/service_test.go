@@ -34,7 +34,7 @@ func TestNewExtractorRegistrySelectsDedicatedExtractors(t *testing.T) {
 		{name: "xaml", path: "Views/Main.xaml", language: "xaml", want: "xaml-structural"},
 		{name: "resource", path: "Properties/Resources.resx", language: "dotnet-resource", want: "resx-structural"},
 		{name: "nim", path: "src/auth.nim", language: "nim", want: "nim-structural"},
-		{name: "zig", path: "src/auth.zig", language: "zig", want: "generic-structural"},
+		{name: "zig", path: "src/auth.zig", language: "zig", want: "zig-structural"},
 		{name: "generic", path: "README.txt", language: "text", want: "generic-structural"},
 	}
 	for _, test := range tests {

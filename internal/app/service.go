@@ -27,6 +27,7 @@ import (
 	templateextract "github.com/focalspan/focalspan/internal/extract/template"
 	vbextract "github.com/focalspan/focalspan/internal/extract/vb"
 	"github.com/focalspan/focalspan/internal/extract/xaml"
+	zigstructural "github.com/focalspan/focalspan/internal/extract/zig"
 	"github.com/focalspan/focalspan/internal/gitx"
 	"github.com/focalspan/focalspan/internal/indexer"
 	"github.com/focalspan/focalspan/internal/model"
@@ -81,6 +82,7 @@ func newExtractorRegistry() *extract.Registry {
 		vbextract.NewVB6Extractor(),
 		vbextract.NewVBNetExtractor(),
 		nimstructural.NewExtractor(),
+		zigstructural.NewExtractor(),
 		templateextract.NewExtractor(),
 		xaml.NewExtractor(),
 		resx.NewExtractor(),

@@ -1879,11 +1879,11 @@ git commit -m "feat: add first-class Nim extraction"
 - Create: `testdata/repos/zigsample/*`
 - Create: `testdata/eval/zig-cases.jsonl`
 
-- [ ] **Step 1: Lexer tests**
+- [x] **Step 1: Lexer tests**
 
 Cover line comments、normal strings、multiline string lines beginning `\\`、character literal、builtin `@name`、comptime blocks、error unions、optional types、malformed braces。
 
-- [ ] **Step 2: Declarations**
+- [x] **Step 2: Declarations**
 
 ```text
 module
@@ -1901,7 +1901,7 @@ extern/export function
 
 `const Name = struct { ... }`をtype symbolとして認識する。`const f = fn`的な値と区別する。
 
-- [ ] **Step 3: Relations**
+- [x] **Step 3: Relations**
 
 ```text
 @import static literal imports
@@ -1913,7 +1913,7 @@ contains
 
 Compile-time evaluationは行わない。
 
-- [ ] **Step 4: Fixture/eval/verify**
+- [x] **Step 4: Fixture/eval/verify**
 
 ```text
 go test ./internal/extract/zig -v
