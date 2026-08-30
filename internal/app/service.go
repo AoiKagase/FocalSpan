@@ -2,14 +2,13 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/focalspan/focalspan/internal/budget"
 	"github.com/focalspan/focalspan/internal/config"
+	"github.com/focalspan/focalspan/internal/evidence"
 	"github.com/focalspan/focalspan/internal/extract"
 	"github.com/focalspan/focalspan/internal/extract/cpp"
 	"github.com/focalspan/focalspan/internal/extract/csharp"
@@ -31,20 +30,19 @@ import (
 	"github.com/focalspan/focalspan/internal/gitx"
 	"github.com/focalspan/focalspan/internal/indexer"
 	"github.com/focalspan/focalspan/internal/model"
-	"github.com/focalspan/focalspan/internal/query"
-	"github.com/focalspan/focalspan/internal/rank"
 	"github.com/focalspan/focalspan/internal/repository"
 	"github.com/focalspan/focalspan/internal/search"
 	"github.com/focalspan/focalspan/internal/store"
 )
 
 type Service struct {
-	Root     string
-	Config   config.Config
-	Store    *store.Store
-	indexer  *indexer.Indexer
-	searcher *search.Searcher
-	packer   *budget.Packer
+	Root             string
+	Config           config.Config
+	Store            *store.Store
+	indexer          *indexer.Indexer
+	searcher         *search.Searcher
+	packer           *budget.Packer
+	evidenceCompiler *evidence.Compiler
 }
 
 func New(root string) (*Service, error) {
@@ -61,7 +59,8 @@ func NewWithConfig(root string, cfg config.Config) (*Service, error) {
 		return nil, err
 	}
 	registry := newExtractorRegistry()
-	service := &Service{Root: root, Config: cfg, Store: st, packer: budget.NewPacker(budget.NewEstimator())}
+	estimator := budget.NewEstimator()
+	service := &Service{Root: root, Config: cfg, Store: st, packer: budget.NewPacker(estimator), evidenceCompiler: evidence.NewCompiler(estimator)}
 	service.indexer = indexer.New(root, cfg, st, registry)
 	service.searcher = search.New(st)
 	return service, nil
@@ -122,30 +121,18 @@ type QueryRequest struct {
 }
 
 func (s *Service) Query(ctx context.Context, req QueryRequest) (model.ContextBundle, error) {
-	if strings.TrimSpace(req.Query) == "" {
-		return model.ContextBundle{}, errors.New("query must not be blank")
-	}
 	if req.TokenBudget == 0 {
 		req.TokenBudget = s.Config.DefaultTokenBudget
 	}
-	if req.Mode == "" {
-		req.Mode = "source"
-	}
-	if !req.NoUpdate && s.Config.AutoUpdateBeforeQuery {
-		if _, err := s.Index(ctx, false); err != nil {
-			return model.ContextBundle{}, fmt.Errorf("auto-update index: %w", err)
-		}
-	}
-	changed := s.changedRanges(ctx, req.ChangedOnly)
-	retrievalMode := req.RetrievalMode
-	if retrievalMode == "" {
-		retrievalMode = search.RetrievalFull
-	}
-	result, err := s.searcher.SearchDetailed(ctx, search.SearchRequest{Query: req.Query, Paths: req.Paths, ChangedOnly: req.ChangedOnly, Changed: changed, Limit: s.Config.MaxCandidates, Mode: retrievalMode})
+	result, err := s.queryCandidates(ctx, req)
 	if err != nil {
 		return model.ContextBundle{}, err
 	}
-	return s.packWithSavings(ctx, model.PackRequest{Query: req.Query, TokenBudget: req.TokenBudget, Mode: req.Mode, Candidates: result.Candidates, IntentHints: result.Plan.IntentStrings()})
+	mode := req.Mode
+	if mode == "" {
+		mode = "source"
+	}
+	return s.packWithSavings(ctx, model.PackRequest{Query: req.Query, TokenBudget: req.TokenBudget, Mode: mode, Candidates: result.Candidates, IntentHints: result.Plan.IntentStrings()})
 }
 
 func (s *Service) changedRanges(ctx context.Context, changedOnly bool) map[string][]search.LineRange {
@@ -200,64 +187,32 @@ func (s *Service) Health(ctx context.Context) (model.HealthStatus, error) {
 }
 
 func (s *Service) Expand(ctx context.Context, handles []string, relation string, tokenBudget int) (model.ContextBundle, error) {
-	if len(handles) == 0 {
-		return model.ContextBundle{}, errors.New("at least one handle is required")
-	}
 	if tokenBudget == 0 {
 		tokenBudget = s.Config.DefaultTokenBudget
 	}
-	candidates, err := s.Store.RelatedCandidates(ctx, handles, relation)
+	result, err := s.expandCandidates(ctx, handles, relation, false)
 	if err != nil {
 		return model.ContextBundle{}, err
 	}
-	return s.packWithSavings(ctx, model.PackRequest{Query: relation, TokenBudget: tokenBudget, Mode: "source", Candidates: candidates, IntentHints: []string{relation}})
+	return s.packWithSavings(ctx, model.PackRequest{Query: relation, TokenBudget: tokenBudget, Mode: "source", Candidates: result.Candidates, IntentHints: []string{relation}})
 }
 
 func (s *Service) Impact(ctx context.Context, base, head string, tokenBudget int) (model.ContextBundle, error) {
 	if tokenBudget == 0 {
 		tokenBudget = s.Config.DefaultTokenBudget
 	}
-	var changed []gitx.ChangedFile
-	var err error
-	if base != "" || head != "" {
-		changed, err = gitx.NewClient(s.Root).Diff(ctx, gitx.DiffRequest{Base: base, Head: head})
-	} else {
-		unstaged, unstagedErr := gitx.NewClient(s.Root).Diff(ctx, gitx.DiffRequest{})
-		staged, stagedErr := gitx.NewClient(s.Root).Diff(ctx, gitx.DiffRequest{Staged: true})
-		if unstagedErr != nil && stagedErr != nil {
-			if !repository.IsGitRepository(ctx, s.Root) {
-				bundle := s.pack(ctx, model.PackRequest{Query: "Git impact", TokenBudget: tokenBudget, Mode: "source"})
-				bundle.Diagnostics = append(bundle.Diagnostics, "impact unavailable: repository is not a Git repository")
-				return bundle, nil
-			}
-			return model.ContextBundle{}, fmt.Errorf("read Git changes: %w", unstagedErr)
-		}
-		changed = append(changed, unstaged...)
-		changed = append(changed, staged...)
-	}
-	all, err := s.Store.AllCandidates(ctx, s.Config.MaxCandidates)
+	result, err := s.impactCandidates(ctx, base, head)
 	if err != nil {
 		return model.ContextBundle{}, err
 	}
-	selected := make([]model.RankedCandidate, 0)
-	for _, candidate := range all {
-		for _, file := range changed {
-			if candidate.Path != file.Path || !candidateOverlaps(candidate.StartLine, candidate.EndLine, file.Ranges) {
-				continue
-			}
-			candidate.Changed = true
-			candidate.Score = 25
-			selected = append(selected, candidate)
-			break
-		}
-	}
-	plan := query.Plan{RawQuery: "Git impact", Intents: []query.Intent{query.IntentImpact}, PrimaryIntent: query.IntentImpact, Profile: "impact"}
-	selected = rank.RankWithPlan(selected, plan)
-	bundle, err := s.packWithSavings(ctx, model.PackRequest{Query: "Git impact", TokenBudget: tokenBudget, Mode: "source", Candidates: selected})
+	bundle, err := s.packWithSavings(ctx, model.PackRequest{Query: "Git impact", TokenBudget: tokenBudget, Mode: "source", Candidates: result.Candidates})
 	if err != nil {
 		return model.ContextBundle{}, err
 	}
-	bundle.Diagnostics = append(bundle.Diagnostics, "impact analysis is syntax-only; unresolved calls may be omitted")
+	bundle.Diagnostics = append(bundle.Diagnostics, result.Diagnostics...)
+	if len(result.Diagnostics) == 0 {
+		bundle.Diagnostics = append(bundle.Diagnostics, "impact analysis is syntax-only; unresolved calls may be omitted")
+	}
 	return bundle, nil
 }
 
