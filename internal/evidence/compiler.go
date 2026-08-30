@@ -154,6 +154,13 @@ func (c *Compiler) Compile(req CompileRequest) (CompileResult, error) {
 	if packet.Budget.Used > limit {
 		return CompileResult{}, errors.New("empty evidence packet does not fit clamped budget")
 	}
+	omittedCandidates := omittedClassified(prepared, selected)
+	guidanceSelected := make([]GuidanceSelection, 0, len(selected))
+	for _, item := range selected {
+		guidanceSelected = append(guidanceSelected, GuidanceSelection{Candidate: item.prepared.classified, Fidelity: item.variant.Fidelity})
+	}
+	limitations, next := BuildGuidance(GuidanceInput{Plan: req.Plan, Selected: guidanceSelected, Omitted: omittedCandidates, KnownHandles: req.KnownHandles, ExpansionAnchors: req.ExpansionAnchors, Truncated: omitted > 0})
+	applyGuidanceWithinBudget(&packet, limitations, next, c.estimator)
 	if err := Validate(packet); err != nil {
 		return CompileResult{}, err
 	}
@@ -265,9 +272,44 @@ func buildPacket(req CompileRequest, mode Mode, limit int, selected []selectedCa
 	}
 	ids := AssignLocalIDs(items)
 	packet := Packet{Schema: SchemaContextV1, Revision: req.Revision, Intent: string(req.Plan.PrimaryIntent), Mode: mode, Budget: Budget{Limit: limit, Truncated: omitted > 0, Omitted: omitted}, Evidence: items, SkippedKnown: skippedKnown}
+	if omitted > 0 {
+		packet.Limitations = []string{"budget_limited"}
+	}
 	packet.Relations = selectedEdges(ordered, ids)
 	settleWireUsage(&packet, estimator)
 	return packet
+}
+
+func omittedClassified(prepared []preparedCandidate, selected []selectedCandidate) []ClassifiedCandidate {
+	selectedHandles := make(map[string]bool, len(selected))
+	for _, item := range selected {
+		selectedHandles[item.prepared.classified.Candidate.Handle] = true
+	}
+	result := make([]ClassifiedCandidate, 0, len(prepared)-len(selected))
+	for _, item := range prepared {
+		if !selectedHandles[item.classified.Candidate.Handle] {
+			result = append(result, item.classified)
+		}
+	}
+	return result
+}
+
+func applyGuidanceWithinBudget(packet *Packet, limitations []string, next []NextAction, estimator budget.TokenEstimator) {
+	packet.Limitations = append([]string(nil), limitations...)
+	packet.Next = append([]NextAction(nil), next...)
+	settleWireUsage(packet, estimator)
+	for packet.Budget.Used > packet.Budget.Limit && len(packet.Next) > 0 {
+		packet.Next = packet.Next[:len(packet.Next)-1]
+		settleWireUsage(packet, estimator)
+	}
+	for packet.Budget.Used > packet.Budget.Limit && len(packet.Limitations) > 0 {
+		remove := len(packet.Limitations) - 1
+		if packet.Limitations[remove] == "budget_limited" {
+			break
+		}
+		packet.Limitations = packet.Limitations[:remove]
+		settleWireUsage(packet, estimator)
+	}
 }
 
 func selectedEdges(selected []selectedCandidate, ids map[string]string) []Edge {

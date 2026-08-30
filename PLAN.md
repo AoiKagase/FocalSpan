@@ -1221,7 +1221,7 @@ git commit -m "feat: compile evidence within serialized token budgets"
 - Consumes: query plan, selected/omitted classified candidates, selected variants, known handles, packet budget state
 - Produces: bounded stable `limitations` and `next` entries
 
-- [ ] **Step 1: Define the v1 limitation vocabulary**
+- [x] **Step 1: Define the v1 limitation vocabulary**
 
 Use these exact codes only:
 
@@ -1243,7 +1243,7 @@ syntax_only_impact
 
 Remove duplicates and order by the list above.
 
-- [ ] **Step 2: Define the v1 next-action reasons**
+- [x] **Step 2: Define the v1 next-action reasons**
 
 Use these exact values:
 
@@ -1260,7 +1260,7 @@ children_available
 
 Supported next relations remain the current stable relation vocabulary.
 
-- [ ] **Step 3: Write action-generation tests**
+- [x] **Step 3: Write action-generation tests**
 
 Cover:
 
@@ -1275,7 +1275,7 @@ no more than four actions
 actions stable across candidate input ordering
 ```
 
-- [ ] **Step 4: Implement `BuildGuidance`**
+- [x] **Step 4: Implement `BuildGuidance`**
 
 Required signature:
 
@@ -1285,7 +1285,7 @@ func BuildGuidance(input GuidanceInput) (limitations []string, next []NextAction
 
 Define `GuidanceInput` with explicit selected, omitted, known, plan, and truncation fields. Do not let it inspect serialized JSON or global mutable state.
 
-- [ ] **Step 5: Integrate guidance after final packet selection**
+- [x] **Step 5: Integrate guidance after final packet selection**
 
 Guidance must be part of wire budgeting. If adding all guidance exceeds budget:
 
@@ -1297,7 +1297,7 @@ Guidance must be part of wire budgeting. If adding all guidance exceeds budget:
 
 Re-run the fixed-point token loop afterward.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 ```bash
 go test ./internal/evidence -run 'TestGuidance|TestLimitations|TestNext' -count=1
