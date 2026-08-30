@@ -7,29 +7,33 @@ import (
 	"sync"
 
 	"github.com/focalspan/focalspan/internal/app"
+	"github.com/focalspan/focalspan/internal/evidence"
 	"github.com/focalspan/focalspan/internal/model"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type CodeContextInput struct {
-	Query       string   `json:"query" jsonschema:"the natural-language code question"`
-	TokenBudget int      `json:"token_budget,omitempty"`
-	Mode        string   `json:"mode,omitempty"`
-	ChangedOnly bool     `json:"changed_only,omitempty"`
-	Paths       []string `json:"paths,omitempty"`
-	AutoUpdate  *bool    `json:"auto_update,omitempty"`
+	Query        string   `json:"query" jsonschema:"the natural-language code question"`
+	TokenBudget  int      `json:"token_budget,omitempty"`
+	Mode         string   `json:"mode,omitempty"`
+	ChangedOnly  bool     `json:"changed_only,omitempty"`
+	Paths        []string `json:"paths,omitempty"`
+	AutoUpdate   *bool    `json:"auto_update,omitempty"`
+	KnownHandles []string `json:"known_handles,omitempty" jsonschema:"stable handles already present in the model context and not to be retransmitted"`
 }
 
 type CodeExpandInput struct {
-	Handles     []string `json:"handles" jsonschema:"chunk or symbol handles"`
-	Relation    string   `json:"relation,omitempty"`
-	TokenBudget int      `json:"token_budget,omitempty"`
+	Handles      []string `json:"handles" jsonschema:"chunk or symbol handles"`
+	Relation     string   `json:"relation,omitempty"`
+	TokenBudget  int      `json:"token_budget,omitempty"`
+	KnownHandles []string `json:"known_handles,omitempty" jsonschema:"stable handles already present in the model context and not to be retransmitted"`
 }
 
 type CodeImpactInput struct {
-	BaseRef     string `json:"base_ref,omitempty"`
-	HeadRef     string `json:"head_ref,omitempty"`
-	TokenBudget int    `json:"token_budget,omitempty"`
+	BaseRef      string   `json:"base_ref,omitempty"`
+	HeadRef      string   `json:"head_ref,omitempty"`
+	TokenBudget  int      `json:"token_budget,omitempty"`
+	KnownHandles []string `json:"known_handles,omitempty" jsonschema:"stable handles already present in the model context and not to be retransmitted"`
 }
 
 type CodeRestartInput struct{}
@@ -44,10 +48,10 @@ type Server struct {
 
 func New(service *app.Service, autoUpdate bool) *Server {
 	s := &Server{service: service, autoUpdate: autoUpdate}
-	s.sdk = mcp.NewServer(&mcp.Implementation{Name: "focalspan", Version: "0.1.0"}, nil)
-	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_context", Description: "Return relevant repository source spans within a token budget."}, s.codeContext)
-	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_expand", Description: "Expand stable code handles through a supported relation."}, s.codeExpand)
-	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_impact", Description: "Return syntax-only impact candidates for Git changes."}, s.codeImpact)
+	s.sdk = mcp.NewServer(&mcp.Implementation{Name: "focalspan", Version: "0.4.0"}, nil)
+	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_context", Description: "Find and return a role-labeled packet of repository evidence for a code question. Call this before broad file reads; use handles and next actions for follow-up expansion."}, s.codeContext)
+	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_expand", Description: "Return new evidence related to stable handles. Pass known_handles to avoid retransmitting context already present in the conversation."}, s.codeExpand)
+	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_impact", Description: "Return syntax-based changed spans, dependents, and related tests for Git changes within a token budget. Results may omit unresolved dynamic relationships."}, s.codeImpact)
 	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_restart", Description: "Reload FocalSpan configuration and reopen the repository index."}, s.codeRestart)
 	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_status", Description: "Return read-only index status."}, s.codeStatus)
 	return s
@@ -114,9 +118,17 @@ func (s *Server) Close() error {
 	return err
 }
 
-func (s *Server) codeContext(ctx context.Context, _ *mcp.CallToolRequest, in CodeContextInput) (*mcp.CallToolResult, model.ContextBundle, error) {
+func (s *Server) codeContext(ctx context.Context, _ *mcp.CallToolRequest, in CodeContextInput) (*mcp.CallToolResult, evidence.Packet, error) {
 	if strings.TrimSpace(in.Query) == "" {
-		return nil, model.ContextBundle{}, fmt.Errorf("query is required")
+		return nil, evidence.Packet{}, fmt.Errorf("query is required")
+	}
+	mode, err := normalizeMCPMode(in.Mode)
+	if err != nil {
+		return nil, evidence.Packet{}, err
+	}
+	known, err := evidence.NormalizeKnownHandles(in.KnownHandles)
+	if err != nil {
+		return nil, evidence.Packet{}, userError(err)
 	}
 	auto := s.autoUpdate
 	if in.AutoUpdate != nil {
@@ -125,45 +137,64 @@ func (s *Server) codeContext(ctx context.Context, _ *mcp.CallToolRequest, in Cod
 	s.mu.RLock()
 	if s.service == nil {
 		s.mu.RUnlock()
-		return nil, model.ContextBundle{}, fmt.Errorf("MCP server is closed")
+		return nil, evidence.Packet{}, fmt.Errorf("MCP server is closed")
 	}
-	bundle, err := s.service.Query(ctx, app.QueryRequest{Query: in.Query, TokenBudget: in.TokenBudget, Mode: in.Mode, ChangedOnly: in.ChangedOnly, Paths: in.Paths, NoUpdate: !auto})
+	result, err := s.service.QueryEvidence(ctx, app.EvidenceQueryRequest{Query: in.Query, TokenBudget: in.TokenBudget, Mode: mode, ChangedOnly: in.ChangedOnly, Paths: in.Paths, NoUpdate: !auto, KnownHandles: known})
 	s.mu.RUnlock()
 	if err != nil {
-		return nil, model.ContextBundle{}, userError(err)
+		return nil, evidence.Packet{}, userError(err)
 	}
-	return summaryResult(withTokenSavings(fmt.Sprintf("query: %s; items: %d; estimated: %d", in.Query, len(bundle.Items), bundle.EstimatedTokens), bundle)), bundle, nil
+	return summaryResult(evidence.Summary(result.Packet)), result.Packet, nil
 }
 
-func (s *Server) codeExpand(ctx context.Context, _ *mcp.CallToolRequest, in CodeExpandInput) (*mcp.CallToolResult, model.ContextBundle, error) {
+func (s *Server) codeExpand(ctx context.Context, _ *mcp.CallToolRequest, in CodeExpandInput) (*mcp.CallToolResult, evidence.Packet, error) {
 	if len(in.Handles) == 0 {
-		return nil, model.ContextBundle{}, fmt.Errorf("handles are required")
+		return nil, evidence.Packet{}, fmt.Errorf("handles are required")
+	}
+	known, err := evidence.NormalizeKnownHandles(in.KnownHandles)
+	if err != nil {
+		return nil, evidence.Packet{}, userError(err)
 	}
 	s.mu.RLock()
 	if s.service == nil {
 		s.mu.RUnlock()
-		return nil, model.ContextBundle{}, fmt.Errorf("MCP server is closed")
+		return nil, evidence.Packet{}, fmt.Errorf("MCP server is closed")
 	}
-	bundle, err := s.service.Expand(ctx, in.Handles, in.Relation, in.TokenBudget)
+	result, err := s.service.ExpandEvidence(ctx, app.EvidenceExpandRequest{Handles: in.Handles, Relation: in.Relation, TokenBudget: in.TokenBudget, KnownHandles: known})
 	s.mu.RUnlock()
 	if err != nil {
-		return nil, model.ContextBundle{}, userError(err)
+		return nil, evidence.Packet{}, userError(err)
 	}
-	return summaryResult(withTokenSavings(fmt.Sprintf("relation: %s; items: %d; estimated: %d", in.Relation, len(bundle.Items), bundle.EstimatedTokens), bundle)), bundle, nil
+	return summaryResult(evidence.Summary(result.Packet)), result.Packet, nil
 }
 
-func (s *Server) codeImpact(ctx context.Context, _ *mcp.CallToolRequest, in CodeImpactInput) (*mcp.CallToolResult, model.ContextBundle, error) {
+func (s *Server) codeImpact(ctx context.Context, _ *mcp.CallToolRequest, in CodeImpactInput) (*mcp.CallToolResult, evidence.Packet, error) {
+	known, err := evidence.NormalizeKnownHandles(in.KnownHandles)
+	if err != nil {
+		return nil, evidence.Packet{}, userError(err)
+	}
 	s.mu.RLock()
 	if s.service == nil {
 		s.mu.RUnlock()
-		return nil, model.ContextBundle{}, fmt.Errorf("MCP server is closed")
+		return nil, evidence.Packet{}, fmt.Errorf("MCP server is closed")
 	}
-	bundle, err := s.service.Impact(ctx, in.BaseRef, in.HeadRef, in.TokenBudget)
+	result, err := s.service.ImpactEvidence(ctx, app.EvidenceImpactRequest{BaseRef: in.BaseRef, HeadRef: in.HeadRef, TokenBudget: in.TokenBudget, KnownHandles: known})
 	s.mu.RUnlock()
 	if err != nil {
-		return nil, model.ContextBundle{}, userError(err)
+		return nil, evidence.Packet{}, userError(err)
 	}
-	return summaryResult(withTokenSavings(fmt.Sprintf("impact candidates: %d; estimated: %d", len(bundle.Items), bundle.EstimatedTokens), bundle)), bundle, nil
+	return summaryResult(evidence.Summary(result.Packet)), result.Packet, nil
+}
+
+func normalizeMCPMode(value string) (evidence.Mode, error) {
+	if value == "" {
+		return evidence.ModeFocused, nil
+	}
+	mode := evidence.Mode(value)
+	if mode != evidence.ModeOutline && mode != evidence.ModeFocused && mode != evidence.ModeSource {
+		return "", fmt.Errorf("mode must be outline, focused, or source")
+	}
+	return mode, nil
 }
 
 func (s *Server) codeStatus(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, model.HealthStatus, error) {

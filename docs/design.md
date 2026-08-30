@@ -471,6 +471,24 @@ The legacy bundle remains available for current CLI users, retrieval regression
 evaluation, and direct comparison while the pre-1.0 MCP contract moves to the
 smaller role-aware representation.
 
+The implemented presentation pipeline is:
+
+```text
+repository -> extraction -> SQLite/FTS5 -> query plan -> retrievers -> RRF/ranking
+           -> ranked candidates + relation provenance
+           -> Evidence Compiler
+              -> role classifier
+              -> fidelity/segment builder
+              -> utility-per-wire-token selection
+              -> local relations and guidance
+              -> serialized hard-cap verification
+           -> CLI Evidence renderer or MCP structuredContent
+```
+
+The legacy packer remains a compatibility branch for the default positional
+CLI and legacy retrieval evaluations. It is no longer the canonical output
+path for `code_context`, `code_expand`, or `code_impact`.
+
 ## Roadmap (design only)
 
 1. SCIP semantic index importer.
