@@ -38,7 +38,7 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 		return csharpStructured(file), nil
 	case "javascript", "typescript":
 		return javascriptStructured(file), nil
-	case "c", "cpp", "rust", "java", "php":
+	case "c", "cpp", "java", "php":
 		return braceBalanced(file), nil
 	default:
 		return windows(file, 80, 10), nil

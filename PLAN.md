@@ -1198,7 +1198,7 @@ git commit -m "feat: strengthen Node JavaScript and TypeScript extraction"
 - `Name() == "rust-structural"`
 - Supports `language == "rust"` and `.rs`
 
-- [ ] **Step 1: Write lexer tests**
+- [x] **Step 1: Write lexer tests**
 
 Cover:
 
@@ -1217,7 +1217,7 @@ malformed raw string
 cancellation
 ```
 
-- [ ] **Step 2: Write declaration tests**
+- [x] **Step 2: Write declaration tests**
 
 Required symbols:
 
@@ -1250,11 +1250,11 @@ crate::auth::TokenService::validate_token
 crate::auth::TokenValidator::validate
 ```
 
-- [ ] **Step 3: Implement hierarchy/chunks**
+- [x] **Step 3: Implement hierarchy/chunks**
 
 Owner `crate_module`; class-like outline for struct/enum/trait/impl; method/function body as independent chunk; module-level unclaimed code as bounded fragment.
 
-- [ ] **Step 4: Implement relations**
+- [x] **Step 4: Implement relations**
 
 ```text
 mod/use            imports
@@ -1268,7 +1268,7 @@ contains hierarchy contains
 
 `self::`、`super::`、`crate::` pathは字句的にnormalizeする。同一fileで一意なfunction/methodだけresolveする。macro expansionやtrait dispatchは確定しない。
 
-- [ ] **Step 5: Add Rust fixture**
+- [x] **Step 5: Add Rust fixture**
 
 Minimum:
 
@@ -1284,7 +1284,7 @@ unrelated/report.rs
 
 Include traits、impl、async fn、generic、macro、nested comment、raw string、`#[tokio::test]`。
 
-- [ ] **Step 6: Add evaluation cases**
+- [x] **Step 6: Add evaluation cases**
 
 ```text
 where is an expired Rust token rejected?
@@ -1294,9 +1294,9 @@ which module imports token_service?
 which trait does TokenService implement?
 ```
 
-- [ ] **Step 7: Register extractor and remove Rust from generic dispatch**
+- [x] **Step 7: Register extractor and remove Rust from generic dispatch**
 
-- [ ] **Step 8: Verify**
+- [x] **Step 8: Verify**
 
 ```text
 go test ./internal/extract/rust -v
@@ -1305,7 +1305,7 @@ focalspan index --root testdata/repos/rustsample --quiet
 focalspan eval --root testdata/repos/rustsample --cases testdata/eval/rust-cases.jsonl --json
 ```
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```text
 git add internal/extract/rust internal/app internal/extract/generic testdata/repos/rustsample testdata/eval/rust-cases.jsonl
