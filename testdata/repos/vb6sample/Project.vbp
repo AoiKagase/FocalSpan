@@ -1,0 +1,6 @@
+Type=Exe
+Form=MainForm.frm
+Class=AuthService.cls
+Module=AuthModule.bas
+UserControl=AuthControl.ctl
+Name=VB6AuthSample

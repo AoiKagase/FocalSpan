@@ -1686,7 +1686,7 @@ git commit -m "feat: add first-class AMX Mod X Pawn extraction"
   - `vb6-structural`
   - `vbnet-structural`
 
-- [ ] **Step 1: Shared lexer tests**
+- [x] **Step 1: Shared lexer tests**
 
 Cover:
 
@@ -1702,7 +1702,7 @@ Attribute VB_Name
 malformed End block recovery
 ```
 
-- [ ] **Step 2: VB6 declarations**
+- [x] **Step 2: VB6 declarations**
 
 ```text
 Form/Class/Module/UserControl owner
@@ -1722,7 +1722,7 @@ event handler naming
 
 `.frm` designer preambleを一つのbounded `form-layout` chunkとして保持し、binary `.frx`はscannerでskipする。
 
-- [ ] **Step 3: VB.NET declarations**
+- [x] **Step 3: VB.NET declarations**
 
 ```text
 Namespace
@@ -1742,7 +1742,7 @@ Async/Iterator
 generic Of T
 ```
 
-- [ ] **Step 4: Relations**
+- [x] **Step 4: Relations**
 
 VB6:
 
@@ -1766,7 +1766,7 @@ tests
 contains
 ```
 
-- [ ] **Step 5: Fixtures**
+- [x] **Step 5: Fixtures**
 
 VB6:
 
@@ -1791,12 +1791,12 @@ Tests/AuthTests.vb
 unrelated/ReportService.vb
 ```
 
-- [ ] **Step 6: Evaluation**
+- [x] **Step 6: Evaluation**
 
 VB6 queries: command/event handler、Property、Implements、project component。  
 VB.NET queries: Handles、WPF code-behind、interface、tests、partial designer。
 
-- [ ] **Step 7: Verify and commit**
+- [x] **Step 7: Verify and commit**
 
 ```text
 go test ./internal/extract/vb -v

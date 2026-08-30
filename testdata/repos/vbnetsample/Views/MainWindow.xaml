@@ -1,0 +1,3 @@
+<Window x:Class="Demo.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+  <Grid><Button x:Name="LoginButton" Click="Button_Click" Content="Login" /></Grid>
+</Window>

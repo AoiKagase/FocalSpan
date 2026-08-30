@@ -24,6 +24,7 @@ import (
 	rubystructural "github.com/focalspan/focalspan/internal/extract/ruby"
 	rustructural "github.com/focalspan/focalspan/internal/extract/rust"
 	templateextract "github.com/focalspan/focalspan/internal/extract/template"
+	vbextract "github.com/focalspan/focalspan/internal/extract/vb"
 	"github.com/focalspan/focalspan/internal/extract/xaml"
 	"github.com/focalspan/focalspan/internal/gitx"
 	"github.com/focalspan/focalspan/internal/indexer"
@@ -76,6 +77,8 @@ func newExtractorRegistry() *extract.Registry {
 		rustructural.NewExtractor(),
 		pythonstr.NewExtractor(),
 		rubystructural.NewExtractor(),
+		vbextract.NewVB6Extractor(),
+		vbextract.NewVBNetExtractor(),
 		templateextract.NewExtractor(),
 		xaml.NewExtractor(),
 		resx.NewExtractor(),
