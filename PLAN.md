@@ -1310,6 +1310,10 @@ git commit -m "feat: add compact evidence limitations and follow-ups"
 
 ### Task 7: Add Stateless `known_handles` Delta Suppression
 
+> Checkout adaptation: the public CLI had already retired `query`, `expand`,
+> and `impact`. Repeatable `--known-handle` is therefore exposed on the sole
+> positional Evidence query preview; retired commands are not resurrected.
+
 **Files:**
 - Modify: `internal/app/service.go`
 - Modify: `internal/app/service_test.go`
@@ -1323,7 +1327,7 @@ git commit -m "feat: add compact evidence limitations and follow-ups"
 - Consumes: caller-supplied stable handles
 - Produces: no retransmission of known evidence while preserving those handles as relation anchors
 
-- [ ] **Step 1: Add validation tests for known handles**
+- [x] **Step 1: Add validation tests for known handles**
 
 Exact validation rules:
 
@@ -1339,7 +1343,7 @@ reject control characters below U+0020 except no character is permitted after tr
 
 Do not require a specific prefix because existing handles vary by symbol/chunk type.
 
-- [ ] **Step 2: Implement a shared validator**
+- [x] **Step 2: Implement a shared validator**
 
 Place validation in `internal/evidence` or an existing shared request-validation package, not separately in CLI and MCP. Required signature:
 
@@ -1347,7 +1351,7 @@ Place validation in `internal/evidence` or an existing shared request-validation
 func NormalizeKnownHandles(values []string) ([]string, error)
 ```
 
-- [ ] **Step 3: Extend MCP tool inputs**
+- [x] **Step 3: Extend MCP tool inputs**
 
 Add:
 
@@ -1365,7 +1369,7 @@ CodeImpactInput
 
 Do not add server-side session IDs or hidden state.
 
-- [ ] **Step 4: Add CLI flags for evidence-format testing**
+- [x] **Step 4: Add CLI flags for evidence-format testing**
 
 For `query`, `expand`, and `impact`, support repeatable:
 
@@ -1375,7 +1379,7 @@ For `query`, `expand`, and `impact`, support repeatable:
 
 Use a small `flag.Value` implementation in the CLI package. Do not parse comma-separated values because handles may evolve to contain punctuation.
 
-- [ ] **Step 5: Preserve known handles as expansion anchors**
+- [x] **Step 5: Preserve known handles as expansion anchors**
 
 Filtering occurs only during packet compilation. Retrieval and relation expansion must still receive requested handles. Example:
 
@@ -1385,7 +1389,7 @@ code_expand(handles=[A], relation=callers, known_handles=[A,B])
 
 must expand from `A`, omit `A` and `B` from returned evidence, and return only new caller evidence.
 
-- [ ] **Step 6: Test exact retransmission behavior**
+- [x] **Step 6: Test exact retransmission behavior**
 
 Run two calls:
 
@@ -1402,11 +1406,11 @@ known_anchor_not_repeated appears when relevant
 next actions may still name stable handle A
 ```
 
-- [ ] **Step 7: Test deterministic normalization and limits**
+- [x] **Step 7: Test deterministic normalization and limits**
 
 Include duplicate handles, whitespace, Unicode, 256-byte boundary, 257-byte rejection, 512-entry boundary, 513-entry rejection, NUL, and cancellation through the enclosing request.
 
-- [ ] **Step 8: Verify and commit**
+- [x] **Step 8: Verify and commit**
 
 ```bash
 go test ./internal/evidence ./internal/app ./internal/cli ./internal/mcpserver -run 'Known|Delta|Retransmit' -count=1
@@ -1419,6 +1423,9 @@ git commit -m "feat: suppress previously delivered evidence by handle"
 
 ### Task 8: Add Evidence APIs to the Application Service Without Breaking Legacy Bundles
 
+> Checkout adaptation: legacy `Expand` and `Impact` retain their current
+> positional service signatures rather than the older request-struct example.
+
 **Files:**
 - Modify: `internal/app/service.go`
 - Modify: `internal/app/service_test.go`
@@ -1429,7 +1436,7 @@ git commit -m "feat: suppress previously delivered evidence by handle"
 - Consumes: existing query/expand/impact retrieval and new `evidence.Compiler`
 - Produces: `QueryEvidence`, `ExpandEvidence`, and `ImpactEvidence` while preserving existing `Query`, `Expand`, and `Impact`
 
-- [ ] **Step 1: Refactor candidate retrieval behind private result types**
+- [x] **Step 1: Refactor candidate retrieval behind private result types**
 
 Create private types:
 
@@ -1445,7 +1452,7 @@ Create private methods that perform validation, optional index update, changed-r
 
 Do not make `QueryEvidence` call legacy `Query` and reconstruct candidates from a packed bundle; that would lose omitted candidates and provenance.
 
-- [ ] **Step 2: Preserve public legacy methods**
+- [x] **Step 2: Preserve public legacy methods**
 
 These signatures and defaults remain unchanged:
 
@@ -1457,7 +1464,7 @@ func (s *Service) Impact(ctx context.Context, req ImpactRequest) (model.ContextB
 
 Existing CLI behavior and evaluator tests must pass byte-for-byte where they currently assert output.
 
-- [ ] **Step 3: Add Evidence request types**
+- [x] **Step 3: Add Evidence request types**
 
 ```go
 type EvidenceQueryRequest struct {
@@ -1488,7 +1495,7 @@ type EvidenceImpactRequest struct {
 }
 ```
 
-- [ ] **Step 4: Add service Evidence methods**
+- [x] **Step 4: Add service Evidence methods**
 
 Required signatures:
 
@@ -1508,7 +1515,7 @@ Expand relation: self when blank, preserving current behavior
 Impact limitation: syntax_only_impact
 ```
 
-- [ ] **Step 5: Create deterministic plans for expand and impact**
+- [x] **Step 5: Create deterministic plans for expand and impact**
 
 Do not synthesize plan intent through loose English query text. Implement explicit helpers:
 
@@ -1528,7 +1535,7 @@ references -> references
 parent/children/neighbors/self -> definition/default
 ```
 
-- [ ] **Step 6: Construct the compiler once per service**
+- [x] **Step 6: Construct the compiler once per service**
 
 Extend `Service`:
 
@@ -1538,7 +1545,7 @@ evidenceCompiler *evidence.Compiler
 
 Initialize it with the same deterministic estimator family used by the legacy packer. Do not create compiler state per MCP request.
 
-- [ ] **Step 7: Test shared retrieval parity**
+- [x] **Step 7: Test shared retrieval parity**
 
 For the same query:
 
@@ -1553,7 +1560,7 @@ evidence mode default is focused
 
 Add an internal test seam only if needed; do not expose ranked candidates publicly.
 
-- [ ] **Step 8: Verify and commit**
+- [x] **Step 8: Verify and commit**
 
 ```bash
 go test ./internal/app -run 'Test.*Evidence|TestQueryLegacy|TestExpandLegacy|TestImpactLegacy' -count=1
@@ -1566,6 +1573,10 @@ git commit -m "feat: expose evidence compilation through application service"
 
 ### Task 9: Add a Human and JSON Evidence CLI Format
 
+> Checkout adaptation: `--format`, Evidence modes, JSON/human rendering, and
+> repeatable handles apply to the positional query surface. The retired
+> `query`, `expand`, `impact`, and `explain` commands remain unavailable.
+
 **Files:**
 - Create: `internal/render/evidence.go`
 - Create: `internal/render/evidence_test.go`
@@ -1577,7 +1588,7 @@ git commit -m "feat: expose evidence compilation through application service"
 - Consumes: `evidence.Packet`
 - Produces: compact human-readable evidence and exact JSON while keeping current CLI output as default
 
-- [ ] **Step 1: Add CLI format flags**
+- [x] **Step 1: Add CLI format flags**
 
 For `query`, `expand`, and `impact`, add:
 
@@ -1597,7 +1608,7 @@ Evidence default when --format evidence is selected: focused
 
 Reject `--format legacy --mode focused` with a clear validation error.
 
-- [ ] **Step 2: Implement JSON rendering**
+- [x] **Step 2: Implement JSON rendering**
 
 Required function:
 
@@ -1607,7 +1618,7 @@ func EvidenceJSON(packet evidence.Packet) ([]byte, error)
 
 Use indented JSON for CLI output. Validate the packet before marshaling. Do not add a CLI-only envelope that changes the contract.
 
-- [ ] **Step 3: Implement compact human rendering**
+- [x] **Step 3: Implement compact human rendering**
 
 Required function:
 
@@ -1652,11 +1663,11 @@ Rules:
 - omit empty sections;
 - deterministic newline behavior.
 
-- [ ] **Step 4: Keep debug ranking separate**
+- [x] **Step 4: Keep debug ranking separate**
 
 `--debug-scores` remains valid only for legacy output or existing `explain`. Reject `--format evidence --debug-scores` and direct the user to `focalspan explain`.
 
-- [ ] **Step 5: Wire CLI commands to the correct service method**
+- [x] **Step 5: Wire CLI commands to the correct service method**
 
 Dispatch:
 
@@ -1667,7 +1678,7 @@ Evidence -> QueryEvidence/ExpandEvidence/ImpactEvidence
 
 Pass repeatable `--known-handle` values only to Evidence methods. `--json` selects JSON versus human rendering, not the underlying contract.
 
-- [ ] **Step 6: Add CLI tests**
+- [x] **Step 6: Add CLI tests**
 
 Cover:
 
@@ -1684,7 +1695,7 @@ query shortcut still uses legacy default
 stdout/stderr separation
 ```
 
-- [ ] **Step 7: Document preview commands**
+- [x] **Step 7: Document preview commands**
 
 Add to README:
 
@@ -1696,7 +1707,7 @@ focalspan expand --format evidence --handle sym_... --relation callers --known-h
 
 State clearly that MCP always uses Evidence Packet v1 while CLI defaults to legacy during v0.4.
 
-- [ ] **Step 8: Verify and commit**
+- [x] **Step 8: Verify and commit**
 
 ```bash
 go test ./internal/render ./internal/cli -count=1
@@ -1719,7 +1730,7 @@ git commit -m "feat: add evidence packet CLI rendering"
 - Consumes: service Evidence APIs
 - Produces: versioned typed structured output for context, expand, and impact with source appearing once
 
-- [ ] **Step 1: Write failing typed-output tests**
+- [x] **Step 1: Write failing typed-output tests**
 
 For `code_context`, assert the typed handler returns `evidence.Packet` and that the SDK-generated output schema requires:
 
@@ -1732,7 +1743,7 @@ evidence
 
 Assert `schema` serializes as `focalspan.context.v1` and each evidence item schema includes `id`, `handle`, `role`, `location`, and `fidelity`.
 
-- [ ] **Step 2: Change the three handler output types**
+- [x] **Step 2: Change the three handler output types**
 
 Change only:
 
@@ -1744,7 +1755,7 @@ code_impact
 
 To return `evidence.Packet` as structured output. Keep status and restart outputs unchanged.
 
-- [ ] **Step 3: Make MCP mode default `focused`**
+- [x] **Step 3: Make MCP mode default `focused`**
 
 Input accepts:
 
@@ -1756,11 +1767,11 @@ source
 
 Blank mode becomes `focused`. Invalid mode returns a typed tool validation error with no stack trace.
 
-- [ ] **Step 4: Pass normalized known handles**
+- [x] **Step 4: Pass normalized known handles**
 
 Normalize and validate `known_handles` once in each handler before calling the service. Return a compact user-correctable error when invalid.
 
-- [ ] **Step 5: Improve tool descriptions for model use**
+- [x] **Step 5: Improve tool descriptions for model use**
 
 Use these descriptions or text with identical semantics:
 
@@ -1780,7 +1791,7 @@ code_impact:
 
 Do not turn descriptions into a long tutorial.
 
-- [ ] **Step 6: Keep text content to one short summary**
+- [x] **Step 6: Keep text content to one short summary**
 
 Text content must be produced by `evidence.Summary(packet)` and have this exact format:
 
@@ -1790,7 +1801,7 @@ FocalSpan evidence: <n> items, <used>/<limit> tokens, <omitted> omitted.
 
 Maximum 160 Unicode code points. It must not contain query text, source code, signatures, paths, handles, score details, or savings values.
 
-- [ ] **Step 7: Add in-memory MCP integration tests**
+- [x] **Step 7: Add in-memory MCP integration tests**
 
 Using the SDK client/session, verify:
 
@@ -1807,7 +1818,7 @@ code_status contract unchanged
 code_restart contract unchanged
 ```
 
-- [ ] **Step 8: Add raw stdio JSON-RPC duplication test**
+- [x] **Step 8: Add raw stdio JSON-RPC duplication test**
 
 Start the actual `focalspan serve` subprocess against the evidence fixture. Send initialize, tools/list, and tools/call requests. Place a unique source marker in the fixture:
 
@@ -1829,7 +1840,7 @@ stderr may contain logs but no source marker
 
 Count escaped JSON occurrences carefully by parsing first and use raw counting only for the unique marker.
 
-- [ ] **Step 9: Bump the MCP implementation version**
+- [x] **Step 9: Bump the MCP implementation version**
 
 Change:
 
@@ -1845,7 +1856,7 @@ mcp.Implementation{Name: "focalspan", Version: "0.4.0"}
 
 Do not infer the executable release version from this field elsewhere.
 
-- [ ] **Step 10: Document the intentional pre-1.0 output change**
+- [x] **Step 10: Document the intentional pre-1.0 output change**
 
 README and design docs must say:
 
@@ -1856,7 +1867,7 @@ README and design docs must say:
 - Numeric ranking diagnostics remain available through focalspan explain, not MCP context responses.
 ```
 
-- [ ] **Step 11: Verify and commit**
+- [x] **Step 11: Verify and commit**
 
 ```bash
 go test ./internal/mcpserver -count=1
@@ -1883,7 +1894,7 @@ git commit -m "feat: return evidence packets from MCP context tools"
 - Consumes: legacy and Evidence service methods, evidence fixture, token estimator
 - Produces: measurable wire/quality comparisons without weakening existing retrieval evaluation
 
-- [ ] **Step 1: Define evidence evaluation cases**
+- [x] **Step 1: Define evidence evaluation cases**
 
 Implement:
 
@@ -1907,7 +1918,7 @@ type EvidenceCase struct {
 }
 ```
 
-- [ ] **Step 2: Create cross-language evidence cases**
+- [x] **Step 2: Create cross-language evidence cases**
 
 At minimum include:
 
@@ -1923,7 +1934,7 @@ Smarty block plus embedded JavaScript
 
 Use current checked-in fixtures where suitable and the dedicated `evidencesample` for late-hit and delta scenarios. Do not add production hard-coding for case names.
 
-- [ ] **Step 3: Define evidence metrics**
+- [x] **Step 3: Define evidence metrics**
 
 Implement per-case and aggregate metrics:
 
@@ -1961,7 +1972,7 @@ KnownResendCount: number of known stable handles incorrectly retransmitted.
 EvidenceVsLegacyRatio: Evidence Packet serialized tokens / legacy ContextBundle serialized tokens.
 ```
 
-- [ ] **Step 4: Add evaluator contract modes**
+- [x] **Step 4: Add evaluator contract modes**
 
 Extend `focalspan eval` with:
 
@@ -1981,7 +1992,7 @@ compare: run both output paths for compatible evidence cases and include A/B fie
 
 Do not reinterpret old case files as Evidence cases without an explicit contract flag.
 
-- [ ] **Step 5: Add a two-step delta evaluation**
+- [x] **Step 5: Add a two-step delta evaluation**
 
 For cases with `follow_up_relation`:
 
@@ -1993,7 +2004,7 @@ For cases with `follow_up_relation`:
 
 Add aggregate `delta_token_ratio`.
 
-- [ ] **Step 6: Add A/B acceptance tests**
+- [x] **Step 6: Add A/B acceptance tests**
 
 The checked-in evidence suite must meet:
 
@@ -2015,7 +2026,7 @@ median two-step delta token ratio      <= 0.70
 
 Do not weaken current legacy hit@5, recall, forbidden-path, budget, reduction, relation, intent, or determinism thresholds.
 
-- [ ] **Step 7: Test forbidden output fields**
+- [x] **Step 7: Test forbidden output fields**
 
 Every evaluated serialized packet must be recursively inspected and fail if any object key equals:
 
@@ -2032,7 +2043,7 @@ savings_ratio
 
 This must inspect keys, not naive substring matches inside source code.
 
-- [ ] **Step 8: Document metric meaning and limitations**
+- [x] **Step 8: Document metric meaning and limitations**
 
 Update `docs/evaluation.md` with:
 
@@ -2049,7 +2060,7 @@ why one-response size is not enough without cumulative tool-result tokens
 
 Record actual measured results after implementation; do not copy acceptance thresholds into the results section as if they were measurements.
 
-- [ ] **Step 9: Verify and commit**
+- [x] **Step 9: Verify and commit**
 
 ```bash
 go test ./internal/eval ./internal/cli -count=1
@@ -2067,6 +2078,10 @@ On Windows, use an output path under a temporary directory and remove the `.exe`
 
 ### Task 12: Harden Edge Cases, Fuzz Invariants, and Compatibility
 
+> Checkout adaptation: the compatibility assertion for `focalspan explain`
+> verifies that the already-retired command remains unavailable rather than
+> reintroducing a public debug surface.
+
 **Files:**
 - Create: `internal/evidence/fuzz_test.go`
 - Modify: `internal/evidence/*_test.go`
@@ -2077,7 +2092,7 @@ On Windows, use an output path under a temporary directory and remove the `.exe`
 - Consumes: complete Evidence implementation
 - Produces: robust invariants for malformed source content, tiny budgets, repeated relations, and protocol output
 
-- [ ] **Step 1: Add packet/compiler fuzz seeds**
+- [x] **Step 1: Add packet/compiler fuzz seeds**
 
 Seed with:
 
@@ -2095,7 +2110,7 @@ Japanese identifiers/comments
 invalid UTF-8 bytes already converted to indexed replacement text only where current scanner permits
 ```
 
-- [ ] **Step 2: Enforce fuzz invariants**
+- [x] **Step 2: Enforce fuzz invariants**
 
 For every successful compile:
 
@@ -2115,7 +2130,7 @@ no forbidden debug key
 
 Fuzz tests may discard impossible malformed model candidates, but must not hide panics.
 
-- [ ] **Step 3: Add tiny-budget regression matrix**
+- [x] **Step 3: Add tiny-budget regression matrix**
 
 Test budgets before clamping and at exact boundaries:
 
@@ -2136,11 +2151,11 @@ Test budgets before clamping and at exact boundaries:
 
 Expected: clamped budget is reported, packet remains valid, no over-budget output.
 
-- [ ] **Step 4: Add relation ambiguity tests**
+- [x] **Step 4: Add relation ambiguity tests**
 
 Construct multiple `Validate` methods. Assert lexical unresolved provenance does not produce an `exact` edge. It may return multiple caller/reference items with `lexical_relation_only`, but must not invent a resolved target.
 
-- [ ] **Step 5: Add mixed known-anchor relation tests**
+- [x] **Step 5: Add mixed known-anchor relation tests**
 
 Cover:
 
@@ -2154,7 +2169,7 @@ multiple anchors with one known
 
 No dangling edge is allowed.
 
-- [ ] **Step 6: Add protocol compatibility tests**
+- [x] **Step 6: Add protocol compatibility tests**
 
 Assert:
 
@@ -2167,7 +2182,7 @@ legacy CLI query output remains available
 focalspan explain remains source-free
 ```
 
-- [ ] **Step 7: Run bounded fuzzing locally**
+- [x] **Step 7: Run bounded fuzzing locally**
 
 ```bash
 go test ./internal/evidence -run '^$' -fuzz FuzzCompile -fuzztime 20s
@@ -2176,7 +2191,7 @@ go test ./internal/evidence -run '^$' -fuzz FuzzValidate -fuzztime 20s
 
 If the Go toolchain requires one fuzz target per command, run them separately exactly as above.
 
-- [ ] **Step 8: Run full regression and commit**
+- [x] **Step 8: Run full regression and commit**
 
 ```bash
 go test ./...

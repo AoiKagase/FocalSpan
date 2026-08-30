@@ -318,6 +318,14 @@ work, repository-linker redesign, and HTTP MCP transport are explicitly outside
 v0.4. They remain possible later milestones and are not partial production
 paths in this implementation.
 
+The v0.4 implementation is complete at the service and transport boundaries:
+shared retrieval feeds legacy bundles or Evidence compilation, the positional
+CLI offers an opt-in Evidence preview, and the three MCP context tools return
+typed Evidence packets with stateless delta suppression. The current checkout
+had already retired the old `query`, `expand`, `impact`, and `explain` CLI
+subcommands, so v0.4 does not reintroduce them; this source-of-truth divergence
+from the older plan examples is intentional.
+
 ## Verification checklist
 
 ### Completed PHP structural extraction workstream

@@ -133,3 +133,86 @@ func TestCompilerIsDeterministic(t *testing.T) {
 		}
 	}
 }
+
+func TestCompilerTinyBudgetBoundaryMatrix(t *testing.T) {
+	estimator := budget.NewEstimator()
+	for _, requested := range []int{0, 1, 255, 256, 257, 511, 512, 1199, 1200, 63999, 64000, 64001} {
+		t.Run(strconv.Itoa(requested), func(t *testing.T) {
+			result, err := NewCompiler(estimator).Compile(compilerRequest(requested))
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := requested
+			if want < budget.MinBudget {
+				want = budget.MinBudget
+			}
+			if want > budget.MaxBudget {
+				want = budget.MaxBudget
+			}
+			if result.Packet.Budget.Limit != want || result.Packet.Budget.Used > want || result.Packet.Budget.Used != MeasureModelVisible(result.Packet, estimator) {
+				t.Fatalf("budget=%+v want limit=%d", result.Packet.Budget, want)
+			}
+			if err := Validate(result.Packet); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestCompilerMixedKnownAnchorsNeverCreatesDanglingEdges(t *testing.T) {
+	tests := []struct {
+		name  string
+		known []string
+	}{
+		{name: "anchor known candidate new", known: []string{"target"}},
+		{name: "anchor new candidate known", known: []string{"caller"}},
+		{name: "both known", known: []string{"target", "caller"}},
+		{name: "neither known"},
+		{name: "multiple anchors one known", known: []string{"other-anchor"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := compilerRequest(4000)
+			req.Candidates = req.Candidates[:2]
+			req.KnownHandles = tt.known
+			req.ExpansionAnchors = []string{"target", "other-anchor"}
+			result, err := NewCompiler(nil).Compile(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			known := map[string]bool{}
+			for _, handle := range tt.known {
+				known[handle] = true
+			}
+			ids := map[string]bool{}
+			for _, item := range result.Packet.Evidence {
+				if known[item.Handle] {
+					t.Fatalf("known handle retransmitted: %s", item.Handle)
+				}
+				ids[item.ID] = true
+			}
+			for _, edge := range result.Packet.Relations {
+				if !ids[edge.From] || !ids[edge.To] {
+					t.Fatalf("dangling edge: %+v packet=%+v", edge, result.Packet)
+				}
+			}
+		})
+	}
+}
+
+func TestCompilerUnresolvedRelationNeverProducesExactEdge(t *testing.T) {
+	req := compilerRequest(4000)
+	req.Candidates = req.Candidates[:2]
+	req.Candidates[1].RelationContext.Resolved = false
+	req.Candidates[1].RelationContext.Confidence = 1
+	result, err := NewCompiler(nil).Compile(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Packet.Relations) == 0 || result.Packet.Relations[0].Certainty != CertaintyLexical {
+		t.Fatalf("unresolved edge=%+v", result.Packet.Relations)
+	}
+	if !containsString(result.Packet.Limitations, "lexical_relation_only") {
+		t.Fatalf("limitations=%v", result.Packet.Limitations)
+	}
+}
