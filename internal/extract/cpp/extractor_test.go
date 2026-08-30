@@ -141,12 +141,15 @@ TEST(TokenServiceTest, RejectsExpiredToken) { app::auth::TokenService service; s
 }
 
 func findQualified(symbols []model.Symbol, qualified, kind string) model.Symbol {
+	var found model.Symbol
 	for _, symbol := range symbols {
 		if symbol.QualifiedName == qualified && symbol.Kind == kind {
-			return symbol
+			if found.Handle == "" || symbol.StartByte > found.StartByte {
+				found = symbol
+			}
 		}
 	}
-	return model.Symbol{}
+	return found
 }
 
 func hasRelation(relations []model.Relation, from, to, kind string) bool {
@@ -165,4 +168,97 @@ func hasUnresolved(relations []model.Relation, from, target, kind string) bool {
 		}
 	}
 	return false
+}
+
+func TestCppDisambiguatesInitializersFunctionPointersAndModernDeclarations(t *testing.T) {
+	content := []byte(`struct Config { int timeout; };
+Config config = {.timeout = 5};
+int (*handler)(int);
+typedef int (*CallbackTypedef)(int);
+using Callback = void (*)(int);
+concept HasValue = requires(int value) { value + 1; };
+[[nodiscard]] int Validate(int value) noexcept requires (value > 0) { return value; }
+auto lambda = [](int value) { return value; };
+class Service { friend class FriendTarget; friend int FriendFunction(Service&); };
+`)
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "modern.cpp", Language: "cpp", Content: content})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"handler", "config", "lambda"} {
+		for _, symbol := range got.Symbols {
+			if symbol.Name == name && (symbol.Kind == "function" || symbol.Kind == "method") {
+				t.Fatalf("initializer was misclassified as function: %+v", symbol)
+			}
+		}
+	}
+	validate := findQualified(got.Symbols, "Validate", "function")
+	if validate.Handle == "" || !strings.Contains(validate.Signature, "noexcept") || !strings.Contains(validate.Signature, "requires") {
+		t.Fatalf("modern function signature=%+v", validate)
+	}
+	if findQualified(got.Symbols, "HasValue", "concept").Handle == "" || findQualified(got.Symbols, "CallbackTypedef", "alias").Handle == "" {
+		t.Fatalf("modern declarations missing: %+v", got.Symbols)
+	}
+}
+
+func TestCppPairsDeclarationsAndDefinitionsAndRecordsCallbackReferences(t *testing.T) {
+	content := []byte(`namespace auth { bool Validate(int value); }
+bool auth::Validate(int value) { return value > 0; }
+using Callback = void (*)(int);
+void handler(int value) { (void)value; }
+void register_callback(Callback callback) { callback(1); }
+void install() { register_callback(handler); }
+`)
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "pair.cpp", Language: "cpp", Content: content})
+	if err != nil {
+		t.Fatal(err)
+	}
+	validates := make([]model.Symbol, 0, 2)
+	for _, symbol := range got.Symbols {
+		if symbol.QualifiedName == "auth::Validate" {
+			validates = append(validates, symbol)
+		}
+	}
+	if len(validates) != 2 {
+		t.Fatalf("declaration and definition were collapsed: %+v", got.Symbols)
+	}
+	foundPair := false
+	for _, relation := range got.Relations {
+		if relation.Kind == "declares" && relation.ToHandle != "" {
+			foundPair = true
+		}
+	}
+	if !foundPair {
+		t.Fatalf("same-file declaration-definition relation missing: %+v", got.Relations)
+	}
+	install := findQualified(got.Symbols, "install", "function")
+	handler := findQualified(got.Symbols, "handler", "function")
+	if install.Handle == "" || handler.Handle == "" {
+		t.Fatalf("callback symbols missing: %+v", got.Symbols)
+	}
+	foundCallback := false
+	for _, relation := range got.Relations {
+		if relation.FromHandle == install.Handle && relation.ToHandle == handler.Handle && relation.Kind == "references" {
+			foundCallback = true
+		}
+	}
+	if !foundCallback {
+		t.Fatalf("explicit callback reference missing: %+v", got.Relations)
+	}
+}
+
+func TestCppRecognizesStaticTestTitles(t *testing.T) {
+	content := []byte(`TEST(TokenSuite, RejectsExpiredToken) { }
+TEST_CASE("Rejects expired token", "[auth]") { }
+SCENARIO("refreshes token", "[auth]") { }
+`)
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "tests.cpp", Language: "cpp", Content: content})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"RejectsExpiredToken", "Rejects expired token", "refreshes token"} {
+		if findQualified(got.Symbols, name, "test").Handle == "" {
+			t.Errorf("test title %q missing: %+v", name, got.Symbols)
+		}
+	}
 }

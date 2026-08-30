@@ -777,7 +777,7 @@ git commit -m "feat: strengthen Go structural extraction"
 - Retains `cpp-structural`
 - Adds more precise declaration/definition and callback relations
 
-- [ ] **Step 1: Add failing tests**
+- [x] **Step 1: Add failing tests**
 
 Cover:
 
@@ -802,15 +802,15 @@ GoogleTest/Catch2/doctest
 Windows callback macros WINAPI/CALLBACK/APIENTRY
 ```
 
-- [ ] **Step 2: Improve parser disambiguation**
+- [x] **Step 2: Improve parser disambiguation**
 
 Control constructs、casts、initializers、function pointersをfunctionと誤認しない。C/C++ qualifier、trailing return、`noexcept`、`requires`、`= default/delete`をsignatureへ含める。
 
-- [ ] **Step 3: Add lexical declaration-definition hints**
+- [x] **Step 3: Add lexical declaration-definition hints**
 
 同一file内では既存のresolved handleを使用。別fileのheader/source pairは`UnresolvedTo`へ完全qualified nameとnormalized signatureを保持し、`Source=cpp:declaration`または`cpp:definition`とする。ここではcross-file `ToHandle`を確定しない。
 
-- [ ] **Step 4: Add callback references**
+- [x] **Step 4: Add callback references**
 
 次のような明示的なfunction pointer引数を低〜中confidenceの`references`として保持:
 
@@ -822,11 +822,11 @@ signal(..., handler)
 
 一般関数呼び出しの任意引数をすべてcallback扱いしない。identifierが同一fileの一意なfunction symbolである場合だけ解決する。
 
-- [ ] **Step 5: Improve test recognition**
+- [x] **Step 5: Improve test recognition**
 
 GoogleTest、Catch2、doctestのstatic title/macro spanをtest chunkとして正確に保持する。
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 ```text
 go test ./internal/extract/cpp -v
@@ -835,7 +835,7 @@ focalspan index --root testdata/repos/cppsample --quiet
 focalspan eval --root testdata/repos/cppsample --cases testdata/eval/cpp-cases.jsonl --json
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```text
 git add internal/extract/cpp testdata/repos/cppsample testdata/eval/cpp-cases.jsonl

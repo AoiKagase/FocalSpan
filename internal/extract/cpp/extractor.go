@@ -87,7 +87,7 @@ func build(ctx context.Context, file model.SourceFile, parsed parseResult) model
 		if decl.Name == "" || decl.Start < 0 || decl.Start >= len(parsed.Tokens) {
 			continue
 		}
-		if chosen[declarationKey(decl)] != decl {
+		if !chosen[decl] {
 			continue
 		}
 		if symbol, ok := b.byDecl[decl]; ok {
@@ -128,7 +128,7 @@ func build(ctx context.Context, file model.SourceFile, parsed parseResult) model
 		b.result.Symbols = append(b.result.Symbols, symbol)
 	}
 	for _, decl := range parsed.Declarations {
-		if chosen[declarationKey(decl)] != decl {
+		if !chosen[decl] {
 			continue
 		}
 		symbol, ok := b.byDecl[decl]
@@ -144,6 +144,7 @@ func build(ctx context.Context, file model.SourceFile, parsed parseResult) model
 		}
 	}
 	b.buildRelations()
+	b.addDeclarationDefinitionRelations()
 	b.sortResult()
 	return b.result
 }
@@ -224,6 +225,73 @@ func (b *builder) buildRelations() {
 	}
 }
 
+func (b *builder) addDeclarationDefinitionRelations() {
+	groups := make(map[string][]*declaration)
+	for _, decl := range b.parsed.Declarations {
+		groups[declarationKey(decl)] = append(groups[declarationKey(decl)], decl)
+	}
+	for _, group := range groups {
+		for _, definition := range group {
+			if definition.BodyOpen < 0 || !isCallableDeclaration(definition) {
+				continue
+			}
+			from, ok := b.byDecl[definition]
+			if !ok {
+				continue
+			}
+			paired := false
+			for _, declaration := range group {
+				if declaration.BodyOpen >= 0 || !isCallableDeclaration(declaration) {
+					continue
+				}
+				to, exists := b.byDecl[declaration]
+				if !exists {
+					continue
+				}
+				paired = true
+				b.addRelation(model.Relation{FromHandle: from.Handle, ToHandle: to.Handle, Kind: "declares", Confidence: .95, Source: "cpp:definition"})
+			}
+			if !paired {
+				b.addRelation(model.Relation{FromHandle: from.Handle, UnresolvedTo: declarationTarget(from), Kind: "declaration", Confidence: .45, Source: "cpp:definition"})
+			}
+		}
+		for _, declaration := range group {
+			if declaration.BodyOpen >= 0 || !isCallableDeclaration(declaration) {
+				continue
+			}
+			from, ok := b.byDecl[declaration]
+			if !ok {
+				continue
+			}
+			paired := false
+			for _, definition := range group {
+				if definition.BodyOpen < 0 || !isCallableDeclaration(definition) {
+					continue
+				}
+				if _, exists := b.byDecl[definition]; exists {
+					paired = true
+				}
+			}
+			if !paired {
+				b.addRelation(model.Relation{FromHandle: from.Handle, UnresolvedTo: declarationTarget(from), Kind: "declaration", Confidence: .45, Source: "cpp:declaration"})
+			}
+		}
+	}
+}
+
+func isCallableDeclaration(decl *declaration) bool {
+	switch decl.Kind {
+	case "function", "method", "constructor", "destructor", "operator":
+		return true
+	default:
+		return false
+	}
+}
+
+func declarationTarget(symbol model.Symbol) string {
+	return symbol.QualifiedName + " " + model.NormalizeSignature(symbol.Signature)
+}
+
 func (b *builder) buildReferences(index symbolIndex, decl *declaration, from model.Symbol) {
 	if decl.Kind == "test" || decl.Kind == "macro" {
 		return
@@ -251,16 +319,42 @@ func declarationKey(decl *declaration) string {
 	return decl.Kind + "\x00" + strings.ToLower(decl.Qualified) + "\x00" + model.NormalizeSignature(decl.Name) + "\x00" + model.NormalizeSignature(decl.SignatureKey)
 }
 
-func preferredDeclarations(declarations []*declaration) map[string]*declaration {
-	result := make(map[string]*declaration)
+func preferredDeclarations(declarations []*declaration) map[*declaration]bool {
+	groups := make(map[string][]*declaration)
 	for _, decl := range declarations {
-		key := declarationKey(decl)
-		old := result[key]
-		if old == nil || old.BodyOpen < 0 && decl.BodyOpen >= 0 {
-			result[key] = decl
+		groups[declarationKey(decl)] = append(groups[declarationKey(decl)], decl)
+	}
+	result := make(map[*declaration]bool, len(declarations))
+	for _, group := range groups {
+		if hasDeclarationAndDefinition(group) {
+			for _, decl := range group {
+				result[decl] = true
+			}
+			continue
+		}
+		var preferred *declaration
+		for _, decl := range group {
+			if preferred == nil || preferred.BodyOpen < 0 && decl.BodyOpen >= 0 {
+				preferred = decl
+			}
+		}
+		if preferred != nil {
+			result[preferred] = true
 		}
 	}
 	return result
+}
+
+func hasDeclarationAndDefinition(group []*declaration) bool {
+	hasDeclaration, hasDefinition := false, false
+	for _, decl := range group {
+		if decl.BodyOpen < 0 {
+			hasDeclaration = true
+		} else {
+			hasDefinition = true
+		}
+	}
+	return hasDeclaration && hasDefinition
 }
 
 func (b *builder) buildBodyRelations(index symbolIndex, decl *declaration, from model.Symbol) {
@@ -298,6 +392,9 @@ func (b *builder) buildBodyRelations(index symbolIndex, decl *declaration, from 
 			}
 			b.addRelation(model.Relation{FromHandle: from.Handle, UnresolvedTo: lexical, Kind: kind, Confidence: .25, Source: "cpp-call"})
 		}
+		if isCallbackRegistration(name) {
+			b.addCallbackReferences(index, from, position, end)
+		}
 	}
 	for position := start; position+1 < end; position++ {
 		if !b.parsed.Tokens[position].significant() || b.parsed.Tokens[position].Text != "new" {
@@ -307,6 +404,66 @@ func (b *builder) buildBodyRelations(index symbolIndex, decl *declaration, from 
 		if next >= 0 && b.parsed.Tokens[next].Kind == Identifier {
 			b.addResolvedOrUnresolved(index, from, b.parsed.Tokens[next].Text, "references", "new")
 		}
+	}
+}
+
+func (b *builder) addCallbackReferences(index symbolIndex, from model.Symbol, open, end int) {
+	close := matchingCallClose(b.parsed.Tokens, open, end)
+	if close <= open {
+		return
+	}
+	seen := make(map[string]struct{})
+	for position := open + 1; position < close; position++ {
+		token := b.parsed.Tokens[position]
+		if !token.significant() || token.Kind != Identifier {
+			continue
+		}
+		if _, exists := seen[token.Text]; exists {
+			continue
+		}
+		seen[token.Text] = struct{}{}
+		target, ok := unique(index.byName, strings.ToLower(token.Text))
+		if !ok || !isCallableKind(target.Kind) || target.Handle == from.Handle {
+			continue
+		}
+		b.addRelation(model.Relation{FromHandle: from.Handle, ToHandle: target.Handle, Kind: "references", Confidence: .65, Source: "cpp:callback"})
+	}
+}
+
+func matchingCallClose(tokens []Token, open, end int) int {
+	depth := 0
+	for position := open; position < end; position++ {
+		if !tokens[position].significant() {
+			continue
+		}
+		switch tokens[position].Text {
+		case "(":
+			depth++
+		case ")":
+			depth--
+			if depth == 0 {
+				return position
+			}
+		}
+	}
+	return -1
+}
+
+func isCallbackRegistration(name string) bool {
+	switch strings.ToLower(name) {
+	case "register_callback", "settimer", "signal":
+		return true
+	default:
+		return false
+	}
+}
+
+func isCallableKind(kind string) bool {
+	switch kind {
+	case "function", "method", "constructor", "destructor", "operator":
+		return true
+	default:
+		return false
 	}
 }
 
