@@ -673,7 +673,7 @@ git commit -m "feat: preserve relation provenance for evidence output"
 - Consumes: `query.Plan`, ranked candidate kind/path/language, changed flag, relation provenance, original rank
 - Produces: `ClassifiedCandidate`, role, certainty, semantic reason codes, and deterministic presentation priority
 
-- [ ] **Step 1: Write role-classification tests**
+- [x] **Step 1: Write role-classification tests**
 
 Required internal type:
 
@@ -710,7 +710,7 @@ prototype/interface/ambient declaration -> declaration
 unclassified supporting span -> context
 ```
 
-- [ ] **Step 2: Implement stable reason-code mapping**
+- [x] **Step 2: Implement stable reason-code mapping**
 
 Normal `why` codes may include only this bounded vocabulary in v1:
 
@@ -742,7 +742,7 @@ lexical or path
 contextual fallback
 ```
 
-- [ ] **Step 3: Implement relation certainty mapping**
+- [x] **Step 3: Implement relation certainty mapping**
 
 Rules:
 
@@ -755,7 +755,7 @@ No relation provenance              -> lexical only when an edge is not emitted
 
 Do not emit an edge solely from a candidate role when there is no identifiable anchor.
 
-- [ ] **Step 4: Define intent presentation profiles**
+- [x] **Step 4: Define intent presentation profiles**
 
 Use exact role order tables:
 
@@ -794,7 +794,7 @@ template:
 
 Within the same role, preserve original retrieval rank, then path, start line, and handle.
 
-- [ ] **Step 5: Implement classifier and ordering API**
+- [x] **Step 5: Implement classifier and ordering API**
 
 Required signatures:
 
@@ -805,11 +805,11 @@ func SortForPresentation(plan query.Plan, candidates []ClassifiedCandidate)
 
 The input candidate slice must not be mutated.
 
-- [ ] **Step 6: Test determinism across repeated runs and shuffled maps**
+- [x] **Step 6: Test determinism across repeated runs and shuffled maps**
 
 Run classification 100 times with the same candidates and assert byte-identical JSON after converting only stable fields. Include equal-score and duplicate-reason cases.
 
-- [ ] **Step 7: Verify and commit**
+- [x] **Step 7: Verify and commit**
 
 ```bash
 go test ./internal/evidence -run 'TestClassify|TestPresentation|TestWhy|TestCertainty' -count=1
