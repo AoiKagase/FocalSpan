@@ -83,13 +83,13 @@ expired-token production code, its middleware caller, PHPUnit coverage, and a
 
 | Metric | PHP result |
 | --- | ---: |
-| hit@1 / hit@3 / hit@5 | 0.25 / 0.75 / 1.00 |
+| hit@1 / hit@3 / hit@5 | 0.25 / 1.00 / 1.00 |
 | Symbol recall / path recall | 1.00 / 1.00 |
 | Budget compliance | 1.00 |
 | Forbidden path violations | 0 |
 | Deterministic result | 1.00 |
-| Median estimated tokens | 1129 |
-| Median reduction ratio | 0.1699 |
+| Median estimated tokens | 179 |
+| Median reduction ratio | 0.05550387596899225 |
 
 The individual callers case had a 0.2708 reduction ratio; the reported median
 remained within the `<= 0.25` acceptance threshold. Every returned item had
@@ -108,8 +108,8 @@ The template fixture is `testdata/repos/templatesample` and its cases are in
 | Budget compliance | 1.00 |
 | Forbidden path violations | 0 |
 | Deterministic result | 1.00 |
-| Median estimated tokens | 834 |
-| Median reduction ratio | 0.20 |
+| Median estimated tokens | 87 |
+| Median reduction ratio | 0.026568430453226165 |
 
 Path-only cases use `expected_paths` for hit@N when no expected symbol is
 declared; path recall still requires every expected path. The run verified
@@ -125,7 +125,7 @@ matching fixture and JSONL cases. Each case is queried twice by the evaluator.
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | C/C++ (includes C) | 5 | 0.40 / 0.80 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 146 | 0.1667 |
 | C# | 5 | 0.60 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 92 | 0.1215 |
-| JavaScript/TypeScript | 6 | 0.83 / 0.83 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 145 | 0.2020 |
+| JavaScript/TypeScript | 6 | 0.6667 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 121 | 0.15419501133786848 |
 
 All three profiles meet the existing thresholds: hit@5 100%, budget
 compliance 100%, no forbidden-path violations, deterministic output, and
@@ -182,6 +182,32 @@ profiles move structurally supported relation candidates ahead of some former
 first-place lexical candidates; hit@3/hit@5, symbol/path recall, budget
 compliance, and determinism remain within the recorded acceptance results. No
 case or threshold was removed to conceal these ordering changes.
+
+## Polyglot Coverage v0.3 starting worktree baseline
+
+This is the measured starting-worktree record for the v0.3 implementation on
+2026-08-30. The checkout was `codex/mcp-missing-registration` at `b84880a`,
+with the language-detection changes already present as uncommitted worktree
+changes. Because those changes could not be discarded under the worktree
+preservation rule, these values are a starting-worktree baseline rather than a
+pre-Task-1 source baseline. Each fixture was indexed immediately before its
+case set, and each case was queried twice by `focalspan-eval`.
+
+| Profile | Cases | hit@1 / hit@3 / hit@5 | Symbol / path recall | Budget | Forbidden | Deterministic | Median tokens | Median reduction |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Go/auth | 4 | 0.50 / 1.00 / 1.00 | 1.00 / 0.875 | 1.00 | 0 | 1.00 | 175 | 0.04009163802978236 |
+| PHP | 4 | 0.25 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 179 | 0.05550387596899225 |
+| Smarty/template | 5 | 0.80 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 110 | 0.024559053360125028 |
+| C/C++ | 5 | 0.40 / 0.80 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 137 | 0.14952279957582185 |
+| C# | 5 | 0.20 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 93 | 0.13559322033898305 |
+| JavaScript/TypeScript | 6 | 0.8333333333333334 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 138 | 0.1760204081632653 |
+
+The Japanese ablation run also completed from the same starting worktree. The
+full mode achieved hit@3/hit@5 `1.0/1.0` for `ja-auth` and `0.6667/1.0` for
+`ja-jsts`; `fts-only` and `no-relations` remained respectively
+`0.6667/0.6667` and `0.3333/0.3333`. Full-mode relation recall was `1.0` for
+both fixtures, while relation-bearing recall for both reduced modes was `0.0`.
+All runs were budget-compliant and deterministic.
 
 ### Japanese ablation comparison
 
@@ -267,3 +293,43 @@ The baseline commands also produced `go test ./...` with 263 passing tests,
 `go vet ./...` with no issues, and a successful CGO-free native build. Race
 coverage and the later cross-build/evaluation matrix are not implied by this
 baseline section.
+
+## .NET WinForms/WPF/XAML Task 5 result
+
+The `dotnetsample` fixture was indexed with `focalspan setup` and evaluated
+with `go run ./cmd/focalspan-eval --root testdata/repos/dotnetsample
+--cases testdata/eval/dotnet-cases.jsonl --json` on 2026-08-30. The public CLI
+does not expose the retired `index`/`eval` commands, so the development
+evaluator was used after the fixture index was rebuilt. Each of the six cases
+was queried twice.
+
+| Profile | Cases | hit@1 / hit@3 / hit@5 | Symbol / path recall | Budget | Forbidden | Deterministic | Median tokens | Median reduction |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| .NET WinForms/WPF/XAML/RESX | 6 | 0.8333 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 105 | 0.22410147991543342 |
+
+The six cases cover the WPF code-behind handler and binding, XAML resource
+dictionary, WinForms designer initializer and load handler, and a ViewModel
+validation test. All returned paths existed and no unrelated fixture path was
+returned. The fixture also exercises RESX keys, metadata, type/mimetype
+references, and binary-value omission; those resource assertions are covered
+by the package tests rather than a separate evaluation query.
+
+## Polyglot Coverage v0.3 final acceptance
+
+On 2026-08-30, every regular fixture root was rebuilt immediately before its
+evaluation with `extractors-v5-polyglot`. The full per-profile JSON summaries
+are recorded in `docs/evaluation-v0.3.json`; the evaluator queried every case
+twice. The table below is copied from those current-checkout runs.
+
+| Profile | Cases | hit@1 / hit@3 / hit@5 | Symbol / path recall | Budget | Forbidden | Deterministic | Median tokens | Median reduction |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Go/auth | 6 | 0.6667 / 1.0000 / 1.0000 | 1.0000 / 0.9167 | 1.0000 | 0 | 1.0000 | 172 | 0.04007084348018596 |
+| PHP | 4 | 0.2500 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 179 | 0.05550387596899225 |
+| Smarty/template | 5 | 0.8000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 87 | 0.026568430453226165 |
+| C/C++ | 8 | 0.5000 / 0.8750 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 94 | 0.15639269406392695 |
+| C# | 5 | 0.6000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 107 | 0.15507246376811595 |
+| JavaScript/TypeScript | 6 | 0.6667 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 121 | 0.15419501133786848 |
+| .NET WinForms/WPF/XAML/RESX | 6 | 0.8333 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 95 | 0.20833333333333334 |
+| Rust | 5 | 0.4000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 94 | 0.19542619542619544 |
+| Python | 5 | 1.0000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 78 | 0.22857142857142856 |
+

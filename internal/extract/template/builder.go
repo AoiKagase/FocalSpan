@@ -77,7 +77,9 @@ func (b *templateBuilder) appendRootOutline() {
 		}
 	}
 	content := strings.Join(lines, "\n")
-	b.result.Chunks = append(b.result.Chunks, b.newChunk("template-outline", b.root.Handle, b.root.Name, 0, len(b.file.Content), content))
+	chunk := b.newChunk("template-outline", b.root.Handle, b.root.Name, 0, 0, content)
+	chunk.Signature = "synthetic outline (not a source slice)"
+	b.result.Chunks = append(b.result.Chunks, chunk)
 }
 
 func (b *templateBuilder) appendNamedSymbols() error {
@@ -218,7 +220,8 @@ func (b *templateBuilder) appendStaticRange(start, end int) {
 		}
 		content := string(b.file.Content[start:windowEnd])
 		if strings.TrimSpace(content) != "" {
-			b.result.Chunks = append(b.result.Chunks, b.newChunk("static", "", "", start, windowEnd, content))
+			owner := b.ownerForOffset(start)
+			b.result.Chunks = append(b.result.Chunks, b.newChunk("static", owner.Handle, owner.Name, start, windowEnd, content))
 		}
 		if windowEnd >= end {
 			break

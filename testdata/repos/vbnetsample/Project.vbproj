@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><RootNamespace>Demo</RootNamespace><AssemblyName>VbNetAuth</AssemblyName></PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\Shared\Shared.vbproj" /></ItemGroup>
+</Project>

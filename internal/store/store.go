@@ -608,6 +608,9 @@ WHERE r.kind = ? AND (
         OR lower(r.unresolved_to) = lower(target.qualified_name)
         OR lower(r.unresolved_to) = lower(target_file.path)
         OR lower(target_file.path) LIKE '%/' || lower(r.unresolved_to)
+        OR lower(r.unresolved_to) LIKE '%::' || lower(target.name) || '::%'
+        OR lower(r.unresolved_to) LIKE '%.' || lower(target.name) || '.%'
+        OR lower(r.unresolved_to) LIKE '%.' || lower(target.name)
       )
   )
 )
@@ -622,6 +625,9 @@ WHERE r.kind = ? AND r.from_handle = COALESCE((SELECT symbol_handle FROM chunks 
     OR lower(r.unresolved_to) = lower(target.qualified_name)
     OR lower(r.unresolved_to) = lower(target_file.path)
     OR lower(target_file.path) LIKE '%/' || lower(r.unresolved_to)
+    OR lower(r.unresolved_to) LIKE '%::' || lower(target.name) || '::%'
+    OR lower(r.unresolved_to) LIKE '%.' || lower(target.name) || '.%'
+    OR lower(r.unresolved_to) LIKE '%.' || lower(target.name)
   )
 ) AND (c.kind = 'template-outline' OR NOT EXISTS (
 SELECT 1 FROM chunks outline

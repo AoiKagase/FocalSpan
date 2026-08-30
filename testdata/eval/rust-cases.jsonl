@@ -1,0 +1,5 @@
+{"name":"rust-expired-token","query":"where is an expired Rust token rejected?","token_budget":1600,"expected_symbols":["validate_token"],"expected_paths":["src/auth/token_service.rs"],"forbidden_paths":["unrelated/report.rs"]}
+{"name":"rust-token-callers","query":"what calls TokenService validate_token?","token_budget":1600,"expected_symbols":["authorize","validate_token"],"expected_paths":["src/http/middleware.rs","src/auth/token_service.rs"],"forbidden_paths":["unrelated/report.rs"]}
+{"name":"rust-token-tests","query":"what tests cover expired Rust tokens?","token_budget":1600,"expected_symbols":["expired_token_is_rejected"],"expected_paths":["tests/token_service_test.rs"],"forbidden_paths":["unrelated/report.rs"]}
+{"name":"rust-module-import","query":"which module imports token_service?","token_budget":1400,"expected_paths":["src/auth/mod.rs","src/http/middleware.rs"],"forbidden_paths":["unrelated/report.rs"]}
+{"name":"rust-trait","query":"which trait does TokenService implement?","token_budget":1600,"expected_symbols":["TokenValidator","TokenService"],"expected_paths":["src/auth/token_service.rs"],"forbidden_paths":["unrelated/report.rs"]}

@@ -200,6 +200,14 @@ func (p *parser) parseType(position, hi int, parent *declaration, namespace stri
 func (p *parser) parseAlias(position, hi int, parent *declaration, namespace string) (*declaration, int, bool) {
 	keyword := p.tokens[p.sig[position]].Text
 	semi := p.findToken(position+1, position+2, hi, ";")
+	if keyword == "concept" {
+		for cursor := position + 1; cursor < hi; cursor++ {
+			if p.tokens[p.sig[cursor]].Text == ";" {
+				semi = cursor
+				break
+			}
+		}
+	}
 	if semi < 0 {
 		return nil, position, false
 	}
@@ -212,7 +220,12 @@ func (p *parser) parseAlias(position, hi int, parent *declaration, namespace str
 			break
 		}
 		if keyword == "typedef" && p.tokens[p.sig[cursor]].Kind == Identifier {
-			name = text
+			if cursor+1 < semi && p.tokens[p.sig[cursor+1]].Text == ")" && cursor > position+1 && (p.tokens[p.sig[cursor-1]].Text == "*" || p.tokens[p.sig[cursor-1]].Text == "&") {
+				name = text
+			}
+			if name == "" {
+				name = text
+			}
 		}
 		if keyword == "concept" && p.tokens[p.sig[cursor]].Kind == Identifier {
 			name = text
@@ -338,7 +351,11 @@ func (p *parser) parseTest(position, hi int, parent *declaration, namespace stri
 	if name == "" {
 		name = p.tokens[p.sig[position]].Text
 	}
-	return &declaration{Kind: "test", Name: name, Qualified: joinQualified(namespace, name), Start: p.sig[position], HeaderEnd: p.tokens[p.sig[body]].EndByte, End: p.endAfter(bodyClose, hi), BodyOpen: p.sig[body], BodyClose: bodyClose, Parent: parent, Namespace: namespace}, p.positionOfOr(bodyClose, body), true
+	qualified := name
+	if namespace != "" {
+		qualified = namespace + "::" + name
+	}
+	return &declaration{Kind: "test", Name: name, Qualified: qualified, Start: p.sig[position], HeaderEnd: p.tokens[p.sig[body]].EndByte, End: p.endAfter(bodyClose, hi), BodyOpen: p.sig[body], BodyClose: bodyClose, Parent: parent, Namespace: namespace}, p.positionOfOr(bodyClose, body), true
 }
 
 func (p *parser) functionHeaderLikely(start, name, open int, currentType string) bool {
@@ -346,7 +363,7 @@ func (p *parser) functionHeaderLikely(start, name, open int, currentType string)
 	if controlWords[nameText] || nameText == "sizeof" || nameText == "decltype" || nameText == "static_assert" {
 		return false
 	}
-	if nameText == "." || nameText == "->" || nameText == "*" || nameText == "&" {
+	if nameText == "." || nameText == "->" || nameText == "*" || nameText == "&" || nameText == "]" || nameText == "[" {
 		return false
 	}
 	if name == start {
@@ -357,7 +374,7 @@ func (p *parser) functionHeaderLikely(start, name, open int, currentType string)
 	}
 	for cursor := start; cursor < name; cursor++ {
 		text := p.tokens[p.sig[cursor]].Text
-		if text == "::" || text == "operator" || text == "template" || typeWords[text] || text == "auto" || text == "inline" || text == "static" || text == "constexpr" || text == "virtual" {
+		if text == "::" || text == "operator" || text == "template" || text == "friend" || typeWords[text] || text == "auto" || text == "inline" || text == "static" || text == "constexpr" || text == "virtual" {
 			return true
 		}
 	}
@@ -534,6 +551,11 @@ func namespaceFor(value string) string {
 }
 
 func testName(args string) string {
+	if start := strings.IndexByte(args, '"'); start >= 0 {
+		if end := strings.IndexByte(args[start+1:], '"'); end >= 0 {
+			return args[start+1 : start+1+end]
+		}
+	}
 	parts := strings.Split(args, ",")
 	if len(parts) > 1 {
 		return strings.TrimSpace(parts[len(parts)-1])

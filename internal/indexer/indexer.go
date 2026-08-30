@@ -11,7 +11,9 @@ import (
 
 	"github.com/focalspan/focalspan/internal/config"
 	"github.com/focalspan/focalspan/internal/extract"
+	"github.com/focalspan/focalspan/internal/linker"
 	"github.com/focalspan/focalspan/internal/model"
+	"github.com/focalspan/focalspan/internal/projectmeta"
 	"github.com/focalspan/focalspan/internal/repository"
 	"github.com/focalspan/focalspan/internal/store"
 )
@@ -38,7 +40,7 @@ const (
 	PhaseWriting  = "writing"
 	PhaseComplete = "complete"
 
-	extractorVersion = "extractors-v4"
+	extractorVersion = "extractors-v5-polyglot"
 )
 
 func New(root string, cfg config.Config, st *store.Store, registry *extract.Registry) *Indexer {
@@ -128,6 +130,15 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 			run.ParseFailures++
 		}
 	}
+	facts, metadataDiagnostics, err := projectmeta.Discover(ctx, i.root, files)
+	if err != nil {
+		return model.IndexRun{}, fmt.Errorf("discover project metadata: %w", err)
+	}
+	for _, diagnostic := range metadataDiagnostics {
+		if diagnostic.Level == "warning" {
+			run.ParseFailures++
+		}
+	}
 	revision := revisionFor(files)
 	run.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	run.DurationMS = time.Since(started).Milliseconds()
@@ -140,6 +151,9 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 		{Key: "last_successful_index", Value: run.CompletedAt},
 	}, run); err != nil {
 		return model.IndexRun{}, err
+	}
+	if err := (&linker.Linker{Store: i.store}).Link(ctx, facts); err != nil {
+		return model.IndexRun{}, fmt.Errorf("link project relations: %w", err)
 	}
 	emit(Progress{Phase: PhaseComplete, Completed: 1, Total: 1})
 	return run, nil

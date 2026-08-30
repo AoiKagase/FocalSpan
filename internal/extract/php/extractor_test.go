@@ -408,6 +408,7 @@ class TokenServiceTest extends TestCase {
     #[Test]
     public function expired_token_is_rejected(): void { validateToken(); }
 }
+
 `
 	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "tests/TokenServiceTest.php", Language: "php", Content: []byte(content)})
 	if err != nil {
@@ -425,6 +426,70 @@ class TokenServiceTest extends TestCase {
 	}
 }
 
+func TestPHPExtractorRecognizesModernDeclarationsPHPDocAndPestTests(t *testing.T) {
+	content := `<?php
+namespace App\Feature {
+    #[\Attribute]
+    readonly class Request {}
+    class DocDependency {}
+    class DocOnly {}
+    class DocResult {}
+    interface Contract {}
+    trait Auditable { public function audit(): void {} }
+    trait Alternate { public function audit(): void {} }
+    enum Status: string { case Ready = 'ready'; }
+
+    class Service implements Contract {
+        use Auditable, Alternate { Auditable::audit insteadof Alternate; Alternate::audit as protected auditAlternate; }
+
+        /** @param DocDependency $dependency @return DocOnly */
+        public function process(DocDependency $dependency): DocResult {
+            $closure = function () use ($dependency) { return $dependency; };
+            $arrow = fn($value) => $value;
+            $anonymous = new class {};
+            return new DocResult();
+        }
+    }
+}
+
+function validateToken(): bool { return true; }
+test('rejects expired token', function (): void { validateToken(); });
+`
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "modern.php", Language: "php", Content: []byte(content)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireSymbol(t, got.Symbols, "App\\Feature\\Request", "class")
+	requireSymbol(t, got.Symbols, "App\\Feature\\Status", "enum")
+	auditable := requireSymbol(t, got.Symbols, "App\\Feature\\Auditable", "trait")
+	service := requireSymbol(t, got.Symbols, "App\\Feature\\Service", "class")
+	process := requireSymbol(t, got.Symbols, "App\\Feature\\Service::process", "method")
+	docOnly := requireSymbol(t, got.Symbols, "App\\Feature\\DocOnly", "class")
+	pest, pestOK := findSymbol(got.Symbols, "rejects expired token")
+	if !pestOK {
+		t.Fatalf("Pest test symbol absent")
+	}
+	if !hasRelation(got.Relations, service.Handle, auditable.Handle, "references") {
+		t.Fatalf("trait adaptation reference missing")
+	}
+	if !hasRelation(got.Relations, process.Handle, docOnly.Handle, "references") && !hasUnresolvedRelation(got.Relations, process.Handle, "DocOnly", "references") {
+		t.Fatalf("PHPDoc type reference missing")
+	}
+	for _, relation := range got.Relations {
+		if relation.FromHandle == process.Handle && relation.Kind == "references" && (relation.ToHandle == docOnly.Handle || relation.UnresolvedTo == "DocOnly") && relation.Confidence >= .5 {
+			t.Fatalf("PHPDoc reference confidence is not low")
+		}
+	}
+	if !hasRelation(got.Relations, pest.Handle, requireSymbol(t, got.Symbols, "validateToken", "function").Handle, "tests") {
+		t.Fatalf("Pest test relation missing")
+	}
+	for _, chunk := range got.Chunks {
+		if chunk.SymbolHandle == process.Handle && strings.Contains(chunk.Content, "function ()") && strings.Contains(chunk.Content, "fn($value)") && strings.Contains(chunk.Content, "new class") {
+			return
+		}
+	}
+	t.Fatalf("closure and arrow source was not retained in process chunk")
+}
 func TestPHPExtractorLimitsTestClassificationToPHPUnitClassesAndExactAttributes(t *testing.T) {
 	content := `<?php
 namespace App\Tests;

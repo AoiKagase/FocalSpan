@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"path"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -495,7 +496,7 @@ func (b *phpBuilder) buildRelations() {
 		if isClassLike(decl.Kind) {
 			b.buildTraitRelations(index, decl, symbol)
 		}
-		if decl.Kind == "function" || classParent(decl) != nil {
+		if decl.Kind == "function" || decl.Kind == "test" || classParent(decl) != nil {
 			b.buildBodyRelations(index, decl, symbol)
 		}
 	}
@@ -568,6 +569,37 @@ func (b *phpBuilder) buildDeclarationTypeRelations(index phpSymbolIndex, decl *p
 			b.addResolvedOrUnresolved(index, symbol, decl.Namespace, target, "references", "signature-type")
 		}
 	}
+	for _, target := range phpDocTypes(decl.Doc) {
+		if resolved, ok := resolveType(index, decl.Namespace, target); ok {
+			b.addRelation(model.Relation{FromHandle: symbol.Handle, ToHandle: resolved.Handle, Kind: "references", Confidence: .25, Source: "phpdoc-type"})
+		} else {
+			b.addRelation(model.Relation{FromHandle: symbol.Handle, UnresolvedTo: target, Kind: "references", Confidence: .2, Source: "phpdoc-type"})
+		}
+	}
+}
+
+var phpDocTypePattern = regexp.MustCompile(`(?i)@(param|return|var)\s+([A-Za-z_][A-Za-z0-9_\\|?&\[\]]*)`)
+
+func phpDocTypes(doc string) []string {
+	matches := phpDocTypePattern.FindAllStringSubmatch(doc, -1)
+	result := make([]string, 0, len(matches))
+	seen := make(map[string]bool)
+	for _, match := range matches {
+		if len(match) != 3 {
+			continue
+		}
+		for _, value := range strings.Split(match[2], "|") {
+			value = strings.Trim(value, "?&")
+			value = strings.TrimSuffix(value, "[]")
+			value = canonicalName(value)
+			if value == "" || strings.EqualFold(value, "mixed") || strings.EqualFold(value, "null") || seen[strings.ToLower(value)] {
+				continue
+			}
+			seen[strings.ToLower(value)] = true
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 func (b *phpBuilder) indexSymbols() phpSymbolIndex {

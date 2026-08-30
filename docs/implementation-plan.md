@@ -297,9 +297,11 @@ MCP surface is five tools rather than the four-tool surface described by the
 original MVP plan.
 
 Measured acceptance results and environment-specific verification status are
-recorded in `docs/evaluation.md`. The next-stage roadmap remains design-only:
-semantic zoom and evidence spans (v0.3), repository linking (v0.4), and
-optional semantic facts (v0.5).
+recorded in `docs/evaluation.md`. Polyglot Coverage v0.3 is implemented in the
+current checkout: Rust, Python, Ruby, Lua, Pawn, VB6, VB.NET, Nim, and Zig have
+dedicated structural extractors, and static project metadata can conservatively
+link repository relations. Semantic zoom, compiler-grade semantic providers,
+and optional semantic facts remain design-only follow-up work.
 
 ## Verification checklist
 
@@ -346,3 +348,25 @@ optional semantic facts (v0.5).
 - [x] `GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/focalspan`
 - [x] `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/focalspan`
 - [x] fixture evaluation meets the acceptance thresholds; PHP and Go results are recorded in `docs/evaluation.md`.
+
+### Polyglot Coverage v0.3 release gate
+
+- [x] Extractor version is `extractors-v5-polyglot`; version changes trigger a
+  deterministic reparse and do not require a schema migration.
+- [x] All 16 regular fixture evaluations and both Japanese `--ablation all`
+  evaluations were rerun after indexing each root. Full-mode regular profiles
+  reached hit@5 1.0, symbol recall 1.0, budget compliance 1.0, zero forbidden
+  paths, and deterministic output. Path recall is 1.0 for 15 profiles and
+  0.9167 for Go/auth because its syntax-only impact case expects two paths
+  while the returned impact result contains one.
+- [x] Read-only project metadata and conservative cross-file linker behavior
+  are covered by package tests; ambiguous matches remain unresolved.
+- [ ] `CGO_ENABLED=1 go test -race ./...` is environment-unverified because
+  the available Windows `cc1.exe` cannot compile 64-bit cgo code.
+- [x] Host, Windows amd64, Linux amd64, and Darwin arm64 CGO-free builds pass
+  using output paths outside the repository.
+- [x] Public CLI regression covers setup/status/update/positional query and
+  project MCP dry-run/status/uninstall. Retired command names and `mcp print`
+  are rejected; protocol stdout cleanliness is covered by the MCP subprocess
+  test. A direct PowerShell `serve` harness remained unverified because its
+  stdin path produced a BOM before the server received JSON.

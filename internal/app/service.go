@@ -16,8 +16,18 @@ import (
 	"github.com/focalspan/focalspan/internal/extract/generic"
 	"github.com/focalspan/focalspan/internal/extract/goast"
 	"github.com/focalspan/focalspan/internal/extract/jsts"
+	luaextract "github.com/focalspan/focalspan/internal/extract/lua"
+	nimstructural "github.com/focalspan/focalspan/internal/extract/nim"
+	pawnextract "github.com/focalspan/focalspan/internal/extract/pawn"
 	"github.com/focalspan/focalspan/internal/extract/php"
+	pythonstr "github.com/focalspan/focalspan/internal/extract/python"
+	"github.com/focalspan/focalspan/internal/extract/resx"
+	rubystructural "github.com/focalspan/focalspan/internal/extract/ruby"
+	rustructural "github.com/focalspan/focalspan/internal/extract/rust"
 	templateextract "github.com/focalspan/focalspan/internal/extract/template"
+	vbextract "github.com/focalspan/focalspan/internal/extract/vb"
+	"github.com/focalspan/focalspan/internal/extract/xaml"
+	zigstructural "github.com/focalspan/focalspan/internal/extract/zig"
 	"github.com/focalspan/focalspan/internal/gitx"
 	"github.com/focalspan/focalspan/internal/indexer"
 	"github.com/focalspan/focalspan/internal/model"
@@ -64,7 +74,18 @@ func newExtractorRegistry() *extract.Registry {
 		cpp.NewExtractor(),
 		csharp.NewExtractor(),
 		jsts.NewExtractor(),
+		luaextract.NewExtractor(),
+		pawnextract.NewExtractor(),
+		rustructural.NewExtractor(),
+		pythonstr.NewExtractor(),
+		rubystructural.NewExtractor(),
+		vbextract.NewVB6Extractor(),
+		vbextract.NewVBNetExtractor(),
+		nimstructural.NewExtractor(),
+		zigstructural.NewExtractor(),
 		templateextract.NewExtractor(),
+		xaml.NewExtractor(),
+		resx.NewExtractor(),
 		generic.NewExtractor(),
 	)
 }

@@ -65,6 +65,16 @@ func TestCommandFailureIncludesExitCodeAndStderr(t *testing.T) {
 	}
 }
 
+func TestMissingRegistrationRecognizesCurrentCodexMessage(t *testing.T) {
+	result := CommandResult{
+		ExitCode: 1,
+		Stderr:   []byte("Error: No MCP server named 'focalspan-FocalSpan-01e544cb' found.\n"),
+	}
+	if !isMissingRegistration(result, errors.New("exit status 1")) {
+		t.Fatal("current Codex missing-registration message was not recognized")
+	}
+}
+
 func (f *fakeCommandRunner) Run(ctx context.Context, name string, args ...string) (CommandResult, error) {
 	f.calls = append(f.calls, fakeCommandCall{Name: name, Args: append([]string(nil), args...)})
 	return f.fn(ctx, name, args)

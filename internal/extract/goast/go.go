@@ -32,21 +32,30 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 		return model.Extraction{}, err
 	}
 	fset := token.NewFileSet()
-	parsed, err := parser.ParseFile(fset, file.Path, file.Content, parser.ParseComments)
-	if err != nil {
-		return model.Extraction{Diagnostics: []model.Diagnostic{{FilePath: file.Path, Level: "warning", Code: "go_parse", Message: err.Error()}}}, fmt.Errorf("parse Go source %s: %w", file.Path, err)
+	parsed, parseErr := parser.ParseFile(fset, file.Path, file.Content, parser.ParseComments|parser.AllErrors)
+	if parsed == nil {
+		if parseErr == nil {
+			parseErr = fmt.Errorf("parser returned no AST")
+		}
+		return model.Extraction{Diagnostics: []model.Diagnostic{{FilePath: file.Path, Level: "warning", Code: "go_parse", Message: parseErr.Error()}}}, fmt.Errorf("parse Go source %s: %w", file.Path, parseErr)
 	}
 	result := model.Extraction{}
+	if parseErr != nil {
+		result.Diagnostics = append(result.Diagnostics, model.Diagnostic{FilePath: file.Path, Level: "warning", Code: "go_parse_partial", Message: parseErr.Error()})
+	}
 	allocator := model.NewHandleAllocator()
-	packageHandle := allocator.Allocate("sym", file.Path, "go", "package", parsed.Name.Name, parsed.Name.Name)
+	packageName := "unknown"
+	if parsed.Name != nil {
+		packageName = parsed.Name.Name
+	}
+	packageHandle := allocator.Allocate("sym", file.Path, "go", "package", packageName, packageName)
 	packageStart, packageEnd := span(fset, parsed)
-	result.Symbols = append(result.Symbols, model.Symbol{Handle: packageHandle, FilePath: file.Path, Language: "go", Kind: "package", Name: parsed.Name.Name, QualifiedName: parsed.Name.Name, Signature: "package " + parsed.Name.Name, StartLine: packageStart.line, EndLine: packageEnd.line, StartByte: packageStart.offset, EndByte: packageEnd.offset, Confidence: 1})
+	result.Symbols = append(result.Symbols, model.Symbol{Handle: packageHandle, FilePath: file.Path, Language: "go", Kind: "package", Name: packageName, QualifiedName: packageName, Signature: "package " + packageName, StartLine: packageStart.line, EndLine: packageEnd.line, StartByte: packageStart.offset, EndByte: packageEnd.offset, Confidence: 1})
 	for _, spec := range parsed.Imports {
 		path := strings.Trim(spec.Path.Value, "\"")
 		result.Relations = append(result.Relations, model.Relation{FromHandle: packageHandle, UnresolvedTo: path, Kind: "imports", Confidence: 1, Source: "go-ast"})
 	}
 
-	topHandles := make(map[string]string)
 	for _, decl := range parsed.Decls {
 		if err := ctx.Err(); err != nil {
 			return model.Extraction{}, err
@@ -55,8 +64,8 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 		case *ast.FuncDecl:
 			symbol := buildFuncSymbol(file, fset, d, allocator)
 			result.Symbols = append(result.Symbols, symbol)
-			topHandles[symbol.Name] = symbol.Handle
 			result.Relations = append(result.Relations, model.Relation{FromHandle: packageHandle, ToHandle: symbol.Handle, Kind: "contains", Confidence: 1, Source: "go-ast"})
+			result.Relations = append(result.Relations, typeRelations(symbol, d.Type, file, fset)...)
 			if d.Recv != nil && len(d.Recv.List) > 0 {
 				receiver := receiverName(d.Recv.List[0].Type)
 				if receiver != "" {
@@ -67,14 +76,19 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 			result.Chunks = append(result.Chunks, chunkForSymbol(symbol, sourceForNode(file.Content, fset, d)))
 		case *ast.GenDecl:
 			for _, spec := range d.Specs {
-				symbol, ok := buildDeclSymbol(file, fset, d, spec, allocator)
-				if !ok {
-					continue
+				symbols := buildDeclSymbols(file, fset, d, spec, allocator)
+				for _, symbol := range symbols {
+					result.Symbols = append(result.Symbols, symbol)
+					result.Relations = append(result.Relations, model.Relation{FromHandle: packageHandle, ToHandle: symbol.Handle, Kind: "contains", Confidence: 1, Source: "go-ast"})
+					result.Chunks = append(result.Chunks, chunkForSymbol(symbol, sourceForNode(file.Content, fset, spec)))
+					if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+						result.Relations = append(result.Relations, typeRelations(symbol, typeSpec.Type, file, fset)...)
+						members, relations := buildTypeMembers(file, fset, typeSpec, symbol, allocator)
+						result.Symbols = append(result.Symbols, members...)
+						result.Chunks = append(result.Chunks, memberChunks(file, members, fset)...)
+						result.Relations = append(result.Relations, relations...)
+					}
 				}
-				result.Symbols = append(result.Symbols, symbol)
-				topHandles[symbol.Name] = symbol.Handle
-				result.Relations = append(result.Relations, model.Relation{FromHandle: packageHandle, ToHandle: symbol.Handle, Kind: "contains", Confidence: 1, Source: "go-ast"})
-				result.Chunks = append(result.Chunks, chunkForSymbol(symbol, sourceForNode(file.Content, fset, spec)))
 			}
 		}
 	}
@@ -87,6 +101,8 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 		}
 	}
 	resolveTestRelations(result.Symbols, result.Relations)
+	resolveGoRelations(result.Symbols, result.Relations)
+	deduplicateRelations(&result)
 	sort.Slice(result.Symbols, func(i, j int) bool {
 		return result.Symbols[i].StartByte < result.Symbols[j].StartByte || result.Symbols[i].Name < result.Symbols[j].Name
 	})
@@ -188,7 +204,7 @@ func buildFuncSymbol(file model.SourceFile, fset *token.FileSet, decl *ast.FuncD
 		receiver := receiverName(decl.Recv.List[0].Type)
 		qualified = receiver + "." + name
 	}
-	if strings.HasPrefix(name, "Test") || strings.HasPrefix(name, "Benchmark") || strings.HasPrefix(name, "Example") {
+	if strings.HasPrefix(name, "Test") || strings.HasPrefix(name, "Benchmark") || strings.HasPrefix(name, "Fuzz") || strings.HasPrefix(name, "Example") {
 		kind = "test"
 	}
 	signature := funcSignature(file.Content, fset, decl)
@@ -196,12 +212,16 @@ func buildFuncSymbol(file model.SourceFile, fset *token.FileSet, decl *ast.FuncD
 	return model.Symbol{Handle: handle, FilePath: file.Path, Language: "go", Kind: kind, Name: name, QualifiedName: qualified, Signature: signature, StartLine: start.line, EndLine: end.line, StartByte: start.offset, EndByte: end.offset, Confidence: 1}
 }
 
-func buildDeclSymbol(file model.SourceFile, fset *token.FileSet, decl *ast.GenDecl, spec ast.Spec, allocator *model.HandleAllocator) (model.Symbol, bool) {
-	var name, kind string
+func buildDeclSymbols(file model.SourceFile, fset *token.FileSet, decl *ast.GenDecl, spec ast.Spec, allocator *model.HandleAllocator) []model.Symbol {
+	var names []string
+	var kind string
 	switch s := spec.(type) {
 	case *ast.TypeSpec:
-		name = s.Name.Name
+		names = []string{s.Name.Name}
 		kind = "type"
+		if s.Assign.IsValid() {
+			kind = "type_alias"
+		}
 		switch s.Type.(type) {
 		case *ast.StructType:
 			kind = "struct"
@@ -209,21 +229,187 @@ func buildDeclSymbol(file model.SourceFile, fset *token.FileSet, decl *ast.GenDe
 			kind = "interface"
 		}
 	case *ast.ValueSpec:
-		if len(s.Names) == 0 {
-			return model.Symbol{}, false
+		for _, name := range s.Names {
+			names = append(names, name.Name)
 		}
-		name = s.Names[0].Name
 		kind = strings.ToLower(decl.Tok.String())
 	default:
-		return model.Symbol{}, false
+		return nil
 	}
+	result := make([]model.Symbol, 0, len(names))
 	start, end := span(fset, spec)
 	signature := strings.TrimSpace(sourceForNode(file.Content, fset, spec))
 	if i := strings.IndexByte(signature, '\n'); i >= 0 {
 		signature = signature[:i]
 	}
-	handle := allocator.Allocate("sym", file.Path, "go", kind, name, model.NormalizeSignature(signature))
-	return model.Symbol{Handle: handle, FilePath: file.Path, Language: "go", Kind: kind, Name: name, QualifiedName: name, Signature: signature, StartLine: start.line, EndLine: end.line, StartByte: start.offset, EndByte: end.offset, Confidence: 1}, true
+	for _, name := range names {
+		handle := allocator.Allocate("sym", file.Path, "go", kind, name, model.NormalizeSignature(signature))
+		result = append(result, model.Symbol{Handle: handle, FilePath: file.Path, Language: "go", Kind: kind, Name: name, QualifiedName: name, Signature: signature, StartLine: start.line, EndLine: end.line, StartByte: start.offset, EndByte: end.offset, Confidence: 1})
+	}
+	return result
+}
+
+func declarationType(spec ast.Spec) ast.Expr {
+	if value, ok := spec.(*ast.ValueSpec); ok {
+		return value.Type
+	}
+	return nil
+}
+
+func buildTypeMembers(file model.SourceFile, fset *token.FileSet, typeSpec *ast.TypeSpec, owner model.Symbol, allocator *model.HandleAllocator) ([]model.Symbol, []model.Relation) {
+	var fields *ast.FieldList
+	switch typeExpr := typeSpec.Type.(type) {
+	case *ast.StructType:
+		fields = typeExpr.Fields
+	case *ast.InterfaceType:
+		fields = typeExpr.Methods
+	}
+	if fields == nil {
+		return nil, nil
+	}
+	members := make([]model.Symbol, 0, len(fields.List))
+	relations := make([]model.Relation, 0, len(fields.List)*2)
+	for _, field := range fields.List {
+		names := make([]string, 0, len(field.Names))
+		kind := "field"
+		if _, ok := field.Type.(*ast.FuncType); ok {
+			kind = "interface_method"
+		}
+		for _, name := range field.Names {
+			names = append(names, name.Name)
+		}
+		if len(names) == 0 {
+			if name := embeddedFieldName(field.Type); name != "" {
+				names = append(names, name)
+				kind = "embedded_field"
+			}
+		}
+		for _, name := range names {
+			start, end := span(fset, field)
+			signature := strings.TrimSpace(sourceForNode(file.Content, fset, field))
+			qualified := owner.QualifiedName + "." + name
+			handle := allocator.Allocate("sym", file.Path, "go", kind, qualified, model.NormalizeSignature(signature))
+			member := model.Symbol{Handle: handle, FilePath: file.Path, Language: "go", Kind: kind, Name: name, QualifiedName: qualified, Signature: signature, StartLine: start.line, EndLine: end.line, StartByte: start.offset, EndByte: end.offset, ParentHandle: owner.Handle, Confidence: 1}
+			members = append(members, member)
+			relations = append(relations, model.Relation{FromHandle: owner.Handle, ToHandle: member.Handle, Kind: "contains", Confidence: 1, Source: "go-ast"})
+			relations = append(relations, typeRelations(member, field.Type, file, fset)...)
+		}
+		if kind == "embedded_field" {
+			relations = append(relations, typeRelations(owner, field.Type, file, fset)...)
+		}
+	}
+	return members, relations
+}
+
+func memberChunks(file model.SourceFile, members []model.Symbol, fset *token.FileSet) []model.Chunk {
+	chunks := make([]model.Chunk, 0, len(members))
+	for _, member := range members {
+		var content string
+		if member.StartByte >= 0 && member.EndByte >= member.StartByte && member.EndByte <= len(file.Content) {
+			content = string(file.Content[member.StartByte:member.EndByte])
+		}
+		if content != "" {
+			chunks = append(chunks, chunkForSymbol(member, content))
+		}
+	}
+	return chunks
+}
+
+func embeddedFieldName(expr ast.Expr) string {
+	switch value := expr.(type) {
+	case *ast.Ident:
+		return value.Name
+	case *ast.StarExpr:
+		return embeddedFieldName(value.X)
+	case *ast.IndexExpr:
+		return embeddedFieldName(value.X)
+	case *ast.IndexListExpr:
+		return embeddedFieldName(value.X)
+	case *ast.SelectorExpr:
+		return value.Sel.Name
+	default:
+		return ""
+	}
+}
+
+func typeRelations(symbol model.Symbol, expr ast.Expr, file model.SourceFile, fset *token.FileSet) []model.Relation {
+	_ = file
+	_ = fset
+	refs := make([]string, 0, 4)
+	collectTypeReferences(expr, &refs)
+	seen := make(map[string]struct{}, len(refs))
+	result := make([]model.Relation, 0, len(refs))
+	for _, ref := range refs {
+		if ref == "" {
+			continue
+		}
+		if _, ok := seen[ref]; ok {
+			continue
+		}
+		seen[ref] = struct{}{}
+		result = append(result, model.Relation{FromHandle: symbol.Handle, UnresolvedTo: ref, Kind: "references", Confidence: .65, Source: "go-ast:type"})
+	}
+	return result
+}
+
+func collectTypeReferences(expr ast.Expr, refs *[]string) {
+	if expr == nil {
+		return
+	}
+	switch value := expr.(type) {
+	case *ast.Ident:
+		if !goBuiltinType[value.Name] {
+			*refs = append(*refs, value.Name)
+		}
+	case *ast.SelectorExpr:
+		if name := formatExpr(value); name != "" {
+			*refs = append(*refs, name)
+		}
+	case *ast.StarExpr:
+		collectTypeReferences(value.X, refs)
+	case *ast.ArrayType:
+		collectTypeReferences(value.Elt, refs)
+	case *ast.MapType:
+		collectTypeReferences(value.Key, refs)
+		collectTypeReferences(value.Value, refs)
+	case *ast.ChanType:
+		collectTypeReferences(value.Value, refs)
+	case *ast.Ellipsis:
+		collectTypeReferences(value.Elt, refs)
+	case *ast.IndexExpr:
+		collectTypeReferences(value.X, refs)
+		collectTypeReferences(value.Index, refs)
+	case *ast.IndexListExpr:
+		collectTypeReferences(value.X, refs)
+		for _, index := range value.Indices {
+			collectTypeReferences(index, refs)
+		}
+	case *ast.ParenExpr:
+		collectTypeReferences(value.X, refs)
+	case *ast.FuncType:
+		collectFieldTypes(value.Params, refs)
+		collectFieldTypes(value.Results, refs)
+	case *ast.InterfaceType:
+		collectFieldTypes(value.Methods, refs)
+	case *ast.StructType:
+		collectFieldTypes(value.Fields, refs)
+	}
+}
+
+func collectFieldTypes(fields *ast.FieldList, refs *[]string) {
+	if fields == nil {
+		return
+	}
+	for _, field := range fields.List {
+		collectTypeReferences(field.Type, refs)
+	}
+}
+
+var goBuiltinType = map[string]bool{
+	"any": true, "bool": true, "byte": true, "comparable": true, "complex128": true, "complex64": true,
+	"error": true, "float32": true, "float64": true, "int": true, "int16": true, "int32": true,
+	"int64": true, "int8": true, "rune": true, "string": true, "uint": true, "uint16": true,
+	"uint32": true, "uint64": true, "uint8": true, "uintptr": true,
 }
 
 func funcSignature(content []byte, fset *token.FileSet, decl *ast.FuncDecl) string {
@@ -265,16 +451,63 @@ func functionRelations(symbol model.Symbol, decl *ast.FuncDecl, file model.Sourc
 		case *ast.CallExpr:
 			name, confidence := callName(n.Fun)
 			if name != "" {
-				result = append(result, model.Relation{FromHandle: symbol.Handle, UnresolvedTo: name, Kind: "calls", Confidence: confidence, Source: "go-ast"})
+				source := "go-ast"
+				if _, ok := n.Fun.(*ast.SelectorExpr); ok {
+					source = "go-ast:selector-call"
+				}
+				result = append(result, model.Relation{FromHandle: symbol.Handle, UnresolvedTo: name, Kind: "calls", Confidence: confidence, Source: source})
 			}
 		case *ast.SelectorExpr:
 			if _, ok := n.X.(*ast.Ident); ok {
-				result = append(result, model.Relation{FromHandle: symbol.Handle, UnresolvedTo: n.Sel.Name, Kind: "refers_to", Confidence: .35, Source: "go-ast"})
+				result = append(result, model.Relation{FromHandle: symbol.Handle, UnresolvedTo: n.Sel.Name, Kind: "refers_to", Confidence: .35, Source: "go-ast:selector"})
 			}
 		}
 		return true
 	})
 	return result
+}
+
+func resolveGoRelations(symbols []model.Symbol, relations []model.Relation) {
+	byName := make(map[string][]model.Symbol)
+	byQualified := make(map[string][]model.Symbol)
+	for _, symbol := range symbols {
+		if symbol.Kind == "package" {
+			continue
+		}
+		byName[strings.ToLower(symbol.Name)] = append(byName[strings.ToLower(symbol.Name)], symbol)
+		byQualified[strings.ToLower(symbol.QualifiedName)] = append(byQualified[strings.ToLower(symbol.QualifiedName)], symbol)
+	}
+	for index := range relations {
+		relation := &relations[index]
+		if relation.ToHandle != "" || relation.UnresolvedTo == "" {
+			continue
+		}
+		if relation.Kind == "calls" && relation.Source != "go-ast" || relation.Kind != "calls" && relation.Kind != "references" {
+			continue
+		}
+		matches := byQualified[strings.ToLower(relation.UnresolvedTo)]
+		if len(matches) != 1 {
+			matches = byName[strings.ToLower(relation.UnresolvedTo)]
+		}
+		if len(matches) == 1 && matches[0].Handle != relation.FromHandle {
+			relation.ToHandle = matches[0].Handle
+			relation.UnresolvedTo = ""
+		}
+	}
+}
+
+func deduplicateRelations(result *model.Extraction) {
+	seen := make(map[string]struct{}, len(result.Relations))
+	filtered := result.Relations[:0]
+	for _, relation := range result.Relations {
+		key := relation.FromHandle + "\x00" + relation.ToHandle + "\x00" + relation.UnresolvedTo + "\x00" + relation.Kind
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		filtered = append(filtered, relation)
+	}
+	result.Relations = filtered
 }
 
 func callName(expr ast.Expr) (string, float64) {

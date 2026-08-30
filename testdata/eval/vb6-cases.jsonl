@@ -1,0 +1,5 @@
+{"name":"vb6-form-handler","query":"where is the VB6 form load handler defined?","token_budget":512,"expected_symbols":["Form_Load"],"expected_paths":["MainForm.frm"],"forbidden_paths":["unrelated/ReportForm.frm"]}
+{"name":"vb6-validation","query":"which VB6 function validates an authentication token?","token_budget":512,"expected_symbols":["ValidateToken"],"expected_paths":["AuthService.cls"],"forbidden_paths":["unrelated/ReportForm.frm"]}
+{"name":"vb6-property","query":"where is the VB6 CurrentUser property?","token_budget":512,"expected_symbols":["CurrentUser"],"expected_paths":["AuthService.cls"],"forbidden_paths":["unrelated/ReportForm.frm"]}
+{"name":"vb6-implements","query":"which VB6 class implements IAuthorizer?","token_budget":512,"expected_symbols":["AuthService"],"expected_paths":["AuthService.cls"],"forbidden_paths":["unrelated/ReportForm.frm"]}
+{"name":"vb6-project-module","query":"where is the AuthModule VB6 module defined?","token_budget":512,"expected_symbols":["AuthModule"],"expected_paths":["AuthModule.bas"],"forbidden_paths":["unrelated/ReportForm.frm"]}

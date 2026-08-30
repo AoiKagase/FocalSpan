@@ -21,8 +21,12 @@ func (Extractor) Supports(path, language string) bool {
 	if language == "javascript" || language == "typescript" {
 		return true
 	}
+	lowerPath := strings.ToLower(filepath.ToSlash(path))
+	if strings.HasSuffix(lowerPath, ".d.ts") || strings.HasSuffix(lowerPath, ".d.mts") || strings.HasSuffix(lowerPath, ".d.cts") {
+		return true
+	}
 	switch strings.ToLower(filepath.Ext(path)) {
-	case ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".d.ts":
+	case ".js", ".jsx", ".ts", ".tsx", ".mts", ".cts", ".mjs", ".cjs":
 		return true
 	}
 	return false

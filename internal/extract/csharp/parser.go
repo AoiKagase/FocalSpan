@@ -146,6 +146,15 @@ func (p *parser) parseScope(lo, hi int, parent *declaration, namespace, currentT
 				continue
 			}
 		}
+		// Try member properties before looking ahead for a type declaration. An
+		// indexer parameter can contain a type keyword (for example int in
+		// this[int index]); treating that keyword as a declaration would swallow
+		// the indexer before parseProperty gets a chance to recognize it.
+		if decl, close, ok := p.parseProperty(position, hi, parent, namespace); ok {
+			p.add(decl)
+			position = close
+			continue
+		}
 		if typePosition := p.typeKeywordAhead(position, hi); typePosition >= 0 {
 			if decl, close, ok := p.parseType(typePosition, hi, parent, namespace); ok {
 				p.add(decl)
@@ -164,11 +173,6 @@ func (p *parser) parseScope(lo, hi int, parent *declaration, namespace, currentT
 				position = close
 				continue
 			}
-		}
-		if decl, close, ok := p.parseProperty(position, hi, parent, namespace); ok {
-			p.add(decl)
-			position = close
-			continue
 		}
 		if decl, close, ok := p.parseFunction(position, hi, parent, namespace, currentType); ok {
 			p.add(decl)
@@ -254,10 +258,10 @@ func (p *parser) parseFunction(position, hi int, parent *declaration, namespace,
 	closePosition := p.positionOf(closeRaw)
 	namePosition := openPosition - 1
 	name := p.tokens[p.sig[namePosition]].Text
-	if name == "=" || p.tokens[p.sig[namePosition]].Kind == Operator {
+	if name == "=" || p.tokens[p.sig[namePosition]].Kind == Operator || p.hasOperatorKeyword(position, namePosition) {
 		for cursor := namePosition - 1; cursor >= position; cursor-- {
 			if p.tokens[p.sig[cursor]].Text == "operator" {
-				name = "operator " + p.tokens[p.sig[namePosition]].Text
+				name = "operator " + name
 				break
 			}
 		}
@@ -326,8 +330,17 @@ func (p *parser) parseFunction(position, hi int, parent *declaration, namespace,
 	return &declaration{Kind: kind, Name: name, Qualified: qualified, Start: p.sig[position], HeaderEnd: headerEnd, End: p.endAfter(p.sig[endPosition], hi), BodyOpen: bodyOpen, BodyClose: bodyClose, Parent: parent, Namespace: namespace, SignatureKey: joinTokens(p.tokens, p.sig[openPosition+1:closePosition])}, endPosition, true
 }
 
+func (p *parser) hasOperatorKeyword(start, end int) bool {
+	for cursor := start; cursor < end; cursor++ {
+		if p.tokens[p.sig[cursor]].Text == "operator" {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *parser) parseProperty(position, hi int, parent *declaration, namespace string) (*declaration, int, bool) {
-	if position+1 >= hi || p.tokens[p.sig[position]].Kind != Identifier {
+	if position+1 >= hi || p.tokens[p.sig[position]].Kind != Identifier && p.tokens[p.sig[position]].Text != "this" {
 		return nil, position, false
 	}
 	if p.tokens[p.sig[position+1]].Text == "[" && p.matching[p.sig[position+1]] > 0 {
@@ -379,6 +392,9 @@ func (p *parser) parseEvent(position, hi int, parent *declaration, namespace str
 }
 
 func (p *parser) functionLikely(start, namePosition int, currentType, name string) bool {
+	if namePosition > start && p.tokens[p.sig[namePosition-1]].Text == "new" {
+		return false
+	}
 	if currentType != "" && (name == currentType || name == "~"+currentType || strings.HasPrefix(name, "operator ")) {
 		return true
 	}

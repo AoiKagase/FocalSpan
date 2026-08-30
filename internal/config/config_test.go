@@ -45,3 +45,38 @@ func TestWriteDefaultDoesNotOverwrite(t *testing.T) {
 		t.Fatalf("config overwritten: %q", b)
 	}
 }
+
+func TestLoadLanguageOverrides(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, FileName), []byte(`{"language_overrides":{"**/*.inc":"pawn","scripts/**/*.bas":"vb6"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.LanguageOverrides["**/*.inc"] != "pawn" || cfg.LanguageOverrides["scripts/**/*.bas"] != "vb6" {
+		t.Fatalf("language overrides not loaded: %+v", cfg.LanguageOverrides)
+	}
+}
+
+func TestValidateRejectsInvalidLanguageOverrides(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		key  string
+		lang string
+	}{
+		{"unknown language", "**/*.inc", "made-up"},
+		{"invalid glob", "**/[.inc", "php"},
+		{"parent escape", "../outside/*.inc", "php"},
+		{"absolute path", `C:\outside\*.inc`, "php"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Default()
+			cfg.LanguageOverrides = map[string]string{tt.key: tt.lang}
+			if err := cfg.Validate(); err == nil {
+				t.Fatalf("Validate accepted invalid override %q=%q", tt.key, tt.lang)
+			}
+		})
+	}
+}

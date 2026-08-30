@@ -18,7 +18,7 @@ var plannerIntents = []intentLexicon{
 	{intent: IntentCallees, words: []string{"callee", "callees"}, phrases: []string{"calls from", "what does", "dependencies called"}, japanese: []string{"呼び出し先", "何を呼ぶ", "内部で呼ぶ", "依存先"}},
 	{intent: IntentImports, words: []string{"import", "imports", "include", "includes", "require", "extends", "layout", "partial", "template"}, japanese: []string{"読み込み", "読み込んでいる", "読み込む", "インポート", "インクルード", "継承元テンプレート", "部品テンプレート"}},
 	{intent: IntentExports, words: []string{"export", "exports", "re-export"}, japanese: []string{"エクスポート", "再エクスポート", "公開元"}},
-	{intent: IntentReferences, words: []string{"reference", "references", "implements", "interface", "inherits", "type usage"}, japanese: []string{"参照", "実装している", "継承", "型の使用箇所"}},
+	{intent: IntentReferences, words: []string{"reference", "references", "implement", "implements", "interface", "inherits", "type usage"}, japanese: []string{"参照", "実装している", "継承", "型の使用箇所"}},
 	{intent: IntentDefinition, words: []string{"define", "defined", "definition", "implementation", "declaration"}, phrases: []string{"where is"}, japanese: []string{"定義", "実装", "宣言", "どこにある", "場所"}},
 }
 

@@ -58,12 +58,16 @@ func scan(ctx context.Context, source []byte) ([]Region, []string, error) {
 			i, staticStart = end, end
 		case isLiteralOpen(source, i):
 			flushStatic(i)
-			end := bytesIndexFold(source, i+1, "{/literal}")
+			closeTag := "{/literal}"
+			if bytesHasPrefixFold(source, i, "{verbatim") {
+				closeTag = "{/verbatim}"
+			}
+			end := bytesIndexFold(source, i+1, closeTag)
 			if end < 0 {
 				end = len(source)
 				diagnostics = append(diagnostics, "template_unclosed_literal")
 			} else {
-				end += len("{/literal}")
+				end += len(closeTag)
 			}
 			regions = append(regions, makeRegion(source, KindSmartyLiteral, i, end))
 			i, staticStart = end, end
@@ -184,11 +188,14 @@ func scan(ctx context.Context, source []byte) ([]Region, []string, error) {
 }
 
 func isLiteralOpen(source []byte, at int) bool {
-	if !bytesHasPrefixFold(source, at, "{literal") {
-		return false
+	for _, name := range []string{"literal", "verbatim"} {
+		if !bytesHasPrefixFold(source, at, "{"+name) {
+			continue
+		}
+		end := at + 1 + len(name)
+		return end < len(source) && (source[end] == '}' || source[end] == ' ' || source[end] == '\t' || source[end] == '\r' || source[end] == '\n')
 	}
-	end := at + len("{literal")
-	return end < len(source) && (source[end] == '}' || source[end] == ' ' || source[end] == '\t' || source[end] == '\r' || source[end] == '\n')
+	return false
 }
 
 func isPHPOpen(source []byte, at int) bool {

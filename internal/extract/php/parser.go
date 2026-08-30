@@ -158,6 +158,14 @@ func (p *phpParser) parseScope(start, end int, namespace string, parent *phpDecl
 				position = nextPosition
 				continue
 			}
+		case "test", "it":
+			if parent == nil || parent.Kind == "namespace" {
+				if decl, nextPosition, ok := p.parsePestTest(position, end, currentNamespace, parent); ok {
+					p.result.Declarations = append(p.result.Declarations, decl)
+					position = nextPosition
+					continue
+				}
+			}
 		}
 		if classScope && (text == "const" || p.isPropertyCandidate(position, end)) {
 			if added, nextPosition := p.parseClassMembers(position, end, currentNamespace, parent); added {
@@ -168,6 +176,71 @@ func (p *phpParser) parseScope(start, end int, namespace string, parent *phpDecl
 		position++
 	}
 	return nil
+}
+
+func (p *phpParser) parsePestTest(position, end int, namespace string, parent *phpDecl) (*phpDecl, int, bool) {
+	if position+1 >= end || p.tokens[p.sig[position+1]].Text != "(" {
+		return nil, position, false
+	}
+	open := position + 1
+	close := p.matchDelimiter(open, end, "(", ")")
+	if close < 0 {
+		return nil, position, false
+	}
+	name := ""
+	for cursor := open + 1; cursor < close; cursor++ {
+		token := p.tokens[p.sig[cursor]]
+		if token.Kind == KindSingleQuotedString || token.Kind == KindDoubleQuotedString {
+			name = strings.Trim(token.Text, "'\"")
+			break
+		}
+	}
+	if name == "" {
+		return nil, position, false
+	}
+	decl := &phpDecl{Kind: "test", Name: name, Namespace: namespace, Start: p.declarationStart(position, 0), HeaderEnd: p.tokens[p.sig[close]].EndByte, Parent: parent, BodyOpen: -1, BodyClose: -1}
+	// Pest passes the closure as an argument, so its body is inside the
+	// outer call's parentheses rather than after the closing parenthesis.
+	for cursor := close - 1; cursor > open; cursor-- {
+		if p.tokens[p.sig[cursor]].Text != "{" {
+			continue
+		}
+		bodyClose := p.matchDelimiter(cursor, end, "{", "}")
+		decl.BodyOpen = p.sig[cursor]
+		if bodyClose < 0 || bodyClose >= close {
+			decl.End = len(p.tokens)
+			decl.Recovered = true
+			p.addDiagnostic("php_unbalanced_brace", "Pest test closure is not closed", p.sig[cursor])
+			return decl, end, true
+		}
+		decl.BodyClose = p.sig[bodyClose]
+		break
+	}
+	for cursor := close + 1; cursor < end; cursor++ {
+		text := p.tokens[p.sig[cursor]].Text
+		switch text {
+		case "{":
+			bodyClose := p.matchDelimiter(cursor, end, "{", "}")
+			decl.BodyOpen = p.sig[cursor]
+			if bodyClose < 0 {
+				decl.End = len(p.tokens)
+				decl.Recovered = true
+				p.addDiagnostic("php_unbalanced_brace", "Pest test closure is not closed", p.sig[cursor])
+				return decl, end, true
+			}
+			decl.BodyClose = p.sig[bodyClose]
+			decl.End = p.sig[bodyClose] + 1
+			return decl, bodyClose + 1, true
+		case ";":
+			decl.End = p.sig[cursor] + 1
+			return decl, cursor + 1, true
+		}
+	}
+	if decl.BodyClose >= 0 {
+		decl.End = p.sig[close] + 1
+		return decl, close + 1, true
+	}
+	return nil, position, false
 }
 
 func (p *phpParser) parseClassLike(position, end int, namespace string, parent *phpDecl) (*phpDecl, int) {

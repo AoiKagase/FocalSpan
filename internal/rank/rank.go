@@ -27,10 +27,10 @@ func RankWithPlan(candidates []model.RankedCandidate, plan query.Plan) []model.R
 			identifierTerms[identifier] = true
 		}
 	}
-	return rankCandidates(candidates, plan.Terms.Words, identifierTerms, profile, plan.HasIntent(query.IntentTests))
+	return rankCandidates(candidates, plan.Terms.Words, identifierTerms, profile, plan.HasIntent(query.IntentTests), plan.HasIntent(query.IntentReferences))
 }
 
-func rankCandidates(candidates []model.RankedCandidate, terms []string, identifierTerms map[string]bool, profile Profile, testIntent bool) []model.RankedCandidate {
+func rankCandidates(candidates []model.RankedCandidate, terms []string, identifierTerms map[string]bool, profile Profile, testIntent, referenceIntent bool) []model.RankedCandidate {
 	result := append([]model.RankedCandidate(nil), candidates...)
 	for i := range result {
 		result[i].Reasons = append([]model.ScoreReason(nil), result[i].Reasons...)
@@ -96,6 +96,9 @@ func rankCandidates(candidates []model.RankedCandidate, terms []string, identifi
 				addReason(&result[i], "relation-"+result[i].Relation, weight, "candidate was reached through the query's explicit relation intent")
 			}
 		}
+		if referenceIntent && isReferenceKind(result[i].Kind) {
+			addReason(&result[i], "reference-kind", 280, "trait or interface declaration is relevant to the reference question")
+		}
 		if result[i].EstimatedTokens > 4000 {
 			addReason(&result[i], "large-span", profile.LargeSpanPenalty, "large span has reduced utility")
 		}
@@ -120,6 +123,11 @@ func rankCandidates(candidates []model.RankedCandidate, terms []string, identifi
 		return result[a].Handle < result[b].Handle
 	})
 	return Deduplicate(result)
+}
+
+func isReferenceKind(kind string) bool {
+	kind = strings.ToLower(kind)
+	return strings.Contains(kind, "trait") || strings.Contains(kind, "interface") || strings.Contains(kind, "protocol")
 }
 
 func addReason(candidate *model.RankedCandidate, code string, weight float64, detail string) {
@@ -200,7 +208,8 @@ func Deduplicate(candidates []model.RankedCandidate) []model.RankedCandidate {
 		if isOutline(candidate.Kind) && candidate.Relation == "" && specificByPath[candidate.Path] && !hasReason(candidate, "symbol-exact") {
 			continue
 		}
-		if candidate.ContentHash != "" && hashes[candidate.ContentHash] {
+		contentKey := candidate.Path + "\x00" + candidate.ContentHash
+		if candidate.ContentHash != "" && hashes[contentKey] {
 			continue
 		}
 		contained := false
@@ -217,7 +226,7 @@ func Deduplicate(candidates []model.RankedCandidate) []model.RankedCandidate {
 			continue
 		}
 		if candidate.ContentHash != "" {
-			hashes[candidate.ContentHash] = true
+			hashes[contentKey] = true
 		}
 		result = append(result, candidate)
 	}

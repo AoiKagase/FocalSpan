@@ -159,6 +159,7 @@ func isMissingRegistration(result CommandResult, runErr error) bool {
 		message += " " + strings.ToLower(runErr.Error())
 	}
 	return strings.Contains(message, "not found") || strings.Contains(message, "does not exist") ||
+		strings.Contains(message, "no mcp server named") ||
 		(result.ExitCode != 0 && strings.TrimSpace(message) == "" && len(result.Stdout) == 0)
 }
 

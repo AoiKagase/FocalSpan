@@ -433,17 +433,36 @@ func (p *parser) parseVariableFunction(position, hi int, parent *declaration, na
 }
 
 func (p *parser) parseTest(position, hi int, parent *declaration, namespace string) (*declaration, int, bool) {
-	if position+1 >= hi || p.tokens[p.sig[position+1]].Text != "(" {
+	if position+1 >= hi {
 		return nil, position, false
 	}
-	closeRaw := p.matching[p.sig[position+1]]
+	openPosition := position + 1
+	if p.tokens[p.sig[openPosition]].Text == "." && openPosition+2 < hi && p.tokens[p.sig[openPosition+1]].Text == "each" && p.tokens[p.sig[openPosition+2]].Text == "(" {
+		dataClose := p.matching[p.sig[openPosition+2]]
+		if dataClose == 0 {
+			return nil, position, false
+		}
+		openPosition = p.positionOf(dataClose) + 1
+		if openPosition >= hi || p.tokens[p.sig[openPosition]].Text != "(" {
+			return nil, position, false
+		}
+	}
+	if p.tokens[p.sig[openPosition]].Text != "(" {
+		return nil, position, false
+	}
+	closeRaw := p.matching[p.sig[openPosition]]
 	if closeRaw == 0 {
 		return nil, position, false
 	}
 	close := p.positionOf(closeRaw)
 	body := -1
-	for cursor := position + 2; cursor < close; cursor++ {
-		if p.tokens[p.sig[cursor]].Text == "{" {
+	for cursor := openPosition + 1; cursor < close; cursor++ {
+		text := p.tokens[p.sig[cursor]].Text
+		if text == "{" {
+			body = cursor
+			break
+		}
+		if text == "=>" {
 			body = cursor
 			break
 		}
@@ -452,7 +471,10 @@ func (p *parser) parseTest(position, hi int, parent *declaration, namespace stri
 		return nil, position, false
 	}
 	bodyClose := p.matching[p.sig[body]]
-	name := firstString(p.tokens, p.sig[position+2:close])
+	if p.tokens[p.sig[body]].Text == "=>" {
+		bodyClose = closeRaw
+	}
+	name := firstString(p.tokens, p.sig[openPosition+1:close])
 	if name == "" {
 		name = p.tokens[p.sig[position]].Text
 	}
@@ -680,8 +702,15 @@ func normalizeModule(filePath, target string) []string {
 	clean := path.Clean(path.Join(path.Dir(filePath), target))
 	result := []string{clean}
 	if path.Ext(clean) == "" {
-		for _, ext := range []string{".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"} {
+		extensions := []string{".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"}
+		if strings.HasSuffix(strings.ToLower(filePath), ".ts") || strings.HasSuffix(strings.ToLower(filePath), ".tsx") || strings.HasSuffix(strings.ToLower(filePath), ".mts") || strings.HasSuffix(strings.ToLower(filePath), ".cts") {
+			extensions = []string{".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"}
+		}
+		for _, ext := range extensions {
 			result = append(result, clean+ext)
+		}
+		for _, ext := range extensions {
+			result = append(result, path.Join(clean, "index"+ext))
 		}
 	}
 	return uniqueStrings(result)

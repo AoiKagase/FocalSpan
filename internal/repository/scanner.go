@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/focalspan/focalspan/internal/config"
+	"github.com/focalspan/focalspan/internal/language"
 	"github.com/focalspan/focalspan/internal/model"
 )
 
@@ -73,7 +74,7 @@ func (s *Scanner) Scan(ctx context.Context) ([]model.SourceFile, []model.Diagnos
 			continue
 		}
 		digest := sha256.Sum256(content)
-		files = append(files, model.SourceFile{Path: rel, Language: DetectLanguageContent(rel, content), Content: content, SHA256: hex.EncodeToString(digest[:]), SizeBytes: int64(len(content))})
+		files = append(files, model.SourceFile{Path: rel, Language: language.Detect(rel, content, s.Config.LanguageOverrides).Language, Content: content, SHA256: hex.EncodeToString(digest[:]), SizeBytes: int64(len(content))})
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	return files, diagnostics, nil
@@ -207,205 +208,9 @@ func hasNUL(b []byte) bool {
 func bytesHasBOM(b []byte) bool { return len(b) >= 3 && b[0] == 0xef && b[1] == 0xbb && b[2] == 0xbf }
 
 func DetectLanguage(path string) string {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".go":
-		return "go"
-	case ".c":
-		return "c"
-	case ".cc", ".cpp", ".cxx", ".c++", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp", ".tpp", ".ixx", ".cppm":
-		return "cpp"
-	case ".cs":
-		return "csharp"
-	case ".rs":
-		return "rust"
-	case ".java":
-		return "java"
-	case ".js", ".jsx", ".mjs", ".cjs":
-		return "javascript"
-	case ".ts", ".tsx":
-		return "typescript"
-	case ".php":
-		return "php"
-	case ".phtml", ".php3", ".php4", ".php5", ".php7", ".php8", ".phps":
-		return "php"
-	case ".py":
-		return "python"
-	case ".rb":
-		return "ruby"
-	case ".ps1":
-		return "powershell"
-	case ".sh", ".bash":
-		return "shell"
-	case ".md", ".markdown":
-		return "markdown"
-	case ".json", ".yaml", ".yml", ".toml", ".xml":
-		return "config"
-	default:
-		return "text"
-	}
+	return language.Detect(path, nil, nil).Language
 }
 
 func DetectLanguageContent(path string, content []byte) string {
-	ext := strings.ToLower(filepath.Ext(path))
-	switch ext {
-	case ".tpl":
-		if containsSmartyMarker(content) {
-			return "smarty"
-		}
-		if containsPHPTag(content) {
-			return "php"
-		}
-		return "template"
-	case ".smarty":
-		return "smarty"
-	case ".inc":
-		if containsPHPTag(content) {
-			return "php"
-		}
-		return "text"
-	default:
-		return DetectLanguage(path)
-	}
-}
-
-func containsSmartyMarker(content []byte) bool {
-	for index := 0; index+1 < len(content); index++ {
-		if bytesHasPrefixFold(content, index, "<!--") {
-			if end := bytesIndexFold(content, index+4, "-->"); end >= 0 {
-				index = end + 2
-				continue
-			}
-			return false
-		}
-		if bytesHasPrefixFold(content, index, "<script") || bytesHasPrefixFold(content, index, "<style") {
-			name := "script"
-			if !bytesHasPrefixFold(content, index, "<script") {
-				name = "style"
-			}
-			if end := bytesIndexFold(content, index, "</"+name); end >= 0 {
-				index = end + len(name) + 1
-				continue
-			}
-			return false
-		}
-		if content[index] != '{' {
-			continue
-		}
-		if index+1 < len(content) && content[index+1] == '{' {
-			if end := findDoubleCurlyEnd(content, index); end >= 0 {
-				index = end + 1
-			} else {
-				index = len(content)
-			}
-			continue
-		}
-		if content[index+1] == '*' {
-			return true
-		}
-		if content[index+1] == '$' {
-			return true
-		}
-		if content[index+1] == '/' && index+2 < len(content) && isSmartyTagName(content[index+2:]) {
-			return true
-		}
-		if isASCIIAlpha(content[index+1]) {
-			end := index + 1
-			for end < len(content) && (isASCIIAlpha(content[end]) || content[end] == '_') {
-				end++
-			}
-			name := strings.ToLower(string(content[index+1 : end]))
-			switch name {
-			case "block", "extends", "include", "function", "foreach", "section", "if", "for", "while", "capture", "call", "elseif", "else", "ldelim", "rdelim":
-				if end == len(content) || content[end] == '}' || content[end] == ' ' || content[end] == '\t' || content[end] == '\r' || content[end] == '\n' {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-func findDoubleCurlyEnd(content []byte, at int) int {
-	quote := byte(0)
-	escaped := false
-	for index := at + 2; index+1 < len(content); index++ {
-		if escaped {
-			escaped = false
-			continue
-		}
-		if quote != 0 {
-			if content[index] == '\\' {
-				escaped = true
-			} else if content[index] == quote {
-				quote = 0
-			}
-			continue
-		}
-		if content[index] == '\'' || content[index] == '"' {
-			quote = content[index]
-			continue
-		}
-		if content[index] == '}' && content[index+1] == '}' {
-			return index
-		}
-	}
-	return -1
-}
-
-func isSmartyTagName(content []byte) bool {
-	end := 0
-	for end < len(content) && isASCIIAlpha(content[end]) {
-		end++
-	}
-	if end == 0 {
-		return false
-	}
-	name := strings.ToLower(string(content[:end]))
-	switch name {
-	case "block", "extends", "include", "function", "foreach", "section", "if", "for", "while", "capture", "call", "elseif", "else", "ldelim", "rdelim":
-		return true
-	}
-	return false
-}
-
-func isASCIIAlpha(value byte) bool {
-	return value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z'
-}
-
-func bytesHasPrefixFold(source []byte, at int, value string) bool {
-	return at >= 0 && at+len(value) <= len(source) && strings.EqualFold(string(source[at:at+len(value)]), value)
-}
-
-func bytesIndexFold(source []byte, at int, value string) int {
-	for index := at; index+len(value) <= len(source); index++ {
-		if bytesHasPrefixFold(source, index, value) {
-			return index
-		}
-	}
-	return -1
-}
-
-func containsPHPTag(content []byte) bool {
-	lower := strings.ToLower(string(content))
-	for offset := 0; offset+1 < len(lower); offset++ {
-		if lower[offset:offset+2] != "<?" {
-			continue
-		}
-		rest := lower[offset+2:]
-		if strings.HasPrefix(rest, "php") {
-			if len(rest) == 3 || !isIdentifierByte(rest[3]) {
-				return true
-			}
-			continue
-		}
-		if strings.HasPrefix(rest, "xml") {
-			continue
-		}
-		return true
-	}
-	return false
-}
-
-func isIdentifierByte(value byte) bool {
-	return value >= 'a' && value <= 'z' || value >= '0' && value <= '9' || value == '_'
+	return language.Detect(path, content, nil).Language
 }

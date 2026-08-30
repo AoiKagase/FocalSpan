@@ -194,3 +194,25 @@ func TestRelatedCandidatesFilterImportAndReferenceKinds(t *testing.T) {
 		t.Fatalf("references=%+v err=%v", references, err)
 	}
 }
+
+func TestRelatedCandidatesMatchQualifiedModuleImportToFileAnchor(t *testing.T) {
+	s := openTestStore(t)
+	defer s.Close()
+	if err := s.ReplaceFile(context.Background(), model.SourceFile{Path: "src/auth/token_service.rs", Language: "rust", SHA256: "target"}, model.Extraction{
+		Symbols: []model.Symbol{{Handle: "target", FilePath: "src/auth/token_service.rs", Language: "rust", Kind: "crate_module", Name: "token_service", StartLine: 1, EndLine: 1, Confidence: 1}},
+		Chunks:  []model.Chunk{{Handle: "target-chunk", FilePath: "src/auth/token_service.rs", Language: "rust", Kind: "module-outline", SymbolHandle: "target", SymbolName: "token_service", StartLine: 1, EndLine: 1, Content: "crate module", ContentHash: "target"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReplaceFile(context.Background(), model.SourceFile{Path: "src/http/middleware.rs", Language: "rust", SHA256: "importer"}, model.Extraction{
+		Symbols:   []model.Symbol{{Handle: "importer", FilePath: "src/http/middleware.rs", Language: "rust", Kind: "crate_module", Name: "src/http/middleware.rs", StartLine: 1, EndLine: 1, Confidence: 1}},
+		Chunks:    []model.Chunk{{Handle: "importer-chunk", FilePath: "src/http/middleware.rs", Language: "rust", Kind: "module-outline", SymbolHandle: "importer", SymbolName: "src/http/middleware.rs", StartLine: 1, EndLine: 1, Content: "crate module", ContentHash: "importer"}},
+		Relations: []model.Relation{{FromHandle: "importer", UnresolvedTo: "crate::auth::token_service::TokenService", Kind: "imports", Confidence: .9, Source: "rust-use"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.RelatedCandidates(context.Background(), []string{"target"}, "imports")
+	if err != nil || len(got) != 1 || got[0].Path != "src/http/middleware.rs" {
+		t.Fatalf("qualified module imports=%+v err=%v", got, err)
+	}
+}

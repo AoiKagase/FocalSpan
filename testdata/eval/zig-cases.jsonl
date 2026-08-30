@@ -1,0 +1,5 @@
+{"name":"zig-validation","query":"where is validateToken defined in Zig?","token_budget":512,"expected_symbols":["validateToken"],"expected_paths":["src/auth.zig"],"forbidden_paths":["unrelated/report.zig"]}
+{"name":"zig-plugin-entry","query":"where is pluginEntry defined in Zig?","token_budget":512,"expected_symbols":["pluginEntry"],"expected_paths":["src/auth.zig"],"forbidden_paths":["unrelated/report.zig"]}
+{"name":"zig-types","query":"where is the Zig Credentials struct?","token_budget":512,"expected_symbols":["Credentials"],"expected_paths":["src/auth.zig"],"forbidden_paths":["unrelated/report.zig"]}
+{"name":"zig-import","query":"where does the Zig auth module import std?","token_budget":512,"expected_symbols":["std"],"expected_paths":["src/auth.zig"],"forbidden_paths":["unrelated/report.zig"]}
+{"name":"zig-test","query":"which Zig test covers the expired token?","token_budget":512,"expected_symbols":["expired token"],"expected_paths":["src/auth.zig"],"forbidden_paths":["unrelated/report.zig"]}

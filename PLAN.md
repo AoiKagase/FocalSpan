@@ -17,38 +17,7 @@
 このファイルを渡されたCodexは、次の順序で作業してください。
 
 1. `AGENTS.md`、`PLAN.md`、`docs/design.md`、`docs/evaluation.md`、`README.md`を読む。
-2. `git status --short`、`git diff --stat`、`git log -10 --oneline`を実行する。
-3. 現在のcheckoutを唯一のsource of truthとして扱う。
-4. Task 0から順番に実装する。言語Taskを飛ばして後段のlinkerへ進まない。
-5. 各behaviorについて失敗するtestを先に追加し、失敗を確認してから最小実装を行う。
-6. Task完了ごとに、局所テスト、`go test ./...`、該当fixtureの`focalspan eval`を実行する。
-7. Task完了ごとに本ファイルのチェックボックスを更新する。
-8. Gitへ書き込める場合はTask単位でcommitする。書き込めない場合は差分を保持し、最終報告に理由を書く。
-9. 設計確認だけで停止せず、Task 17の全検証と最終報告まで進める。
-10. 実行していないテスト、未達の評価値、未実装項目を成功扱いしない。
-
-重大な仕様矛盾、既存データ破壊の危険、またはユーザー変更を失う危険がある場合だけ質問してください。
-
----
-
-## Global Constraints
-
-- 開始時から存在する未コミット差分を消さない。
-- `git reset`、`git restore`、`git checkout --`、`git clean`、`git stash`を実行しない。
-- Go 1.26以上を維持する。
-- `CGO_ENABLED=0`でWindows amd64、Linux amd64、Darwin arm64へbuildできること。
-- production pathからPython、Ruby、Node.js、PHP、.NET、Clang、rustc、nim、zig、Lua、Pawn compilerを起動しない。
-- production pathからComposer、npm、pnpm、yarn、pip、cargo、go list、dotnet restore/build、MSBuildを起動しない。
-- ネットワークアクセスを追加しない。
-- repository内コードを実行しない。
-- shell文字列を組み立てず、必要な既存Git呼び出しは引数分離した`exec.CommandContext`を維持する。
-- SQLite schema version 1を原則維持する。schema変更が必要なら先に設計文書へ理由、migration、rebuild影響を書く。
-- MCP tool名、structured output、stdout protocol-only規則を壊さない。
-- CLIの既存command、flag、JSON出力を後方互換に保つ。
-- source spanは元ファイル基準のhalf-open byte rangeと1-based line rangeを使う。
-- source chunkの`Content`は、synthetic outlineを除き`file.Content[StartByte:EndByte]`と一致すること。
-- stable handleへ行番号を直接含めない。
-- 曖昧なrelationへ誤った`ToHandle`を設定しない。
+2. `git status --short`、`git diff --stat`、`git log -10 --oneline`を実行する。- 曖昧なrelationへ誤った`ToHandle`を設定しない。
 - fixture固有のsymbol、path、queryをproduction codeへ埋め込まない。
 - 同じ入力、index revision、設定では同じhandle、候補順、出力を返す。
 - 最終serialized payloadのtoken budget complianceを100%維持する。
@@ -215,39 +184,6 @@ internal/extract/xaml/
     scanner.go
     builder.go
     extractor_test.go
-
-internal/extract/resx/
-    extractor.go
-    scanner.go
-    builder.go
-    extractor_test.go
-
-internal/projectmeta/
-    model.go
-    discover.go
-    go.go
-    cargo.go
-    node.go
-    dotnet.go
-    composer.go
-    python.go
-    ruby.go
-    lua.go
-    vb.go
-    pawn.go
-    nim.go
-    zig.go
-    projectmeta_test.go
-
-internal/linker/
-    linker.go
-    paths.go
-    symbols.go
-    linker_test.go
-
-testdata/repos/rustsample/
-testdata/repos/pythonsample/
-testdata/repos/rubysample/
 testdata/repos/luasample/
 testdata/repos/pawnsample/
 testdata/repos/vb6sample/
@@ -386,18 +322,6 @@ git log -10 --oneline
 - [x] **Step 2: Run baseline tests**
 
 ```text
-gofmt -w .
-go test ./...
-go vet ./...
-```
-
-`gofmt -w .`が開始時差分を大量変更する場合は停止せず、まず`gofmt -l .`で対象を確認し、今回変更するGo fileだけをformatする。
-
-- [x] **Step 3: Build one temporary binary**
-
-Windows PowerShell:
-
-```text
 go build -o .focalspan-v03-baseline.exe ./cmd/focalspan
 ```
 
@@ -476,7 +400,7 @@ func KnownLanguages() []string
 LanguageOverrides map[string]string `json:"language_overrides"`
 ```
 
-- [ ] **Step 1: Add failing detection tests**
+- [x] **Step 1: Add failing detection tests**
 
 最低限:
 
@@ -516,7 +440,7 @@ main.cts                -> typescript
 types.d.ts              -> typescript
 ```
 
-- [ ] **Step 2: Add override tests**
+- [x] **Step 2: Add override tests**
 
 設定例:
 
@@ -541,7 +465,7 @@ explicit language override
 
 無効language、NUL、root外path、無効globは`Config.Validate`でerrorにする。mapの順序に依存せず、最も具体的なmatchを選ぶ。同じspecificityならkey辞書順で決定的に選ぶ。
 
-- [ ] **Step 3: Implement known profiles**
+- [x] **Step 3: Implement known profiles**
 
 最低限のextension:
 
@@ -571,7 +495,7 @@ config: existing config extensions
 
 複合拡張子は`filepath.Ext`一回だけで判定しない。lowercase basename suffixで判定する。
 
-- [ ] **Step 4: Implement `.inc` scoring**
+- [x] **Step 4: Implement `.inc` scoring**
 
 PHP:
 
@@ -598,18 +522,18 @@ enum
 
 PHP markerがあればPHPを優先する。Pawn scoreが閾値以上ならPawn。それ以外はtext。単語がcomment/string内だけにある場合はscoreへ含めない軽量scanを行う。
 
-- [ ] **Step 5: Migrate scanner**
+- [x] **Step 5: Migrate scanner**
 
 `repository.DetectLanguage`と`DetectLanguageContent`は互換wrapperにするか削除し、実処理を`language.Detect`へ一本化する。同じロジックを二か所に残さない。
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 ```text
 go test ./internal/language ./internal/config ./internal/repository -v
 go test ./...
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```text
 git add internal/language internal/config internal/repository
@@ -635,11 +559,11 @@ func AssertNoSourceDuplication(t *testing.T, file model.SourceFile, got model.Ex
 func AssertDeterministic(t *testing.T, extractor extract.Extractor, file model.SourceFile)
 ```
 
-- [ ] **Step 1: Write conformance tests against existing extractors**
+- [x] **Step 1: Write conformance tests against existing extractors**
 
 Go、PHP、C/C++、C#、JS/TS、templateで共通invariantを検証する。
 
-- [ ] **Step 2: Add interval helpers only where missing**
+- [x] **Step 2: Add interval helpers only where missing**
 
 `sourceutil`へ既存実装と重複しない範囲で追加:
 
@@ -650,22 +574,22 @@ func WindowByLines(source SourceMap, span Span, lines, overlap int) []Span
 func ValidUTF8Boundary(content []byte, offset int) bool
 ```
 
-- [ ] **Step 3: Add registry selection test for all target languages**
+- [x] **Step 3: Add registry selection test for all target languages**
 
 期待するExtractor名はTask完了に応じて更新する。Task 2時点で未実装言語はgeneric、既存言語は専用名を期待する。後続Taskで専用名へ変更する。
 
-- [ ] **Step 4: Add fuzz invariant seeds**
+- [x] **Step 4: Add fuzz invariant seeds**
 
 少なくともC++ raw string、C# interpolated raw string、JS template literal、PHP heredoc、Smarty literalをseedにする。新規Extractorは各Taskでseedを追加する。
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 ```text
 go test ./internal/extract/... -v
 go test ./...
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```text
 git add internal/extract internal/app/service_test.go
@@ -686,7 +610,7 @@ git commit -m "test: add extractor conformance infrastructure"
 - Retains `go-ast`
 - Adds symbols/relations without public schema change
 
-- [ ] **Step 1: Add failing Go tests**
+- [x] **Step 1: Add failing Go tests**
 
 Cover:
 
@@ -710,11 +634,11 @@ same-package call
 selector call remains conservative
 ```
 
-- [ ] **Step 2: Preserve partial parse results**
+- [x] **Step 2: Preserve partial parse results**
 
 `parser.ParseFile`がASTとerrorを同時に返した場合、ASTを捨てない。確定済みsymbol/chunk/relationを返し、`go_parse_partial` diagnosticを追加する。ASTがnilの場合だけfallbackまたはerror。
 
-- [ ] **Step 3: Add member symbols**
+- [x] **Step 3: Add member symbols**
 
 Interface method、struct field、embedded fieldを独立symbolまたは短いoutline memberとして保持する。大量のanonymous field occurrenceを作らない。
 
@@ -727,11 +651,11 @@ embedded_field
 type_alias
 ```
 
-- [ ] **Step 4: Improve signatures and handles**
+- [x] **Step 4: Improve signatures and handles**
 
 Generics、receiver、parameter、return typeを正規化signatureへ含める。同名overloadはGoにはないが、method ownerをqualified nameへ必ず含める。
 
-- [ ] **Step 5: Improve relations**
+- [x] **Step 5: Improve relations**
 
 ```text
 contains
@@ -744,11 +668,11 @@ references
 
 Interface embedding、field type、parameter/return typeを`references`として保持する。selector receiver型を解決したふりをしない。
 
-- [ ] **Step 6: Add fixture cases**
+- [x] **Step 6: Add fixture cases**
 
 Go fixtureへinterface、generics、Fuzz test、parse-recoverable fileを追加。既存caseを削除しない。
 
-- [ ] **Step 7: Verify**
+- [x] **Step 7: Verify**
 
 ```text
 go test ./internal/extract/goast -v
@@ -757,7 +681,7 @@ focalspan index --root testdata/repos/authsample --quiet
 focalspan eval --root testdata/repos/authsample --cases testdata/eval/cases.jsonl --json
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```text
 git add internal/extract/goast testdata/repos/authsample testdata/eval/cases.jsonl
@@ -777,7 +701,7 @@ git commit -m "feat: strengthen Go structural extraction"
 - Retains `cpp-structural`
 - Adds more precise declaration/definition and callback relations
 
-- [ ] **Step 1: Add failing tests**
+- [x] **Step 1: Add failing tests**
 
 Cover:
 
@@ -802,15 +726,15 @@ GoogleTest/Catch2/doctest
 Windows callback macros WINAPI/CALLBACK/APIENTRY
 ```
 
-- [ ] **Step 2: Improve parser disambiguation**
+- [x] **Step 2: Improve parser disambiguation**
 
 Control constructs、casts、initializers、function pointersをfunctionと誤認しない。C/C++ qualifier、trailing return、`noexcept`、`requires`、`= default/delete`をsignatureへ含める。
 
-- [ ] **Step 3: Add lexical declaration-definition hints**
+- [x] **Step 3: Add lexical declaration-definition hints**
 
 同一file内では既存のresolved handleを使用。別fileのheader/source pairは`UnresolvedTo`へ完全qualified nameとnormalized signatureを保持し、`Source=cpp:declaration`または`cpp:definition`とする。ここではcross-file `ToHandle`を確定しない。
 
-- [ ] **Step 4: Add callback references**
+- [x] **Step 4: Add callback references**
 
 次のような明示的なfunction pointer引数を低〜中confidenceの`references`として保持:
 
@@ -822,11 +746,11 @@ signal(..., handler)
 
 一般関数呼び出しの任意引数をすべてcallback扱いしない。identifierが同一fileの一意なfunction symbolである場合だけ解決する。
 
-- [ ] **Step 5: Improve test recognition**
+- [x] **Step 5: Improve test recognition**
 
 GoogleTest、Catch2、doctestのstatic title/macro spanをtest chunkとして正確に保持する。
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 ```text
 go test ./internal/extract/cpp -v
@@ -835,7 +759,7 @@ focalspan index --root testdata/repos/cppsample --quiet
 focalspan eval --root testdata/repos/cppsample --cases testdata/eval/cpp-cases.jsonl --json
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```text
 git add internal/extract/cpp testdata/repos/cppsample testdata/eval/cpp-cases.jsonl
@@ -860,7 +784,7 @@ git commit -m "feat: strengthen C and C++ extraction"
 - Adds `xaml-structural`
 - Adds `resx-structural`
 
-- [ ] **Step 1: Add failing C# tests**
+- [x] **Step 1: Add failing C# tests**
 
 Cover:
 
@@ -886,7 +810,7 @@ WPF code-behind partial class
 xUnit/NUnit/MSTest
 ```
 
-- [ ] **Step 2: Add XAML scanner tests**
+- [x] **Step 2: Add XAML scanner tests**
 
 Cover:
 
@@ -909,7 +833,7 @@ UTF-8/CRLF
 malformed tag recovery
 ```
 
-- [ ] **Step 3: Implement XAML symbols**
+- [x] **Step 3: Implement XAML symbols**
 
 Kinds:
 
@@ -934,7 +858,7 @@ dictionary -> Source              imports
 
 `ToHandle`は同一file内のresourceだけを確定し、code-behindや別resourceは`UnresolvedTo`にする。
 
-- [ ] **Step 4: Add RESX and .settings structural extraction**
+- [x] **Step 4: Add RESX and .settings structural extraction**
 
 `resx-structural`はXMLを実行せず、次を抽出する。
 
@@ -957,7 +881,7 @@ settings document -> generated setting name references
 
 Base64/blob本文はchunkへ複製しない。長いbinary-like valueはsignatureと短いpreviewだけを保持する。`.resources`と`.frx`はbinaryとしてskipする。
 
-- [ ] **Step 5: Improve C# WinForms relations**
+- [x] **Step 5: Improve C# WinForms relations**
 
 Recognize:
 
@@ -971,7 +895,7 @@ resources.ApplyResources(...);
 
 Handlerが同一partial declaration内で一意なら`references`または`calls`として解決する。Designer code全体とhandler sourceを重複返却しない。
 
-- [ ] **Step 6: Add dotnet fixture**
+- [x] **Step 6: Add dotnet fixture**
 
 Minimum:
 
@@ -989,7 +913,7 @@ unrelated/ReportWindow.xaml
 unrelated/ReportService.cs
 ```
 
-- [ ] **Step 7: Add evaluation cases**
+- [x] **Step 7: Add evaluation cases**
 
 Queries:
 
@@ -1002,7 +926,7 @@ what method handles the WinForms Load event?
 what tests cover MainViewModel validation?
 ```
 
-- [ ] **Step 8: Verify**
+- [x] **Step 8: Verify**
 
 ```text
 go test ./internal/extract/csharp ./internal/extract/xaml ./internal/extract/resx -v
@@ -1011,7 +935,7 @@ focalspan index --root testdata/repos/dotnetsample --quiet
 focalspan eval --root testdata/repos/dotnetsample --cases testdata/eval/dotnet-cases.jsonl --json
 ```
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```text
 git add internal/extract/csharp internal/extract/xaml internal/extract/resx internal/app testdata/repos/dotnetsample testdata/eval/dotnet-cases.jsonl
@@ -1030,7 +954,7 @@ git commit -m "feat: add WinForms and WPF structural coverage"
 - Modify: `testdata/eval/php-cases.jsonl`
 - Modify: `testdata/eval/template-cases.jsonl`
 
-- [ ] **Step 1: Add failing PHP tests**
+- [x] **Step 1: Add failing PHP tests**
 
 Cover:
 
@@ -1051,15 +975,15 @@ Pest test(...)
 malformed heredoc recovery
 ```
 
-- [ ] **Step 2: Strengthen `.inc` behavior**
+- [x] **Step 2: Strengthen `.inc` behavior**
 
 `language_overrides`を優先し、PHP marker付き`.inc`はPHP、Pawn score付き`.inc`はPawn、曖昧なものはtext。READMEへ規則を書く。
 
-- [ ] **Step 3: Improve PHP relations**
+- [x] **Step 3: Improve PHP relations**
 
 Trait adaptation、base/interface、attribute、parameter/return/property type、static include pathを保守的に保持。Container、magic method、dynamic includeを確定しない。
 
-- [ ] **Step 4: Add failing Smarty tests**
+- [x] **Step 4: Add failing Smarty tests**
 
 Cover:
 
@@ -1077,11 +1001,11 @@ double-curly opaque tag
 malformed close recovery
 ```
 
-- [ ] **Step 5: Reduce template duplication**
+- [x] **Step 5: Reduce template duplication**
 
 Template outline、named block/function、script/style、unclaimed fragmentのcoverageを測り、同一sourceの過剰な三重複を防ぐ。
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 ```text
 go test ./internal/extract/php ./internal/extract/template -v
@@ -1092,7 +1016,7 @@ focalspan index --root testdata/repos/templatesample --quiet
 focalspan eval --root testdata/repos/templatesample --cases testdata/eval/template-cases.jsonl --json
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```text
 git add internal/extract/php internal/extract/template testdata/repos/phpsample testdata/repos/templatesample testdata/eval/php-cases.jsonl testdata/eval/template-cases.jsonl
@@ -1108,7 +1032,7 @@ git commit -m "feat: strengthen PHP and Smarty extraction"
 - Modify: `testdata/repos/jstssample`
 - Modify: `testdata/eval/jsts-cases.jsonl`
 
-- [ ] **Step 1: Add extension tests**
+- [x] **Step 1: Add extension tests**
 
 Ensure:
 
@@ -1118,7 +1042,7 @@ Ensure:
 
 are classified as TypeScript. `.json` remains config/data, not JavaScript.
 
-- [ ] **Step 2: Add failing parser tests**
+- [x] **Step 2: Add failing parser tests**
 
 Cover:
 
@@ -1144,7 +1068,7 @@ regex vs division
 nested template interpolation
 ```
 
-- [ ] **Step 3: Improve module relations**
+- [x] **Step 3: Improve module relations**
 
 Static relative ESM/CommonJS specifierをnormalizeし、拡張子候補を決定的に生成する。`node_modules`、package exports、runtime条件はこのTaskでは確定しない。
 
@@ -1159,15 +1083,15 @@ explicit path
 
 JS importerではJS候補を先にする。
 
-- [ ] **Step 4: Improve tests**
+- [x] **Step 4: Improve tests**
 
 Jest、Vitest、Mocha、Playwright、Denoのstatic test callbackを認識する。`test.each`、`describe.each`を扱う。
 
-- [ ] **Step 5: Add Node fixture metadata files**
+- [x] **Step 5: Add Node fixture metadata files**
 
 `package.json`、`tsconfig.json`、ESM/CommonJS混在、re-export、workspace-like directoryをfixtureへ追加する。metadata解析自体はTask 16で行うが、source relationのbaselineを作る。
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 ```text
 go test ./internal/extract/jsts -v
@@ -1176,7 +1100,7 @@ focalspan index --root testdata/repos/jstssample --quiet
 focalspan eval --root testdata/repos/jstssample --cases testdata/eval/jsts-cases.jsonl --json
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```text
 git add internal/extract/jsts internal/language testdata/repos/jstssample testdata/eval/jsts-cases.jsonl
@@ -1198,7 +1122,7 @@ git commit -m "feat: strengthen Node JavaScript and TypeScript extraction"
 - `Name() == "rust-structural"`
 - Supports `language == "rust"` and `.rs`
 
-- [ ] **Step 1: Write lexer tests**
+- [x] **Step 1: Write lexer tests**
 
 Cover:
 
@@ -1217,7 +1141,7 @@ malformed raw string
 cancellation
 ```
 
-- [ ] **Step 2: Write declaration tests**
+- [x] **Step 2: Write declaration tests**
 
 Required symbols:
 
@@ -1250,11 +1174,11 @@ crate::auth::TokenService::validate_token
 crate::auth::TokenValidator::validate
 ```
 
-- [ ] **Step 3: Implement hierarchy/chunks**
+- [x] **Step 3: Implement hierarchy/chunks**
 
 Owner `crate_module`; class-like outline for struct/enum/trait/impl; method/function body as independent chunk; module-level unclaimed code as bounded fragment.
 
-- [ ] **Step 4: Implement relations**
+- [x] **Step 4: Implement relations**
 
 ```text
 mod/use            imports
@@ -1268,7 +1192,7 @@ contains hierarchy contains
 
 `self::`、`super::`、`crate::` pathは字句的にnormalizeする。同一fileで一意なfunction/methodだけresolveする。macro expansionやtrait dispatchは確定しない。
 
-- [ ] **Step 5: Add Rust fixture**
+- [x] **Step 5: Add Rust fixture**
 
 Minimum:
 
@@ -1284,7 +1208,7 @@ unrelated/report.rs
 
 Include traits、impl、async fn、generic、macro、nested comment、raw string、`#[tokio::test]`。
 
-- [ ] **Step 6: Add evaluation cases**
+- [x] **Step 6: Add evaluation cases**
 
 ```text
 where is an expired Rust token rejected?
@@ -1294,9 +1218,9 @@ which module imports token_service?
 which trait does TokenService implement?
 ```
 
-- [ ] **Step 7: Register extractor and remove Rust from generic dispatch**
+- [x] **Step 7: Register extractor and remove Rust from generic dispatch**
 
-- [ ] **Step 8: Verify**
+- [x] **Step 8: Verify**
 
 ```text
 go test ./internal/extract/rust -v
@@ -1305,7 +1229,7 @@ focalspan index --root testdata/repos/rustsample --quiet
 focalspan eval --root testdata/repos/rustsample --cases testdata/eval/rust-cases.jsonl --json
 ```
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```text
 git add internal/extract/rust internal/app internal/extract/generic testdata/repos/rustsample testdata/eval/rust-cases.jsonl
@@ -1327,7 +1251,7 @@ git commit -m "feat: add first-class Rust extraction"
 - `Name() == "python-structural"`
 - Supports `.py`, `.pyw`, `.pyi`
 
-- [ ] **Step 1: Write lexer tests**
+- [x] **Step 1: Write lexer tests**
 
 Cover:
 
@@ -1346,7 +1270,7 @@ malformed triple string
 cancellation
 ```
 
-- [ ] **Step 2: Write declaration tests**
+- [x] **Step 2: Write declaration tests**
 
 Symbols:
 
@@ -1367,7 +1291,7 @@ test
 
 `@property`、`@classmethod`、`@staticmethod`をsignature/kindへ反映する。lambdaを独立symbolにしない。
 
-- [ ] **Step 3: Implement imports and calls**
+- [x] **Step 3: Implement imports and calls**
 
 ```text
 import x
@@ -1383,7 +1307,7 @@ constructor call
 
 同一scope・同一classで一意なtargetだけresolve。monkey patch、dynamic import、decorator semanticsは未解決。
 
-- [ ] **Step 4: Implement test recognition**
+- [x] **Step 4: Implement test recognition**
 
 ```text
 pytest test_*
@@ -1395,7 +1319,7 @@ fixtures as fixture kind
 
 Test body callから`tests` relationを作る。
 
-- [ ] **Step 5: Add fixture/evaluation**
+- [x] **Step 5: Add fixture/evaluation**
 
 Minimum:
 
@@ -1410,9 +1334,9 @@ unrelated/report.py
 
 Queriesはdefinition、callers、tests、imports、protocol implementation。
 
-- [ ] **Step 6: Register extractor and remove Python from generic indentation dispatch**
+- [x] **Step 6: Register extractor and remove Python from generic indentation dispatch**
 
-- [ ] **Step 7: Verify**
+- [x] **Step 7: Verify**
 
 ```text
 go test ./internal/extract/python -v
@@ -1421,7 +1345,7 @@ focalspan index --root testdata/repos/pythonsample --quiet
 focalspan eval --root testdata/repos/pythonsample --cases testdata/eval/python-cases.jsonl --json
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```text
 git add internal/extract/python internal/app internal/extract/generic testdata/repos/pythonsample testdata/eval/python-cases.jsonl
@@ -1439,11 +1363,11 @@ git commit -m "feat: add first-class Python extraction"
 - Create: `testdata/repos/rubysample/*`
 - Create: `testdata/eval/ruby-cases.jsonl`
 
-- [ ] **Step 1: Write lexer tests**
+- [x] **Step 1: Write lexer tests**
 
 Cover Ruby strings、interpolation、symbols、regex、percent literals、heredoc、comments、`=begin/=end`、`do/end` nesting、modifier `if/unless`。
 
-- [ ] **Step 2: Write declaration tests**
+- [x] **Step 2: Write declaration tests**
 
 ```text
 module
@@ -1460,7 +1384,7 @@ test
 
 Blocks are not all symbols. Named RSpec examples can be test symbols.
 
-- [ ] **Step 3: Implement relations**
+- [x] **Step 3: Implement relations**
 
 ```text
 require/require_relative imports
@@ -1473,13 +1397,13 @@ contains
 
 Dynamic metaprogramming is unresolved.
 
-- [ ] **Step 4: Add fixture/eval**
+- [x] **Step 4: Add fixture/eval**
 
 Include Gemfile、gemspec、service、middleware、RSpec、Minitest、unrelated file。
 
-- [ ] **Step 5: Register and remove Ruby from generic indentation dispatch**
+- [x] **Step 5: Register and remove Ruby from generic indentation dispatch**
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 ```text
 go test ./internal/extract/ruby -v
@@ -1488,7 +1412,7 @@ focalspan index --root testdata/repos/rubysample --quiet
 focalspan eval --root testdata/repos/rubysample --cases testdata/eval/ruby-cases.jsonl --json
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```text
 git add internal/extract/ruby internal/app internal/extract/generic testdata/repos/rubysample testdata/eval/ruby-cases.jsonl
@@ -1505,7 +1429,7 @@ git commit -m "feat: add first-class Ruby extraction"
 - Create: `testdata/repos/luasample/*`
 - Create: `testdata/eval/lua-cases.jsonl`
 
-- [ ] **Step 1: Lexer tests**
+- [x] **Step 1: Lexer tests**
 
 Cover:
 
@@ -1521,7 +1445,7 @@ table constructors
 malformed long string
 ```
 
-- [ ] **Step 2: Declarations**
+- [x] **Step 2: Declarations**
 
 ```text
 local function name
@@ -1534,7 +1458,7 @@ module/table owner
 test
 ```
 
-- [ ] **Step 3: Relations**
+- [x] **Step 3: Relations**
 
 ```text
 require("module") imports
@@ -1547,11 +1471,11 @@ contains
 
 Dynamic table indexing stays unresolved.
 
-- [ ] **Step 4: Fixture/eval**
+- [x] **Step 4: Fixture/eval**
 
 Include service、middleware、busted tests、rockspec、unrelated report。
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```text
 go test ./internal/extract/lua -v
@@ -1573,7 +1497,7 @@ git commit -m "feat: add first-class Lua extraction"
 - Create: `testdata/repos/pawnsample/*`
 - Create: `testdata/eval/pawn-cases.jsonl`
 
-- [ ] **Step 1: Lexer tests**
+- [x] **Step 1: Lexer tests**
 
 Cover:
 
@@ -1590,7 +1514,7 @@ public/stock/native/forward
 malformed directive
 ```
 
-- [ ] **Step 2: Declaration tests**
+- [x] **Step 2: Declaration tests**
 
 Kinds:
 
@@ -1619,7 +1543,7 @@ client_putinserver
 
 These are functions with callback metadata, not hard-coded ranking boosts.
 
-- [ ] **Step 3: Relations**
+- [x] **Step 3: Relations**
 
 ```text
 #include imports
@@ -1633,11 +1557,11 @@ contains
 
 String handlerはstatic literalかつ同一fileで一意なfunctionの場合だけresolveする。
 
-- [ ] **Step 4: `.inc` conflict tests**
+- [x] **Step 4: `.inc` conflict tests**
 
 PHP marker優先、Pawn score、explicit override、plain `.inc` fallbackを検証する。
 
-- [ ] **Step 5: Fixture/eval**
+- [x] **Step 5: Fixture/eval**
 
 Minimum:
 
@@ -1658,7 +1582,7 @@ what calls validate_token?
 where is the client authorization callback?
 ```
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 ```text
 go test ./internal/extract/pawn ./internal/language -v
@@ -1686,7 +1610,7 @@ git commit -m "feat: add first-class AMX Mod X Pawn extraction"
   - `vb6-structural`
   - `vbnet-structural`
 
-- [ ] **Step 1: Shared lexer tests**
+- [x] **Step 1: Shared lexer tests**
 
 Cover:
 
@@ -1702,7 +1626,7 @@ Attribute VB_Name
 malformed End block recovery
 ```
 
-- [ ] **Step 2: VB6 declarations**
+- [x] **Step 2: VB6 declarations**
 
 ```text
 Form/Class/Module/UserControl owner
@@ -1722,7 +1646,7 @@ event handler naming
 
 `.frm` designer preambleを一つのbounded `form-layout` chunkとして保持し、binary `.frx`はscannerでskipする。
 
-- [ ] **Step 3: VB.NET declarations**
+- [x] **Step 3: VB.NET declarations**
 
 ```text
 Namespace
@@ -1742,7 +1666,7 @@ Async/Iterator
 generic Of T
 ```
 
-- [ ] **Step 4: Relations**
+- [x] **Step 4: Relations**
 
 VB6:
 
@@ -1766,7 +1690,7 @@ tests
 contains
 ```
 
-- [ ] **Step 5: Fixtures**
+- [x] **Step 5: Fixtures**
 
 VB6:
 
@@ -1791,12 +1715,12 @@ Tests/AuthTests.vb
 unrelated/ReportService.vb
 ```
 
-- [ ] **Step 6: Evaluation**
+- [x] **Step 6: Evaluation**
 
 VB6 queries: command/event handler、Property、Implements、project component。  
 VB.NET queries: Handles、WPF code-behind、interface、tests、partial designer。
 
-- [ ] **Step 7: Verify and commit**
+- [x] **Step 7: Verify and commit**
 
 ```text
 go test ./internal/extract/vb -v
@@ -1819,11 +1743,11 @@ git commit -m "feat: add VB6 and VB.NET structural extraction"
 - Create: `testdata/repos/nimsample/*`
 - Create: `testdata/eval/nim-cases.jsonl`
 
-- [ ] **Step 1: Lexer/indent tests**
+- [x] **Step 1: Lexer/indent tests**
 
 Cover indentation、`#[ ]#` nested comments、triple strings、raw strings、pragmas、backtick identifiers、continuation inside delimiters。
 
-- [ ] **Step 2: Declarations**
+- [x] **Step 2: Declarations**
 
 ```text
 module
@@ -1845,7 +1769,7 @@ var
 test
 ```
 
-- [ ] **Step 3: Relations**
+- [x] **Step 3: Relations**
 
 ```text
 import/include/from imports
@@ -1858,7 +1782,7 @@ contains
 
 Compile-time macro expansionは行わない。
 
-- [ ] **Step 4: Fixture/eval/verify**
+- [x] **Step 4: Fixture/eval/verify**
 
 ```text
 go test ./internal/extract/nim -v
@@ -1879,11 +1803,11 @@ git commit -m "feat: add first-class Nim extraction"
 - Create: `testdata/repos/zigsample/*`
 - Create: `testdata/eval/zig-cases.jsonl`
 
-- [ ] **Step 1: Lexer tests**
+- [x] **Step 1: Lexer tests**
 
 Cover line comments、normal strings、multiline string lines beginning `\\`、character literal、builtin `@name`、comptime blocks、error unions、optional types、malformed braces。
 
-- [ ] **Step 2: Declarations**
+- [x] **Step 2: Declarations**
 
 ```text
 module
@@ -1901,7 +1825,7 @@ extern/export function
 
 `const Name = struct { ... }`をtype symbolとして認識する。`const f = fn`的な値と区別する。
 
-- [ ] **Step 3: Relations**
+- [x] **Step 3: Relations**
 
 ```text
 @import static literal imports
@@ -1913,7 +1837,7 @@ contains
 
 Compile-time evaluationは行わない。
 
-- [ ] **Step 4: Fixture/eval/verify**
+- [x] **Step 4: Fixture/eval/verify**
 
 ```text
 go test ./internal/extract/zig -v
@@ -1961,7 +1885,7 @@ func (l *Linker) Link(ctx context.Context, facts []Fact) error
 
 実際の型は既存設計へ合わせてよいが、metadata parsingとsymbol linkingを分離する。
 
-- [ ] **Step 1: Add project metadata parser tests**
+- [x] **Step 1: Add project metadata parser tests**
 
 Read-only parsing only:
 
@@ -1982,7 +1906,7 @@ build.zig.zon
 
 XML/TOML/JSONは既存dependencyまたは標準ライブラリでparseする。外部commandを起動しない。
 
-- [ ] **Step 2: Implement minimum metadata facts**
+- [x] **Step 2: Implement minimum metadata facts**
 
 Go:
 
@@ -2084,7 +2008,7 @@ static path dependencies
 module root paths that can be read without evaluating build.zig
 ```
 
-- [ ] **Step 3: Add linker store queries**
+- [x] **Step 3: Add linker store queries**
 
 Add deterministic indexed lookups for:
 
@@ -2099,13 +2023,13 @@ declaration/definition signature
 
 Do not choose the first of multiple ambiguous matches.
 
-- [ ] **Step 4: Run linker after file updates**
+- [x] **Step 4: Run linker after file updates**
 
 After `ApplyIndex` succeeds, or inside the same safe index transaction if current architecture permits, resolve only exact/scoped facts. If linking fails, do not mark index run successful without reporting the error.
 
 No schema change is preferred. Existing `relations` rows may be replaced/rebuilt deterministically. If schema change becomes unavoidable, document and test migration before implementation.
 
-- [ ] **Step 5: Resolution precedence**
+- [x] **Step 5: Resolution precedence**
 
 ```text
 exact static path
@@ -2118,7 +2042,7 @@ ambiguous -> unresolved
 
 Simple repository-wide uniqueness may resolve only when no scope/module information contradicts it.
 
-- [ ] **Step 6: Add cross-file tests**
+- [x] **Step 6: Add cross-file tests**
 
 Minimum:
 
@@ -2139,11 +2063,11 @@ Nim import -> module
 Zig @import -> file
 ```
 
-- [ ] **Step 7: Verify all relation directions**
+- [x] **Step 7: Verify all relation directions**
 
 `expand imports`、`callers`、`callees`、`references`、`tests`でforward/reverse candidateが実用的に返る。
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```text
 git add internal/projectmeta internal/linker internal/indexer internal/store testdata
@@ -2160,10 +2084,11 @@ git commit -m "feat: link polyglot project metadata conservatively"
 - Modify: `README.md`
 - Modify: `docs/design.md`
 - Modify: `docs/evaluation.md`
+- Create: `docs/evaluation-v0.3.json`
 - Modify: `docs/implementation-plan.md`
 - Modify: `PLAN.md`
 
-- [ ] **Step 1: Bump extractor version exactly once**
+- [x] **Step 1: Bump extractor version exactly once**
 
 Current baseline is`extractors-v4`。本計画の全Extractor formatが確定した後に一度だけ新しい値へ更新する。例:
 
@@ -2173,7 +2098,7 @@ extractors-v5-polyglot
 
 現在checkoutですでに別値へ進んでいる場合は巻き戻さず、次の一意な値を使う。
 
-- [ ] **Step 2: Test reindex behavior**
+- [x] **Step 2: Test reindex behavior**
 
 ```text
 old extractor version + unchanged source -> reparse
@@ -2183,7 +2108,7 @@ old generic chunks for upgraded languages are removed
 schema migration is not required
 ```
 
-- [ ] **Step 3: Run all unit tests**
+- [x] **Step 3: Run all unit tests**
 
 ```text
 gofmt -w <changed Go files/directories>
@@ -2199,7 +2124,7 @@ CGO_ENABLED=1 go test -race ./...
 
 Windowsでnative C compilerがない場合は未検証と記録し、成功扱いしない。
 
-- [ ] **Step 5: Run every evaluation**
+- [x] **Step 5: Run every evaluation**
 
 At minimum:
 
@@ -2226,7 +2151,7 @@ ja-jsts
 
 各rootは評価直前にindexする。JSON結果を保存し、`docs/evaluation.md`へ実測値を記載する。
 
-- [ ] **Step 6: Add language matrix to README**
+- [x] **Step 6: Add language matrix to README**
 
 能力を次の階層で正確に表す:
 
@@ -2240,7 +2165,7 @@ generic fallback
 
 「対応」とだけ書かず、型推論、動的dispatch、macro expansion、runtime resolutionの制限を書く。
 
-- [ ] **Step 7: Update design docs**
+- [x] **Step 7: Update design docs**
 
 Document:
 
@@ -2257,7 +2182,7 @@ source duplication policy
 security/no-execution policy
 ```
 
-- [ ] **Step 8: Cross-build**
+- [x] **Step 8: Cross-build**
 
 ```text
 CGO_ENABLED=0 go build ./cmd/focalspan
@@ -2269,6 +2194,11 @@ GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/focalspan
 Cross-build artifactsをrepository rootへ残さない。
 
 - [ ] **Step 9: CLI/MCP regression**
+
+The supported setup/status/update/query and MCP regression checks passed, but
+the direct public `serve` harness remains unverified because the PowerShell
+stdin path delivered a BOM before the server received JSON. This step remains
+unchecked rather than treating the partial regression as complete.
 
 Verify:
 
@@ -2299,7 +2229,7 @@ code_status
 
 stdoutへlogが混入しない。
 
-- [ ] **Step 10: Run self-review**
+- [x] **Step 10: Run self-review**
 
 Check:
 
@@ -2317,7 +2247,7 @@ all docs match implementation
 all existing cases retained
 ```
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```text
 git add internal/indexer README.md docs PLAN.md
@@ -2361,38 +2291,44 @@ Tasks 14-15 complete:
 
 ### Gate E — Repository-Aware Linking
 
-Tasks 16-17 complete:
+Tasks 16-17 implementation and release checks executed:
 
 - Static manifest facts improve cross-file retrieval.
 - Ambiguity remains explicit.
-- All evaluations, tests, cross-builds, docs, and MCP regression checks pass.
+- All executed evaluations, tests, cross-builds, docs, and MCP regression
+  checks pass; race coverage and the direct public `serve` harness remain
+  environment-unverified as recorded below.
 
 ---
 
 ## Final Acceptance Table
 
-Codex must fill this table with measured values before claiming completion.
+The following values were measured on 2026-08-30 from the current checkout
+with `extractors-v5-polyglot`; each case was queried twice.
 
 | Profile | Cases | hit@1 | hit@3 | hit@5 | Symbol recall | Path recall | Budget | Forbidden | Deterministic | Median reduction |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Go | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| PHP | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| Smarty/template | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| C/C++ | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| C# | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| .NET WinForms/WPF | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| JS/TS/Node | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| Rust | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| Python | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| Ruby | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| Lua | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| Pawn/AMXX | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| VB6 | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| VB.NET | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| Nim | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| Zig | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+| Go/auth | 6 | 0.6667 | 1.0000 | 1.0000 | 1.0000 | 0.9167 | 1.0000 | 0 | 1.0000 | 0.04007084348018596 |
+| PHP | 4 | 0.2500 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.05550387596899225 |
+| Smarty/template | 5 | 0.8000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.026568430453226165 |
+| C/C++ | 8 | 0.5000 | 0.8750 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.15639269406392695 |
+| C# | 5 | 0.6000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.15507246376811595 |
+| .NET WinForms/WPF | 6 | 0.8333 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.20833333333333334 |
+| JS/TS/Node | 6 | 0.6667 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.15419501133786848 |
+| Rust | 5 | 0.4000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.19542619542619544 |
+| Python | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.22857142857142856 |
+| Ruby | 5 | 0.8000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.23061630218687873 |
+| Lua | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.08498583569405099 |
+| Pawn/AMXX | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.07951070336391437 |
+| VB6 | 5 | 0.8000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.11160714285714286 |
+| VB.NET | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.0864 |
+| Nim | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.07947019867549669 |
+| Zig | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.12133891213389121 |
 
-`UNMEASURED`のまま完了報告しない。未実行profileは`UNVERIFIED`と明記する。
+Race coverage is `UNVERIFIED` because the available Windows cgo compiler
+cannot compile 64-bit cgo code. The direct public `serve` harness is also
+`UNVERIFIED` because the PowerShell stdin path delivered a BOM before the
+server received JSON; the in-process MCP and subprocess stdout checks passed.
 
 ---
 
@@ -2446,3 +2382,4 @@ dependency injection/container resolution
 20. ユーザーの既存変更をreset、restore、stash、cleanしていないこと。
 
 失敗、未実行、未達thresholdが残る場合は「完了」と表現しない。
+

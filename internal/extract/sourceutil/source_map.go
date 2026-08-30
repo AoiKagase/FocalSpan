@@ -62,3 +62,58 @@ func (m SourceMap) Slice(span Span) (string, bool) {
 	}
 	return string(m.Content[span.StartByte:span.EndByte]), true
 }
+
+// WindowByLines returns deterministic windows, each at most lines long, that
+// cover span's source lines. Overlap applies between adjacent windows.
+func WindowByLines(source SourceMap, span Span, lines, overlap int) []Span {
+	if source.LineCount() == 0 || span.StartLine < 1 || span.EndLine < span.StartLine {
+		return nil
+	}
+	if lines <= 0 {
+		lines = 80
+	}
+	if overlap < 0 {
+		overlap = 0
+	}
+	if overlap >= lines {
+		overlap = lines - 1
+	}
+	startLine := span.StartLine
+	endLine := span.EndLine
+	if startLine > source.LineCount() {
+		return nil
+	}
+	if endLine > source.LineCount() {
+		endLine = source.LineCount()
+	}
+	step := lines - overlap
+	result := make([]Span, 0, (endLine-startLine+step)/step)
+	for windowStart := startLine; windowStart <= endLine; windowStart += step {
+		windowEnd := windowStart + lines - 1
+		if windowEnd > endLine {
+			windowEnd = endLine
+		}
+		startByte := source.LineStarts[windowStart-1]
+		endByte := len(source.Content)
+		if windowEnd < source.LineCount() {
+			endByte = source.LineStarts[windowEnd]
+		}
+		window, ok := source.Span(startByte, endByte)
+		if !ok {
+			return nil
+		}
+		result = append(result, window)
+		if windowEnd == endLine {
+			break
+		}
+	}
+	return result
+}
+
+// ValidUTF8Boundary reports whether offset is at a UTF-8 code point boundary.
+func ValidUTF8Boundary(content []byte, offset int) bool {
+	if offset < 0 || offset > len(content) {
+		return false
+	}
+	return offset == 0 || offset == len(content) || content[offset]&0xc0 != 0x80
+}

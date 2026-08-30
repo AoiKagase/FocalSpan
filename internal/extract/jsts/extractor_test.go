@@ -10,13 +10,64 @@ import (
 
 func TestExtractorSupportsJavaScriptTypeScriptJSXAndCommonJS(t *testing.T) {
 	extractor := NewExtractor()
-	for _, item := range []struct{ path, language string }{{"main.js", "javascript"}, {"main.jsx", "javascript"}, {"main.ts", "typescript"}, {"main.tsx", "typescript"}, {"main.mjs", ""}, {"main.cjs", ""}} {
+	for _, item := range []struct{ path, language string }{{"main.js", "javascript"}, {"main.jsx", "javascript"}, {"main.ts", "typescript"}, {"main.tsx", "typescript"}, {"main.mts", ""}, {"main.cts", ""}, {"types.d.ts", ""}, {"types.d.mts", ""}, {"types.d.cts", ""}, {"main.mjs", ""}, {"main.cjs", ""}} {
 		if !extractor.Supports(item.path, item.language) {
 			t.Errorf("Supports(%q,%q)=false", item.path, item.language)
 		}
 	}
+	if extractor.Supports("data.json", "") {
+		t.Fatal("JSTS extractor claimed JSON")
+	}
 	if extractor.Supports("main.go", "go") {
 		t.Fatal("JSTS extractor claimed Go")
+	}
+}
+
+func TestExtractorRecognizesModernTypeScriptAndNodeForms(t *testing.T) {
+	content := `import type { User } from "./types";
+import * as api from "./api";
+export type { User } from "./types";
+export = api;
+
+@sealed
+class Session {
+    #token = "";
+    accessor ready = true;
+    static { this.ready = true; }
+    private check(value: string): boolean { return value.length > 0; }
+    get token(): string { return this.#token; }
+}
+
+function overload(value: string): string;
+function overload(value: string): string { return value; }
+declare function ambient(value: string): void;
+const Component = (props: User) => <><span>{props.name}</span></>;
+const checked = value satisfies User as const;
+const { validate } = require("./validator");
+module.exports = { validate, Session };
+await import("./lazy");
+test.each([["expired"]])("rejects %s", () => validate("expired"));
+describe.each([["auth"]])("%s", () => { test("works", () => overload("ok")); });
+`
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "src/modern.ts", Language: "typescript", Content: []byte(content)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []struct{ name, kind string }{
+		{"Session", "class"}, {"check", "method"}, {"token", "method"},
+		{"overload", "function"}, {"ambient", "function"}, {"Component", "arrow_function"},
+		{"rejects %s", "test"}, {"works", "test"},
+	} {
+		if findSymbolByName(got.Symbols, want.name, want.kind).Handle == "" {
+			t.Fatalf("missing %s %q: %+v", want.kind, want.name, got.Symbols)
+		}
+	}
+	owner := findSymbol(got.Symbols, "src/modern.ts", "module")
+	if owner.Handle == "" || !hasUnresolved(got.Relations, owner.Handle, "src/types", "imports") || !hasUnresolved(got.Relations, owner.Handle, "src/api", "imports") {
+		t.Fatalf("type/namespace imports missing: %+v", got.Relations)
+	}
+	if !hasUnresolved(got.Relations, owner.Handle, "src/lazy", "imports") {
+		t.Fatalf("dynamic import missing: %+v", got.Relations)
 	}
 }
 
@@ -122,9 +173,30 @@ test("expired token is rejected", () => { vt("expired"); });
 	}
 }
 
+func TestNormalizeModuleUsesDeterministicLanguageAwareCandidateOrder(t *testing.T) {
+	got := normalizeModule("src/app.ts", "./feature")
+	want := []string{"src/feature", "src/feature.ts", "src/feature.tsx", "src/feature.mts", "src/feature.cts", "src/feature.js", "src/feature.jsx", "src/feature.mjs", "src/feature.cjs", "src/feature/index.ts", "src/feature/index.tsx", "src/feature/index.mts", "src/feature/index.cts", "src/feature/index.js", "src/feature/index.jsx", "src/feature/index.mjs", "src/feature/index.cjs"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("candidate order=%v, want %v", got, want)
+	}
+	js := normalizeModule("src/app.cjs", "./feature")
+	if len(js) < 5 || js[1] != "src/feature.js" || js[4] != "src/feature.cjs" {
+		t.Fatalf("JS candidate order=%v", js)
+	}
+}
+
 func findSymbol(symbols []model.Symbol, qualified, kind string) model.Symbol {
 	for _, symbol := range symbols {
 		if symbol.QualifiedName == qualified && symbol.Kind == kind {
+			return symbol
+		}
+	}
+	return model.Symbol{}
+}
+
+func findSymbolByName(symbols []model.Symbol, name, kind string) model.Symbol {
+	for _, symbol := range symbols {
+		if symbol.Name == name && symbol.Kind == kind {
 			return symbol
 		}
 	}

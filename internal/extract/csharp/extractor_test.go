@@ -10,11 +10,88 @@ import (
 
 func TestExtractorSupportsCSharpOnly(t *testing.T) {
 	extractor := NewExtractor()
-	if !extractor.Supports("Auth/TokenService.cs", "csharp") || !extractor.Supports("TokenService.CS", "") {
+	if !extractor.Supports("Auth/TokenService.cs", "csharp") || !extractor.Supports("TokenService.CS", "") || !extractor.Supports("script.csx", "csharp") {
 		t.Fatal("C# source was not supported")
 	}
 	if extractor.Supports("TokenService.ts", "typescript") {
 		t.Fatal("C# extractor claimed TypeScript")
+	}
+}
+
+func TestExtractorRecognizesModernCSharpMembersAndLocalFunctions(t *testing.T) {
+	content := []byte(`using System;
+namespace Demo;
+[Serializable]
+public record class User(string Name);
+public record struct Point(int X, int Y);
+public partial class ViewModel {
+    public required string DisplayName { get; init; }
+    public string this[int index] { get => DisplayName; set => DisplayName = value; }
+    public static implicit operator string(ViewModel value) => value.DisplayName;
+    public static string Format(this ViewModel value) {
+        string Local() => value.DisplayName;
+        return Local();
+    }
+    partial void OnChanged();
+    public async System.Collections.Generic.IAsyncEnumerable<string> Stream() { yield return DisplayName; }
+}
+`)
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "ViewModels/ViewModel.csx", Language: "csharp", Content: content})
+	if err != nil {
+		t.Fatal(err)
+	}
+	missing := make([]string, 0)
+	for _, want := range []struct{ qualified, kind string }{
+		{"Demo.User", "record"},
+		{"Demo.Point", "record"},
+		{"Demo.ViewModel.DisplayName", "property"},
+		{"Demo.ViewModel.this[]", "property"},
+		{"Demo.ViewModel.operator string", "operator"},
+		{"Demo.ViewModel.Format", "method"},
+		{"Demo.ViewModel.Local", "method"},
+		{"Demo.ViewModel.OnChanged", "method"},
+		{"Demo.ViewModel.Stream", "method"},
+	} {
+		if symbol := findSymbol(got.Symbols, want.qualified, want.kind); symbol.Handle == "" {
+			missing = append(missing, want.qualified+" ("+want.kind+")")
+		}
+	}
+	if len(missing) > 0 {
+		names := make([]string, 0, len(got.Symbols))
+		for _, symbol := range got.Symbols {
+			names = append(names, symbol.QualifiedName+" ("+symbol.Kind+")")
+		}
+		t.Fatalf("missing modern symbols: %s; got: %s", strings.Join(missing, ", "), strings.Join(names, ", "))
+	}
+}
+
+func TestExtractorRecordsWinFormsInitializationAndEventReferences(t *testing.T) {
+	content := []byte(`using System.Windows.Forms;
+public partial class MainForm : Form {
+    private Button saveButton;
+    private void InitializeComponent() {
+        saveButton = new Button();
+        saveButton.Click += SaveButton_Click;
+        this.Load += MainForm_Load;
+        Controls.Add(saveButton);
+        resources.ApplyResources(saveButton, "saveButton");
+    }
+    private void SaveButton_Click(object sender, EventArgs e) { }
+    private void MainForm_Load(object sender, EventArgs e) { }
+}
+`)
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "Forms/MainForm.Designer.cs", Language: "csharp", Content: content})
+	if err != nil {
+		t.Fatal(err)
+	}
+	initializer := findSymbol(got.Symbols, "MainForm.InitializeComponent", "method")
+	clickHandler := findSymbol(got.Symbols, "MainForm.SaveButton_Click", "method")
+	loadHandler := findSymbol(got.Symbols, "MainForm.MainForm_Load", "method")
+	if initializer.Handle == "" || clickHandler.Handle == "" || loadHandler.Handle == "" {
+		t.Fatalf("WinForms symbols missing: %+v", got.Symbols)
+	}
+	if !hasRelation(got.Relations, initializer.Handle, clickHandler.Handle, "references") || !hasRelation(got.Relations, initializer.Handle, loadHandler.Handle, "references") {
+		t.Fatalf("event handler references missing: %+v", got.Relations)
 	}
 }
 
@@ -148,6 +225,40 @@ func TestExtractorRecoversMalformedSourceAndKeepsStableHandles(t *testing.T) {
 			t.Fatalf("invalid recovered chunk=%+v", chunk)
 		}
 	}
+}
+
+func TestExtractorDoesNotTreatObjectCreationAsTestSymbol(t *testing.T) {
+	content := []byte(`using App.Auth;
+namespace App.Tests;
+public class TokenServiceXunitTests {
+    [Fact]
+    public void RejectsExpiredToken() {
+        var service = new TokenService("test");
+        Assert.False(service.ValidateToken("expired"));
+    }
+}
+`)
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "Tests/TokenServiceXunitTests.cs", Language: "csharp", Content: content})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, symbol := range got.Symbols {
+		if symbol.Name == "TokenService" && symbol.Kind == "test" {
+			t.Fatalf("object creation was extracted as a test symbol: %+v", symbol)
+		}
+	}
+	if !hasSymbol(got.Symbols, "RejectsExpiredToken", "test") {
+		t.Fatalf("test method was not retained: %+v", got.Symbols)
+	}
+}
+
+func hasSymbol(symbols []model.Symbol, name, kind string) bool {
+	for _, symbol := range symbols {
+		if symbol.Name == name && symbol.Kind == kind {
+			return true
+		}
+	}
+	return false
 }
 
 func findSymbol(symbols []model.Symbol, qualified, kind string) model.Symbol {
