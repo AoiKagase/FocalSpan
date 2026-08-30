@@ -635,11 +635,11 @@ func AssertNoSourceDuplication(t *testing.T, file model.SourceFile, got model.Ex
 func AssertDeterministic(t *testing.T, extractor extract.Extractor, file model.SourceFile)
 ```
 
-- [ ] **Step 1: Write conformance tests against existing extractors**
+- [x] **Step 1: Write conformance tests against existing extractors**
 
 Go、PHP、C/C++、C#、JS/TS、templateで共通invariantを検証する。
 
-- [ ] **Step 2: Add interval helpers only where missing**
+- [x] **Step 2: Add interval helpers only where missing**
 
 `sourceutil`へ既存実装と重複しない範囲で追加:
 
@@ -650,22 +650,22 @@ func WindowByLines(source SourceMap, span Span, lines, overlap int) []Span
 func ValidUTF8Boundary(content []byte, offset int) bool
 ```
 
-- [ ] **Step 3: Add registry selection test for all target languages**
+- [x] **Step 3: Add registry selection test for all target languages**
 
 期待するExtractor名はTask完了に応じて更新する。Task 2時点で未実装言語はgeneric、既存言語は専用名を期待する。後続Taskで専用名へ変更する。
 
-- [ ] **Step 4: Add fuzz invariant seeds**
+- [x] **Step 4: Add fuzz invariant seeds**
 
 少なくともC++ raw string、C# interpolated raw string、JS template literal、PHP heredoc、Smarty literalをseedにする。新規Extractorは各Taskでseedを追加する。
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 ```text
 go test ./internal/extract/... -v
 go test ./...
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```text
 git add internal/extract internal/app/service_test.go

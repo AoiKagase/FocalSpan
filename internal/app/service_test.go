@@ -24,6 +24,17 @@ func TestNewExtractorRegistrySelectsDedicatedExtractors(t *testing.T) {
 		{name: "csharp", path: "Auth/TokenService.cs", language: "csharp", want: "csharp-structural"},
 		{name: "javascript", path: "src/auth/token-service.ts", language: "typescript", want: "jsts-structural"},
 		{name: "template", path: "pages/login.tpl", language: "smarty", want: "template-structural"},
+		{name: "rust", path: "src/lib.rs", language: "rust", want: "generic-structural"},
+		{name: "python", path: "src/auth.py", language: "python", want: "generic-structural"},
+		{name: "ruby", path: "lib/auth.rb", language: "ruby", want: "generic-structural"},
+		{name: "lua", path: "lua/auth.lua", language: "lua", want: "generic-structural"},
+		{name: "pawn", path: "addons/amxmodx/scripting/plugin.sma", language: "pawn", want: "generic-structural"},
+		{name: "vb6", path: "legacy/Module1.bas", language: "vb6", want: "generic-structural"},
+		{name: "vbnet", path: "src/Form.vb", language: "vbnet", want: "generic-structural"},
+		{name: "xaml", path: "Views/Main.xaml", language: "xaml", want: "generic-structural"},
+		{name: "resource", path: "Properties/Resources.resx", language: "dotnet-resource", want: "generic-structural"},
+		{name: "nim", path: "src/auth.nim", language: "nim", want: "generic-structural"},
+		{name: "zig", path: "src/auth.zig", language: "zig", want: "generic-structural"},
 		{name: "generic", path: "README.txt", language: "text", want: "generic-structural"},
 	}
 	for _, test := range tests {
