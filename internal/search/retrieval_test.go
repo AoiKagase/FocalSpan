@@ -72,9 +72,6 @@ func (s *retrievalRecordingStore) RelatedCandidates(_ context.Context, handles [
 }
 
 func (s *retrievalRecordingStore) RelatedCandidateHits(_ context.Context, handles []string, relation string) ([]model.RelationHit, error) {
-	if err := s.record(RetrieverRelation); err != nil {
-		return nil, err
-	}
 	if relation != "callers" || !reflect.DeepEqual(handles, []string{"target"}) {
 		return nil, errors.New("unexpected relation anchor")
 	}

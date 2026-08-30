@@ -584,22 +584,7 @@ func (s *Store) RelatedCandidateHits(ctx context.Context, handles []string, rela
 }
 
 func (s *Store) RelatedCandidates(ctx context.Context, handles []string, relation string) ([]model.RankedCandidate, error) {
-	hits, err := s.RelatedCandidateHits(ctx, handles, relation)
-	if err != nil {
-		return nil, err
-	}
-	result := make([]model.RankedCandidate, 0, len(hits))
-	seen := make(map[string]bool, len(hits))
-	for _, hit := range hits {
-		if seen[hit.Candidate.Handle] {
-			continue
-		}
-		candidate := hit.Candidate
-		candidate.Relation = hit.Context.Kind
-		result = append(result, candidate)
-		seen[candidate.Handle] = true
-	}
-	return result, nil
+	return s.relatedCandidatesLegacy(ctx, handles, relation)
 }
 
 func supportedRelation(relation string) bool {

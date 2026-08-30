@@ -86,14 +86,46 @@ func (r *RetrieverSet) Retrieve(ctx context.Context, plan query.Plan, req Search
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		hits, relationErr := r.store.RelatedCandidateHits(ctx, handles, relation)
+		legacyItems, relationErr := r.store.RelatedCandidates(ctx, handles, relation)
 		if relationErr != nil {
 			return nil, fmt.Errorf("%s retriever: %w", RetrieverRelation, relationErr)
 		}
-		items := relationCandidates(hits)
+		hits, relationErr := r.store.RelatedCandidateHits(ctx, handles, relation)
+		if relationErr != nil {
+			return nil, fmt.Errorf("%s provenance: %w", RetrieverRelation, relationErr)
+		}
+		items := mergeRelationCandidates(legacyItems, hits, relation)
 		lists = append(lists, RankedList{Retriever: RetrieverRelation, Items: items})
 	}
 	return lists, nil
+}
+
+func mergeRelationCandidates(legacy []model.RankedCandidate, hits []model.RelationHit, relation string) []model.RankedCandidate {
+	provenance := relationCandidates(hits)
+	if len(legacy) == 0 {
+		return provenance
+	}
+	byIdentity := make(map[string]model.RankedCandidate, len(provenance))
+	byHandle := make(map[string]model.RankedCandidate, len(provenance))
+	for _, candidate := range provenance {
+		byIdentity[candidateIdentity(candidate)] = candidate
+		if current, exists := byHandle[candidate.Handle]; !exists || strongerRelationContext(candidate.RelationContext, current.RelationContext) {
+			byHandle[candidate.Handle] = candidate
+		}
+	}
+	result := append([]model.RankedCandidate(nil), legacy...)
+	for index := range result {
+		result[index].Relation = relation
+		matched, ok := byIdentity[candidateIdentity(result[index])]
+		if !ok {
+			matched, ok = byHandle[result[index].Handle]
+		}
+		if ok && matched.RelationContext != nil {
+			contextCopy := *matched.RelationContext
+			result[index].RelationContext = &contextCopy
+		}
+	}
+	return result
 }
 
 func relationCandidates(hits []model.RelationHit) []model.RankedCandidate {
