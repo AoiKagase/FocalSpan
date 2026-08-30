@@ -1017,7 +1017,7 @@ git commit -m "feat: add source-faithful focused evidence excerpts"
 - Consumes: query plan, revision, mode, token budget, ranked candidates, known handles
 - Produces: `CompileResult` containing a valid `Packet`, canonical short summary measurement, and internal-only accounting statistics
 
-- [ ] **Step 1: Define compiler input and internal statistics**
+- [x] **Step 1: Define compiler input and internal statistics**
 
 Implement:
 
@@ -1057,7 +1057,7 @@ func (c *Compiler) Compile(req CompileRequest) (CompileResult, error)
 
 If estimator is nil, use `budget.NewEstimator()`.
 
-- [ ] **Step 2: Write failing tests for model-visible budget compliance**
+- [x] **Step 2: Write failing tests for model-visible budget compliance**
 
 For budgets 256, 512, 1200, 4000, and 64000, measure the same compact JSON plus canonical summary that the MCP handler will expose:
 
@@ -1073,7 +1073,7 @@ if used != result.Packet.Budget.Used {
 
 Also test clamping to existing `budget.MinBudget` and `budget.MaxBudget`.
 
-- [ ] **Step 3: Implement candidate preprocessing**
+- [x] **Step 3: Implement candidate preprocessing**
 
 Before selection:
 
@@ -1089,7 +1089,7 @@ build content variants
 
 Do not count candidates rejected before ranking as omitted evidence.
 
-- [ ] **Step 4: Implement marginal utility per wire cost**
+- [x] **Step 4: Implement marginal utility per wire cost**
 
 Use deterministic internal utility. Define named constants with these initial values:
 
@@ -1130,19 +1130,19 @@ template target=42 template=44 import=28 implementation=22
 
 Unlisted roles receive 8. Divide the resulting utility by the incremental serialized token cost of adding the selected content variant. Use original rank, path, start line, and handle as deterministic tie breakers.
 
-- [ ] **Step 5: Guarantee a compact anchor before greedy selection**
+- [x] **Step 5: Guarantee a compact anchor before greedy selection**
 
 When candidates exist, include the highest-priority target/change item at least as a signature if the minimal valid packet can fit. For callers, callees, tests, imports, and references intents, preserve a compact target signature even when the richest relation candidate scores above it.
 
 Do not violate the wire budget to force an anchor. A 256-token packet may contain one signature item or an empty evidence array plus limitations.
 
-- [ ] **Step 6: Add variants using incremental serialized cost**
+- [x] **Step 6: Add variants using incremental serialized cost**
 
 For each candidate, try richest-to-cheapest allowed variants. Measure each trial packet with `MeasureModelVisible`, including the canonical summary. Select the variant with the highest utility per incremental model-visible token that fits. Recompute role/path diversity after each selection.
 
 Do not estimate candidate source alone as the hard-cap decision.
 
-- [ ] **Step 7: Assemble edges only after final item selection**
+- [x] **Step 7: Assemble edges only after final item selection**
 
 Use relation provenance and stable-handle-to-local-ID mapping. Edge orientation:
 
@@ -1154,7 +1154,7 @@ related/ambiguous relation: omit edge; retain a lexical why code and limitation
 
 Map certainty through Task 3. If the anchor was suppressed by `known_handles`, do not emit a dangling edge. The item may retain role and why; add `known_anchor_not_repeated` to limitations once per packet.
 
-- [ ] **Step 8: Implement canonical summary and fixed-point model-visible token reporting**
+- [x] **Step 8: Implement canonical summary and fixed-point model-visible token reporting**
 
 Add these functions in `wire.go`:
 
@@ -1177,7 +1177,7 @@ for i := 0; i < 4; i++ {
 
 After the loop, remeasure. If the packet exceeds the limit, degrade or remove the lowest-utility non-anchor item and repeat. If only the anchor remains, degrade verbatim to excerpt to signature before removing it. Return an error only when even the empty valid packet cannot fit after budget clamping.
 
-- [ ] **Step 9: Implement internal accounting**
+- [x] **Step 9: Implement internal accounting**
 
 Definitions:
 
@@ -1190,15 +1190,15 @@ DuplicateSourceBytes: bytes repeated by overlapping source line ranges on the sa
 
 Do not serialize `Stats` into normal MCP output.
 
-- [ ] **Step 10: Validate every compiled packet**
+- [x] **Step 10: Validate every compiled packet**
 
 Call `evidence.Validate` before returning success. Compiler tests must fail if a future change produces a dangling edge, mixed content representation, invalid line range, duplicate handle, or wrong `budget.used`.
 
-- [ ] **Step 11: Test deterministic packing**
+- [x] **Step 11: Test deterministic packing**
 
 Run the same request 100 times, including candidates with tied scores and tied utility. Assert byte-identical `json.Marshal(result.Packet)` output.
 
-- [ ] **Step 12: Verify and commit**
+- [x] **Step 12: Verify and commit**
 
 ```bash
 go test ./internal/evidence -run 'TestCompiler|TestWire|TestBudget|TestUtility|TestDeterministic' -count=1

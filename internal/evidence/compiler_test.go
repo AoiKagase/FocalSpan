@@ -1,0 +1,135 @@
+package evidence
+
+import (
+	"encoding/json"
+	"reflect"
+	"strconv"
+	"strings"
+	"testing"
+
+	"github.com/focalspan/focalspan/internal/budget"
+	"github.com/focalspan/focalspan/internal/model"
+	"github.com/focalspan/focalspan/internal/query"
+)
+
+func compilerCandidates() []model.RankedCandidate {
+	targetContent := "func ValidateToken() error {\n" + strings.Repeat("\twork()\n", 80) + "\treturn ErrExpiredToken\n}\n"
+	return []model.RankedCandidate{
+		{Handle: "target", Path: "auth/service.go", Language: "go", Kind: "method", Symbol: "ValidateToken", Signature: "func ValidateToken() error", StartLine: 10, EndLine: 93, Content: targetContent, ContentHash: "target-hash", Reasons: []model.ScoreReason{{Code: "symbol-exact"}}},
+		{Handle: "caller", Path: "http/middleware.go", Language: "go", Kind: "method", Symbol: "Authenticate", Signature: "func Authenticate() error", StartLine: 5, EndLine: 8, Content: "func Authenticate() error {\n\treturn service.ValidateToken()\n}\n", ContentHash: "caller-hash", Relation: "callers", RelationContext: &model.RelationContext{AnchorHandle: "target", Kind: "callers", Direction: model.RelationIncoming, Confidence: .95, Source: "go-ast", Resolved: true}},
+		{Handle: "test", Path: "auth/service_test.go", Language: "go", Kind: "test", Symbol: "TestValidateToken", Signature: "func TestValidateToken(t *testing.T)", StartLine: 7, EndLine: 14, Content: "func TestValidateToken(t *testing.T) {\n\t_ = ErrExpiredToken\n}\n", ContentHash: "test-hash", Relation: "tests", RelationContext: &model.RelationContext{AnchorHandle: "target", Kind: "tests", Direction: model.RelationIncoming, Confidence: .8, Source: "go-ast", Resolved: true}},
+		{Handle: "noise", Path: "unrelated/report.go", Language: "go", Kind: "function", Symbol: "BuildReport", Signature: "func BuildReport()", StartLine: 1, EndLine: 40, Content: strings.Repeat("report line\n", 40), ContentHash: "noise-hash", Reasons: []model.ScoreReason{{Code: "lexical"}}},
+	}
+}
+
+func compilerRequest(tokenBudget int) CompileRequest {
+	return CompileRequest{
+		Plan:     query.Plan{RawQuery: "what calls ValidateToken?", PrimaryIntent: query.IntentCallers, Intents: []query.Intent{query.IntentCallers}, Anchors: []string{"ValidateToken"}, Terms: query.Terms{Identifiers: []string{"ValidateToken", "ErrExpiredToken"}, Words: []string{"expired", "token"}}},
+		Revision: "rev-1", TokenBudget: tokenBudget, Mode: ModeFocused, Candidates: compilerCandidates(),
+	}
+}
+
+func TestCompilerRespectsFinalModelVisibleBudget(t *testing.T) {
+	estimator := budget.NewEstimator()
+	compiler := NewCompiler(estimator)
+	for _, requested := range []int{256, 512, 1200, 4000, 64000, 0, 1, 64001} {
+		t.Run(strconv.Itoa(requested), func(t *testing.T) {
+			result, err := compiler.Compile(compilerRequest(requested))
+			if err != nil {
+				t.Fatal(err)
+			}
+			used := MeasureModelVisible(result.Packet, estimator)
+			if used > result.Packet.Budget.Limit {
+				t.Fatalf("wire packet uses %d > %d", used, result.Packet.Budget.Limit)
+			}
+			if used != result.Packet.Budget.Used || used != result.Stats.WireTokens {
+				t.Fatalf("reported=%d stats=%d measured=%d", result.Packet.Budget.Used, result.Stats.WireTokens, used)
+			}
+			wantLimit := requested
+			if wantLimit < budget.MinBudget {
+				wantLimit = budget.MinBudget
+			}
+			if wantLimit > budget.MaxBudget {
+				wantLimit = budget.MaxBudget
+			}
+			if result.Packet.Budget.Limit != wantLimit {
+				t.Fatalf("limit = %d, want %d", result.Packet.Budget.Limit, wantLimit)
+			}
+			if err := Validate(result.Packet); err != nil {
+				t.Fatalf("compiled packet invalid: %v", err)
+			}
+		})
+	}
+}
+
+func TestCompilerKeepsCompactTargetAndBuildsLocalEdges(t *testing.T) {
+	result, err := NewCompiler(nil).Compile(compilerRequest(4000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	byHandle := make(map[string]Item)
+	for _, item := range result.Packet.Evidence {
+		byHandle[item.Handle] = item
+	}
+	target, targetOK := byHandle["target"]
+	caller, callerOK := byHandle["caller"]
+	if !targetOK || target.Role != RoleTarget || !callerOK || caller.Role != RoleCaller {
+		t.Fatalf("target/caller roles absent: %+v", result.Packet.Evidence)
+	}
+	wantEdge := Edge{From: caller.ID, To: target.ID, Kind: "calls", Certainty: CertaintyExact}
+	found := false
+	for _, edge := range result.Packet.Relations {
+		found = found || edge == wantEdge
+	}
+	if !found {
+		t.Fatalf("edge %+v absent: %+v", wantEdge, result.Packet.Relations)
+	}
+}
+
+func TestCompilerPreprocessesDuplicatesAndKnownHandles(t *testing.T) {
+	req := compilerRequest(4000)
+	req.Candidates = append(req.Candidates, req.Candidates[0], req.Candidates[1])
+	req.KnownHandles = []string{"caller"}
+	result, err := NewCompiler(nil).Compile(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, item := range result.Packet.Evidence {
+		if item.Handle == "caller" {
+			t.Fatal("known caller was retransmitted")
+		}
+		if seen[item.Handle] {
+			t.Fatalf("duplicate handle %q", item.Handle)
+		}
+		seen[item.Handle] = true
+	}
+	if result.Packet.SkippedKnown != 1 || result.Stats.SkippedKnown != 1 {
+		t.Fatalf("skipped known packet=%d stats=%d", result.Packet.SkippedKnown, result.Stats.SkippedKnown)
+	}
+	for _, edge := range result.Packet.Relations {
+		if edge.From == "" || edge.To == "" {
+			t.Fatalf("dangling edge: %+v", edge)
+		}
+	}
+}
+
+func TestCompilerIsDeterministic(t *testing.T) {
+	compiler := NewCompiler(nil)
+	var want []byte
+	for iteration := 0; iteration < 100; iteration++ {
+		result, err := compiler.Compile(compilerRequest(1200))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := json.Marshal(result.Packet)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want == nil {
+			want = got
+		} else if !reflect.DeepEqual(got, want) {
+			t.Fatalf("iteration %d differs\n got: %s\nwant: %s", iteration, got, want)
+		}
+	}
+}
