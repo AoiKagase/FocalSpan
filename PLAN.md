@@ -2216,7 +2216,7 @@ git commit -m "test: harden evidence packet invariants"
 - Consumes: all completed v0.4 behavior and measured results
 - Produces: truthful documentation and a reproducible verification report
 
-- [ ] **Step 1: Document the Evidence Packet contract**
+- [x] **Step 1: Document the Evidence Packet contract**
 
 README must include a compact valid example:
 
@@ -2245,7 +2245,7 @@ README must include a compact valid example:
 
 The example values must fit the schema and must not claim they are measured output.
 
-- [ ] **Step 2: Document how LLM consumers should use it**
+- [x] **Step 2: Document how LLM consumers should use it**
 
 State:
 
@@ -2259,7 +2259,7 @@ State:
 - Do not parse the short MCP text summary for source.
 ```
 
-- [ ] **Step 3: Document compatibility and migration**
+- [x] **Step 3: Document compatibility and migration**
 
 Explain:
 
@@ -2270,14 +2270,15 @@ MCP context tools return focalspan.context.v1.
 Tool names remain unchanged.
 code_status and code_restart outputs remain unchanged.
 Normal MCP packets no longer expose ranking scores and token-savings diagnostics.
-focalspan explain remains the debugging interface.
+The already-retired focalspan explain command remains unavailable; use the
+positional Evidence preview for debugging without restoring a public command.
 ```
 
-- [ ] **Step 4: Document fidelity and omission semantics**
+- [x] **Step 4: Document fidelity and omission semantics**
 
 Define `verbatim`, `excerpt`, `signature`, `synthetic`, source and omitted segments, line ranges, and the guarantee that omitted markers are metadata rather than injected code.
 
-- [ ] **Step 5: Update architecture diagrams**
+- [x] **Step 5: Update architecture diagrams**
 
 Use this pipeline:
 
@@ -2295,7 +2296,7 @@ repository -> extraction -> SQLite/FTS5 -> query plan -> retrievers -> RRF/ranki
 
 Keep the legacy packer shown as a compatibility branch, not the future canonical MCP path.
 
-- [ ] **Step 6: Update durable contributor rules only when needed**
+- [x] **Step 6: Update durable contributor rules only when needed**
 
 If `AGENTS.md` does not already cover them, add concise rules:
 
@@ -2308,7 +2309,7 @@ Every Evidence change requires wire-budget and invariant tests.
 
 Do not paste task-specific checklists into `AGENTS.md`.
 
-- [ ] **Step 7: Run formatting and static checks**
+- [x] **Step 7: Run formatting and static checks**
 
 ```bash
 gofmt -w .
@@ -2319,7 +2320,7 @@ go vet ./...
 
 Expected: PASS.
 
-- [ ] **Step 8: Run race tests where supported**
+- [x] **Step 8: Run race tests where supported**
 
 ```bash
 go test -race ./...
@@ -2327,7 +2328,7 @@ go test -race ./...
 
 If the current Windows environment lacks a compatible C compiler/linker, report it as unverified rather than passed. Run it in Linux CI or another supported environment before a release claim when available.
 
-- [ ] **Step 9: Run CGO-free native and cross-builds**
+- [x] **Step 9: Run CGO-free native and cross-builds**
 
 ```bash
 CGO_ENABLED=0 go build ./cmd/focalspan
@@ -2338,7 +2339,7 @@ GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/focalspan
 
 Direct artifacts to a temporary directory or remove generated binaries after verification.
 
-- [ ] **Step 10: Run every legacy evaluation**
+- [x] **Step 10: Run every legacy evaluation**
 
 Run all checked-in legacy case files using their matching fixture roots. Compare against Task 0 baseline. Requirements:
 
@@ -2351,7 +2352,7 @@ no lower determinism
 no lower expected relation/intent/kind recall
 ```
 
-- [ ] **Step 11: Run Evidence comparison evaluation**
+- [x] **Step 11: Run Evidence comparison evaluation**
 
 ```bash
 focalspan eval \
@@ -2363,7 +2364,7 @@ focalspan eval \
 
 Run any additional language-specific Evidence case roots documented by Task 11. Confirm all v0.4 acceptance thresholds from Task 11.
 
-- [ ] **Step 12: Run manual MCP smoke tests**
+- [x] **Step 12: Run manual MCP smoke tests**
 
 Against an indexed fixture or safe local repository:
 
@@ -2386,7 +2387,7 @@ relations reference valid local IDs
 no debug weights or savings fields appear
 ```
 
-- [ ] **Step 13: Self-review the full diff**
+- [x] **Step 13: Self-review the full diff**
 
 Check every item:
 
@@ -2411,11 +2412,11 @@ README matches implementation
 
 Fix discovered issues and rerun affected tests.
 
-- [ ] **Step 14: Mark this plan with actual completion evidence**
+- [x] **Step 14: Mark this plan with actual completion evidence**
 
 Check a box only after its command or assertion has been verified. Add a short final section to `docs/evaluation.md` containing actual command results, dates, platform, Go version, and any unverified race coverage.
 
-- [ ] **Step 15: Commit final docs and verification updates**
+- [x] **Step 15: Commit final docs and verification updates**
 
 ```bash
 git add README.md docs/design.md docs/evaluation.md docs/implementation-plan.md AGENTS.md PLAN.md

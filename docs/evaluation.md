@@ -370,3 +370,45 @@ twice. The table below is copied from those current-checkout runs.
 | .NET WinForms/WPF/XAML/RESX | 6 | 0.8333 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 95 | 0.20833333333333334 |
 | Rust | 5 | 0.4000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 94 | 0.19542619542619544 |
 | Python | 5 | 1.0000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 78 | 0.22857142857142856 |
+
+## LLM Evidence Contract v0.4 release-readiness verification
+
+This section records actual commands run on 2026-08-30 on Windows amd64 with
+Go 1.27.0. It is a verification record, not a copy of acceptance thresholds.
+
+- `go test ./...`: PASS, 588 tests in 43 packages.
+- `go vet ./...`: PASS with no reported issues.
+- `git diff --check`: PASS.
+- `go test ./internal/evidence -run '^$' -fuzz FuzzCompile -fuzztime 20s`:
+  PASS after 130,761 executions. The first sandboxed attempt stopped before
+  completing because the Go fuzz cache was not writable; the unrestricted
+  rerun is the reported result.
+- `go test ./internal/evidence -run '^$' -fuzz FuzzValidate -fuzztime 20s`:
+  PASS after 2,832,641 executions.
+- CGO-free native Windows amd64, cross Windows amd64, Linux amd64, and Darwin
+  arm64 builds of `./cmd/focalspan`: PASS. All artifacts were directed to and
+  removed from `.verify-builds`.
+- `go test -race ./...`: UNVERIFIED, not PASS. All 43 packages failed during
+  the `runtime/cgo` build before tests ran. A focused rerun reported
+  `cc1.exe: sorry, unimplemented: 64-bit mode not compiled in`.
+- All 18 checked-in legacy case suites were run after rebuilding their matching
+  fixture indexes. Every suite had budget compliance 1.0, zero forbidden-path
+  violations, and deterministic output 1.0. All profiles with a checked-in
+  numeric v0.3 record met or exceeded its hit@5, symbol recall, and path recall.
+  The additional Lua, Nim, Pawn, Ruby, VB6, VB.NET, and Zig suites were also
+  run, but no separate Task 0 numeric artifact exists for a historical
+  comparison; their current results must not be described as a measured delta.
+- Evidence `--contract compare`: PASS for eight cases. Expected coverage, role
+  accuracy, fidelity validity, relation validity, wire-budget compliance,
+  deterministic output, and focused late-hit preservation were 1.0. Forbidden
+  violations, known resends, and median duplicate source ratio were zero.
+  Median metadata overhead was 0.34496919917864477, median Evidence-to-legacy
+  wire ratio was 0.9371391917896087, and median two-step delta ratio was
+  0.5578351609480015.
+- A raw stdio MCP smoke called `code_context`, `code_expand`, `code_impact`,
+  `code_status`, and `code_restart`. Context source occurred only in
+  `structuredContent`; the text summary was source-free. Expanding with all
+  four prior handles returned no evidence, reported `skipped_known: 4`, and
+  emitted no dangling relation. The normal packets contained no ranking or
+  token-savings debug fields. Impact returned the syntax-only limitation, and
+  status/restart retained their established contracts.
