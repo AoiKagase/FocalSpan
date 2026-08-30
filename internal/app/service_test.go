@@ -28,7 +28,7 @@ func TestNewExtractorRegistrySelectsDedicatedExtractors(t *testing.T) {
 		{name: "python", path: "src/auth.py", language: "python", want: "python-structural"},
 		{name: "ruby", path: "lib/auth.rb", language: "ruby", want: "ruby-structural"},
 		{name: "lua", path: "lua/auth.lua", language: "lua", want: "lua-structural"},
-		{name: "pawn", path: "addons/amxmodx/scripting/plugin.sma", language: "pawn", want: "generic-structural"},
+		{name: "pawn", path: "addons/amxmodx/scripting/plugin.sma", language: "pawn", want: "pawn-structural"},
 		{name: "vb6", path: "legacy/Module1.bas", language: "vb6", want: "generic-structural"},
 		{name: "vbnet", path: "src/Form.vb", language: "vbnet", want: "generic-structural"},
 		{name: "xaml", path: "Views/Main.xaml", language: "xaml", want: "xaml-structural"},

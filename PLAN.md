@@ -1573,7 +1573,7 @@ git commit -m "feat: add first-class Lua extraction"
 - Create: `testdata/repos/pawnsample/*`
 - Create: `testdata/eval/pawn-cases.jsonl`
 
-- [ ] **Step 1: Lexer tests**
+- [x] **Step 1: Lexer tests**
 
 Cover:
 
@@ -1590,7 +1590,7 @@ public/stock/native/forward
 malformed directive
 ```
 
-- [ ] **Step 2: Declaration tests**
+- [x] **Step 2: Declaration tests**
 
 Kinds:
 
@@ -1619,7 +1619,7 @@ client_putinserver
 
 These are functions with callback metadata, not hard-coded ranking boosts.
 
-- [ ] **Step 3: Relations**
+- [x] **Step 3: Relations**
 
 ```text
 #include imports
@@ -1633,11 +1633,11 @@ contains
 
 String handlerはstatic literalかつ同一fileで一意なfunctionの場合だけresolveする。
 
-- [ ] **Step 4: `.inc` conflict tests**
+- [x] **Step 4: `.inc` conflict tests**
 
 PHP marker優先、Pawn score、explicit override、plain `.inc` fallbackを検証する。
 
-- [ ] **Step 5: Fixture/eval**
+- [x] **Step 5: Fixture/eval**
 
 Minimum:
 
@@ -1658,7 +1658,7 @@ what calls validate_token?
 where is the client authorization callback?
 ```
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 ```text
 go test ./internal/extract/pawn ./internal/language -v
