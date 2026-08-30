@@ -125,7 +125,7 @@ matching fixture and JSONL cases. Each case is queried twice by the evaluator.
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | C/C++ (includes C) | 5 | 0.40 / 0.80 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 146 | 0.1667 |
 | C# | 5 | 0.60 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 92 | 0.1215 |
-| JavaScript/TypeScript | 6 | 0.83 / 0.83 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 145 | 0.2020 |
+| JavaScript/TypeScript | 6 | 0.6667 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 121 | 0.15419501133786848 |
 
 All three profiles meet the existing thresholds: hit@5 100%, budget
 compliance 100%, no forbidden-path violations, deterministic output, and

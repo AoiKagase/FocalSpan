@@ -1108,7 +1108,7 @@ git commit -m "feat: strengthen PHP and Smarty extraction"
 - Modify: `testdata/repos/jstssample`
 - Modify: `testdata/eval/jsts-cases.jsonl`
 
-- [ ] **Step 1: Add extension tests**
+- [x] **Step 1: Add extension tests**
 
 Ensure:
 
@@ -1118,7 +1118,7 @@ Ensure:
 
 are classified as TypeScript. `.json` remains config/data, not JavaScript.
 
-- [ ] **Step 2: Add failing parser tests**
+- [x] **Step 2: Add failing parser tests**
 
 Cover:
 
@@ -1144,7 +1144,7 @@ regex vs division
 nested template interpolation
 ```
 
-- [ ] **Step 3: Improve module relations**
+- [x] **Step 3: Improve module relations**
 
 Static relative ESM/CommonJS specifierをnormalizeし、拡張子候補を決定的に生成する。`node_modules`、package exports、runtime条件はこのTaskでは確定しない。
 
@@ -1159,15 +1159,15 @@ explicit path
 
 JS importerではJS候補を先にする。
 
-- [ ] **Step 4: Improve tests**
+- [x] **Step 4: Improve tests**
 
 Jest、Vitest、Mocha、Playwright、Denoのstatic test callbackを認識する。`test.each`、`describe.each`を扱う。
 
-- [ ] **Step 5: Add Node fixture metadata files**
+- [x] **Step 5: Add Node fixture metadata files**
 
 `package.json`、`tsconfig.json`、ESM/CommonJS混在、re-export、workspace-like directoryをfixtureへ追加する。metadata解析自体はTask 16で行うが、source relationのbaselineを作る。
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 ```text
 go test ./internal/extract/jsts -v
@@ -1176,7 +1176,7 @@ focalspan index --root testdata/repos/jstssample --quiet
 focalspan eval --root testdata/repos/jstssample --cases testdata/eval/jsts-cases.jsonl --json
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```text
 git add internal/extract/jsts internal/language testdata/repos/jstssample testdata/eval/jsts-cases.jsonl

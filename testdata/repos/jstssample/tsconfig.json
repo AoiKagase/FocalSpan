@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": { "@sample/*": ["src/*"] },
+    "module": "NodeNext",
+    "strict": true
+  }
+}

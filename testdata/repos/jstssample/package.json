@@ -1,0 +1,10 @@
+{
+  "name": "focalspan-jsts-sample",
+  "type": "module",
+  "main": "src/esm/bootstrap.mjs",
+  "exports": {
+    ".": "./src/esm/bootstrap.mjs",
+    "./validator": "./src/auth/token-validator.ts"
+  },
+  "workspaces": ["packages/*"]
+}
