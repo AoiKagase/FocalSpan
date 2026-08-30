@@ -373,7 +373,7 @@ If `baseline-v0.4.json` was not needed, omit it from `git add`. If the checkout 
 - Consumes: only standard library types
 - Produces: `evidence.Packet`, enums, `Validate(Packet) error`, and deterministic local-ID helpers used by every later task
 
-- [ ] **Step 1: Write contract serialization tests**
+- [x] **Step 1: Write contract serialization tests**
 
 Add table-driven tests that marshal a minimal packet and assert:
 
@@ -420,7 +420,7 @@ func TestPacketJSONContract(t *testing.T) {
 
 Expected before implementation: compilation fails because `internal/evidence` does not exist.
 
-- [ ] **Step 2: Implement exact enums and public structs**
+- [x] **Step 2: Implement exact enums and public structs**
 
 Create `model.go` with the exact schema identifier, modes, roles, fidelity values, certainty values, and public structs defined in the Product Contract section. Use constants for segment kinds:
 
@@ -431,7 +431,7 @@ const (
 )
 ```
 
-- [ ] **Step 3: Write validation tests for every invariant**
+- [x] **Step 3: Write validation tests for every invariant**
 
 Cover at least:
 
@@ -463,7 +463,7 @@ negative skipped_known
 
 Use exact error substrings so callers can diagnose malformed packet assembly.
 
-- [ ] **Step 4: Implement `Validate`**
+- [x] **Step 4: Implement `Validate`**
 
 Required signature:
 
@@ -473,7 +473,7 @@ func Validate(packet Packet) error
 
 Validation must be read-only, deterministic, and must not repair malformed packets silently. Use joined or wrapped errors only when the resulting message remains stable enough for tests.
 
-- [ ] **Step 5: Add deterministic local-ID assignment**
+- [x] **Step 5: Add deterministic local-ID assignment**
 
 Required helper:
 
@@ -488,7 +488,7 @@ Behavior:
 - reject or surface duplicate non-empty handles through validation rather than silently mapping the last duplicate;
 - do not derive IDs from scores, line numbers, map iteration, or random values.
 
-- [ ] **Step 6: Run focused tests**
+- [x] **Step 6: Run focused tests**
 
 ```bash
 go test ./internal/evidence -run 'TestPacket|TestValidate|TestAssignLocalIDs' -count=1
@@ -496,7 +496,7 @@ go test ./internal/evidence -run 'TestPacket|TestValidate|TestAssignLocalIDs' -c
 
 Expected: PASS.
 
-- [ ] **Step 7: Run full tests and commit**
+- [x] **Step 7: Run full tests and commit**
 
 ```bash
 go test ./...
