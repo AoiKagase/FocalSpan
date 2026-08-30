@@ -48,9 +48,11 @@ Query flags:
 
 - `--root PATH`
 - `--token-budget N`
-- `--mode source|outline`
+- `--format legacy|evidence` (default: `legacy`)
+- `--mode source|outline` for legacy; `source|focused|outline` for Evidence
 - `--changed-only`
 - repeatable `--path PREFIX`
+- repeatable `--known-handle HANDLE` with `--format evidence`
 - `--auto-update=false`
 - `--json`
 
@@ -117,12 +119,73 @@ The MCP server exposes exactly:
 - `code_restart`
 - `code_status`
 
+`code_context`, `code_expand`, and `code_impact` return the versioned
+`focalspan.context.v1` Evidence Packet. Their default mode is `focused`.
+`code_status` and `code_restart` keep their existing output contracts.
+
+## LLM Evidence Packet v0.4
+
+Start with `code_context` in focused mode. Source strings and `source`
+segments are verbatim indexed code; `synthetic` outlines are generated
+navigation aids. Roles and local relations distinguish targets, callers,
+tests, declarations, implementations, and dependencies. Follow `next` actions
+with `code_expand`, passing stable handles through `known_handles` so evidence
+already present in the conversation is not sent again. The short MCP text
+content is only a source-free summary and must not be parsed as code.
+
+This compact example illustrates the schema; its numbers are not measured
+output:
+
+```json
+{
+  "schema": "focalspan.context.v1",
+  "intent": "callers",
+  "mode": "focused",
+  "budget": {"limit": 1200, "used": 934, "truncated": true, "omitted": 2},
+  "evidence": [
+    {
+      "id": "e1",
+      "handle": "sym_target",
+      "role": "target",
+      "location": {"path": "auth/service.go", "lines": [44, 51]},
+      "language": "go",
+      "kind": "method",
+      "symbol": "Service.ValidateToken",
+      "signature": "func (s *Service) ValidateToken(token string) error",
+      "fidelity": "signature",
+      "why": ["exact_symbol"]
+    }
+  ]
+}
+```
+
+Fidelity values are `verbatim`, `excerpt`, `signature`, and `synthetic`.
+Excerpt `source` segments preserve source bytes and line endings. An `omitted`
+segment is metadata describing a skipped line range; its marker is never
+inserted into source text.
+
+The public CLI remains legacy by default. Preview the same contract through
+the sole positional query surface:
+
+```powershell
+focalspan --format evidence --mode focused --token-budget 1200 "callers of Service.ValidateToken"
+focalspan --format evidence --mode focused --token-budget 1200 --json "callers of Service.ValidateToken"
+focalspan --format evidence --known-handle sym_target --json "Service.ValidateToken"
+```
+
+Normal MCP Evidence packets exclude ranking scores, score details, and legacy
+token-savings diagnostics. The current public CLI intentionally has no
+`query`, `expand`, `impact`, or `explain` subcommands; Evidence preview and
+debugging use the positional query surface without resurrecting retired
+commands.
+
 ## Development evaluation
 
 Evaluation is intentionally separated from the public binary:
 
 ```powershell
 go run ./cmd/focalspan-eval --root . --cases testdata/eval/cases.jsonl --ablation all --json
+go run ./cmd/focalspan-eval --root testdata/repos/evidencesample --cases testdata/eval/evidence-cases.jsonl --contract compare --json
 ```
 
 Ambiguous extensions use content-aware detection. A `.inc` file containing a

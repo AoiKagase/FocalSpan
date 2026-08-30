@@ -17,6 +17,7 @@ import (
 
 	"github.com/focalspan/focalspan/internal/app"
 	"github.com/focalspan/focalspan/internal/config"
+	"github.com/focalspan/focalspan/internal/evidence"
 	"github.com/focalspan/focalspan/internal/integration/codex"
 	"github.com/focalspan/focalspan/internal/mcpserver"
 	"github.com/focalspan/focalspan/internal/model"
@@ -286,10 +287,13 @@ func runQuery(ctx context.Context, args []string, stdout io.Writer) error {
 	rootArg := fs.String("root", ".", "repository root")
 	query := fs.String("query", "", "natural-language query")
 	budget := fs.Int("token-budget", 0, "token budget")
-	mode := fs.String("mode", "source", "outline or source")
+	format := fs.String("format", "legacy", "legacy or evidence output contract")
+	mode := fs.String("mode", "", "legacy: outline or source; evidence: outline, focused, or source")
 	changedOnly := fs.Bool("changed-only", false, "restrict to changed spans")
 	var pathFilters stringList
 	fs.Var(&pathFilters, "path", "repository-relative path prefix; repeatable")
+	var knownHandles stringList
+	fs.Var(&knownHandles, "known-handle", "stable evidence handle already in context; repeatable")
 	jsonOutput := fs.Bool("json", false, "JSON output")
 	autoUpdate := fs.Bool("auto-update", true, "automatically update the index")
 	if err := fs.Parse(args); err != nil {
@@ -307,8 +311,26 @@ func runQuery(ctx context.Context, args []string, stdout io.Writer) error {
 	} else if len(fs.Args()) > 0 {
 		return fmt.Errorf("unexpected query argument %q", fs.Args()[0])
 	}
-	if *mode != "source" && *mode != "outline" {
-		return errors.New("--mode must be outline or source")
+	if *format != "legacy" && *format != "evidence" {
+		return errors.New("--format must be legacy or evidence")
+	}
+	if *format == "legacy" {
+		if *mode == "" {
+			*mode = "source"
+		}
+		if *mode != "source" && *mode != "outline" {
+			return errors.New("legacy --mode must be outline or source")
+		}
+		if len(knownHandles) > 0 {
+			return errors.New("--known-handle requires --format evidence")
+		}
+	} else {
+		if *mode == "" {
+			*mode = string(evidence.ModeFocused)
+		}
+		if *mode != string(evidence.ModeSource) && *mode != string(evidence.ModeFocused) && *mode != string(evidence.ModeOutline) {
+			return errors.New("evidence --mode must be outline, focused, or source")
+		}
 	}
 	root, _, err := resolveRoot(ctx, *rootArg)
 	if err != nil {
@@ -319,6 +341,22 @@ func runQuery(ctx context.Context, args []string, stdout io.Writer) error {
 		return err
 	}
 	defer service.Close()
+	if *format == "evidence" {
+		result, err := service.QueryEvidence(ctx, app.EvidenceQueryRequest{Query: *query, TokenBudget: *budget, Mode: evidence.Mode(*mode), ChangedOnly: *changedOnly, Paths: []string(pathFilters), NoUpdate: !*autoUpdate, KnownHandles: []string(knownHandles)})
+		if err != nil {
+			return err
+		}
+		if *jsonOutput {
+			data, err := render.EvidenceJSON(result.Packet)
+			if err != nil {
+				return err
+			}
+			_, err = fmt.Fprintln(stdout, string(data))
+			return err
+		}
+		_, err = fmt.Fprint(stdout, render.EvidenceCompact(result.Packet))
+		return err
+	}
 	bundle, err := service.Query(ctx, app.QueryRequest{Query: *query, TokenBudget: *budget, Mode: *mode, ChangedOnly: *changedOnly, Paths: []string(pathFilters), NoUpdate: !*autoUpdate})
 	if err != nil {
 		return err
@@ -331,7 +369,7 @@ func runQuery(ctx context.Context, args []string, stdout io.Writer) error {
 }
 
 func normalizeQueryArgs(args []string) []string {
-	valueFlags := map[string]bool{"--root": true, "-root": true, "--token-budget": true, "-token-budget": true, "--mode": true, "-mode": true, "--path": true, "-path": true}
+	valueFlags := map[string]bool{"--root": true, "-root": true, "--token-budget": true, "-token-budget": true, "--format": true, "-format": true, "--mode": true, "-mode": true, "--path": true, "-path": true, "--known-handle": true, "-known-handle": true}
 	options := make([]string, 0, len(args))
 	question := make([]string, 0, len(args))
 	for index := 0; index < len(args); index++ {

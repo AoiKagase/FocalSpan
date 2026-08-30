@@ -104,6 +104,71 @@ func TestBareQueryAcceptsRepeatedPathFilters(t *testing.T) {
 	}
 }
 
+func TestBareQueryEvidenceJSONAndKnownHandleDelta(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "main.go"), "package sample\n\nfunc ValidateToken() error { return nil }\n")
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"setup", "--root", root, "--json"}, &out, &errOut); code != 0 {
+		t.Fatalf("setup code=%d stderr=%s", code, errOut.String())
+	}
+	out.Reset()
+	errOut.Reset()
+	args := []string{"--root", root, "--auto-update=false", "--format", "evidence", "--json", "ValidateToken"}
+	if code := Run(context.Background(), args, &out, &errOut); code != 0 {
+		t.Fatalf("evidence code=%d stderr=%s", code, errOut.String())
+	}
+	var first struct {
+		Schema   string `json:"schema"`
+		Mode     string `json:"mode"`
+		Evidence []struct {
+			Handle string `json:"handle"`
+		} `json:"evidence"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &first); err != nil || first.Schema != "focalspan.context.v1" || first.Mode != "focused" || len(first.Evidence) == 0 {
+		t.Fatalf("first=%+v err=%v output=%s", first, err, out.String())
+	}
+	out.Reset()
+	errOut.Reset()
+	args = append(args[:len(args)-1], "--known-handle", " "+first.Evidence[0].Handle+" ", "ValidateToken")
+	if code := Run(context.Background(), args, &out, &errOut); code != 0 {
+		t.Fatalf("delta code=%d stderr=%s", code, errOut.String())
+	}
+	var delta struct {
+		Evidence     []map[string]any `json:"evidence"`
+		SkippedKnown int              `json:"skipped_known"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &delta); err != nil || delta.SkippedKnown < 1 {
+		t.Fatalf("delta=%+v err=%v output=%s", delta, err, out.String())
+	}
+	for _, item := range delta.Evidence {
+		if item["handle"] == first.Evidence[0].Handle {
+			t.Fatalf("known handle retransmitted: %s", out.String())
+		}
+	}
+}
+
+func TestBareQueryEvidenceHumanAndFormatValidation(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "main.go"), "package sample\n\nfunc ValidateToken() error { return nil }\n")
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"--root", root, "--format", "evidence", "ValidateToken"}, &out, &errOut); code != 0 {
+		t.Fatalf("human code=%d stderr=%s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "schema: focalspan.context.v1") || !strings.Contains(out.String(), " target]") || strings.Contains(out.String(), "savings") || strings.Contains(out.String(), "score") {
+		t.Fatalf("unexpected evidence human output: %s", out.String())
+	}
+	for _, args := range [][]string{
+		{"--root", root, "--format", "legacy", "--mode", "focused", "ValidateToken"},
+		{"--root", root, "--format", "unknown", "ValidateToken"},
+	} {
+		out.Reset()
+		errOut.Reset()
+		if code := Run(context.Background(), args, &out, &errOut); code == 0 {
+			t.Fatalf("invalid args succeeded: %v output=%s", args, out.String())
+		}
+	}
+}
+
 func writeCLIFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
