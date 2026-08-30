@@ -183,6 +183,32 @@ first-place lexical candidates; hit@3/hit@5, symbol/path recall, budget
 compliance, and determinism remain within the recorded acceptance results. No
 case or threshold was removed to conceal these ordering changes.
 
+## Polyglot Coverage v0.3 starting worktree baseline
+
+This is the measured starting-worktree record for the v0.3 implementation on
+2026-08-30. The checkout was `codex/mcp-missing-registration` at `b84880a`,
+with the language-detection changes already present as uncommitted worktree
+changes. Because those changes could not be discarded under the worktree
+preservation rule, these values are a starting-worktree baseline rather than a
+pre-Task-1 source baseline. Each fixture was indexed immediately before its
+case set, and each case was queried twice by `focalspan-eval`.
+
+| Profile | Cases | hit@1 / hit@3 / hit@5 | Symbol / path recall | Budget | Forbidden | Deterministic | Median tokens | Median reduction |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Go/auth | 4 | 0.50 / 1.00 / 1.00 | 1.00 / 0.875 | 1.00 | 0 | 1.00 | 175 | 0.04009163802978236 |
+| PHP | 4 | 0.25 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 179 | 0.05550387596899225 |
+| Smarty/template | 5 | 0.80 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 110 | 0.024559053360125028 |
+| C/C++ | 5 | 0.40 / 0.80 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 137 | 0.14952279957582185 |
+| C# | 5 | 0.20 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 93 | 0.13559322033898305 |
+| JavaScript/TypeScript | 6 | 0.8333333333333334 / 1.00 / 1.00 | 1.00 / 1.00 | 1.00 | 0 | 1.00 | 138 | 0.1760204081632653 |
+
+The Japanese ablation run also completed from the same starting worktree. The
+full mode achieved hit@3/hit@5 `1.0/1.0` for `ja-auth` and `0.6667/1.0` for
+`ja-jsts`; `fts-only` and `no-relations` remained respectively
+`0.6667/0.6667` and `0.3333/0.3333`. Full-mode relation recall was `1.0` for
+both fixtures, while relation-bearing recall for both reduced modes was `0.0`.
+All runs were budget-compliant and deterministic.
+
 ### Japanese ablation comparison
 
 The following reports are the actual `--ablation all --json` results. Aggregate
