@@ -62,13 +62,29 @@ func (f fakeStore) RelatedCandidates(context.Context, []string, string) ([]model
 	return nil, nil
 }
 
+func (f fakeStore) RelatedCandidateHits(context.Context, []string, string) ([]model.RelationHit, error) {
+	return nil, nil
+}
+
 type relationFakeStore struct {
 	fakeStore
-	related []model.RankedCandidate
+	related     []model.RankedCandidate
+	relatedHits []model.RelationHit
 }
 
 func (f relationFakeStore) RelatedCandidates(context.Context, []string, string) ([]model.RankedCandidate, error) {
 	return append([]model.RankedCandidate(nil), f.related...), nil
+}
+
+func (f relationFakeStore) RelatedCandidateHits(context.Context, []string, string) ([]model.RelationHit, error) {
+	if len(f.relatedHits) > 0 {
+		return append([]model.RelationHit(nil), f.relatedHits...), nil
+	}
+	hits := make([]model.RelationHit, 0, len(f.related))
+	for _, candidate := range f.related {
+		hits = append(hits, model.RelationHit{Candidate: candidate, Context: model.RelationContext{AnchorHandle: "target", Kind: "callers", Direction: model.RelationIncoming, Confidence: 1, Resolved: true}})
+	}
+	return hits, nil
 }
 
 func TestSearchFiltersPathsAndChangedOnly(t *testing.T) {
@@ -97,6 +113,37 @@ func TestSearchAddsCallerRelationsForExplicitCallQuestion(t *testing.T) {
 		}
 	}
 	t.Fatalf("caller relation missing: %+v", got)
+}
+
+func TestSearchDetailedPreservesResolvedRelationProvenance(t *testing.T) {
+	resolved := model.RelationContext{AnchorHandle: "target", Kind: "callers", Direction: model.RelationIncoming, Confidence: .95, Source: "go-ast", Resolved: true}
+	lexical := model.RelationContext{AnchorHandle: "target", Kind: "callers", Direction: model.RelationIncoming, Confidence: .4, Source: "generic", Resolved: false}
+	caller := model.RankedCandidate{Handle: "caller", Path: "http/middleware.go", Symbol: "Authenticate", Content: "service.ValidateToken()"}
+	s := New(relationFakeStore{
+		fakeStore: fakeStore{results: []model.RankedCandidate{{Handle: "target", Path: "auth/service.go", Symbol: "ValidateToken", Content: "expired token"}}},
+		relatedHits: []model.RelationHit{
+			{Candidate: caller, Context: lexical},
+			{Candidate: caller, Context: resolved},
+		},
+	})
+
+	result, err := s.SearchDetailed(context.Background(), SearchRequest{Query: "what calls ValidateToken?"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range result.Candidates {
+		if candidate.Handle != "caller" {
+			continue
+		}
+		if candidate.Relation != "callers" || candidate.RelationContext == nil {
+			t.Fatalf("caller provenance absent: %+v", candidate)
+		}
+		if *candidate.RelationContext != resolved {
+			t.Fatalf("context = %+v, want resolved %+v", *candidate.RelationContext, resolved)
+		}
+		return
+	}
+	t.Fatalf("caller absent: %+v", result.Candidates)
 }
 
 func TestSearchOnlyExpandsExactStructuralAnchor(t *testing.T) {

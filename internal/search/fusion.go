@@ -44,8 +44,9 @@ func fuseRankedLists(lists []RankedList, limit int) ([]model.RankedCandidate, []
 					StartLine: item.StartLine, EndLine: item.EndLine,
 				}}
 				merged[key] = entry
-			} else if entry.candidate.Relation == "" && item.Relation != "" {
+			} else if item.Relation != "" && (entry.candidate.Relation == "" || strongerRelationContext(item.RelationContext, entry.candidate.RelationContext)) {
 				entry.candidate.Relation = item.Relation
+				entry.candidate.RelationContext = item.RelationContext
 			}
 			rank := index + 1
 			contribution := weight / (rrfK + float64(rank))

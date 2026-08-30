@@ -519,7 +519,7 @@ git commit -m "feat: define versioned evidence packet contract"
 - Consumes: stored `relations` rows and existing `RelatedCandidates` behavior
 - Produces: provenance-rich relation hits and `RankedCandidate.RelationContext` without changing the database schema or legacy public JSON
 
-- [ ] **Step 1: Add failing model and store tests**
+- [x] **Step 1: Add failing model and store tests**
 
 Define the expected internal types in tests:
 
@@ -563,7 +563,7 @@ confidence and source preserved from the relation row
 
 Expected before implementation: the types and API are absent.
 
-- [ ] **Step 2: Add internal relation types to `model.go`**
+- [x] **Step 2: Add internal relation types to `model.go`**
 
 Add the types above without JSON tags. Extend `RankedCandidate`:
 
@@ -573,7 +573,7 @@ RelationContext *RelationContext
 
 Keep the existing `Relation string` field for legacy ranking and output compatibility during v0.4.
 
-- [ ] **Step 3: Add a provenance-rich store API**
+- [x] **Step 3: Add a provenance-rich store API**
 
 Required API:
 
@@ -597,7 +597,7 @@ Implementation requirements:
 - preserve deterministic ordering by relation class, confidence descending, path, start line, and handle;
 - deduplicate by candidate handle plus anchor, kind, direction, source, and resolved state.
 
-- [ ] **Step 4: Keep the old store API as a compatibility wrapper**
+- [x] **Step 4: Keep the old store API as a compatibility wrapper**
 
 Keep:
 
@@ -611,7 +611,7 @@ func (s *Store) RelatedCandidates(
 
 Implement it by calling `RelatedCandidateHits`, copying `Context.Kind` into legacy `Candidate.Relation`, and deduplicating candidates exactly as the old caller expects. Existing tests must continue to pass.
 
-- [ ] **Step 5: Update the search store interface and relation retriever**
+- [x] **Step 5: Update the search store interface and relation retriever**
 
 Make the search candidate-store interface consume `RelatedCandidateHits`. For each relation hit:
 
@@ -631,7 +631,7 @@ exact direction beats related
 stable lexical order breaks remaining ties
 ```
 
-- [ ] **Step 6: Test relation provenance through `SearchDetailed`**
+- [x] **Step 6: Test relation provenance through `SearchDetailed`**
 
 Add a search test for `what calls ValidateToken?` that verifies:
 
@@ -644,7 +644,7 @@ candidate.RelationContext.Resolved matches the fixture relation
 
 Also test the unresolved lexical path.
 
-- [ ] **Step 7: Run local and full verification**
+- [x] **Step 7: Run local and full verification**
 
 ```bash
 go test ./internal/store ./internal/search -count=1
@@ -654,7 +654,7 @@ go vet ./...
 
 Expected: all existing relation behavior remains compatible.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add internal/model/model.go internal/store/store.go internal/store/store_test.go internal/search/retrieval.go internal/search/retrieval_test.go

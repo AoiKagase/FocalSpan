@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -504,7 +505,234 @@ func (s *Store) AllCandidates(ctx context.Context, limit int) ([]model.RankedCan
 	return scanCandidates(rows)
 }
 
+func (s *Store) RelatedCandidateHits(ctx context.Context, handles []string, relation string) ([]model.RelationHit, error) {
+	if len(handles) == 0 {
+		return []model.RelationHit{}, nil
+	}
+	if relation == "" {
+		relation = "neighbors"
+	}
+	if !supportedRelation(relation) {
+		return []model.RelationHit{}, nil
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]model.RelationHit, 0)
+	for _, handle := range handles {
+		camelPattern := ""
+		if relation == "callers" || relation == "tests" {
+			var err error
+			camelPattern, err = s.camelCaseRelationPattern(ctx, handle)
+			if err != nil {
+				return nil, err
+			}
+		}
+		query, args := relatedHitQuery(handle, relation, camelPattern)
+		rows, err := s.db.QueryContext(ctx, query, args...)
+		if err != nil {
+			return nil, err
+		}
+		hits, scanErr := scanRelationHits(rows, handle, relation)
+		rows.Close()
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		result = append(result, hits...)
+	}
+
+	sort.SliceStable(result, func(i, j int) bool {
+		left, right := result[i], result[j]
+		if left.Context.Kind != right.Context.Kind {
+			return left.Context.Kind < right.Context.Kind
+		}
+		if left.Context.Confidence != right.Context.Confidence {
+			return left.Context.Confidence > right.Context.Confidence
+		}
+		if left.Candidate.Path != right.Candidate.Path {
+			return left.Candidate.Path < right.Candidate.Path
+		}
+		if left.Candidate.StartLine != right.Candidate.StartLine {
+			return left.Candidate.StartLine < right.Candidate.StartLine
+		}
+		if left.Candidate.Handle != right.Candidate.Handle {
+			return left.Candidate.Handle < right.Candidate.Handle
+		}
+		if left.Context.AnchorHandle != right.Context.AnchorHandle {
+			return left.Context.AnchorHandle < right.Context.AnchorHandle
+		}
+		if left.Context.Direction != right.Context.Direction {
+			return left.Context.Direction < right.Context.Direction
+		}
+		if left.Context.Resolved != right.Context.Resolved {
+			return left.Context.Resolved
+		}
+		return left.Context.Source < right.Context.Source
+	})
+
+	seen := make(map[string]bool, len(result))
+	deduped := result[:0]
+	for _, hit := range result {
+		key := fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%s\x00%t", hit.Candidate.Handle, hit.Context.AnchorHandle, hit.Context.Kind, hit.Context.Direction, hit.Context.Source, hit.Context.Resolved)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		deduped = append(deduped, hit)
+	}
+	return deduped, nil
+}
+
 func (s *Store) RelatedCandidates(ctx context.Context, handles []string, relation string) ([]model.RankedCandidate, error) {
+	hits, err := s.RelatedCandidateHits(ctx, handles, relation)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]model.RankedCandidate, 0, len(hits))
+	seen := make(map[string]bool, len(hits))
+	for _, hit := range hits {
+		if seen[hit.Candidate.Handle] {
+			continue
+		}
+		candidate := hit.Candidate
+		candidate.Relation = hit.Context.Kind
+		result = append(result, candidate)
+		seen[candidate.Handle] = true
+	}
+	return result, nil
+}
+
+func supportedRelation(relation string) bool {
+	switch relation {
+	case "self", "parent", "children", "callers", "callees", "imports", "exports", "references", "tests", "neighbors":
+		return true
+	default:
+		return false
+	}
+}
+
+func relatedHitQuery(handle, relation, camelPattern string) (string, []any) {
+	anchor := `WITH anchor AS (
+SELECT ? AS requested_handle, s.handle, s.name, s.qualified_name, f.path
+FROM symbols s JOIN files f ON f.id = s.file_id
+WHERE s.handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
+)`
+	if relation == "self" {
+		return anchor + `
+SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature,
+       c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash,
+       1.0, 'self', 1, 'related'
+FROM anchor a JOIN chunks c ON c.symbol_handle = a.handle JOIN files f ON f.id = c.file_id
+ORDER BY f.path, c.start_line, c.handle`, []any{handle, handle, handle}
+	}
+
+	var matches string
+	args := []any{handle, handle, handle}
+	switch relation {
+	case "children":
+		matches = `SELECT r.to_handle AS candidate_handle, r.confidence, r.source, 1 AS resolved, 'outgoing' AS direction FROM relations r, anchor a WHERE r.from_handle = a.handle AND r.kind = 'contains' AND r.to_handle IS NOT NULL`
+	case "parent":
+		matches = `SELECT r.from_handle AS candidate_handle, r.confidence, r.source, 1 AS resolved, 'incoming' AS direction FROM relations r, anchor a WHERE r.to_handle = a.handle AND r.kind = 'contains'`
+	case "callers":
+		matches = incomingMatches("calls", callAnchorMatch("a", "r", true))
+		args = append(args, camelPattern)
+	case "callees":
+		matches = outgoingMatches("calls", callTargetMatch("target", "r"))
+	case "tests":
+		matches = incomingMatches("tests", callAnchorMatch("a", "r", true)) + " UNION ALL " + outgoingMatches("tests", callTargetMatch("target", "r"))
+		args = append(args, camelPattern)
+	case "imports", "exports", "references":
+		matches = incomingMatches(relation, importAnchorMatch("a", "r")) + " UNION ALL " + outgoingMatches(relation, importTargetMatch("target", "target_file", "r"))
+	case "neighbors":
+		matches = `SELECT r.from_handle AS candidate_handle, r.confidence, r.source, 1 AS resolved, 'incoming' AS direction FROM relations r, anchor a WHERE r.to_handle = a.handle
+UNION ALL
+SELECT r.to_handle AS candidate_handle, r.confidence, r.source, 1 AS resolved, 'outgoing' AS direction FROM relations r, anchor a WHERE r.from_handle = a.handle AND r.to_handle IS NOT NULL`
+	}
+	filter := ""
+	if relation == "imports" || relation == "exports" || relation == "references" {
+		filter = ` AND (c.kind = 'template-outline' OR NOT EXISTS (SELECT 1 FROM chunks outline WHERE outline.symbol_handle = c.symbol_handle AND outline.kind = 'template-outline'))`
+	}
+	query := anchor + `,
+matches AS (` + matches + `)
+SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature,
+       c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash,
+       m.confidence, m.source, m.resolved, m.direction
+FROM matches m JOIN chunks c ON c.symbol_handle = m.candidate_handle JOIN files f ON f.id = c.file_id
+WHERE m.candidate_handle IS NOT NULL` + filter + `
+ORDER BY m.confidence DESC, f.path, c.start_line, c.handle, m.direction, m.source, m.resolved DESC`
+	return query, args
+}
+
+func incomingMatches(kind, unresolvedMatch string) string {
+	return fmt.Sprintf(`SELECT r.from_handle AS candidate_handle, r.confidence, r.source,
+CASE WHEN r.to_handle = a.handle THEN 1 ELSE 0 END AS resolved, 'incoming' AS direction
+FROM relations r, anchor a
+WHERE r.kind = '%s' AND (r.to_handle = a.handle OR (r.to_handle IS NULL AND (%s)))`, kind, unresolvedMatch)
+}
+
+func outgoingMatches(kind, unresolvedMatch string) string {
+	return fmt.Sprintf(`SELECT r.to_handle AS candidate_handle, r.confidence, r.source, 1 AS resolved, 'outgoing' AS direction
+FROM relations r, anchor a
+WHERE r.kind = '%s' AND r.from_handle = a.handle AND r.to_handle IS NOT NULL
+UNION ALL
+SELECT target.handle AS candidate_handle, r.confidence, r.source, 0 AS resolved, 'outgoing' AS direction
+FROM relations r, anchor a JOIN symbols target JOIN files target_file ON target_file.id = target.file_id
+WHERE r.kind = '%s' AND r.from_handle = a.handle AND r.to_handle IS NULL AND (%s)`, kind, kind, unresolvedMatch)
+}
+
+func callAnchorMatch(anchor, relation string, camel bool) string {
+	match := fmt.Sprintf(`lower(%[2]s.unresolved_to) = lower(%[1]s.name)
+OR lower(%[2]s.unresolved_to) = lower(%[1]s.qualified_name)
+OR lower(%[2]s.unresolved_to) LIKE '%%.' || lower(%[1]s.name)
+OR lower(%[2]s.unresolved_to) LIKE '%%::' || lower(%[1]s.name)
+OR lower(%[2]s.unresolved_to) LIKE '%%->' || lower(%[1]s.name)`, anchor, relation)
+	if camel {
+		match += fmt.Sprintf(` OR lower(%s.unresolved_to) LIKE ?`, relation)
+	}
+	return match
+}
+
+func callTargetMatch(target, relation string) string {
+	return callAnchorMatch(target, relation, false)
+}
+
+func importAnchorMatch(anchor, relation string) string {
+	return fmt.Sprintf(`lower(%[2]s.unresolved_to) = lower(%[1]s.name)
+OR lower(%[2]s.unresolved_to) = lower(%[1]s.qualified_name)
+OR lower(%[2]s.unresolved_to) = lower(%[1]s.path)
+OR lower(%[1]s.path) LIKE '%%/' || lower(%[2]s.unresolved_to)
+OR lower(%[2]s.unresolved_to) LIKE '%%::' || lower(%[1]s.name) || '::%%'
+OR lower(%[2]s.unresolved_to) LIKE '%%.' || lower(%[1]s.name) || '.%%'
+OR lower(%[2]s.unresolved_to) LIKE '%%.' || lower(%[1]s.name)`, anchor, relation)
+}
+
+func importTargetMatch(target, targetFile, relation string) string {
+	return fmt.Sprintf(`lower(%[3]s.unresolved_to) = lower(%[1]s.name)
+OR lower(%[3]s.unresolved_to) = lower(%[1]s.qualified_name)
+OR lower(%[3]s.unresolved_to) = lower(%[2]s.path)
+OR lower(%[2]s.path) LIKE '%%/' || lower(%[3]s.unresolved_to)
+OR lower(%[3]s.unresolved_to) LIKE '%%::' || lower(%[1]s.name) || '::%%'
+OR lower(%[3]s.unresolved_to) LIKE '%%.' || lower(%[1]s.name) || '.%%'
+OR lower(%[3]s.unresolved_to) LIKE '%%.' || lower(%[1]s.name)`, target, targetFile, relation)
+}
+
+func scanRelationHits(rows *sql.Rows, anchorHandle, relation string) ([]model.RelationHit, error) {
+	result := make([]model.RelationHit, 0)
+	for rows.Next() {
+		var candidate model.RankedCandidate
+		var source, direction string
+		var confidence float64
+		var resolved int
+		if err := rows.Scan(&candidate.Handle, &candidate.Path, &candidate.Language, &candidate.Kind, &candidate.Symbol, &candidate.Signature, &candidate.StartLine, &candidate.EndLine, &candidate.StartByte, &candidate.EndByte, &candidate.Content, &candidate.ContentHash, &confidence, &source, &resolved, &direction); err != nil {
+			return nil, err
+		}
+		context := model.RelationContext{AnchorHandle: anchorHandle, Kind: relation, Direction: model.RelationDirection(direction), Confidence: confidence, Source: source, Resolved: resolved != 0}
+		result = append(result, model.RelationHit{Candidate: candidate, Context: context})
+	}
+	return result, rows.Err()
+}
+
+func (s *Store) relatedCandidatesLegacy(ctx context.Context, handles []string, relation string) ([]model.RankedCandidate, error) {
 	if len(handles) == 0 {
 		return []model.RankedCandidate{}, nil
 	}

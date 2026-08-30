@@ -86,16 +86,59 @@ func (r *RetrieverSet) Retrieve(ctx context.Context, plan query.Plan, req Search
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		items, relationErr := r.store.RelatedCandidates(ctx, handles, relation)
+		hits, relationErr := r.store.RelatedCandidateHits(ctx, handles, relation)
 		if relationErr != nil {
 			return nil, fmt.Errorf("%s retriever: %w", RetrieverRelation, relationErr)
 		}
-		for index := range items {
-			items[index].Relation = relation
-		}
+		items := relationCandidates(hits)
 		lists = append(lists, RankedList{Retriever: RetrieverRelation, Items: items})
 	}
 	return lists, nil
+}
+
+func relationCandidates(hits []model.RelationHit) []model.RankedCandidate {
+	result := make([]model.RankedCandidate, 0, len(hits))
+	byIdentity := make(map[string]int, len(hits))
+	for _, hit := range hits {
+		candidate := hit.Candidate
+		candidate.Relation = hit.Context.Kind
+		contextCopy := hit.Context
+		candidate.RelationContext = &contextCopy
+		key := candidateIdentity(candidate)
+		if index, exists := byIdentity[key]; exists {
+			if strongerRelationContext(candidate.RelationContext, result[index].RelationContext) {
+				result[index].Relation = candidate.Relation
+				result[index].RelationContext = candidate.RelationContext
+			}
+			continue
+		}
+		byIdentity[key] = len(result)
+		result = append(result, candidate)
+	}
+	return result
+}
+
+func strongerRelationContext(left, right *model.RelationContext) bool {
+	if left == nil {
+		return false
+	}
+	if right == nil {
+		return true
+	}
+	if left.Resolved != right.Resolved {
+		return left.Resolved
+	}
+	if left.Confidence != right.Confidence {
+		return left.Confidence > right.Confidence
+	}
+	leftExact := left.Direction != model.RelationRelated
+	rightExact := right.Direction != model.RelationRelated
+	if leftExact != rightExact {
+		return leftExact
+	}
+	leftKey := string(left.Direction) + "\x00" + left.Kind + "\x00" + left.AnchorHandle + "\x00" + left.Source
+	rightKey := string(right.Direction) + "\x00" + right.Kind + "\x00" + right.AnchorHandle + "\x00" + right.Source
+	return leftKey < rightKey
 }
 
 func retrievalAnchors(plan query.Plan, lists []RankedList) []model.RankedCandidate {

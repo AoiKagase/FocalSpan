@@ -216,3 +216,85 @@ func TestRelatedCandidatesMatchQualifiedModuleImportToFileAnchor(t *testing.T) {
 		t.Fatalf("qualified module imports=%+v err=%v", got, err)
 	}
 }
+
+func TestRelatedCandidateHitsPreserveDirectionResolutionAndSource(t *testing.T) {
+	s := openTestStore(t)
+	defer s.Close()
+	ctx := context.Background()
+
+	files := []struct {
+		path      string
+		handle    string
+		chunk     string
+		name      string
+		relations []model.Relation
+	}{
+		{path: "auth/service.go", handle: "target", chunk: "target-chunk", name: "ValidateToken"},
+		{path: "http/middleware.go", handle: "caller", chunk: "caller-chunk", name: "Authenticate", relations: []model.Relation{
+			{FromHandle: "caller", ToHandle: "target", Kind: "calls", Confidence: .95, Source: "go-ast"},
+		}},
+		{path: "legacy/handler.go", handle: "lexical-caller", chunk: "lexical-caller-chunk", name: "LegacyAuthenticate", relations: []model.Relation{
+			{FromHandle: "lexical-caller", UnresolvedTo: "ValidateToken", Kind: "calls", Confidence: .35, Source: "generic"},
+		}},
+		{path: "auth/child.go", handle: "child", chunk: "child-chunk", name: "ParseToken"},
+		{path: "config/importer.go", handle: "importer", chunk: "importer-chunk", name: "LoadAuth", relations: []model.Relation{
+			{FromHandle: "importer", ToHandle: "target", Kind: "imports", Confidence: .9, Source: "go-import"},
+		}},
+	}
+	for _, file := range files {
+		relations := append([]model.Relation(nil), file.relations...)
+		if file.handle == "target" {
+			relations = append(relations, model.Relation{FromHandle: "target", ToHandle: "child", Kind: "contains", Confidence: 1, Source: "go-ast"})
+		}
+		err := s.ReplaceFile(ctx, model.SourceFile{Path: file.path, Language: "go", SHA256: file.handle}, model.Extraction{
+			Symbols:   []model.Symbol{{Handle: file.handle, FilePath: file.path, Language: "go", Kind: "function", Name: file.name, QualifiedName: file.name, StartLine: 1, EndLine: 2, Confidence: 1}},
+			Chunks:    []model.Chunk{{Handle: file.chunk, FilePath: file.path, Language: "go", Kind: "function", SymbolHandle: file.handle, SymbolName: file.name, Signature: "func " + file.name, StartLine: 1, EndLine: 2, Content: file.name, ContentHash: file.handle}},
+			Relations: relations,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	tests := []struct {
+		name       string
+		anchor     string
+		relation   string
+		candidate  string
+		kind       string
+		direction  model.RelationDirection
+		resolved   bool
+		confidence float64
+		source     string
+	}{
+		{name: "caller to anchor", anchor: "target-chunk", relation: "callers", candidate: "caller-chunk", kind: "callers", direction: model.RelationIncoming, resolved: true, confidence: .95, source: "go-ast"},
+		{name: "lexical caller", anchor: "target-chunk", relation: "callers", candidate: "lexical-caller-chunk", kind: "callers", direction: model.RelationIncoming, resolved: false, confidence: .35, source: "generic"},
+		{name: "anchor to callee", anchor: "caller-chunk", relation: "callees", candidate: "target-chunk", kind: "callees", direction: model.RelationOutgoing, resolved: true, confidence: .95, source: "go-ast"},
+		{name: "parent to child", anchor: "target-chunk", relation: "children", candidate: "child-chunk", kind: "children", direction: model.RelationOutgoing, resolved: true, confidence: 1, source: "go-ast"},
+		{name: "child to parent", anchor: "child-chunk", relation: "parent", candidate: "target-chunk", kind: "parent", direction: model.RelationIncoming, resolved: true, confidence: 1, source: "go-ast"},
+		{name: "importer to target", anchor: "importer-chunk", relation: "imports", candidate: "target-chunk", kind: "imports", direction: model.RelationOutgoing, resolved: true, confidence: .9, source: "go-import"},
+		{name: "imported target to importer", anchor: "target-chunk", relation: "imports", candidate: "importer-chunk", kind: "imports", direction: model.RelationIncoming, resolved: true, confidence: .9, source: "go-import"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hits, err := s.RelatedCandidateHits(ctx, []string{tt.anchor}, tt.relation)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var found *model.RelationHit
+			for i := range hits {
+				if hits[i].Candidate.Handle == tt.candidate {
+					found = &hits[i]
+					break
+				}
+			}
+			if found == nil {
+				t.Fatalf("candidate %q absent from hits: %+v", tt.candidate, hits)
+			}
+			want := model.RelationContext{AnchorHandle: tt.anchor, Kind: tt.kind, Direction: tt.direction, Confidence: tt.confidence, Source: tt.source, Resolved: tt.resolved}
+			if found.Context != want {
+				t.Fatalf("context = %+v, want %+v", found.Context, want)
+			}
+		})
+	}
+}

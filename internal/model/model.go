@@ -70,6 +70,28 @@ type ScoreReason struct {
 	Detail string  `json:"detail"`
 }
 
+type RelationDirection string
+
+const (
+	RelationIncoming RelationDirection = "incoming"
+	RelationOutgoing RelationDirection = "outgoing"
+	RelationRelated  RelationDirection = "related"
+)
+
+type RelationContext struct {
+	AnchorHandle string
+	Kind         string
+	Direction    RelationDirection
+	Confidence   float64
+	Source       string
+	Resolved     bool
+}
+
+type RelationHit struct {
+	Candidate RankedCandidate
+	Context   RelationContext
+}
+
 type RankedCandidate struct {
 	Handle          string
 	Path            string
@@ -90,6 +112,7 @@ type RankedCandidate struct {
 	EstimatedTokens int
 	Changed         bool
 	Relation        string
+	RelationContext *RelationContext
 }
 
 type PackRequest struct {

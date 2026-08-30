@@ -12,14 +12,15 @@ import (
 )
 
 type retrievalRecordingStore struct {
-	called    []RetrieverID
-	fts       []model.RankedCandidate
-	qualified []model.RankedCandidate
-	exact     []model.RankedCandidate
-	prefix    []model.RankedCandidate
-	paths     []model.RankedCandidate
-	related   []model.RankedCandidate
-	errFor    RetrieverID
+	called      []RetrieverID
+	fts         []model.RankedCandidate
+	qualified   []model.RankedCandidate
+	exact       []model.RankedCandidate
+	prefix      []model.RankedCandidate
+	paths       []model.RankedCandidate
+	related     []model.RankedCandidate
+	relatedHits []model.RelationHit
+	errFor      RetrieverID
 }
 
 func (s *retrievalRecordingStore) record(id RetrieverID) error {
@@ -68,6 +69,23 @@ func (s *retrievalRecordingStore) RelatedCandidates(_ context.Context, handles [
 		return nil, errors.New("unexpected relation anchor")
 	}
 	return append([]model.RankedCandidate(nil), s.related...), nil
+}
+
+func (s *retrievalRecordingStore) RelatedCandidateHits(_ context.Context, handles []string, relation string) ([]model.RelationHit, error) {
+	if err := s.record(RetrieverRelation); err != nil {
+		return nil, err
+	}
+	if relation != "callers" || !reflect.DeepEqual(handles, []string{"target"}) {
+		return nil, errors.New("unexpected relation anchor")
+	}
+	if len(s.relatedHits) > 0 {
+		return append([]model.RelationHit(nil), s.relatedHits...), nil
+	}
+	hits := make([]model.RelationHit, 0, len(s.related))
+	for _, candidate := range s.related {
+		hits = append(hits, model.RelationHit{Candidate: candidate, Context: model.RelationContext{AnchorHandle: handles[0], Kind: relation, Direction: model.RelationIncoming, Confidence: 1, Resolved: true}})
+	}
+	return hits, nil
 }
 
 func TestRetrieverSetSelectsBaseRetrieversByMode(t *testing.T) {
