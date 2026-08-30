@@ -837,7 +837,7 @@ git commit -m "feat: classify and order LLM evidence by intent"
 - Consumes: classified candidate, query plan, selected mode, item token allowance
 - Produces: exactly one valid content representation with explicit source or omitted segments
 
-- [ ] **Step 1: Add a late-hit fixture that exposes current tail truncation**
+- [x] **Step 1: Add a late-hit fixture that exposes current tail truncation**
 
 Create `auth/service.go` with a `ValidateToken` function longer than 120 lines. Place routine normalization and logging near the beginning and the decisive branch near the end:
 
@@ -855,7 +855,7 @@ where is an expired authentication token rejected?
 
 Add a caller, a test, a compact JSON config file, and a large unrelated Go file.
 
-- [ ] **Step 2: Write fidelity invariant tests**
+- [x] **Step 2: Write fidelity invariant tests**
 
 Test `verbatim`, `excerpt`, `signature`, and `synthetic` item construction. For every source segment, assert:
 
@@ -868,7 +868,7 @@ if segment.Text != want {
 
 Also assert no generated line-number prefixes and no literal `[...]` marker is inserted into source text.
 
-- [ ] **Step 3: Define internal content variants**
+- [x] **Step 3: Define internal content variants**
 
 Required private type:
 
@@ -896,7 +896,7 @@ func BuildVariants(
 
 Return variants from richest to cheapest. Every candidate must have a signature fallback; when the original signature is blank, build a compact fallback from symbol, kind, and location without pretending it is source.
 
-- [ ] **Step 4: Implement line indexing without rescanning per hit**
+- [x] **Step 4: Implement line indexing without rescanning per hit**
 
 Create a line table once per candidate content. Preserve line endings in source segments. Calculate absolute source lines as:
 
@@ -906,7 +906,7 @@ candidate.StartLine + local zero-based line index
 
 Do not split a UTF-8 code point or alter CRLF/LF bytes in verbatim text.
 
-- [ ] **Step 5: Implement focused hit detection**
+- [x] **Step 5: Implement focused hit detection**
 
 Use `query.Plan` terms and anchors. Match:
 
@@ -921,7 +921,7 @@ relation anchor symbol terminal names when available
 
 Do not treat every punctuation token as a hit.
 
-- [ ] **Step 6: Implement deterministic source windows**
+- [x] **Step 6: Implement deterministic source windows**
 
 For each hit line, start with:
 
@@ -946,7 +946,7 @@ Segment{Kind: SegmentOmitted, Lines: [2]int{start, end}}
 
 Omitted segments have no `text` field.
 
-- [ ] **Step 7: Implement mode rules**
+- [x] **Step 7: Implement mode rules**
 
 Exact behavior:
 
@@ -969,11 +969,11 @@ source:
 
 Recognize synthetic outline chunks through existing kinds/signals rather than path-specific rules. Record the helper in one place so new languages can extend it.
 
-- [ ] **Step 8: Test that the late decisive branch survives**
+- [x] **Step 8: Test that the late decisive branch survives**
 
 At 512, 1200, and 4000 token allowances, `focused` must include the exact `ErrExpiredToken` branch or its containing source lines. It must not return only the beginning of the function.
 
-- [ ] **Step 9: Test hard cases**
+- [x] **Step 9: Test hard cases**
 
 Cover:
 
@@ -994,7 +994,7 @@ source shorter than allowance
 source larger than allowance
 ```
 
-- [ ] **Step 10: Verify and commit**
+- [x] **Step 10: Verify and commit**
 
 ```bash
 go test ./internal/evidence -run 'TestBuildVariants|TestFocused|TestSegments|TestFidelity' -count=1
