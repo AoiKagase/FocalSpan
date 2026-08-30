@@ -76,6 +76,9 @@ func resolveCandidates(from model.Symbol, target string, symbols []model.Symbol,
 		}
 	}
 	if len(pathCandidates) > 0 {
+		if narrowed := narrowPathCandidates(target, pathCandidates); len(narrowed) > 0 {
+			return uniqueSymbols(narrowed)
+		}
 		return uniqueSymbols(pathCandidates)
 	}
 	pathCandidates = factPathCandidates(target, symbols, facts)
@@ -101,6 +104,31 @@ func resolveCandidates(from model.Symbol, target string, symbols []model.Symbol,
 		}
 	}
 	return uniqueSymbols(name)
+}
+
+func narrowPathCandidates(target string, candidates []model.Symbol) []model.Symbol {
+	leaf := ""
+	if strings.Contains(target, "::") {
+		leaf = target[strings.LastIndex(target, "::")+2:]
+	} else if dot := strings.LastIndexByte(target, '.'); dot >= 0 {
+		leaf = target[dot+1:]
+		if leaf == "" || leaf[0] < 'A' || leaf[0] > 'Z' {
+			return nil
+		}
+	} else {
+		return nil
+	}
+	leaf = strings.TrimSpace(leaf)
+	if leaf == "" {
+		return nil
+	}
+	result := make([]model.Symbol, 0, len(candidates))
+	for _, candidate := range candidates {
+		if strings.EqualFold(candidate.Name, leaf) || strings.HasSuffix(strings.ToLower(candidate.QualifiedName), "::"+strings.ToLower(leaf)) {
+			result = append(result, candidate)
+		}
+	}
+	return result
 }
 
 func factPathCandidates(target string, symbols []model.Symbol, facts []projectmeta.Fact) []model.Symbol {
@@ -194,6 +222,9 @@ func linkerPathMatch(importer, candidate, target string) bool {
 	if sameStorePath(candidate, target) {
 		return true
 	}
+	if rustModulePathMatch(candidate, target) || pythonModulePathMatch(importer, candidate, target) {
+		return true
+	}
 	if filepath.Ext(target) == "" {
 		base := strings.TrimSuffix(filepath.ToSlash(candidate), filepath.Ext(candidate))
 		if sameStorePath(base, target) || strings.HasSuffix(strings.ToLower(base), "/"+strings.ToLower(target)) || strings.EqualFold(filepath.Base(base), target) {
@@ -206,6 +237,54 @@ func linkerPathMatch(importer, candidate, target string) bool {
 		if sameStorePath(candidate, joined) || strings.HasPrefix(strings.ToLower(candidate), strings.ToLower(joined)+"/") {
 			return true
 		}
+	}
+	return false
+}
+
+func rustModulePathMatch(candidate, target string) bool {
+	if !strings.Contains(target, "::") {
+		return false
+	}
+	parts := strings.Split(target, "::")
+	if len(parts) < 2 {
+		return false
+	}
+	parts = parts[:len(parts)-1]
+	if len(parts) > 0 && (parts[0] == "crate" || parts[0] == "self" || parts[0] == "super") {
+		parts = parts[1:]
+	}
+	if len(parts) == 0 {
+		return false
+	}
+	expected := strings.ToLower(strings.Join(parts, "/"))
+	path := strings.ToLower(strings.ReplaceAll(candidate, "\\", "/"))
+	withoutExtension := strings.TrimSuffix(path, filepath.Ext(path))
+	return strings.HasSuffix(withoutExtension, "/"+expected) || strings.HasSuffix(withoutExtension, "/"+expected+"/mod")
+}
+
+func pythonModulePathMatch(importer, candidate, target string) bool {
+	if !strings.HasSuffix(strings.ToLower(importer), ".py") && !strings.HasSuffix(strings.ToLower(importer), ".pyi") {
+		return false
+	}
+	leadingDots := len(target) - len(strings.TrimLeft(target, "."))
+	module := strings.TrimLeft(target, ".")
+	if module == "" {
+		return false
+	}
+	module = strings.ReplaceAll(module, ".", "/")
+	base := ""
+	if leadingDots > 0 {
+		base = filepath.ToSlash(filepath.Dir(importer))
+		for level := 1; level < leadingDots; level++ {
+			base = filepath.ToSlash(filepath.Dir(base))
+		}
+	}
+	expected := filepath.ToSlash(filepath.Join(base, module))
+	if sourcePathMatches(candidate, expected) {
+		return true
+	}
+	if separator := strings.LastIndexByte(expected, '/'); separator > 0 {
+		return sourcePathMatches(candidate, expected[:separator])
 	}
 	return false
 }

@@ -306,8 +306,15 @@ func pythonBases(header string) []string {
 func pythonImportTarget(text string) string {
 	if strings.HasPrefix(text, "from ") {
 		value := strings.TrimPrefix(text, "from ")
-		if space := strings.IndexByte(value, ' '); space >= 0 {
-			return value[:space]
+		fields := strings.Fields(value)
+		if len(fields) >= 3 && fields[1] == "import" {
+			imported := strings.TrimSpace(strings.Split(fields[2], ",")[0])
+			if imported != "" && imported != "*" {
+				return fields[0] + "." + imported
+			}
+		}
+		if len(fields) > 0 {
+			return fields[0]
 		}
 		return value
 	}

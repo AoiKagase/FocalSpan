@@ -116,6 +116,29 @@ func TestExtractorRecoversMalformedRustAndHonorsCancellation(t *testing.T) {
 	}
 }
 
+func TestExtractorRelatesImplementingTypeToTraitForReverseLookup(t *testing.T) {
+	source := `trait TokenValidator {}
+struct TokenService {}
+impl TokenValidator for TokenService {}
+`
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "src/auth/token_service.rs", Language: "rust", Content: []byte(source)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := rustSymbol(got.Symbols, "crate::TokenService", "struct")
+	trait := rustSymbol(got.Symbols, "crate::TokenValidator", "trait")
+	if service.Handle == "" || trait.Handle == "" {
+		t.Fatalf("symbols missing: %+v", got.Symbols)
+	}
+	t.Logf("symbols=%+v relations=%+v", got.Symbols, got.Relations)
+	for _, relation := range got.Relations {
+		if relation.FromHandle == service.Handle && relation.ToHandle == trait.Handle && relation.Kind == "references" {
+			return
+		}
+	}
+	t.Fatalf("implementing type to trait relation missing: %+v", got.Relations)
+}
+
 func hasRustSymbol(symbols []model.Symbol, name, kind string) bool {
 	for _, symbol := range symbols {
 		if symbol.Name == name && symbol.Kind == kind {

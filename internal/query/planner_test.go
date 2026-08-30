@@ -35,6 +35,16 @@ func TestPlanEnglishCalleeIntent(t *testing.T) {
 	}
 }
 
+func TestPlanRecognizesEnglishImplementationIntent(t *testing.T) {
+	plan := PlanQuery(`which trait does TokenService implement?`)
+	if !plan.HasIntent(IntentReferences) {
+		t.Fatalf("plan=%+v, want references intent", plan)
+	}
+	if !containsIntent(plan.Relations, "references") {
+		t.Fatalf("plan=%+v, want references relation", plan)
+	}
+}
+
 func TestPlanDoesNotTreatCallerIDAsCallerIntent(t *testing.T) {
 	plan := PlanQuery(`find callerID`)
 	if plan.HasIntent(IntentCallers) {

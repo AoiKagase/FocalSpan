@@ -125,6 +125,38 @@ Evaluation is intentionally separated from the public binary:
 go run ./cmd/focalspan-eval --root . --cases testdata/eval/cases.jsonl --ablation all --json
 ```
 
+Ambiguous extensions use content-aware detection. A `.inc` file containing a
+PHP tag is indexed as PHP; Pawn markers such as `#include`, `public`,
+`plugin_init`, or `register_plugin` select Pawn when their score is decisive;
+otherwise the file remains text. Explicit `language_overrides` take precedence
+over this content-aware rule.
+
+## Language coverage
+
+The matrix describes the parser boundary, not compiler or runtime
+compatibility:
+
+| Tier | Languages / inputs | What is indexed | Important limits |
+| --- | --- | --- | --- |
+| AST | Go | Standard-library AST packages, declarations, calls, tests, and source spans | No type checking, build execution, or compiler package graph |
+| First-class structural | PHP, C/C++, C#, JavaScript/TypeScript, Rust, Python, Ruby, Lua, Pawn/AMX Mod X, VB6, VB.NET, Nim, Zig | Pure-Go lexer/parser declarations, owner symbols, bounded source chunks, and conservative relations | No compiler-grade type inference, overload/virtual dispatch, macro expansion, or runtime import/dispatch resolution |
+| Composite structural | Smarty/template, XAML, RESX | Template/resource structure plus bounded embedded or related source regions | Template rendering, DOM semantics, generated-code semantics, and dynamic resource resolution are not executed |
+| Metadata-assisted structural | Projects with static `go.mod`/`Cargo.toml`/`package.json`/`.csproj`/`pyproject.toml`/`Gemfile`/`*.rockspec`/`Project.vbp`/`.nimble`/`build.zig.zon` metadata | Read-only manifest facts constrain static file and symbol linking | Only literal, repository-local, unambiguous matches are linked; manifests are never evaluated |
+| Generic fallback | Markdown and unregistered text/source | Bounded headings, declarations, or line windows with lower-confidence chunks | Syntax is approximate; dynamic semantics and unresolved language constructs remain lexical text |
+
+All extractors use repository-relative normalized paths and half-open source
+spans. `.inc` detection is content-aware: PHP markers win, decisive Pawn
+markers select Pawn, and otherwise the file remains text unless an explicit
+`language_overrides` entry says otherwise. Rust/Python module paths and the
+other static project facts are used only when their resolution is unique;
+ambiguous candidates remain unresolved.
+
+The supported structural relations are conservative `contains`, imports or
+exports, calls, tests, and references. JavaScript dynamic `require`, Python
+dynamic imports, Ruby/Lua runtime loading, PHP dynamic includes, C/C++ macro
+expansion, C# generated partial code, Rust macro expansion, Nim/Zig compile-
+time evaluation, and runtime dispatch are not inferred.
+
 ## Generated state
 
 Repository-local generated state lives under `.focalspan/`. Project MCP registration modifies only the FocalSpan-managed block in `.codex/config.toml`; global registration delegates to the installed Codex CLI.

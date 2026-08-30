@@ -226,6 +226,53 @@ Other profiles are intentionally approximate:
 Generic symbols have lower confidence and are labeled as approximate in
 diagnostics. They do not pretend to provide semantic resolution.
 
+### Language selection and project linking
+
+Language selection has one deterministic precedence order:
+
+1. A matching `language_overrides` entry from `.focalspan.json`.
+2. Content-aware handling for ambiguous `.inc` files: PHP markers first,
+   then decisive Pawn markers, otherwise text.
+3. The normalized file extension and the first matching registered extractor.
+4. Generic fallback for Markdown, unknown extensions, and unregistered source.
+
+The registry order is Go AST, PHP, C/C++, C#, JavaScript/TypeScript, Lua,
+Pawn, Rust, Python, Ruby, VB6, VB.NET, Nim, Zig, template, XAML, RESX, then
+generic. Every extraction has an owner symbol for the source file or
+compilation unit. Container declarations generally produce outline chunks;
+concrete members produce source chunks, so owner and child bodies are not
+stored twice without a structural reason.
+
+The dedicated parsers are intentionally bounded. They recognize lexical
+declarations and conservative local relations, but do not run a compiler,
+macro expander, type checker, package manager, template renderer, or runtime.
+In particular, dynamic Python/JavaScript/Ruby/Lua/PHP loading, C/C++ macro
+semantics, C# generated partial code, Rust/Nim/Zig compile-time evaluation,
+overload resolution, and virtual or dynamic dispatch remain unresolved.
+
+`internal/projectmeta` reads static project metadata without executing it.
+Supported facts include Go module/workspace and local replace/use paths,
+Cargo package/workspace/path dependencies, Node package/module/exports/
+workspaces and static TS path aliases, .NET project references and item
+paths, Composer PSR mappings, Python package paths, literal Ruby and Lua
+manifest paths, VB6 components, Nim package/source paths, and Zig package/
+path declarations. Invalid or unsupported metadata yields diagnostics and
+does not become executable behavior.
+
+`internal/linker` resolves unresolved relations using this precedence:
+exact static path, exact qualified symbol, metadata-constrained module plus
+exported name, unique owner/scope name, then a simple unique repository-wide
+name. A candidate must remain unique after each narrowing step; ambiguity is
+left as `UnresolvedTo` with its confidence rather than assigning an arbitrary
+`ToHandle`. Rust `crate/self/super` module paths and Python relative module
+paths are normalized using the importing file's directory.
+
+Linking runs only after a successful index transaction. It updates existing
+relation rows deterministically and uses no schema migration. Relation
+resolution never changes source content, and source duplication is avoided by
+keeping one concrete span per path/symbol while preserving distinct files
+even when their content hashes happen to be equal.
+
 ## SQLite schema and transaction model
 
 The embedded migration creates `meta`, `files`, `symbols`, `chunks`,
@@ -295,9 +342,11 @@ because they appear in documentation. Reasons are preserved as
 `ScoreReason{Code, Weight, Detail}`. Ties sort by confidence descending, span
 size ascending, path, start line, then handle.
 
-Deduplication removes duplicate content hashes, contained lower-score spans,
-duplicate outline/body choices, and excessive same-file candidates. A raw text
-hit is not allowed to crowd out a source span for the same symbol.
+Deduplication removes duplicate content hashes within the same path, contained
+lower-score spans, duplicate outline/body choices, and excessive same-file
+candidates. Equal content in different paths remains distinct so repository
+identity is not lost. A raw text hit is not allowed to crowd out a source span
+for the same symbol.
 
 Template `imports` relations are expanded for natural-language include,
 extends, layout, and partial queries, and receive the same explainable

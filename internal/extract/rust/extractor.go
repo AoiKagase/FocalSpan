@@ -635,6 +635,14 @@ func (b *rustBuilder) addHeaderRelations(idx rustIndex, decl *declaration, from 
 		}
 		b.addResolvedOrUnresolved(idx, from, text, "references", "rust-type")
 	}
+	if decl.Kind == "impl" {
+		traitName, typeName := b.implTraitAndType(decl)
+		trait, traitOK := uniqueRust(idx.byName, traitName)
+		implementedType, typeOK := uniqueRustType(idx.byName, typeName)
+		if traitOK && typeOK {
+			b.addRelation(model.Relation{FromHandle: implementedType.Handle, ToHandle: trait.Handle, Kind: "references", Confidence: .8, Source: "rust-implements"})
+		}
+	}
 	if decl.Kind == "use" {
 		target := compactTokens(b.parsed.Tokens, b.parsed.Significant[decl.Start+1:decl.HeaderEnd])
 		b.addRelation(model.Relation{FromHandle: b.owner.Handle, UnresolvedTo: normalizeRustPath(target), Kind: "imports", Confidence: .9, Source: "rust-use"})
@@ -643,6 +651,33 @@ func (b *rustBuilder) addHeaderRelations(idx rustIndex, decl *declaration, from 
 	if decl.Kind == "module" {
 		b.addRelation(model.Relation{FromHandle: b.owner.Handle, UnresolvedTo: decl.Qualified, Kind: "imports", Confidence: .8, Source: "rust-mod"})
 	}
+}
+
+func (b *rustBuilder) implTraitAndType(decl *declaration) (string, string) {
+	start := decl.Start + 1
+	end := decl.HeaderEnd
+	for position := start; position < end && position < len(b.parsed.Significant); position++ {
+		if b.parsed.Tokens[b.parsed.Significant[position]].Text != "for" {
+			continue
+		}
+		traitName := ""
+		for before := start; before < position; before++ {
+			token := b.parsed.Tokens[b.parsed.Significant[before]]
+			if isIdentifierToken(token) && token.Text != "impl" && token.Text != "where" {
+				traitName = token.Text
+			}
+		}
+		typePosition := nextIdentifier(b.parserForBuilder(), position+1, end)
+		if typePosition < 0 {
+			return traitName, ""
+		}
+		return traitName, b.parsed.Tokens[b.parsed.Significant[typePosition]].Text
+	}
+	return "", ""
+}
+
+func (b *rustBuilder) parserForBuilder() *parser {
+	return &parser{tokens: b.parsed.Tokens, sig: b.parsed.Significant}
 }
 
 func (b *rustBuilder) addBodyRelations(idx rustIndex, decl *declaration, from model.Symbol) {
@@ -724,6 +759,21 @@ func uniqueRust(values map[string][]model.Symbol, name string) (model.Symbol, bo
 		return model.Symbol{}, false
 	}
 	return items[0], true
+}
+
+func uniqueRustType(values map[string][]model.Symbol, name string) (model.Symbol, bool) {
+	items := values[strings.ToLower(name)]
+	types := make([]model.Symbol, 0, len(items))
+	for _, item := range items {
+		switch item.Kind {
+		case "struct", "enum", "union":
+			types = append(types, item)
+		}
+	}
+	if len(types) != 1 {
+		return model.Symbol{}, false
+	}
+	return types[0], true
 }
 
 func rustQualified(namespace, name string) string {

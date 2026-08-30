@@ -227,6 +227,40 @@ func TestExtractorRecoversMalformedSourceAndKeepsStableHandles(t *testing.T) {
 	}
 }
 
+func TestExtractorDoesNotTreatObjectCreationAsTestSymbol(t *testing.T) {
+	content := []byte(`using App.Auth;
+namespace App.Tests;
+public class TokenServiceXunitTests {
+    [Fact]
+    public void RejectsExpiredToken() {
+        var service = new TokenService("test");
+        Assert.False(service.ValidateToken("expired"));
+    }
+}
+`)
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "Tests/TokenServiceXunitTests.cs", Language: "csharp", Content: content})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, symbol := range got.Symbols {
+		if symbol.Name == "TokenService" && symbol.Kind == "test" {
+			t.Fatalf("object creation was extracted as a test symbol: %+v", symbol)
+		}
+	}
+	if !hasSymbol(got.Symbols, "RejectsExpiredToken", "test") {
+		t.Fatalf("test method was not retained: %+v", got.Symbols)
+	}
+}
+
+func hasSymbol(symbols []model.Symbol, name, kind string) bool {
+	for _, symbol := range symbols {
+		if symbol.Name == name && symbol.Kind == kind {
+			return true
+		}
+	}
+	return false
+}
+
 func findSymbol(symbols []model.Symbol, qualified, kind string) model.Symbol {
 	for _, symbol := range symbols {
 		if symbol.QualifiedName == qualified && symbol.Kind == kind {

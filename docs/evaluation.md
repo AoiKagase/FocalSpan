@@ -279,3 +279,51 @@ validation test. All returned paths existed and no unrelated fixture path was
 returned. The fixture also exercises RESX keys, metadata, type/mimetype
 references, and binary-value omission; those resource assertions are covered
 by the package tests rather than a separate evaluation query.
+
+## Polyglot Coverage v0.3 final acceptance
+
+On 2026-08-30, every regular fixture root was rebuilt immediately before its
+evaluation with `extractors-v5-polyglot`. The full per-profile JSON summaries
+are recorded in `docs/evaluation-v0.3.json`; the evaluator queried every case
+twice. The table below is copied from those current-checkout runs.
+
+| Profile | Cases | hit@1 / hit@3 / hit@5 | Symbol / path recall | Budget | Forbidden | Deterministic | Median tokens | Median reduction |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Go/auth | 6 | 0.6667 / 1.0000 / 1.0000 | 1.0000 / 0.9167 | 1.0000 | 0 | 1.0000 | 172 | 0.04007084348018596 |
+| PHP | 4 | 0.2500 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 179 | 0.05550387596899225 |
+| Smarty/template | 5 | 0.8000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 87 | 0.026568430453226165 |
+| C/C++ | 8 | 0.5000 / 0.8750 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 94 | 0.15639269406392695 |
+| C# | 5 | 0.6000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 107 | 0.15507246376811595 |
+| JavaScript/TypeScript | 6 | 0.6667 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 121 | 0.15419501133786848 |
+| .NET WinForms/WPF/XAML/RESX | 6 | 0.8333 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 95 | 0.20833333333333334 |
+| Rust | 5 | 0.4000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 94 | 0.19542619542619544 |
+| Python | 5 | 1.0000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 78 | 0.22857142857142856 |
+| Ruby | 5 | 0.8000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 116 | 0.23061630218687873 |
+| Lua | 5 | 1.0000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 30 | 0.08498583569405099 |
+| Pawn/AMX Mod X | 5 | 1.0000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 26 | 0.07951070336391437 |
+| VB6 | 5 | 0.8000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 34 | 0.11160714285714286 |
+| VB.NET | 5 | 1.0000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 54 | 0.0864 |
+| Nim | 5 | 1.0000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 24 | 0.07947019867549669 |
+| Zig | 5 | 1.0000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 29 | 0.12133891213389121 |
+
+All regular profiles meet the existing acceptance gates of hit@5 1.0,
+budget compliance 1.0, zero forbidden paths, deterministic output, and median
+reduction at or below 0.25. Go/auth path recall is 0.9167 because the
+syntax-only impact case expects two paths while the returned impact result
+contains one; this is retained as measured evidence.
+
+The Japanese ablation runs used `--ablation all` after reindexing the same
+roots:
+
+| Cases | Mode | hit@1 / hit@3 / hit@5 | Symbol / path recall | Budget | Forbidden | Deterministic | Median reduction | Relation recall |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| ja-auth (3) | full | 1.0000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 0.031658180208102724 | 1.0000 |
+| ja-auth (3) | fts-only | 0.6667 / 0.6667 / 0.6667 | 1.0000 / 0.6667 | 1.0000 | 0 | 1.0000 | 0.029665707327872482 | 0.3333 |
+| ja-auth (3) | no-relations | 0.6667 / 0.6667 / 0.6667 | 1.0000 / 0.6667 | 1.0000 | 0 | 1.0000 | 0.029665707327872482 | 0.3333 |
+| ja-jsts (3) | full | 0.3333 / 0.6667 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 0.09940119760479042 | 1.0000 |
+| ja-jsts (3) | fts-only | 0.3333 / 0.3333 / 0.3333 | 1.0000 / 0.3333 | 1.0000 | 0 | 1.0000 | 0.16526946107784432 | 0.0000 |
+| ja-jsts (3) | no-relations | 0.3333 / 0.3333 / 0.3333 | 1.0000 / 0.3333 | 1.0000 | 0 | 1.0000 | 0.16526946107784432 | 0.0000 |
+
+These ablations demonstrate that relation retrieval improves the relation
+cases while remaining deterministic and budget-compliant. The reduced modes
+are retained as comparison evidence, not promoted to full-mode acceptance.

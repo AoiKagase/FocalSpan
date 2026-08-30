@@ -167,6 +167,47 @@ func TestIndexerReindexesOldTemplateWindowsAfterExtractorVersionChanges(t *testi
 	}
 }
 
+func TestIndexerRefreshesAllFilesOnceForPolyglotExtractorVersion(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "view.tpl"), `{block name="content"}Hello{/block}`)
+	cfg := config.Default()
+	s, err := store.Open(root, cfg.IndexDirectory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ix := New(root, cfg, s, extract.NewRegistry(templateextract.NewExtractor(), generic.NewExtractor()))
+	if _, err := ix.Run(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetMeta(context.Background(), "extractor_version", "extractors-v4"); err != nil {
+		t.Fatal(err)
+	}
+	first, err := ix.Run(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.FilesChanged != 1 || first.FilesUnchanged != 0 {
+		t.Fatalf("first version refresh run=%+v", first)
+	}
+	second, err := ix.Run(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.FilesChanged != 0 || second.FilesUnchanged != 1 {
+		t.Fatalf("second version refresh run=%+v", second)
+	}
+	candidates, err := s.SearchFTS(context.Background(), `"content"`, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range candidates {
+		if candidate.Path == "view.tpl" && candidate.Kind == "window" {
+			t.Fatalf("old generic window remained after version refresh: %+v", candidates)
+		}
+	}
+}
+
 func TestIndexerLinksUniqueCrossFileCallAfterApplyIndex(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, "auth.go"), "package auth\n\nfunc ValidateToken() bool { return true }\n")

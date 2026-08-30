@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/focalspan/focalspan/internal/model"
+	"github.com/focalspan/focalspan/internal/query"
 )
 
 func TestRankPrefersExactSymbolAndKeepsReasons(t *testing.T) {
@@ -103,6 +104,28 @@ func TestRankDeduplicatesContentAndContainedLowerScore(t *testing.T) {
 	got := Deduplicate(candidates)
 	if len(got) != 1 || got[0].Handle != "whole" {
 		t.Fatalf("deduped=%+v", got)
+	}
+}
+
+func TestRankKeepsSameContentAcrossDistinctPaths(t *testing.T) {
+	candidates := []model.RankedCandidate{
+		{Handle: "source", Path: "src/auth/types.py", Symbol: "TokenClaims", Kind: "class-outline", ContentHash: "same", Score: 10},
+		{Handle: "stub", Path: "types/token_service.pyi", Symbol: "TokenClaims", Kind: "class-outline", ContentHash: "same", Score: 9},
+	}
+	got := Deduplicate(candidates)
+	if len(got) != 2 {
+		t.Fatalf("deduped=%+v, want both paths", got)
+	}
+}
+
+func TestRankPrefersTraitForImplementationQuestion(t *testing.T) {
+	plan := query.PlanQuery("which trait does TokenService implement?")
+	got := RankWithPlan([]model.RankedCandidate{
+		{Handle: "service", Path: "src/auth/token_service.rs", Kind: "struct-outline", Symbol: "TokenService", Content: "struct TokenService", Score: 10, Relation: "references"},
+		{Handle: "trait", Path: "src/auth/token_service.rs", Kind: "trait-outline", Symbol: "TokenValidator", Content: "trait TokenValidator", Score: 10, Relation: "references"},
+	}, plan)
+	if len(got) != 2 || got[0].Handle != "trait" {
+		t.Fatalf("ranked=%+v, want trait first", got)
 	}
 }
 

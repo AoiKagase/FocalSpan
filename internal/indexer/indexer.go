@@ -40,7 +40,7 @@ const (
 	PhaseWriting  = "writing"
 	PhaseComplete = "complete"
 
-	extractorVersion = "extractors-v4"
+	extractorVersion = "extractors-v5-polyglot"
 )
 
 func New(root string, cfg config.Config, st *store.Store, registry *extract.Registry) *Indexer {

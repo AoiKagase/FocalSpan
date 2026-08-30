@@ -81,7 +81,7 @@ def test_expired_token(service, value):
 	}
 	owner := pythonSymbolValue(got.Symbols, "token_service.py", "module")
 	test := pythonSymbolValue(got.Symbols, "test_expired_token", "test")
-	if owner.Handle == "" || test.Handle == "" || !pythonUnresolved(got.Relations, owner.Handle, ".types", "imports") {
+	if owner.Handle == "" || test.Handle == "" || !pythonUnresolved(got.Relations, owner.Handle, ".types.TokenClaims", "imports") {
 		t.Fatalf("module/test relations missing: %+v", got.Relations)
 	}
 	if !pythonRelationKind(got.Relations, test.Handle, "tests") {
@@ -91,6 +91,18 @@ def test_expired_token(service, value):
 		if chunk.StartByte > 0 && (chunk.EndByte > len(source) || string(source[chunk.StartByte:chunk.EndByte]) != chunk.Content) {
 			t.Fatalf("chunk mismatch=%+v", chunk)
 		}
+	}
+}
+
+func TestExtractorPreservesImportedNameInPythonImportRelation(t *testing.T) {
+	source := []byte("from ..auth.token_service import TokenService\n")
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "src/http/middleware.py", Language: "python", Content: source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := pythonSymbolValue(got.Symbols, "middleware.py", "module")
+	if owner.Handle == "" || !pythonUnresolved(got.Relations, owner.Handle, "..auth.token_service.TokenService", "imports") {
+		t.Fatalf("import relation=%+v, want imported symbol", got.Relations)
 	}
 }
 

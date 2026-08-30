@@ -392,6 +392,9 @@ func (p *parser) parseEvent(position, hi int, parent *declaration, namespace str
 }
 
 func (p *parser) functionLikely(start, namePosition int, currentType, name string) bool {
+	if namePosition > start && p.tokens[p.sig[namePosition-1]].Text == "new" {
+		return false
+	}
 	if currentType != "" && (name == currentType || name == "~"+currentType || strings.HasPrefix(name, "operator ")) {
 		return true
 	}

@@ -2143,7 +2143,7 @@ Zig @import -> file
 
 `expand imports`、`callers`、`callees`、`references`、`tests`でforward/reverse candidateが実用的に返る。
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```text
 git add internal/projectmeta internal/linker internal/indexer internal/store testdata
@@ -2160,10 +2160,11 @@ git commit -m "feat: link polyglot project metadata conservatively"
 - Modify: `README.md`
 - Modify: `docs/design.md`
 - Modify: `docs/evaluation.md`
+- Create: `docs/evaluation-v0.3.json`
 - Modify: `docs/implementation-plan.md`
 - Modify: `PLAN.md`
 
-- [ ] **Step 1: Bump extractor version exactly once**
+- [x] **Step 1: Bump extractor version exactly once**
 
 Current baseline is`extractors-v4`。本計画の全Extractor formatが確定した後に一度だけ新しい値へ更新する。例:
 
@@ -2173,7 +2174,7 @@ extractors-v5-polyglot
 
 現在checkoutですでに別値へ進んでいる場合は巻き戻さず、次の一意な値を使う。
 
-- [ ] **Step 2: Test reindex behavior**
+- [x] **Step 2: Test reindex behavior**
 
 ```text
 old extractor version + unchanged source -> reparse
@@ -2183,7 +2184,7 @@ old generic chunks for upgraded languages are removed
 schema migration is not required
 ```
 
-- [ ] **Step 3: Run all unit tests**
+- [x] **Step 3: Run all unit tests**
 
 ```text
 gofmt -w <changed Go files/directories>
@@ -2199,7 +2200,7 @@ CGO_ENABLED=1 go test -race ./...
 
 Windowsでnative C compilerがない場合は未検証と記録し、成功扱いしない。
 
-- [ ] **Step 5: Run every evaluation**
+- [x] **Step 5: Run every evaluation**
 
 At minimum:
 
@@ -2226,7 +2227,7 @@ ja-jsts
 
 各rootは評価直前にindexする。JSON結果を保存し、`docs/evaluation.md`へ実測値を記載する。
 
-- [ ] **Step 6: Add language matrix to README**
+- [x] **Step 6: Add language matrix to README**
 
 能力を次の階層で正確に表す:
 
@@ -2240,7 +2241,7 @@ generic fallback
 
 「対応」とだけ書かず、型推論、動的dispatch、macro expansion、runtime resolutionの制限を書く。
 
-- [ ] **Step 7: Update design docs**
+- [x] **Step 7: Update design docs**
 
 Document:
 
@@ -2257,7 +2258,7 @@ source duplication policy
 security/no-execution policy
 ```
 
-- [ ] **Step 8: Cross-build**
+- [x] **Step 8: Cross-build**
 
 ```text
 CGO_ENABLED=0 go build ./cmd/focalspan
@@ -2269,6 +2270,11 @@ GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/focalspan
 Cross-build artifactsをrepository rootへ残さない。
 
 - [ ] **Step 9: CLI/MCP regression**
+
+The supported setup/status/update/query and MCP regression checks passed, but
+the direct public `serve` harness remains unverified because the PowerShell
+stdin path delivered a BOM before the server received JSON. This step remains
+unchecked rather than treating the partial regression as complete.
 
 Verify:
 
@@ -2299,7 +2305,7 @@ code_status
 
 stdoutへlogが混入しない。
 
-- [ ] **Step 10: Run self-review**
+- [x] **Step 10: Run self-review**
 
 Check:
 
@@ -2317,7 +2323,7 @@ all docs match implementation
 all existing cases retained
 ```
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```text
 git add internal/indexer README.md docs PLAN.md
@@ -2361,38 +2367,44 @@ Tasks 14-15 complete:
 
 ### Gate E — Repository-Aware Linking
 
-Tasks 16-17 complete:
+Tasks 16-17 implementation and release checks executed:
 
 - Static manifest facts improve cross-file retrieval.
 - Ambiguity remains explicit.
-- All evaluations, tests, cross-builds, docs, and MCP regression checks pass.
+- All executed evaluations, tests, cross-builds, docs, and MCP regression
+  checks pass; race coverage and the direct public `serve` harness remain
+  environment-unverified as recorded below.
 
 ---
 
 ## Final Acceptance Table
 
-Codex must fill this table with measured values before claiming completion.
+The following values were measured on 2026-08-30 from the current checkout
+with `extractors-v5-polyglot`; each case was queried twice.
 
 | Profile | Cases | hit@1 | hit@3 | hit@5 | Symbol recall | Path recall | Budget | Forbidden | Deterministic | Median reduction |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Go | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| PHP | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| Smarty/template | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| C/C++ | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| C# | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| .NET WinForms/WPF | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| JS/TS/Node | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| Rust | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| Python | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| Ruby | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| Lua | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| Pawn/AMXX | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| VB6 | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| VB.NET | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| Nim | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
-| Zig | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+| Go/auth | 6 | 0.6667 | 1.0000 | 1.0000 | 1.0000 | 0.9167 | 1.0000 | 0 | 1.0000 | 0.04007084348018596 |
+| PHP | 4 | 0.2500 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.05550387596899225 |
+| Smarty/template | 5 | 0.8000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.026568430453226165 |
+| C/C++ | 8 | 0.5000 | 0.8750 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.15639269406392695 |
+| C# | 5 | 0.6000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.15507246376811595 |
+| .NET WinForms/WPF | 6 | 0.8333 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.20833333333333334 |
+| JS/TS/Node | 6 | 0.6667 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.15419501133786848 |
+| Rust | 5 | 0.4000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.19542619542619544 |
+| Python | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.22857142857142856 |
+| Ruby | 5 | 0.8000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.23061630218687873 |
+| Lua | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.08498583569405099 |
+| Pawn/AMXX | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.07951070336391437 |
+| VB6 | 5 | 0.8000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.11160714285714286 |
+| VB.NET | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.0864 |
+| Nim | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.07947019867549669 |
+| Zig | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.12133891213389121 |
 
-`UNMEASURED`のまま完了報告しない。未実行profileは`UNVERIFIED`と明記する。
+Race coverage is `UNVERIFIED` because the available Windows cgo compiler
+cannot compile 64-bit cgo code. The direct public `serve` harness is also
+`UNVERIFIED` because the PowerShell stdin path delivered a BOM before the
+server received JSON; the in-process MCP and subprocess stdout checks passed.
 
 ---
 
