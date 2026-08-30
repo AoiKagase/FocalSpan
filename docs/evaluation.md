@@ -236,3 +236,37 @@ are limited to unique local qualified/name matches; unresolved calls,
 imports/includes/exports, and references are labeled with their lexical target
 and confidence. Future semantic providers may improve recall without changing
 the packer or output contract.
+
+## Polyglot Coverage v0.3 pre-change baseline
+
+This is the fresh baseline measured from checkout `ec6f86e` on 2026-08-30,
+before Task 1 of the polyglot coverage plan. The starting worktree had an
+existing modification to `PLAN.md` and an untracked `.focalspan.json`; neither
+was changed or included in the baseline commit. The temporary baseline binary
+was built from the current checkout, and every fixture was indexed immediately
+before its case set was evaluated.
+
+| Profile | Cases | hit@1 / hit@3 / hit@5 | Symbol / path recall | Budget | Forbidden | Deterministic | Median tokens | Median reduction |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Go/auth | 4 | 0.5 / 1 / 1 | 1 / 0.875 | 1 | 0 | 1 | 175 | 0.04009163802978236 |
+| PHP | 4 | 0.25 / 1 / 1 | 1 / 1 | 1 | 0 | 1 | 179 | 0.05550387596899225 |
+| Smarty/template | 5 | 0.8 / 1 / 1 | 1 / 1 | 1 | 0 | 1 | 110 | 0.024559053360125028 |
+| C/C++ | 5 | 0.4 / 0.8 / 1 | 1 / 1 | 1 | 0 | 1 | 137 | 0.14952279957582185 |
+| C# | 5 | 0.2 / 1 / 1 | 1 / 1 | 1 | 0 | 1 | 93 | 0.13559322033898305 |
+| JavaScript/TypeScript | 6 | 0.8333333333333334 / 1 / 1 | 1 / 1 | 1 | 0 | 1 | 138 | 0.1760204081632653 |
+
+The exact Japanese ablation aggregates were:
+
+| Cases | Mode | hit@1 / hit@3 / hit@5 | Symbol / path recall | Budget | Forbidden | Deterministic | Median tokens | Median reduction | Intent / relation / kind recall |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| ja-auth (3) | full | 1 / 1 / 1 | 1 / 1 | 1 | 0 | 1 | 143 | 0.03276059564719359 | 1 / 1 / 1 |
+| ja-auth (3) | fts-only | 0.6666666666666666 / 0.6666666666666666 / 0.6666666666666666 | 1 / 0.6666666666666666 | 1 | 0 | 1 | 98 | 0.02245131729667812 | 1 / 0.3333333333333333 / 1 |
+| ja-auth (3) | no-relations | 0.6666666666666666 / 0.6666666666666666 / 0.6666666666666666 | 1 / 0.6666666666666666 | 1 | 0 | 1 | 98 | 0.02245131729667812 | 1 / 0.3333333333333333 / 1 |
+| ja-jsts (3) | full | 0.3333333333333333 / 0.6666666666666666 / 1 | 1 / 1 | 1 | 0 | 1 | 83 | 0.11559888579387187 | 1 / 1 / 1 |
+| ja-jsts (3) | fts-only | 0.3333333333333333 / 0.3333333333333333 / 0.3333333333333333 | 1 / 0.3333333333333333 | 1 | 0 | 1 | 138 | 0.19220055710306408 | 1 / 0 / 1 |
+| ja-jsts (3) | no-relations | 0.3333333333333333 / 0.3333333333333333 / 0.3333333333333333 | 1 / 0.3333333333333333 | 1 | 0 | 1 | 138 | 0.19220055710306408 | 1 / 0 / 1 |
+
+The baseline commands also produced `go test ./...` with 263 passing tests,
+`go vet ./...` with no issues, and a successful CGO-free native build. Race
+coverage and the later cross-build/evaluation matrix are not implied by this
+baseline section.
