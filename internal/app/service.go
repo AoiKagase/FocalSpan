@@ -16,6 +16,7 @@ import (
 	"github.com/focalspan/focalspan/internal/extract/generic"
 	"github.com/focalspan/focalspan/internal/extract/goast"
 	"github.com/focalspan/focalspan/internal/extract/jsts"
+	luaextract "github.com/focalspan/focalspan/internal/extract/lua"
 	"github.com/focalspan/focalspan/internal/extract/php"
 	pythonstr "github.com/focalspan/focalspan/internal/extract/python"
 	"github.com/focalspan/focalspan/internal/extract/resx"
@@ -69,6 +70,7 @@ func newExtractorRegistry() *extract.Registry {
 		cpp.NewExtractor(),
 		csharp.NewExtractor(),
 		jsts.NewExtractor(),
+		luaextract.NewExtractor(),
 		rustructural.NewExtractor(),
 		pythonstr.NewExtractor(),
 		rubystructural.NewExtractor(),

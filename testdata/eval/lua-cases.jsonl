@@ -1,0 +1,5 @@
+{"name":"lua-expired-token","query":"where is validate_token implemented in Lua?","token_budget":512,"expected_symbols":["validate_token"],"expected_paths":["lib/auth/token_service.lua"],"forbidden_paths":["unrelated/report.lua"]}
+{"name":"lua-token-callers","query":"what calls validate_token in Lua?","token_budget":512,"expected_symbols":["authorize"],"expected_paths":["lib/auth/token_service.lua"],"forbidden_paths":["unrelated/report.lua"]}
+{"name":"lua-token-tests","query":"what Lua test covers expired tokens?","token_budget":512,"expected_symbols":["rejects expired tokens"],"expected_paths":["spec/token_service_spec.lua"],"forbidden_paths":["unrelated/report.lua"]}
+{"name":"lua-token-imports","query":"which plugin.lua requires auth.token_service?","token_budget":512,"expected_paths":["plugin.lua"],"forbidden_paths":["unrelated/report.lua"]}
+{"name":"lua-token-module","query":"where is validate_token in the Lua module?","token_budget":512,"expected_symbols":["validate_token"],"expected_paths":["lib/auth/token_service.lua"],"forbidden_paths":["unrelated/report.lua"]}

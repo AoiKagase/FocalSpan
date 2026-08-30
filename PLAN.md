@@ -1505,7 +1505,7 @@ git commit -m "feat: add first-class Ruby extraction"
 - Create: `testdata/repos/luasample/*`
 - Create: `testdata/eval/lua-cases.jsonl`
 
-- [ ] **Step 1: Lexer tests**
+- [x] **Step 1: Lexer tests**
 
 Cover:
 
@@ -1521,7 +1521,7 @@ table constructors
 malformed long string
 ```
 
-- [ ] **Step 2: Declarations**
+- [x] **Step 2: Declarations**
 
 ```text
 local function name
@@ -1534,7 +1534,7 @@ module/table owner
 test
 ```
 
-- [ ] **Step 3: Relations**
+- [x] **Step 3: Relations**
 
 ```text
 require("module") imports
@@ -1547,11 +1547,11 @@ contains
 
 Dynamic table indexing stays unresolved.
 
-- [ ] **Step 4: Fixture/eval**
+- [x] **Step 4: Fixture/eval**
 
 Include service、middleware、busted tests、rockspec、unrelated report。
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```text
 go test ./internal/extract/lua -v
