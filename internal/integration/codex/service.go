@@ -116,7 +116,7 @@ func (s *Service) Status(ctx context.Context, req Request) (RegistrationStatus, 
 		status.State = StateAbsent
 	} else {
 		status.Command, status.Args = current.Command, append([]string(nil), current.Args...)
-		status.Matches = sameUserRegistration(current, spec)
+		status.Matches = managedUserRegistration(current, req.Root)
 		if status.Matches {
 			status.State, status.Managed = StateManagedMatch, true
 		} else {
@@ -171,42 +171,13 @@ func (s *Service) Uninstall(ctx context.Context, req Request) (OperationResult, 
 	if !found {
 		return result, nil
 	}
-	if !sameUserRegistration(current, spec) && !req.Force {
+	if !managedUserRegistration(current, req.Root) && !req.Force {
 		return OperationResult{}, fmt.Errorf("Codex MCP server %q is not the expected FocalSpan registration; use --force to remove it", req.Name)
 	}
 	if err := s.userRemove(ctx, req, req.Name, resolvedCodex); err != nil {
 		return OperationResult{}, err
 	}
 	result.Action, result.State = "removed", StateAbsent
-	return result, nil
-}
-
-func (s *Service) Print(req Request) (OperationResult, error) {
-	if err := validateRequest(req); err != nil {
-		return OperationResult{}, err
-	}
-	spec, warning, err := s.registrationSpecForPrint(req)
-	if err != nil {
-		return OperationResult{}, err
-	}
-	result := OperationResult{Client: ClientName, Scope: req.Scope, Name: req.Name, Root: req.Root, Command: spec.Command, Args: append([]string(nil), spec.Args...), Diagnostics: nil}
-	if warning != "" {
-		result.Diagnostics = append(result.Diagnostics, warning)
-	}
-	if req.Scope == ScopeProject {
-		result.ConfigPath = ProjectConfigPath(req.Root)
-		result.Block, err = BuildManagedBlock(req.Name, spec)
-		return result, err
-	}
-	result.ConfigPath, err = UserConfigPath()
-	if err != nil {
-		return OperationResult{}, err
-	}
-	codexCommand := req.CodexCommand
-	if codexCommand == "" {
-		codexCommand = "codex"
-	}
-	result.Argv = userArgv(codexCommand, req.Name, spec)
 	return result, nil
 }
 
@@ -234,22 +205,10 @@ func (s *Service) registrationSpecForStatus(req Request) (RegistrationSpec, stri
 	return spec, warning, nil
 }
 
-func (s *Service) registrationSpecForPrint(req Request) (RegistrationSpec, string, error) {
-	command, warning, err := ResolveExecutable(req.Command, true)
-	if err != nil {
-		return RegistrationSpec{}, "", err
-	}
-	spec := makeSpec(req.Root, command, req.NoAutoUpdate)
-	if err := validateTOMLValues(spec); err != nil {
-		return RegistrationSpec{}, "", err
-	}
-	return spec, warning, nil
-}
-
 func makeSpec(root, command string, noAutoUpdate bool) RegistrationSpec {
 	args := []string{"serve", "--root", root}
 	if noAutoUpdate {
-		args = append(args, "--no-auto-update")
+		args = append(args, "--auto-update=false")
 	}
 	spec := RegistrationSpec{Command: command, Args: args, Enabled: true, StartupTimeoutSec: 30, ToolTimeoutSec: 60, EnabledTools: append([]string(nil), EnabledTools...)}
 	return spec

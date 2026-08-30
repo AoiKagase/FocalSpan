@@ -26,7 +26,7 @@ fixtures use the same evaluator and do not add fixture-specific ranking rules.
 
 ## Metrics
 
-For every case, `focalspan eval` runs the same query twice and records:
+For every case, the development-only `focalspan-eval` binary runs the same query twice and records:
 
 - hit@1, hit@3, hit@5 for expected symbols;
 - expected symbol recall and expected path recall;
@@ -54,17 +54,16 @@ The MVP acceptance thresholds are:
 From the repository root:
 
 ```text
-focalspan init
-focalspan index --root testdata/repos/authsample
-focalspan eval --root testdata/repos/authsample --cases testdata/eval/cases.jsonl --json
-focalspan index --root testdata/repos/phpsample --quiet
-focalspan eval --root testdata/repos/phpsample --cases testdata/eval/php-cases.jsonl --json
-focalspan index --root testdata/repos/cppsample --quiet
-focalspan eval --root testdata/repos/cppsample --cases testdata/eval/cpp-cases.jsonl --json
-focalspan index --root testdata/repos/csharpsample --quiet
-focalspan eval --root testdata/repos/csharpsample --cases testdata/eval/csharp-cases.jsonl --json
-focalspan index --root testdata/repos/jstssample --quiet
-focalspan eval --root testdata/repos/jstssample --cases testdata/eval/jsts-cases.jsonl --json
+focalspan update --rebuild --root testdata/repos/authsample
+go run ./cmd/focalspan-eval --root testdata/repos/authsample --cases testdata/eval/cases.jsonl --json
+focalspan update --rebuild --root testdata/repos/phpsample --quiet
+go run ./cmd/focalspan-eval --root testdata/repos/phpsample --cases testdata/eval/php-cases.jsonl --json
+focalspan update --rebuild --root testdata/repos/cppsample --quiet
+go run ./cmd/focalspan-eval --root testdata/repos/cppsample --cases testdata/eval/cpp-cases.jsonl --json
+focalspan update --rebuild --root testdata/repos/csharpsample --quiet
+go run ./cmd/focalspan-eval --root testdata/repos/csharpsample --cases testdata/eval/csharp-cases.jsonl --json
+focalspan update --rebuild --root testdata/repos/jstssample --quiet
+go run ./cmd/focalspan-eval --root testdata/repos/jstssample --cases testdata/eval/jsts-cases.jsonl --json
 ```
 
 The evaluation output is the evidence for the thresholds. A failed or
@@ -210,19 +209,17 @@ All Japanese modes remained budget-compliant and deterministic.
 
 On 2026-08-29 the current checkout passed `gofmt`, `go test ./...`, and
 `go vet ./...`. CGO-free builds passed for the native host plus Windows amd64,
-Linux amd64, and Darwin arm64. `go test -race ./...` first failed because the
-environment has `CGO_ENABLED=0`; the explicit `CGO_ENABLED=1 go test -race
-./...` then failed before package tests because `gcc` is not installed
-(`cgo: C compiler "gcc" not found`). Race coverage is therefore unverified,
-not a pass. Pointing `CC` at the available `C:\cygwin64\bin\gcc.exe` was
-also rejected by Go because Cygwin GCC cannot build native Windows programs
-(`don't use the cygwin compiler to build native Windows programs; use MinGW
-instead`).
+Linux amd64, and Darwin arm64. Race coverage remains environment-unverified,
+not a pass: with `CGO_ENABLED=1` and
+`CC=C:\msys64\ucrt64\bin\gcc.exe`, both the repository race run and the
+control command `go test -race runtime/race` fail before package tests because
+the Windows Go toolchain's `runtime/cgo` invocation exits with status 2. This
+host-level cgo failure is tracked separately from the CLI redesign.
 
-The fixture CLI flow passed with each root indexed immediately before
-evaluation: `index`, `status --json`, budgeted JSON `query`, quiet `update`,
-`impact --json`, and `doctor --json`. MCP integration tests and a bounded stdio
-startup smoke also passed with protocol-only stdout. The current checkout
+The fixture CLI flow passed with each root prepared immediately before
+evaluation: `setup`, `status --json`, a budgeted positional JSON query, and
+quiet `update`. MCP integration tests cover impact analysis, and a bounded
+stdio startup smoke also passed with protocol-only stdout. The current checkout
 retains five MCP tools (`code_context`, `code_expand`, `code_impact`,
 `code_restart`, and `code_status`); this is the existing restart extension and
 does not claim the original four-tool MVP surface.
