@@ -1,2385 +1,2479 @@
-# FocalSpan Polyglot Coverage v0.3 Implementation Plan
+# FocalSpan LLM Evidence Contract v0.4 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development`（推奨）または `superpowers:executing-plans` で、この計画をTask単位に実装してください。各チェックボックスを更新し、Taskごとにテスト・レビュー・コミットを完了してから次へ進みます。
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** FocalSpanが、ユーザーが日常的に扱うC、C++、C#/.NET WinForms/WPF、PHP（`.inc`・Smarty `.tpl`を含む）、Go、Rust、Python、Node.js系JavaScript/TypeScript、Ruby、Nim、Zig、VB6/VB.NET、Lua、AMX Mod X/Pawnを、単なる全文検索ではなく、質問に必要なsymbol・source span・relationをtoken budget内で返せる第一級または実用的な構造解析プロファイルとして扱えるようにする。
+**Goal:** Replace FocalSpan's MCP-facing flat ranked bundle with a versioned, role-aware, source-faithful Evidence Packet that gives coding LLMs the smallest useful set of code evidence within the actual model-visible token budget.
 
-**Architecture:** 現在の`Extractor -> SQLite/FTS5 -> independent retrievers -> weighted RRF -> intent-aware ranker -> token packer`を維持する。言語判定を`internal/language`へ集約し、各言語は独立したpure-Go lexer/parser/extractor packageとして実装する。曖昧なcross-file関係は確定せず`UnresolvedTo`とconfidenceを保持し、最後にread-onlyなproject metadataと安全なrepository linkerで候補を絞る。
+**Architecture:** Preserve the existing retrieval, ranking, legacy `model.ContextBundle`, CLI defaults, extractors, and SQLite schema. Add an `internal/evidence` presentation-and-packing layer that converts ranked candidates plus query intent and relation provenance into a compact transport contract with explicit roles, fidelity, source segments, local evidence relations, limitations, follow-up actions, and stateless delta suppression. MCP tools use the new contract; legacy CLI/evaluation remain available for regression and A/B comparison.
 
-**Tech Stack:** Go 1.26+、標準ライブラリ、`database/sql`、SQLite FTS5（`modernc.org/sqlite`）、既存MCP Go SDK。production pathから外部コンパイラ、言語runtime、package manager、language server、ネットワーク、外部LLMを起動しない。
+**Tech Stack:** Go 1.26+, `github.com/modelcontextprotocol/go-sdk/mcp` v1.7.0, standard `encoding/json`, existing SQLite/FTS5 store, existing deterministic token estimator, table-driven tests, process-level MCP JSON-RPC tests.
 
-**Spec:** `AGENTS.md`、`docs/design.md`、`docs/evaluation.md`、現行`README.md`、および本計画。
+**Spec:** This root `PLAN.md` is the executable specification. Record the validated design decisions in `docs/design.md` before changing the public MCP result contract.
 
----
+## Global Constraints
 
-## Codexへの実行指示
-
-このファイルを渡されたCodexは、次の順序で作業してください。
-
-1. `AGENTS.md`、`PLAN.md`、`docs/design.md`、`docs/evaluation.md`、`README.md`を読む。
-2. `git status --short`、`git diff --stat`、`git log -10 --oneline`を実行する。- 曖昧なrelationへ誤った`ToHandle`を設定しない。
-- fixture固有のsymbol、path、queryをproduction codeへ埋め込まない。
-- 同じ入力、index revision、設定では同じhandle、候補順、出力を返す。
-- 最終serialized payloadのtoken budget complianceを100%維持する。
-- production codeへ未完成stub、未実装marker、未実装panicを残さない。
-- 既存Go、PHP、C/C++、C#、JS/TS、Smarty/templateの評価値を隠すためにcaseやthresholdを削除しない。
-- 新しい外部parser dependencyは追加しない。pure-Goの軽量lexer/parserを用いる。
-- 解析不能な新構文はfatalにせず、確定済みsymbolを保持し、diagnosticとbounded fallback chunkを返す。
-- 大きなclass/module/file全体と全methodを無条件に二重保存しない。
-
----
-
-## Current Baseline
-
-本計画作成時の公開`master`基準:
-
-- Latest commit: `ec6f86e` (`Fix global MCP install command runner`)
-- Retrieval Quality v0.2実装済み。
-- 専用Extractor登録済み:
-  - Go: `go-ast`
-  - PHP: `php-structural`
-  - C/C++: `cpp-structural`
-  - C#: `csharp-structural`
-  - JavaScript/TypeScript: `jsts-structural`
-  - Smarty/template: `template-structural`
-  - その他: `generic-structural`
-- 現在のglobal extractor version: `extractors-v4`
-- 現在の専用fixture:
-  - `authsample`
-  - `phpsample`
-  - `templatesample`
-  - `cppsample`
-  - `csharpsample`
-  - `jstssample`
-
-既存の受入下限:
-
-| Profile | hit@5 | Budget | Forbidden | Deterministic | Path recall |
-|---|---:|---:|---:|---:|---:|
-| Go/auth | 1.00 | 1.00 | 0 | 1.00 | 0.875以上 |
-| PHP | 1.00 | 1.00 | 0 | 1.00 | 1.00 |
-| Smarty/template | 1.00 | 1.00 | 0 | 1.00 | 1.00 |
-| C/C++ | 1.00 | 1.00 | 0 | 1.00 | 1.00 |
-| C# | 1.00 | 1.00 | 0 | 1.00 | 1.00 |
-| JavaScript/TypeScript | 1.00 | 1.00 | 0 | 1.00 | 1.00 |
-
-既存profileのmedian reductionは原則`<= 0.25`を維持する。現在値より悪化する場合は、caseを削除せず原因を記録して修正する。
+- Treat the current checkout as the only source of truth. This plan was authored against public `master` at commit `ec6f86e`, but newer local or merged work takes precedence.
+- Inspect `AGENTS.md`, `PLAN.md`, `README.md`, `docs/design.md`, `docs/evaluation.md`, `docs/implementation-plan.md`, `git status`, and `git diff` before editing.
+- Never run `git reset`, `git restore`, `git checkout --`, `git clean`, or `git stash` against user work.
+- Preserve all current language extractors and in-progress polyglot work. This milestone does not redesign language parsing.
+- Preserve existing tool names: `code_context`, `code_expand`, `code_impact`, `code_restart`, and `code_status`.
+- Preserve the current SQLite schema. No database migration is part of this milestone.
+- Preserve current retrieval ranking and evaluation baselines unless relation provenance requires a narrowly scoped internal change.
+- Keep the legacy `model.ContextBundle` and existing default CLI output available during v0.4.
+- MCP `code_context`, `code_expand`, and `code_impact` switch to the versioned Evidence Packet. `code_status` and `code_restart` keep their existing output contracts.
+- The canonical source text must appear once in MCP structured output and must not be duplicated in text content.
+- Do not expose rank scores, BM25 values, RRF contributions, reason weights, token-savings baselines, or debug traces in the normal Evidence Packet.
+- Preserve `focalspan explain` as the place for retrieval and ranking diagnostics.
+- Build with `CGO_ENABLED=0` for Windows amd64, Linux amd64, and macOS arm64.
+- Do not add network access, external LLM calls, embeddings, a model-specific tokenizer, HTTP MCP transport, session storage, or compiler/runtime execution.
+- All output ordering, local evidence IDs, omission decisions, and follow-up actions must be deterministic.
+- All source text labeled `verbatim` or carried in a source segment must exactly match bytes from the indexed source span.
+- The model-visible payload—the compact serialized Evidence Packet plus its canonical short MCP text summary—must fit the requested token budget. JSON-RPC framing and CLI indentation are transport overhead outside this contract.
+- Use TDD. Every behavior starts with a failing test, then minimal implementation, then local and full verification.
+- Do not leave incomplete production branches, placeholder implementations, ignored test failures, or panic-based unimplemented paths.
 
 ---
 
-## Target Support Matrix
+## Product Contract
 
-本計画完了時の能力目標:
+### Why this milestone exists
 
-| Profile | 目標 |
-|---|---|
-| C/C++ | 既存第一級Extractor強化、header/source pairing、compile metadata候補、より安全なpreprocessor/call relation |
-| C# | 既存第一級Extractor強化、WinForms/WPF/XAML/partial/designer/resource/project関係 |
-| PHP/.inc/.tpl | 既存第一級Extractor強化、曖昧拡張子override、Composer PSR-4、include/trait/template関係 |
-| Go | AST抽出強化、partial parse recovery、interface/member/generics、go.mod/go.work package候補 |
-| JS/TS/Node.js | 拡張子・ESM/CommonJS・tsconfig/package metadata・Node relative resolution強化 |
-| Rust | 新規第一級Extractor |
-| Python | 新規第一級Extractor |
-| Ruby | 新規第一級Extractor |
-| Lua | 新規第一級Extractor |
-| AMX Mod X/Pawn | 新規第一級Extractor、`.inc` content-aware判定 |
-| VB6 | 新規第一級line-oriented Extractor |
-| VB.NET | 新規第一級line-oriented Extractor |
-| Nim | 新規第一級indentation-aware Extractor |
-| Zig | 新規第一級brace/token Extractor |
-| WinForms/WPF | C#/VB.NETコード、Designer、XAML、resource/project metadataを複合的に検索可能 |
+The current internal bundle is optimized for implementation and debugging. It contains flat `items`, floating-point scores, weighted reasons, per-item token estimates, savings data, and source text. Coding LLMs instead need a small packet that answers four questions without reinterpreting ranking internals:
 
-新規profileの最低評価基準:
+1. What is the primary target?
+2. What role does each additional span play?
+3. Which relations are exact, scoped, or lexical?
+4. What useful evidence was omitted, and how can it be expanded?
 
-- 5件以上のcase。
-- hit@3 `>= 0.80`。
-- hit@5 `= 1.00`。
-- symbol recall `= 1.00`。
-- path recall `= 1.00`。
-- budget compliance `= 1.00`。
-- forbidden path violations `= 0`。
-- deterministic output `= 1.00`。
-- median reduction ratio `<= 0.25`。
-- 全resultに実在pathとvalid line rangeがある。
-- malformed sourceでもpanicしない。
+The output must present evidence rather than a natural-language conclusion. FocalSpan selects and organizes source; the consuming LLM draws the conclusion.
 
----
+### Public schema identifier
 
-## Target File Map
-
-### Create
+Use this exact schema identifier:
 
 ```text
-internal/language/
-    detect.go
-    profiles.go
-    override.go
-    detect_test.go
-    override_test.go
-
-internal/extract/testutil/
-    conformance.go
-    fixtures.go
-
-internal/extract/rust/
-    extractor.go
-    lexer.go
-    parser.go
-    builder.go
-    extractor_test.go
-    lexer_test.go
-
-internal/extract/python/
-    extractor.go
-    lexer.go
-    parser.go
-    builder.go
-    extractor_test.go
-    lexer_test.go
-
-internal/extract/ruby/
-    extractor.go
-    lexer.go
-    parser.go
-    builder.go
-    extractor_test.go
-
-internal/extract/lua/
-    extractor.go
-    lexer.go
-    parser.go
-    builder.go
-    extractor_test.go
-
-internal/extract/pawn/
-    extractor.go
-    lexer.go
-    parser.go
-    builder.go
-    extractor_test.go
-
-internal/extract/vb/
-    common.go
-    vb6.go
-    vbnet.go
-    builder.go
-    extractor_test.go
-
-internal/extract/nim/
-    extractor.go
-    lexer.go
-    parser.go
-    builder.go
-    extractor_test.go
-
-internal/extract/zig/
-    extractor.go
-    lexer.go
-    parser.go
-    builder.go
-    extractor_test.go
-
-internal/extract/xaml/
-    extractor.go
-    scanner.go
-    builder.go
-    extractor_test.go
-testdata/repos/luasample/
-testdata/repos/pawnsample/
-testdata/repos/vb6sample/
-testdata/repos/vbnetsample/
-testdata/repos/nimsample/
-testdata/repos/zigsample/
-testdata/repos/dotnetsample/
-
-testdata/eval/rust-cases.jsonl
-testdata/eval/python-cases.jsonl
-testdata/eval/ruby-cases.jsonl
-testdata/eval/lua-cases.jsonl
-testdata/eval/pawn-cases.jsonl
-testdata/eval/vb6-cases.jsonl
-testdata/eval/vbnet-cases.jsonl
-testdata/eval/nim-cases.jsonl
-testdata/eval/zig-cases.jsonl
-testdata/eval/dotnet-cases.jsonl
+focalspan.context.v1
 ```
 
-### Modify
+### Public modes
+
+```go
+type Mode string
+
+const (
+    ModeOutline Mode = "outline"
+    ModeFocused Mode = "focused"
+    ModeSource  Mode = "source"
+)
+```
+
+Semantics:
+
+- `outline`: locations, symbols, signatures, roles, relations, and concise synthetic outlines; no full source bodies.
+- `focused`: the primary target may be verbatim when compact; large or supporting items use query-relevant source segments or signatures. This is the MCP default.
+- `source`: include complete selected source spans when they fit; degrade large spans to explicit excerpts, never to an opaque tail-truncated string.
+
+### Public roles
+
+Use these exact serialized values:
+
+```go
+type Role string
+
+const (
+    RoleTarget         Role = "target"
+    RoleDefinition     Role = "definition"
+    RoleDeclaration    Role = "declaration"
+    RoleImplementation Role = "implementation"
+    RoleCaller         Role = "caller"
+    RoleCallee         Role = "callee"
+    RoleTest           Role = "test"
+    RoleType           Role = "type"
+    RoleImport         Role = "import"
+    RoleExport         Role = "export"
+    RoleReference      Role = "reference"
+    RoleConfig         Role = "config"
+    RoleTemplate       Role = "template"
+    RoleDocumentation  Role = "documentation"
+    RoleChange         Role = "change"
+    RoleDependent      Role = "dependent"
+    RoleContext        Role = "context"
+)
+```
+
+### Fidelity values
+
+```go
+type Fidelity string
+
+const (
+    FidelityVerbatim  Fidelity = "verbatim"
+    FidelityExcerpt   Fidelity = "excerpt"
+    FidelitySignature Fidelity = "signature"
+    FidelitySynthetic Fidelity = "synthetic"
+)
+```
+
+Rules:
+
+- `verbatim`: `source` is populated; `segments` and `outline` are empty.
+- `excerpt`: `segments` is populated; `source` and `outline` are empty.
+- `signature`: `signature` is populated; `source`, `segments`, and `outline` are empty.
+- `synthetic`: `outline` is populated; `source` and `segments` are empty.
+- An item must use exactly one content representation.
+
+### Certainty values
+
+```go
+type Certainty string
+
+const (
+    CertaintyExact   Certainty = "exact"
+    CertaintyScoped  Certainty = "scoped"
+    CertaintyLexical Certainty = "lexical"
+)
+```
+
+### Required public types
+
+Implement these public transport types in `internal/evidence/model.go`. Additional private fields are allowed, but the JSON contract below must remain compact.
+
+```go
+package evidence
+
+type Location struct {
+    Path  string `json:"path"`
+    Lines [2]int `json:"lines"`
+}
+
+type Segment struct {
+    Kind  string `json:"kind"` // "source" or "omitted"
+    Lines [2]int `json:"lines"`
+    Text  string `json:"text,omitempty"`
+}
+
+type Item struct {
+    ID        string     `json:"id"`
+    Handle    string     `json:"handle"`
+    Role      Role       `json:"role"`
+    Location  Location   `json:"location"`
+    Language  string     `json:"language,omitempty"`
+    Kind      string     `json:"kind,omitempty"`
+    Symbol    string     `json:"symbol,omitempty"`
+    Signature string     `json:"signature,omitempty"`
+    Fidelity  Fidelity   `json:"fidelity"`
+    Why       []string   `json:"why,omitempty"`
+    Source    string     `json:"source,omitempty"`
+    Segments  []Segment  `json:"segments,omitempty"`
+    Outline   string     `json:"outline,omitempty"`
+}
+
+type Edge struct {
+    From      string    `json:"from"`
+    To        string    `json:"to"`
+    Kind      string    `json:"kind"`
+    Certainty Certainty `json:"certainty"`
+}
+
+type Budget struct {
+    Limit     int  `json:"limit"`
+    Used      int  `json:"used"`
+    Truncated bool `json:"truncated,omitempty"`
+    Omitted   int  `json:"omitted,omitempty"`
+}
+
+type NextAction struct {
+    Handle   string `json:"handle"`
+    Relation string `json:"relation"`
+    Reason   string `json:"reason"`
+}
+
+type Packet struct {
+    Schema       string       `json:"schema"`
+    Revision     string       `json:"revision,omitempty"`
+    Intent       string       `json:"intent,omitempty"`
+    Mode         Mode         `json:"mode"`
+    Budget       Budget       `json:"budget"`
+    Evidence     []Item       `json:"evidence"`
+    Relations    []Edge       `json:"relations,omitempty"`
+    Limitations  []string     `json:"limitations,omitempty"`
+    Next         []NextAction `json:"next,omitempty"`
+    SkippedKnown int          `json:"skipped_known,omitempty"`
+}
+```
+
+### Packet invariants
+
+- `schema` is always `focalspan.context.v1`.
+- `evidence` is always present as a JSON array, including when empty.
+- Final local IDs are sequential `e1`, `e2`, ... in presentation order.
+- Every `location.path` is repository-relative and slash-normalized.
+- Every line pair is one-based and satisfies `1 <= start <= end`.
+- Every edge references IDs present in the same packet.
+- No self-edge is emitted unless the relation itself is explicitly `self`; normal packets omit `self` edges.
+- Duplicate edges are removed by `(from, to, kind, certainty)`.
+- `why` contains stable short codes, not prose and not numeric values; maximum four codes per item.
+- `limitations` contains stable codes; maximum eight entries.
+- `next` contains at most four deterministic actions.
+- `budget.used <= budget.limit` after measuring compact packet JSON plus the canonical short summary returned alongside structured content.
+- `budget.omitted` counts candidates excluded by budget, duplicate suppression, or known-handle suppression only when they otherwise qualified for presentation.
+- The original query is not repeated in the packet because it already exists in the MCP tool input.
+- Normal packets never serialize `score`, `retrieval_score`, `weight`, `detail`, `token_savings`, `baseline_tokens`, `saved_tokens`, or `savings_ratio`.
+
+---
+
+## File Map
+
+Create or modify files according to this responsibility map. Follow current repository conventions when filenames have moved, but preserve these boundaries.
 
 ```text
-internal/config/config.go
-internal/config/config_test.go
-internal/repository/scanner.go
-internal/repository/scanner_test.go
+internal/evidence/
+    model.go              public Evidence Packet types and enum constants
+    validate.go           contract invariant validation
+    roles.go              role classification and intent presentation profiles
+    fidelity.go           fidelity selection and candidate content variants
+    segments.go           query-aware, source-faithful excerpt construction
+    compiler.go           candidate selection and packet assembly
+    wire.go               model-visible JSON/summary token accounting and final hard-cap loop
+    next.go               limitations and follow-up action generation
+
+internal/evidence/*_test.go
+
+internal/model/model.go    add relation provenance used only internally
+internal/store/store.go    return relation hits with provenance
+internal/store/store_test.go
+internal/search/retrieval.go
+internal/search/retrieval_test.go
 internal/app/service.go
 internal/app/service_test.go
-internal/indexer/indexer.go
-internal/indexer/indexer_test.go
-internal/store/store.go
-internal/store/store_test.go
+internal/render/evidence.go
+internal/render/evidence_test.go
+internal/cli/run.go
+internal/cli/run_test.go
+internal/mcpserver/server.go
+internal/mcpserver/mcp_test.go
+internal/eval/evidence.go
+internal/eval/evidence_test.go
 
-internal/extract/sourceutil/*
-internal/extract/goast/*
-internal/extract/cpp/*
-internal/extract/csharp/*
-internal/extract/php/*
-internal/extract/jsts/*
-internal/extract/template/*
-internal/extract/generic/*
+testdata/repos/evidencesample/
+testdata/eval/evidence-cases.jsonl
 
-internal/search/*
-internal/rank/*
-internal/eval/*
-README.md
 docs/design.md
 docs/evaluation.md
 docs/implementation-plan.md
+README.md
 PLAN.md
 ```
 
-既存checkoutに同等packageやhelperが追加されている場合は重複作成せず、現在の境界を使う。
+Do not move current extractors, split the store schema, or replace the existing budget package in this milestone.
 
 ---
 
-## Shared Extraction Contract
-
-全専用Extractorは次を満たす。
-
-```go
-type Extractor interface {
-    Name() string
-    Supports(path string, language string) bool
-    Extract(ctx context.Context, file model.SourceFile) (model.Extraction, error)
-}
-```
-
-各ファイルにowner symbolを一つ作る。推奨kind:
-
-```text
-C/C++: translation_unit
-C#: compilation_unit
-Go: package
-PHP: php_file
-JS/TS: module
-Rust: crate_module
-Python: module
-Ruby: ruby_file
-Lua: lua_module
-Pawn: pawn_unit
-VB6: vb6_component
-VB.NET: vbnet_compilation_unit
-Nim: nim_module
-Zig: zig_module
-XAML: xaml_document
-```
-
-全Extractorの共通invariant:
-
-```text
-symbol/chunk handleは空でない
-handleはExtraction内で一意
-StartByte <= EndByte
-0 <= StartByte <= len(content)
-0 <= EndByte <= len(content)
-1 <= StartLine <= EndLine
-source chunkは元source sliceと一致
-synthetic outlineはStartByte=0/EndByte=0と明示signatureを持つ
-ParentHandleは同じExtraction内のsymbolを指す
-relation.FromHandleは同じExtraction内のsymbolを指す
-ToHandleを設定する場合は同じExtraction内で一意に解決済み
-ToHandleとUnresolvedToを同時に設定しない
-relation confidenceは0..1
-diagnosticへsource全文を入れない
-同一relationを重複生成しない
-結果順は決定的
-context cancellationを伝播
-```
-
----
-
-### Task 0: Protect the Current Merge and Capture a New Baseline
+### Task 0: Protect the Current Baseline and Record the Contract Decision
 
 **Files:**
-- Modify: `docs/evaluation.md`
+- Modify: `docs/design.md`
+- Modify: `docs/implementation-plan.md`
 - Modify: `PLAN.md`
+- Create: `testdata/eval/baseline-v0.4.json` only if the repository does not already have an equivalent checked-in baseline artifact
 
 **Interfaces:**
-- Consumes: current registry, all existing fixtures, current `extractorVersion`
-- Produces: immutable pre-v0.3 baseline and worktree record
+- Consumes: current `model.ContextBundle`, existing CLI/MCP behavior, current fixture evaluations
+- Produces: a documented baseline and a decision record that later tasks must preserve
 
-- [x] **Step 1: Record the starting checkout**
+- [x] **Step 1: Record the exact starting state without modifying it**
 
 Run:
 
-```text
+```bash
 git status --short
 git diff --stat
-git log -10 --oneline
+git rev-parse HEAD
+go version
+go env GOOS GOARCH CGO_ENABLED
+git log -8 --oneline
 ```
 
-最終報告用に保存する。差分をreset、restore、stash、cleanしない。
+Copy the command results into a temporary work note outside tracked source or into the final implementation report. Do not mark a dirty checkout as clean.
 
-- [x] **Step 2: Run baseline tests**
+- [x] **Step 2: Run baseline unit and vet checks**
 
-```text
-go build -o .focalspan-v03-baseline.exe ./cmd/focalspan
-```
-
-Unix:
-
-```text
-go build -o .focalspan-v03-baseline ./cmd/focalspan
-```
-
-- [x] **Step 4: Run every checked-in evaluation**
-
-既存case setを列挙し、対応するfixture rootで`index`直後に`eval --json`を実行する。最低限:
-
-```text
-authsample / cases.jsonl
-phpsample / php-cases.jsonl
-templatesample / template-cases.jsonl
-cppsample / cpp-cases.jsonl
-csharpsample / csharp-cases.jsonl
-jstssample / jsts-cases.jsonl
-authsample / ja-auth-cases.jsonl --ablation all
-jstssample / ja-jsts-cases.jsonl --ablation all
-```
-
-- [x] **Step 5: Record the exact baseline**
-
-`docs/evaluation.md`へ`Polyglot Coverage v0.3 pre-change baseline`を追加する。実行結果のみ記録し、値を推測しない。
-
-- [x] **Step 6: Remove temporary binaries**
-
-```text
-rm -f .focalspan-v03-baseline .focalspan-v03-baseline.exe
-```
-
-PowerShellでは`Remove-Item -ErrorAction SilentlyContinue`を使う。
-
-- [x] **Step 7: Commit**
-
-```text
-git add docs/evaluation.md PLAN.md
-git commit -m "test: capture polyglot coverage baseline"
-```
-
----
-
-### Task 1: Centralize Language Detection and Add Explicit Overrides
-
-**Files:**
-- Create: `internal/language/profiles.go`
-- Create: `internal/language/detect.go`
-- Create: `internal/language/override.go`
-- Create: `internal/language/detect_test.go`
-- Modify: `internal/config/config.go`
-- Modify: `internal/config/config_test.go`
-- Modify: `internal/repository/scanner.go`
-- Modify: `internal/repository/scanner_test.go`
-
-**Interfaces:**
-- Produces:
-
-```go
-type Detection struct {
-    Language   string
-    Reason     string
-    Confidence float64
-}
-
-func Detect(path string, content []byte, overrides map[string]string) Detection
-func IsKnown(language string) bool
-func KnownLanguages() []string
-```
-
-- Config追加:
-
-```go
-LanguageOverrides map[string]string `json:"language_overrides"`
-```
-
-- [x] **Step 1: Add failing detection tests**
-
-最低限:
-
-```text
-main.go                 -> go
-main.rs                 -> rust
-tool.py                 -> python
-tool.pyw                -> python
-types.pyi               -> python
-script.rb               -> ruby
-Rakefile                -> ruby
-tool.nim                -> nim
-build.nims              -> nim
-package.nimble          -> nim
-main.zig                -> zig
-build.zig               -> zig
-Form1.frm               -> vb6
-Module1.bas             -> vb6
-Class1.cls              -> vb6
-App.vbp                 -> vb6-project
-Module1.vb              -> vbnet
-View.xaml               -> xaml
-View.xaml.cs            -> csharp
-View.xaml.vb            -> vbnet
-Form1.resx              -> dotnet-resource
-Settings.settings       -> dotnet-resource
-main.lua                -> lua
-plugin.sma              -> pawn
-plugin.pwn              -> pawn
-page.tpl + Smarty       -> smarty
-page.tpl + HTML only    -> template
-common.inc + PHP tag    -> php
-common.inc + Pawn syntax -> pawn
-plain.inc               -> text
-main.mts                -> typescript
-main.cts                -> typescript
-types.d.ts              -> typescript
-```
-
-- [x] **Step 2: Add override tests**
-
-設定例:
-
-```json
-{
-  "language_overrides": {
-    "**/*.inc": "pawn",
-    "legacy/templates/**/*.tpl": "smarty",
-    "scripts/**/*.bas": "vb6"
-  }
-}
-```
-
-Precedence:
-
-```text
-explicit language override
-> content-aware ambiguous extension detection
-> exact extension/profile detection
-> text fallback
-```
-
-無効language、NUL、root外path、無効globは`Config.Validate`でerrorにする。mapの順序に依存せず、最も具体的なmatchを選ぶ。同じspecificityならkey辞書順で決定的に選ぶ。
-
-- [x] **Step 3: Implement known profiles**
-
-最低限のextension:
-
-```text
-go: .go
-c: .c
-cpp: .cc .cpp .cxx .c++ .h .hh .hpp .hxx .inl .ipp .tpp .ixx .cppm
-csharp: .cs .csx
-javascript: .js .jsx .mjs .cjs
-typescript: .ts .tsx .mts .cts .d.ts .d.mts .d.cts
-php: .php .phtml .php3 .php4 .php5 .php7 .php8 .phps
-rust: .rs
-python: .py .pyw .pyi
-ruby: .rb .rake .gemspec and basename Gemfile/Rakefile
-nim: .nim .nims .nimble
-zig: .zig
-vb6: .bas .cls .frm .ctl .pag
-vb6-project: .vbp
-vbnet: .vb
-xaml: .xaml
-dotnet-resource: .resx .settings
-lua: .lua .rockspec
-pawn: .sma .pwn
-markdown: .md .markdown
-config: existing config extensions
-```
-
-複合拡張子は`filepath.Ext`一回だけで判定しない。lowercase basename suffixで判定する。
-
-- [x] **Step 4: Implement `.inc` scoring**
-
-PHP:
-
-```text
-<?php
-<?=
-short PHP tag except <?xml
-```
-
-Pawn score:
-
-```text
-# include / #include
-public
-stock
-native
-forward
-plugin_init
-plugin_precache
-register_plugin
-new
-enum
-```
-
-PHP markerがあればPHPを優先する。Pawn scoreが閾値以上ならPawn。それ以外はtext。単語がcomment/string内だけにある場合はscoreへ含めない軽量scanを行う。
-
-- [x] **Step 5: Migrate scanner**
-
-`repository.DetectLanguage`と`DetectLanguageContent`は互換wrapperにするか削除し、実処理を`language.Detect`へ一本化する。同じロジックを二か所に残さない。
-
-- [x] **Step 6: Verify**
-
-```text
-go test ./internal/language ./internal/config ./internal/repository -v
-go test ./...
-```
-
-- [x] **Step 7: Commit**
-
-```text
-git add internal/language internal/config internal/repository
-git commit -m "feat: centralize polyglot language detection"
-```
-
----
-
-### Task 2: Add Cross-Extractor Conformance and Recovery Infrastructure
-
-**Files:**
-- Create: `internal/extract/testutil/conformance.go`
-- Create: `internal/extract/testutil/fixtures.go`
-- Modify: `internal/extract/sourceutil/*`
-- Modify: `internal/app/service_test.go`
-
-**Interfaces:**
-- Produces test helpers:
-
-```go
-func AssertExtraction(t *testing.T, file model.SourceFile, got model.Extraction)
-func AssertNoSourceDuplication(t *testing.T, file model.SourceFile, got model.Extraction, maxRatio float64)
-func AssertDeterministic(t *testing.T, extractor extract.Extractor, file model.SourceFile)
-```
-
-- [x] **Step 1: Write conformance tests against existing extractors**
-
-Go、PHP、C/C++、C#、JS/TS、templateで共通invariantを検証する。
-
-- [x] **Step 2: Add interval helpers only where missing**
-
-`sourceutil`へ既存実装と重複しない範囲で追加:
-
-```go
-func Merge(spans []Span) []Span
-func Subtract(whole Span, covered []Span) []Span
-func WindowByLines(source SourceMap, span Span, lines, overlap int) []Span
-func ValidUTF8Boundary(content []byte, offset int) bool
-```
-
-- [x] **Step 3: Add registry selection test for all target languages**
-
-期待するExtractor名はTask完了に応じて更新する。Task 2時点で未実装言語はgeneric、既存言語は専用名を期待する。後続Taskで専用名へ変更する。
-
-- [x] **Step 4: Add fuzz invariant seeds**
-
-少なくともC++ raw string、C# interpolated raw string、JS template literal、PHP heredoc、Smarty literalをseedにする。新規Extractorは各Taskでseedを追加する。
-
-- [x] **Step 5: Verify**
-
-```text
-go test ./internal/extract/... -v
-go test ./...
-```
-
-- [x] **Step 6: Commit**
-
-```text
-git add internal/extract internal/app/service_test.go
-git commit -m "test: add extractor conformance infrastructure"
-```
-
----
-
-### Task 3: Strengthen Go AST Extraction
-
-**Files:**
-- Modify: `internal/extract/goast/go.go`
-- Create or modify: `internal/extract/goast/go_test.go`
-- Modify: `testdata/repos/authsample`
-- Modify: `testdata/eval/cases.jsonl`
-
-**Interfaces:**
-- Retains `go-ast`
-- Adds symbols/relations without public schema change
-
-- [x] **Step 1: Add failing Go tests**
-
-Cover:
-
-```text
-partial AST returned with parser error
-type alias
-generic type parameters
-generic function
-interface methods
-embedded interface
-struct fields
-embedded struct field
-const/var multiple names
-method receiver normalization for pointer/generic receiver
-function literal retained in parent chunk
-go:build tags do not corrupt spans
-import alias
-dot import remains unresolved
-Test/Benchmark/Fuzz/Example recognition
-same-package call
-selector call remains conservative
-```
-
-- [x] **Step 2: Preserve partial parse results**
-
-`parser.ParseFile`がASTとerrorを同時に返した場合、ASTを捨てない。確定済みsymbol/chunk/relationを返し、`go_parse_partial` diagnosticを追加する。ASTがnilの場合だけfallbackまたはerror。
-
-- [x] **Step 3: Add member symbols**
-
-Interface method、struct field、embedded fieldを独立symbolまたは短いoutline memberとして保持する。大量のanonymous field occurrenceを作らない。
-
-Kinds:
-
-```text
-interface_method
-field
-embedded_field
-type_alias
-```
-
-- [x] **Step 4: Improve signatures and handles**
-
-Generics、receiver、parameter、return typeを正規化signatureへ含める。同名overloadはGoにはないが、method ownerをqualified nameへ必ず含める。
-
-- [x] **Step 5: Improve relations**
-
-```text
-contains
-method_of
-imports
-calls
-tests
-references
-```
-
-Interface embedding、field type、parameter/return typeを`references`として保持する。selector receiver型を解決したふりをしない。
-
-- [x] **Step 6: Add fixture cases**
-
-Go fixtureへinterface、generics、Fuzz test、parse-recoverable fileを追加。既存caseを削除しない。
-
-- [x] **Step 7: Verify**
-
-```text
-go test ./internal/extract/goast -v
-go test ./...
-focalspan index --root testdata/repos/authsample --quiet
-focalspan eval --root testdata/repos/authsample --cases testdata/eval/cases.jsonl --json
-```
-
-- [x] **Step 8: Commit**
-
-```text
-git add internal/extract/goast testdata/repos/authsample testdata/eval/cases.jsonl
-git commit -m "feat: strengthen Go structural extraction"
-```
-
----
-
-### Task 4: Strengthen C and C++ Extraction
-
-**Files:**
-- Modify: `internal/extract/cpp/*`
-- Modify: `testdata/repos/cppsample`
-- Modify: `testdata/eval/cpp-cases.jsonl`
-
-**Interfaces:**
-- Retains `cpp-structural`
-- Adds more precise declaration/definition and callback relations
-
-- [x] **Step 1: Add failing tests**
-
-Cover:
-
-```text
-C designated initializer is not a function
-function pointer declaration
-function pointer typedef
-C callback registration
-C++ requires-expression
-concept
-friend function
-friend class
-lambda with braces
-attributes
-declspec
-nested raw strings
-preprocessor line continuation
-#if 0 nested
-#if defined(...) remains conservative
-header declaration and source definition lexical pairing
-GoogleTest/Catch2/doctest
-Windows callback macros WINAPI/CALLBACK/APIENTRY
-```
-
-- [x] **Step 2: Improve parser disambiguation**
-
-Control constructs、casts、initializers、function pointersをfunctionと誤認しない。C/C++ qualifier、trailing return、`noexcept`、`requires`、`= default/delete`をsignatureへ含める。
-
-- [x] **Step 3: Add lexical declaration-definition hints**
-
-同一file内では既存のresolved handleを使用。別fileのheader/source pairは`UnresolvedTo`へ完全qualified nameとnormalized signatureを保持し、`Source=cpp:declaration`または`cpp:definition`とする。ここではcross-file `ToHandle`を確定しない。
-
-- [x] **Step 4: Add callback references**
-
-次のような明示的なfunction pointer引数を低〜中confidenceの`references`として保持:
-
-```text
-register_callback(handler)
-SetTimer(..., handler)
-signal(..., handler)
-```
-
-一般関数呼び出しの任意引数をすべてcallback扱いしない。identifierが同一fileの一意なfunction symbolである場合だけ解決する。
-
-- [x] **Step 5: Improve test recognition**
-
-GoogleTest、Catch2、doctestのstatic title/macro spanをtest chunkとして正確に保持する。
-
-- [x] **Step 6: Verify**
-
-```text
-go test ./internal/extract/cpp -v
-go test ./...
-focalspan index --root testdata/repos/cppsample --quiet
-focalspan eval --root testdata/repos/cppsample --cases testdata/eval/cpp-cases.jsonl --json
-```
-
-- [x] **Step 7: Commit**
-
-```text
-git add internal/extract/cpp testdata/repos/cppsample testdata/eval/cpp-cases.jsonl
-git commit -m "feat: strengthen C and C++ extraction"
-```
-
----
-
-### Task 5: Strengthen C# and Add .NET WinForms/WPF/XAML Coverage
-
-**Files:**
-- Modify: `internal/extract/csharp/*`
-- Create: `internal/extract/xaml/*`
-- Create: `internal/extract/resx/*`
-- Modify: `internal/app/service.go`
-- Modify: `internal/app/service_test.go`
-- Create: `testdata/repos/dotnetsample/*`
-- Create: `testdata/eval/dotnet-cases.jsonl`
-
-**Interfaces:**
-- Retains `csharp-structural`
-- Adds `xaml-structural`
-- Adds `resx-structural`
-
-- [x] **Step 1: Add failing C# tests**
-
-Cover:
-
-```text
-.csx
-file-scoped and block namespace
-primary constructor
-record class/struct
-partial method
-extension method
-local function
-async iterator
-required/init property
-event/add/remove
-indexer
-operator/conversion
-attributes
-nameof
-raw/interpolated raw strings
-WinForms InitializeComponent
-event assignment += Handler
-WPF code-behind partial class
-xUnit/NUnit/MSTest
-```
-
-- [x] **Step 2: Add XAML scanner tests**
-
-Cover:
-
-```text
-x:Class
-x:Name / Name
-event attributes Click="OnClick"
-Binding Path
-x:Bind
-StaticResource
-DynamicResource
-ResourceDictionary Source
-MergedDictionaries
-DataContext
-UserControl/Window/Page
-XML namespaces
-CDATA
-comments
-UTF-8/CRLF
-malformed tag recovery
-```
-
-- [x] **Step 3: Implement XAML symbols**
-
-Kinds:
-
-```text
-xaml_document
-xaml_element
-xaml_resource
-xaml_named_element
-```
-
-全elementをsymbol化しない。owner、root element、`x:Name`/`Name`、resource key、template/control、event-bearing elementを優先する。
-
-Relations:
-
-```text
-xaml document -> x:Class          references
-event element -> handler name     references
-binding -> property path          references
-resource use -> resource key      references
-dictionary -> Source              imports
-```
-
-`ToHandle`は同一file内のresourceだけを確定し、code-behindや別resourceは`UnresolvedTo`にする。
-
-- [x] **Step 4: Add RESX and .settings structural extraction**
-
-`resx-structural`はXMLを実行せず、次を抽出する。
-
-```text
-resx_document owner
-data/name resource key
-metadata/name
-ResXFileRef path
-type/mimetype references
-.settings Setting name/type/scope
-```
-
-Relations:
-
-```text
-resource file -> ResXFileRef target imports
-resource key -> type references
-settings document -> generated setting name references
-```
-
-Base64/blob本文はchunkへ複製しない。長いbinary-like valueはsignatureと短いpreviewだけを保持する。`.resources`と`.frx`はbinaryとしてskipする。
-
-- [x] **Step 5: Improve C# WinForms relations**
-
-Recognize:
-
-```csharp
-button.Click += OnButtonClick;
-this.Load += Form_Load;
-new Button();
-Controls.Add(button);
-resources.ApplyResources(...);
-```
-
-Handlerが同一partial declaration内で一意なら`references`または`calls`として解決する。Designer code全体とhandler sourceを重複返却しない。
-
-- [x] **Step 6: Add dotnet fixture**
-
-Minimum:
-
-```text
-DotNetSample.csproj
-Views/MainWindow.xaml
-Views/MainWindow.xaml.cs
-Forms/MainForm.cs
-Forms/MainForm.Designer.cs
-Forms/MainForm.resx
-ViewModels/MainViewModel.cs
-Resources/Colors.xaml
-Tests/MainViewModelTests.cs
-unrelated/ReportWindow.xaml
-unrelated/ReportService.cs
-```
-
-- [x] **Step 7: Add evaluation cases**
-
-Queries:
-
-```text
-where is the WPF save button click handler?
-which ViewModel property is bound to UserName?
-which resource dictionary defines PrimaryBrush?
-where is WinForms InitializeComponent defined?
-what method handles the WinForms Load event?
-what tests cover MainViewModel validation?
-```
-
-- [x] **Step 8: Verify**
-
-```text
-go test ./internal/extract/csharp ./internal/extract/xaml ./internal/extract/resx -v
-go test ./...
-focalspan index --root testdata/repos/dotnetsample --quiet
-focalspan eval --root testdata/repos/dotnetsample --cases testdata/eval/dotnet-cases.jsonl --json
-```
-
-- [x] **Step 9: Commit**
-
-```text
-git add internal/extract/csharp internal/extract/xaml internal/extract/resx internal/app testdata/repos/dotnetsample testdata/eval/dotnet-cases.jsonl
-git commit -m "feat: add WinForms and WPF structural coverage"
-```
-
----
-
-### Task 6: Strengthen PHP, `.inc`, and Smarty `.tpl`
-
-**Files:**
-- Modify: `internal/extract/php/*`
-- Modify: `internal/extract/template/*`
-- Modify: `testdata/repos/phpsample`
-- Modify: `testdata/repos/templatesample`
-- Modify: `testdata/eval/php-cases.jsonl`
-- Modify: `testdata/eval/template-cases.jsonl`
-
-- [x] **Step 1: Add failing PHP tests**
-
-Cover:
-
-```text
-attributes
-readonly class
-enum cases
-trait use with adaptations
-anonymous class remains in parent chunk
-closure/arrow function retained
-namespace block and semicolon form
-grouped use
-use function/use const
-include/require expression
-PHPDoc type hints as low-confidence references
-PHPUnit attributes
-Pest test(...)
-malformed heredoc recovery
-```
-
-- [x] **Step 2: Strengthen `.inc` behavior**
-
-`language_overrides`を優先し、PHP marker付き`.inc`はPHP、Pawn score付き`.inc`はPawn、曖昧なものはtext。READMEへ規則を書く。
-
-- [x] **Step 3: Improve PHP relations**
-
-Trait adaptation、base/interface、attribute、parameter/return/property type、static include pathを保守的に保持。Container、magic method、dynamic includeを確定しない。
-
-- [x] **Step 4: Add failing Smarty tests**
-
-Cover:
-
-```text
-nested blocks
-function/call
-capture
-extends/include relative paths
-multiple script blocks
-embedded TS
-embedded PHP span
-literal/verbatim
-custom plugin tag as opaque
-double-curly opaque tag
-malformed close recovery
-```
-
-- [x] **Step 5: Reduce template duplication**
-
-Template outline、named block/function、script/style、unclaimed fragmentのcoverageを測り、同一sourceの過剰な三重複を防ぐ。
-
-- [x] **Step 6: Verify**
-
-```text
-go test ./internal/extract/php ./internal/extract/template -v
-go test ./...
-focalspan index --root testdata/repos/phpsample --quiet
-focalspan eval --root testdata/repos/phpsample --cases testdata/eval/php-cases.jsonl --json
-focalspan index --root testdata/repos/templatesample --quiet
-focalspan eval --root testdata/repos/templatesample --cases testdata/eval/template-cases.jsonl --json
-```
-
-- [x] **Step 7: Commit**
-
-```text
-git add internal/extract/php internal/extract/template testdata/repos/phpsample testdata/repos/templatesample testdata/eval/php-cases.jsonl testdata/eval/template-cases.jsonl
-git commit -m "feat: strengthen PHP and Smarty extraction"
-```
-
----
-
-### Task 7: Strengthen JavaScript, TypeScript, and Node.js Coverage
-
-**Files:**
-- Modify: `internal/extract/jsts/*`
-- Modify: `testdata/repos/jstssample`
-- Modify: `testdata/eval/jsts-cases.jsonl`
-
-- [x] **Step 1: Add extension tests**
-
-Ensure:
-
-```text
-.mts .cts .d.ts .d.mts .d.cts
-```
-
-are classified as TypeScript. `.json` remains config/data, not JavaScript.
-
-- [x] **Step 2: Add failing parser tests**
-
-Cover:
-
-```text
-type-only import/export
-export assignment
-namespace import
-decorators
-accessor keyword
-static block
-private field/method
-satisfies
-as const
-overload signatures
-ambient declaration
-JSX fragments
-React component arrow
-CommonJS destructuring require
-module.exports object
-dynamic import static literal
-top-level await
-regex vs division
-nested template interpolation
-```
-
-- [x] **Step 3: Improve module relations**
-
-Static relative ESM/CommonJS specifierをnormalizeし、拡張子候補を決定的に生成する。`node_modules`、package exports、runtime条件はこのTaskでは確定しない。
-
-Candidate order for TS importer:
-
-```text
-explicit path
-.ts .tsx .mts .cts
-.js .jsx .mjs .cjs
-/index.ts /index.tsx /index.js /index.jsx
-```
-
-JS importerではJS候補を先にする。
-
-- [x] **Step 4: Improve tests**
-
-Jest、Vitest、Mocha、Playwright、Denoのstatic test callbackを認識する。`test.each`、`describe.each`を扱う。
-
-- [x] **Step 5: Add Node fixture metadata files**
-
-`package.json`、`tsconfig.json`、ESM/CommonJS混在、re-export、workspace-like directoryをfixtureへ追加する。metadata解析自体はTask 16で行うが、source relationのbaselineを作る。
-
-- [x] **Step 6: Verify**
-
-```text
-go test ./internal/extract/jsts -v
-go test ./...
-focalspan index --root testdata/repos/jstssample --quiet
-focalspan eval --root testdata/repos/jstssample --cases testdata/eval/jsts-cases.jsonl --json
-```
-
-- [x] **Step 7: Commit**
-
-```text
-git add internal/extract/jsts internal/language testdata/repos/jstssample testdata/eval/jsts-cases.jsonl
-git commit -m "feat: strengthen Node JavaScript and TypeScript extraction"
-```
-
----
-
-### Task 8: Add First-Class Rust Extraction
-
-**Files:**
-- Create: `internal/extract/rust/*`
-- Modify: `internal/app/service.go`
-- Modify: `internal/app/service_test.go`
-- Create: `testdata/repos/rustsample/*`
-- Create: `testdata/eval/rust-cases.jsonl`
-
-**Interfaces:**
-- `Name() == "rust-structural"`
-- Supports `language == "rust"` and `.rs`
-
-- [x] **Step 1: Write lexer tests**
-
-Cover:
-
-```text
-line comment
-nested block comment
-normal/byte/C strings
-raw strings r"", r#"..."#, br##""##
-lifetime vs character literal
-attribute #[...]
-inner attribute #![...]
-macro token tree
-generic angle brackets
-async/unsafe/const/extern
-malformed raw string
-cancellation
-```
-
-- [x] **Step 2: Write declaration tests**
-
-Required symbols:
-
-```text
-mod
-use
-struct
-enum
-union
-trait
-impl
-free function
-impl method
-trait method
-associated const
-associated type
-type alias
-const
-static
-macro_rules
-extern block/function
-test
-```
-
-Qualified examples:
-
-```text
-crate::auth::TokenService
-crate::auth::TokenService::validate_token
-crate::auth::TokenValidator::validate
-```
-
-- [x] **Step 3: Implement hierarchy/chunks**
-
-Owner `crate_module`; class-like outline for struct/enum/trait/impl; method/function body as independent chunk; module-level unclaimed code as bounded fragment.
-
-- [x] **Step 4: Implement relations**
-
-```text
-mod/use            imports
-trait impl         references
-base/type paths    references
-calls              calls
-#[test]            test
-test body call     tests
-contains hierarchy contains
-```
-
-`self::`、`super::`、`crate::` pathは字句的にnormalizeする。同一fileで一意なfunction/methodだけresolveする。macro expansionやtrait dispatchは確定しない。
-
-- [x] **Step 5: Add Rust fixture**
-
-Minimum:
-
-```text
-Cargo.toml
-src/lib.rs
-src/auth/mod.rs
-src/auth/token_service.rs
-src/http/middleware.rs
-tests/token_service_test.rs
-unrelated/report.rs
-```
-
-Include traits、impl、async fn、generic、macro、nested comment、raw string、`#[tokio::test]`。
-
-- [x] **Step 6: Add evaluation cases**
-
-```text
-where is an expired Rust token rejected?
-what calls TokenService validate_token?
-what tests cover expired Rust tokens?
-which module imports token_service?
-which trait does TokenService implement?
-```
-
-- [x] **Step 7: Register extractor and remove Rust from generic dispatch**
-
-- [x] **Step 8: Verify**
-
-```text
-go test ./internal/extract/rust -v
-go test ./...
-focalspan index --root testdata/repos/rustsample --quiet
-focalspan eval --root testdata/repos/rustsample --cases testdata/eval/rust-cases.jsonl --json
-```
-
-- [x] **Step 9: Commit**
-
-```text
-git add internal/extract/rust internal/app internal/extract/generic testdata/repos/rustsample testdata/eval/rust-cases.jsonl
-git commit -m "feat: add first-class Rust extraction"
-```
-
----
-
-### Task 9: Add First-Class Python Extraction
-
-**Files:**
-- Create: `internal/extract/python/*`
-- Modify: `internal/app/service.go`
-- Modify: `internal/app/service_test.go`
-- Create: `testdata/repos/pythonsample/*`
-- Create: `testdata/eval/python-cases.jsonl`
-
-**Interfaces:**
-- `Name() == "python-structural"`
-- Supports `.py`, `.pyw`, `.pyi`
-
-- [x] **Step 1: Write lexer tests**
-
-Cover:
-
-```text
-indent/dedent
-tabs policy without executing Python
-single/double/triple strings
-raw/byte/f-string prefixes
-f-string interpolation braces
-line continuation
-parenthesized multiline statement
-comments
-decorators
-type comments
-malformed triple string
-cancellation
-```
-
-- [x] **Step 2: Write declaration tests**
-
-Symbols:
-
-```text
-module
-class
-function
-async function
-method
-async method
-nested function
-property
-class variable outline
-type alias
-protocol/interface-like class
-test
-```
-
-`@property`、`@classmethod`、`@staticmethod`をsignature/kindへ反映する。lambdaを独立symbolにしない。
-
-- [x] **Step 3: Implement imports and calls**
-
-```text
-import x
-import x as y
-from x import y as z
-relative import
-function call
-self.method
-cls.method
-Class.method
-constructor call
-```
-
-同一scope・同一classで一意なtargetだけresolve。monkey patch、dynamic import、decorator semanticsは未解決。
-
-- [x] **Step 4: Implement test recognition**
-
-```text
-pytest test_*
-unittest.TestCase methods
-pytest.mark.parametrize
-async tests
-fixtures as fixture kind
-```
-
-Test body callから`tests` relationを作る。
-
-- [x] **Step 5: Add fixture/evaluation**
-
-Minimum:
-
-```text
-pyproject.toml
-src/auth/token_service.py
-src/http/middleware.py
-tests/test_token_service.py
-types/token_service.pyi
-unrelated/report.py
-```
-
-Queriesはdefinition、callers、tests、imports、protocol implementation。
-
-- [x] **Step 6: Register extractor and remove Python from generic indentation dispatch**
-
-- [x] **Step 7: Verify**
-
-```text
-go test ./internal/extract/python -v
-go test ./...
-focalspan index --root testdata/repos/pythonsample --quiet
-focalspan eval --root testdata/repos/pythonsample --cases testdata/eval/python-cases.jsonl --json
-```
-
-- [x] **Step 8: Commit**
-
-```text
-git add internal/extract/python internal/app internal/extract/generic testdata/repos/pythonsample testdata/eval/python-cases.jsonl
-git commit -m "feat: add first-class Python extraction"
-```
-
----
-
-### Task 10: Add First-Class Ruby Extraction
-
-**Files:**
-- Create: `internal/extract/ruby/*`
-- Modify: `internal/app/service.go`
-- Modify: `internal/app/service_test.go`
-- Create: `testdata/repos/rubysample/*`
-- Create: `testdata/eval/ruby-cases.jsonl`
-
-- [x] **Step 1: Write lexer tests**
-
-Cover Ruby strings、interpolation、symbols、regex、percent literals、heredoc、comments、`=begin/=end`、`do/end` nesting、modifier `if/unless`。
-
-- [x] **Step 2: Write declaration tests**
-
-```text
-module
-class
-singleton class
-def
-self.method
-define_method with static symbol
-attr_reader/writer/accessor
-constant
-alias
-test
-```
-
-Blocks are not all symbols. Named RSpec examples can be test symbols.
-
-- [x] **Step 3: Implement relations**
-
-```text
-require/require_relative imports
-include/extend/prepend references
-inheritance references
-same-class call calls
-RSpec/Minitest tests
-contains
-```
-
-Dynamic metaprogramming is unresolved.
-
-- [x] **Step 4: Add fixture/eval**
-
-Include Gemfile、gemspec、service、middleware、RSpec、Minitest、unrelated file。
-
-- [x] **Step 5: Register and remove Ruby from generic indentation dispatch**
-
-- [x] **Step 6: Verify**
-
-```text
-go test ./internal/extract/ruby -v
-go test ./...
-focalspan index --root testdata/repos/rubysample --quiet
-focalspan eval --root testdata/repos/rubysample --cases testdata/eval/ruby-cases.jsonl --json
-```
-
-- [x] **Step 7: Commit**
-
-```text
-git add internal/extract/ruby internal/app internal/extract/generic testdata/repos/rubysample testdata/eval/ruby-cases.jsonl
-git commit -m "feat: add first-class Ruby extraction"
-```
-
----
-
-### Task 11: Add First-Class Lua Extraction
-
-**Files:**
-- Create: `internal/extract/lua/*`
-- Modify: `internal/app/service.go`
-- Create: `testdata/repos/luasample/*`
-- Create: `testdata/eval/lua-cases.jsonl`
-
-- [x] **Step 1: Lexer tests**
-
-Cover:
-
-```text
--- comment
---[[ long comment ]]
---[=[ nested delimiter ]=]
-short strings
-long bracket strings
-escape
-function/end nesting
-table constructors
-malformed long string
-```
-
-- [x] **Step 2: Declarations**
-
-```text
-local function name
-function name
-function table.name
-function table:method
-name = function
-local name = function
-module/table owner
-test
-```
-
-- [x] **Step 3: Relations**
-
-```text
-require("module") imports
-same-table method calls
-local function calls
-setmetatable/type-like references as low confidence
-busted describe/it tests
-contains
-```
-
-Dynamic table indexing stays unresolved.
-
-- [x] **Step 4: Fixture/eval**
-
-Include service、middleware、busted tests、rockspec、unrelated report。
-
-- [x] **Step 5: Verify and commit**
-
-```text
-go test ./internal/extract/lua -v
-go test ./...
-focalspan index --root testdata/repos/luasample --quiet
-focalspan eval --root testdata/repos/luasample --cases testdata/eval/lua-cases.jsonl --json
-git add internal/extract/lua internal/app testdata/repos/luasample testdata/eval/lua-cases.jsonl
-git commit -m "feat: add first-class Lua extraction"
-```
-
----
-
-### Task 12: Add First-Class AMX Mod X / Pawn Extraction
-
-**Files:**
-- Create: `internal/extract/pawn/*`
-- Modify: `internal/app/service.go`
-- Modify: `internal/language/*`
-- Create: `testdata/repos/pawnsample/*`
-- Create: `testdata/eval/pawn-cases.jsonl`
-
-- [x] **Step 1: Lexer tests**
-
-Cover:
-
-```text
-// and /* */
-preprocessor directives
-line continuation
-strings/chars
-tagged types
-array dimensions
-enum
-new/const/static
-public/stock/native/forward
-malformed directive
-```
-
-- [x] **Step 2: Declaration tests**
-
-Kinds:
-
-```text
-function
-public
-stock
-native
-forward
-enum
-constant
-global
-callback
-```
-
-Recognize AMXX lifecycle callbacks:
-
-```text
-plugin_init
-plugin_precache
-plugin_cfg
-client_connect
-client_disconnect
-client_putinserver
-```
-
-These are functions with callback metadata, not hard-coded ranking boosts.
-
-- [x] **Step 3: Relations**
-
-```text
-#include imports
-function calls calls
-native/forward references
-register_clcmd/register_concmd/register_event/register_logevent handler string -> references
-set_task handler string -> references
-menu handler string -> references
-contains
-```
-
-String handlerはstatic literalかつ同一fileで一意なfunctionの場合だけresolveする。
-
-- [x] **Step 4: `.inc` conflict tests**
-
-PHP marker優先、Pawn score、explicit override、plain `.inc` fallbackを検証する。
-
-- [x] **Step 5: Fixture/eval**
-
-Minimum:
-
-```text
-addons/amxmodx/scripting/auth_plugin.sma
-addons/amxmodx/scripting/include/auth.inc
-tests or test-like debug harness
-unrelated/report_plugin.sma
-```
-
-Queries:
-
-```text
-where is plugin_init defined?
-what handles the say /login command?
-which include declares validate_token?
-what calls validate_token?
-where is the client authorization callback?
-```
-
-- [x] **Step 6: Verify and commit**
-
-```text
-go test ./internal/extract/pawn ./internal/language -v
-go test ./...
-focalspan index --root testdata/repos/pawnsample --quiet
-focalspan eval --root testdata/repos/pawnsample --cases testdata/eval/pawn-cases.jsonl --json
-git add internal/extract/pawn internal/language internal/app testdata/repos/pawnsample testdata/eval/pawn-cases.jsonl
-git commit -m "feat: add first-class AMX Mod X Pawn extraction"
-```
-
----
-
-### Task 13: Add First-Class VB6 and VB.NET Extraction
-
-**Files:**
-- Create: `internal/extract/vb/*`
-- Modify: `internal/app/service.go`
-- Create: `testdata/repos/vb6sample/*`
-- Create: `testdata/repos/vbnetsample/*`
-- Create: `testdata/eval/vb6-cases.jsonl`
-- Create: `testdata/eval/vbnet-cases.jsonl`
-
-**Interfaces:**
-- Two extractor names:
-  - `vb6-structural`
-  - `vbnet-structural`
-
-- [x] **Step 1: Shared lexer tests**
-
-Cover:
-
-```text
-apostrophe comment
-REM comment
-string with doubled quote
-line continuation _
-colon-separated statements
-#If/#Else/#End If
-case-insensitive keywords
-Attribute VB_Name
-malformed End block recovery
-```
-
-- [x] **Step 2: VB6 declarations**
-
-```text
-Form/Class/Module/UserControl owner
-Sub
-Function
-Property Get/Let/Set
-Event
-Declare Function/Sub
-Type
-Enum
-Const
-public/private/friend
-Implements
-WithEvents
-event handler naming
-```
-
-`.frm` designer preambleを一つのbounded `form-layout` chunkとして保持し、binary `.frx`はscannerでskipする。
-
-- [x] **Step 3: VB.NET declarations**
-
-```text
-Namespace
-Class/Module/Structure/Interface/Enum/Delegate
-Partial
-Sub/Function
-Constructor New
-Property
-Event
-Operator
-Imports
-Inherits
-Implements
-Handles
-AddHandler/RemoveHandler
-Async/Iterator
-generic Of T
-```
-
-- [x] **Step 4: Relations**
-
-VB6:
-
-```text
-Project component imports
-Implements references
-function calls
-event handler references
-contains
-```
-
-VB.NET:
-
-```text
-Imports
-Inherits/Implements
-Handles event
-AddHandler handler
-calls
-tests
-contains
-```
-
-- [x] **Step 5: Fixtures**
-
-VB6:
-
-```text
-Project.vbp
-MainForm.frm
-AuthService.cls
-AuthModule.bas
-AuthControl.ctl
-unrelated/ReportForm.frm
-```
-
-VB.NET:
-
-```text
-Project.vbproj
-Views/MainWindow.xaml
-Views/MainWindow.xaml.vb
-Forms/MainForm.vb
-Forms/MainForm.Designer.vb
-Tests/AuthTests.vb
-unrelated/ReportService.vb
-```
-
-- [x] **Step 6: Evaluation**
-
-VB6 queries: command/event handler、Property、Implements、project component。  
-VB.NET queries: Handles、WPF code-behind、interface、tests、partial designer。
-
-- [x] **Step 7: Verify and commit**
-
-```text
-go test ./internal/extract/vb -v
-go test ./...
-focalspan index --root testdata/repos/vb6sample --quiet
-focalspan eval --root testdata/repos/vb6sample --cases testdata/eval/vb6-cases.jsonl --json
-focalspan index --root testdata/repos/vbnetsample --quiet
-focalspan eval --root testdata/repos/vbnetsample --cases testdata/eval/vbnet-cases.jsonl --json
-git add internal/extract/vb internal/app testdata/repos/vb6sample testdata/repos/vbnetsample testdata/eval/vb6-cases.jsonl testdata/eval/vbnet-cases.jsonl
-git commit -m "feat: add VB6 and VB.NET structural extraction"
-```
-
----
-
-### Task 14: Add First-Class Nim Extraction
-
-**Files:**
-- Create: `internal/extract/nim/*`
-- Modify: `internal/app/service.go`
-- Create: `testdata/repos/nimsample/*`
-- Create: `testdata/eval/nim-cases.jsonl`
-
-- [x] **Step 1: Lexer/indent tests**
-
-Cover indentation、`#[ ]#` nested comments、triple strings、raw strings、pragmas、backtick identifiers、continuation inside delimiters。
-
-- [x] **Step 2: Declarations**
-
-```text
-module
-proc
-func
-method
-iterator
-converter
-template
-macro
-type
-object
-enum
-distinct
-concept
-const
-let
-var
-test
-```
-
-- [x] **Step 3: Relations**
-
-```text
-import/include/from imports
-type inheritance/reference
-same-module calls
-method references
-unittest suite/test tests
-contains
-```
-
-Compile-time macro expansionは行わない。
-
-- [x] **Step 4: Fixture/eval/verify**
-
-```text
-go test ./internal/extract/nim -v
-go test ./...
-focalspan index --root testdata/repos/nimsample --quiet
-focalspan eval --root testdata/repos/nimsample --cases testdata/eval/nim-cases.jsonl --json
-git add internal/extract/nim internal/app testdata/repos/nimsample testdata/eval/nim-cases.jsonl
-git commit -m "feat: add first-class Nim extraction"
-```
-
----
-
-### Task 15: Add First-Class Zig Extraction
-
-**Files:**
-- Create: `internal/extract/zig/*`
-- Modify: `internal/app/service.go`
-- Create: `testdata/repos/zigsample/*`
-- Create: `testdata/eval/zig-cases.jsonl`
-
-- [x] **Step 1: Lexer tests**
-
-Cover line comments、normal strings、multiline string lines beginning `\\`、character literal、builtin `@name`、comptime blocks、error unions、optional types、malformed braces。
-
-- [x] **Step 2: Declarations**
-
-```text
-module
-pub fn/fn
-const/var
-struct
-enum
-union
-opaque
-test
-comptime declaration
-usingnamespace
-extern/export function
-```
-
-`const Name = struct { ... }`をtype symbolとして認識する。`const f = fn`的な値と区別する。
-
-- [x] **Step 3: Relations**
-
-```text
-@import static literal imports
-same-module calls
-type references
-test body tests
-contains
-```
-
-Compile-time evaluationは行わない。
-
-- [x] **Step 4: Fixture/eval/verify**
-
-```text
-go test ./internal/extract/zig -v
-go test ./...
-focalspan index --root testdata/repos/zigsample --quiet
-focalspan eval --root testdata/repos/zigsample --cases testdata/eval/zig-cases.jsonl --json
-git add internal/extract/zig internal/app testdata/repos/zigsample testdata/eval/zig-cases.jsonl
-git commit -m "feat: add first-class Zig extraction"
-```
-
----
-
-### Task 16: Add Read-Only Project Metadata and Conservative Repository Linking
-
-**Files:**
-- Create: `internal/projectmeta/*`
-- Create: `internal/linker/*`
-- Modify: `internal/indexer/indexer.go`
-- Modify: `internal/store/store.go`
-- Modify: `internal/store/store_test.go`
-- Modify: fixtures from Tasks 3-15
-
-**Interfaces:**
-
-```go
-type Fact struct {
-    SourcePath string
-    Kind       string
-    Name       string
-    Target     string
-    Confidence float64
-}
-
-type Provider interface {
-    Supports(path string) bool
-    Parse(ctx context.Context, root string, file model.SourceFile) ([]Fact, []model.Diagnostic, error)
-}
-
-type Linker struct {
-    Store *store.Store
-}
-
-func (l *Linker) Link(ctx context.Context, facts []Fact) error
-```
-
-実際の型は既存設計へ合わせてよいが、metadata parsingとsymbol linkingを分離する。
-
-- [x] **Step 1: Add project metadata parser tests**
-
-Read-only parsing only:
-
-```text
-go.mod / go.work
-Cargo.toml
-package.json
-tsconfig.json / jsconfig.json
-.csproj / .vbproj
-composer.json
-pyproject.toml / setup.cfg
-Gemfile / *.gemspec（static literalだけ）
-*.rockspec（static literalだけ）
-Project.vbp
-.nimble
-build.zig.zon
-```
-
-XML/TOML/JSONは既存dependencyまたは標準ライブラリでparseする。外部commandを起動しない。
-
-- [x] **Step 2: Implement minimum metadata facts**
-
-Go:
-
-```text
-module path
-replace local path
-workspace use path
-```
-
-Rust:
-
-```text
-package name
-lib/bin path
-workspace members
-path dependencies
-```
-
-Node:
-
-```text
-name
-type
-main/module/types
-exports static entries
-workspaces
-tsconfig baseUrl/paths static patterns
-```
-
-.NET:
-
-```text
-RootNamespace
-AssemblyName
-ProjectReference
-Compile Include
-Page/ApplicationDefinition
-EmbeddedResource/DependentUpon
-```
-
-PHP:
-
-```text
-PSR-4
-PSR-0
-classmap
-files
-```
-
-Python:
-
-```text
-project/package name
-package-dir
-src root
-tool-specific static extra paths when safely parseable
-```
-
-Ruby:
-
-```text
-gem name
-require_paths static literals
-local path gem entries
-```
-
-Lua:
-
-```text
-rockspec package name
-source directory/static modules
-```
-
-VB6:
-
-```text
-Form/Class/Module/UserControl entries from .vbp
-```
-
-Pawn:
-
-```text
-configured include directories only if represented in repository config; do not inspect machine-global AMXX install
-```
-
-Nim:
-
-```text
-nimble package name
-srcDir
-static local path dependencies
-```
-
-Zig:
-
-```text
-build.zig.zon package name
-static path dependencies
-module root paths that can be read without evaluating build.zig
-```
-
-- [x] **Step 3: Add linker store queries**
-
-Add deterministic indexed lookups for:
-
-```text
-file path exact
-file path suffix constrained by importer directory
-qualified symbol exact
-symbol name + owner/module constraint
-same partial type
-declaration/definition signature
-```
-
-Do not choose the first of multiple ambiguous matches.
-
-- [x] **Step 4: Run linker after file updates**
-
-After `ApplyIndex` succeeds, or inside the same safe index transaction if current architecture permits, resolve only exact/scoped facts. If linking fails, do not mark index run successful without reporting the error.
-
-No schema change is preferred. Existing `relations` rows may be replaced/rebuilt deterministically. If schema change becomes unavoidable, document and test migration before implementation.
-
-- [x] **Step 5: Resolution precedence**
-
-```text
-exact static path
-exact qualified symbol
-manifest-constrained module + exported name
-same owner/scope unique name
-simple unique repository-wide name
-ambiguous -> unresolved
-```
-
-Simple repository-wide uniqueness may resolve only when no scope/module information contradicts it.
-
-- [x] **Step 6: Add cross-file tests**
-
-Minimum:
-
-```text
-Go import -> package file
-Rust mod/use -> module
-C++ header declaration -> source definition
-C# partial class and XAML x:Class -> code-behind
-PHP PSR-4 class -> file
-JS/TS import alias -> exported symbol
-Python relative import -> module
-Ruby require_relative -> file
-Lua require -> module
-Pawn include -> .inc
-VB6 project component -> source
-VB.NET ProjectReference/XAML -> code
-Nim import -> module
-Zig @import -> file
-```
-
-- [x] **Step 7: Verify all relation directions**
-
-`expand imports`、`callers`、`callees`、`references`、`tests`でforward/reverse candidateが実用的に返る。
-
-- [x] **Step 8: Commit**
-
-```text
-git add internal/projectmeta internal/linker internal/indexer internal/store testdata
-git commit -m "feat: link polyglot project metadata conservatively"
-```
-
----
-
-### Task 17: Final Evaluation, Extractor Version, Documentation, and Release Gate
-
-**Files:**
-- Modify: `internal/indexer/indexer.go`
-- Modify: `internal/indexer/indexer_test.go`
-- Modify: `README.md`
-- Modify: `docs/design.md`
-- Modify: `docs/evaluation.md`
-- Create: `docs/evaluation-v0.3.json`
-- Modify: `docs/implementation-plan.md`
-- Modify: `PLAN.md`
-
-- [x] **Step 1: Bump extractor version exactly once**
-
-Current baseline is`extractors-v4`。本計画の全Extractor formatが確定した後に一度だけ新しい値へ更新する。例:
-
-```text
-extractors-v5-polyglot
-```
-
-現在checkoutですでに別値へ進んでいる場合は巻き戻さず、次の一意な値を使う。
-
-- [x] **Step 2: Test reindex behavior**
-
-```text
-old extractor version + unchanged source -> reparse
-new version first update -> all required files refreshed
-new version second update -> unchanged
-old generic chunks for upgraded languages are removed
-schema migration is not required
-```
-
-- [x] **Step 3: Run all unit tests**
+Run:
 
-```text
-gofmt -w <changed Go files/directories>
+```bash
 go test ./...
 go vet ./...
 ```
 
-- [ ] **Step 4: Run race tests where supported**
+Expected: both commands pass. If either already fails, preserve the exact failure before making changes and distinguish it from v0.4 regressions.
 
-```text
-CGO_ENABLED=1 go test -race ./...
+- [x] **Step 3: Run every checked-in retrieval evaluation**
+
+Discover files first:
+
+```bash
+find testdata/eval -maxdepth 1 -type f -name '*cases.jsonl' -print
 ```
 
-Windowsでnative C compilerがない場合は未検証と記録し、成功扱いしない。
+On Windows without a POSIX shell, list the same directory with PowerShell and run each file through the existing `focalspan eval` command using its matching fixture root. At minimum run all currently checked-in Go, PHP, C/C++, C#, JS/TS, and Smarty/template cases.
 
-- [x] **Step 5: Run every evaluation**
+Expected: save the exact hit, recall, forbidden-path, budget, reduction, relation, intent, and determinism metrics. Do not round stored baselines more aggressively than the current evaluator output.
 
-At minimum:
+- [x] **Step 4: Add the v0.4 decision to `docs/design.md`**
+
+Add a decision section with these exact decisions:
 
 ```text
-authsample
-phpsample
-templatesample
-cppsample
-csharpsample
-jstssample
-dotnetsample
-rustsample
-pythonsample
-rubysample
-luasample
-pawnsample
-vb6sample
-vbnetsample
-nimsample
-zigsample
-ja-auth
-ja-jsts
+- Keep model.ContextBundle as an internal and legacy CLI representation.
+- Introduce internal/evidence as the LLM-facing presentation boundary.
+- Switch code_context, code_expand, and code_impact to focalspan.context.v1.
+- Keep code_status and code_restart unchanged.
+- Keep normal ranking diagnostics out of the Evidence Packet.
+- Budget the final serialized packet rather than source text alone.
+- Make MCP default mode focused.
+- Use stateless known_handles instead of server-side conversation state.
+- Preserve the SQLite schema and all extractors in this milestone.
 ```
 
-各rootは評価直前にindexする。JSON結果を保存し、`docs/evaluation.md`へ実測値を記載する。
+- [x] **Step 5: Update `docs/implementation-plan.md` with milestone boundaries**
 
-- [x] **Step 6: Add language matrix to README**
+Document that v0.4 covers transport modeling, role assignment, excerpt fidelity, wire budgeting, delta suppression, MCP integration, and evidence evaluation. Explicitly place learned reranking, embeddings, model tokenizers, semantic-provider work, repository linker redesign, and HTTP transport outside v0.4.
 
-能力を次の階層で正確に表す:
+- [x] **Step 6: Verify documentation-only changes**
 
-```text
-AST
-first-class structural
-composite structural
-metadata-assisted structural
-generic fallback
+Run:
+
+```bash
+git diff --check
+go test ./...
 ```
 
-「対応」とだけ書かず、型推論、動的dispatch、macro expansion、runtime resolutionの制限を書く。
+Expected: no whitespace errors and no test regression.
 
-- [x] **Step 7: Update design docs**
+- [x] **Step 7: Commit the baseline and design decision**
 
-Document:
-
-```text
-language detection precedence
-language_overrides
-owner symbols
-per-language parser boundaries
-project metadata facts
-link resolution precedence
-ambiguity behavior
-error recovery
-source duplication policy
-security/no-execution policy
+```bash
+git add docs/design.md docs/implementation-plan.md PLAN.md testdata/eval/baseline-v0.4.json
+git commit -m "docs: define LLM evidence contract v0.4"
 ```
 
-- [x] **Step 8: Cross-build**
+If `baseline-v0.4.json` was not needed, omit it from `git add`. If the checkout was already dirty, stage only files changed by this task.
+
+---
+
+### Task 1: Define and Validate the Versioned Evidence Packet
+
+**Files:**
+- Create: `internal/evidence/model.go`
+- Create: `internal/evidence/validate.go`
+- Create: `internal/evidence/model_test.go`
+- Create: `internal/evidence/validate_test.go`
+
+**Interfaces:**
+- Consumes: only standard library types
+- Produces: `evidence.Packet`, enums, `Validate(Packet) error`, and deterministic local-ID helpers used by every later task
+
+- [ ] **Step 1: Write contract serialization tests**
+
+Add table-driven tests that marshal a minimal packet and assert:
+
+```go
+func TestPacketJSONContract(t *testing.T) {
+    packet := evidence.Packet{
+        Schema: evidence.SchemaContextV1,
+        Intent: "callers",
+        Mode:   evidence.ModeFocused,
+        Budget: evidence.Budget{Limit: 1200, Used: 380},
+        Evidence: []evidence.Item{
+            {
+                ID:       "e1",
+                Handle:   "sym_target",
+                Role:     evidence.RoleTarget,
+                Location: evidence.Location{Path: "auth/service.go", Lines: [2]int{44, 51}},
+                Language: "go",
+                Kind:     "method",
+                Symbol:   "Service.ValidateToken",
+                Fidelity: evidence.FidelitySignature,
+                Signature: "func (s *Service) ValidateToken(token string) error",
+                Why:      []string{"exact_symbol"},
+            },
+        },
+    }
+
+    data, err := json.Marshal(packet)
+    if err != nil {
+        t.Fatal(err)
+    }
+    text := string(data)
+    for _, required := range []string{`"schema":"focalspan.context.v1"`, `"role":"target"`, `"fidelity":"signature"`} {
+        if !strings.Contains(text, required) {
+            t.Fatalf("missing %s in %s", required, text)
+        }
+    }
+    for _, forbidden := range []string{`"score"`, `"weight"`, `"token_savings"`, `"query"`} {
+        if strings.Contains(text, forbidden) {
+            t.Fatalf("forbidden field %s in %s", forbidden, text)
+        }
+    }
+}
+```
+
+Expected before implementation: compilation fails because `internal/evidence` does not exist.
+
+- [ ] **Step 2: Implement exact enums and public structs**
+
+Create `model.go` with the exact schema identifier, modes, roles, fidelity values, certainty values, and public structs defined in the Product Contract section. Use constants for segment kinds:
+
+```go
+const (
+    SegmentSource  = "source"
+    SegmentOmitted = "omitted"
+)
+```
+
+- [ ] **Step 3: Write validation tests for every invariant**
+
+Cover at least:
 
 ```text
+wrong schema
+unsupported mode
+empty evidence array is valid
+non-sequential local ID
+blank stable handle
+absolute path
+backslash path
+zero or reversed line range
+unknown role
+unknown fidelity
+verbatim with missing source
+verbatim with segments
+excerpt with no source segment
+excerpt with top-level source
+signature with source
+synthetic with no outline
+edge to missing local ID
+duplicate edge
+more than four why codes
+more than eight limitations
+more than four next actions
+used greater than limit
+negative skipped_known
+```
+
+Use exact error substrings so callers can diagnose malformed packet assembly.
+
+- [ ] **Step 4: Implement `Validate`**
+
+Required signature:
+
+```go
+func Validate(packet Packet) error
+```
+
+Validation must be read-only, deterministic, and must not repair malformed packets silently. Use joined or wrapped errors only when the resulting message remains stable enough for tests.
+
+- [ ] **Step 5: Add deterministic local-ID assignment**
+
+Required helper:
+
+```go
+func AssignLocalIDs(items []Item) map[string]string
+```
+
+Behavior:
+
+- assign `e1`, `e2`, ... in slice order;
+- return a stable-handle-to-local-ID map;
+- reject or surface duplicate non-empty handles through validation rather than silently mapping the last duplicate;
+- do not derive IDs from scores, line numbers, map iteration, or random values.
+
+- [ ] **Step 6: Run focused tests**
+
+```bash
+go test ./internal/evidence -run 'TestPacket|TestValidate|TestAssignLocalIDs' -count=1
+```
+
+Expected: PASS.
+
+- [ ] **Step 7: Run full tests and commit**
+
+```bash
+go test ./...
+git add internal/evidence
+git commit -m "feat: define versioned evidence packet contract"
+```
+
+---
+
+### Task 2: Preserve Relation Provenance from Store to Ranked Candidates
+
+**Files:**
+- Modify: `internal/model/model.go`
+- Modify: `internal/store/store.go`
+- Modify: `internal/store/store_test.go`
+- Modify: `internal/search/retrieval.go`
+- Modify: `internal/search/retrieval_test.go`
+
+**Interfaces:**
+- Consumes: stored `relations` rows and existing `RelatedCandidates` behavior
+- Produces: provenance-rich relation hits and `RankedCandidate.RelationContext` without changing the database schema or legacy public JSON
+
+- [ ] **Step 1: Add failing model and store tests**
+
+Define the expected internal types in tests:
+
+```go
+type RelationDirection string
+
+const (
+    RelationIncoming RelationDirection = "incoming"
+    RelationOutgoing RelationDirection = "outgoing"
+    RelationRelated  RelationDirection = "related"
+)
+
+type RelationContext struct {
+    AnchorHandle string
+    Kind         string
+    Direction    RelationDirection
+    Confidence   float64
+    Source       string
+    Resolved     bool
+}
+
+type RelationHit struct {
+    Candidate RankedCandidate
+    Context   RelationContext
+}
+```
+
+Store tests must create a small graph and assert exact provenance for:
+
+```text
+caller candidate -> anchor: incoming
+anchor -> callee candidate: outgoing
+parent -> child candidate: outgoing when anchor is parent
+parent candidate -> child anchor: incoming when requesting parent
+importer -> imported target: outgoing
+importer candidate -> imported anchor: incoming for reverse import/export lookup
+resolved ToHandle relation: Resolved=true
+UnresolvedTo lexical relation: Resolved=false
+confidence and source preserved from the relation row
+```
+
+Expected before implementation: the types and API are absent.
+
+- [ ] **Step 2: Add internal relation types to `model.go`**
+
+Add the types above without JSON tags. Extend `RankedCandidate`:
+
+```go
+RelationContext *RelationContext
+```
+
+Keep the existing `Relation string` field for legacy ranking and output compatibility during v0.4.
+
+- [ ] **Step 3: Add a provenance-rich store API**
+
+Required API:
+
+```go
+func (s *Store) RelatedCandidateHits(
+    ctx context.Context,
+    handles []string,
+    relation string,
+) ([]model.RelationHit, error)
+```
+
+Implementation requirements:
+
+- use parameter binding;
+- preserve current supported relation names;
+- return actual edge direction for each SQL branch;
+- return relation confidence and source;
+- mark exact `ToHandle` joins resolved;
+- mark simple-name or qualified-name fallback through `UnresolvedTo` unresolved;
+- avoid N+1 queries by joining candidate symbol/chunk data in bounded queries;
+- preserve deterministic ordering by relation class, confidence descending, path, start line, and handle;
+- deduplicate by candidate handle plus anchor, kind, direction, source, and resolved state.
+
+- [ ] **Step 4: Keep the old store API as a compatibility wrapper**
+
+Keep:
+
+```go
+func (s *Store) RelatedCandidates(
+    ctx context.Context,
+    handles []string,
+    relation string,
+) ([]model.RankedCandidate, error)
+```
+
+Implement it by calling `RelatedCandidateHits`, copying `Context.Kind` into legacy `Candidate.Relation`, and deduplicating candidates exactly as the old caller expects. Existing tests must continue to pass.
+
+- [ ] **Step 5: Update the search store interface and relation retriever**
+
+Make the search candidate-store interface consume `RelatedCandidateHits`. For each relation hit:
+
+```go
+candidate := hit.Candidate
+candidate.Relation = hit.Context.Kind
+contextCopy := hit.Context
+candidate.RelationContext = &contextCopy
+```
+
+Do not let a later duplicate with weaker lexical provenance replace an earlier resolved hit. Merge rules:
+
+```text
+resolved beats unresolved
+higher confidence beats lower confidence
+exact direction beats related
+stable lexical order breaks remaining ties
+```
+
+- [ ] **Step 6: Test relation provenance through `SearchDetailed`**
+
+Add a search test for `what calls ValidateToken?` that verifies:
+
+```text
+candidate.Relation == "callers"
+candidate.RelationContext.AnchorHandle is the ValidateToken anchor
+candidate.RelationContext.Direction == incoming
+candidate.RelationContext.Resolved matches the fixture relation
+```
+
+Also test the unresolved lexical path.
+
+- [ ] **Step 7: Run local and full verification**
+
+```bash
+go test ./internal/store ./internal/search -count=1
+go test ./...
+go vet ./...
+```
+
+Expected: all existing relation behavior remains compatible.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add internal/model/model.go internal/store/store.go internal/store/store_test.go internal/search/retrieval.go internal/search/retrieval_test.go
+git commit -m "feat: preserve relation provenance for evidence output"
+```
+
+---
+
+### Task 3: Classify Evidence Roles and Define Intent-Specific Presentation Order
+
+**Files:**
+- Create: `internal/evidence/roles.go`
+- Create: `internal/evidence/roles_test.go`
+
+**Interfaces:**
+- Consumes: `query.Plan`, ranked candidate kind/path/language, changed flag, relation provenance, original rank
+- Produces: `ClassifiedCandidate`, role, certainty, semantic reason codes, and deterministic presentation priority
+
+- [ ] **Step 1: Write role-classification tests**
+
+Required internal type:
+
+```go
+type ClassifiedCandidate struct {
+    Candidate       model.RankedCandidate
+    OriginalRank    int
+    Role            Role
+    Certainty       Certainty
+    Why             []string
+    PresentationKey PresentationKey
+}
+```
+
+Test at least these mappings:
+
+```text
+first exact anchor -> target
+callers relation, incoming -> caller
+callees relation, outgoing -> callee
+tests relation -> test
+imports outgoing -> import
+imports incoming -> dependent
+references -> reference
+changed candidate under impact intent -> change
+non-changed reverse dependency under impact -> dependent
+kind test or test path -> test
+kind class/interface/struct/record/trait/type -> type
+kind template/block/template-function -> template
+config/project/manifest path -> config
+Markdown/documentation kind -> documentation
+ordinary function/method target -> implementation
+prototype/interface/ambient declaration -> declaration
+unclassified supporting span -> context
+```
+
+- [ ] **Step 2: Implement stable reason-code mapping**
+
+Normal `why` codes may include only this bounded vocabulary in v1:
+
+```text
+exact_symbol
+qualified_symbol
+path_match
+lexical_match
+changed_span
+direct_caller
+direct_callee
+related_test
+imports_target
+imported_by
+references_target
+contains_target
+parent_context
+same_symbol
+same_file
+```
+
+Map current score/retriever reasons to these codes without copying weights or details. Remove duplicates and cap at four in this priority order:
+
+```text
+exact or qualified identity
+relation
+change
+lexical or path
+contextual fallback
+```
+
+- [ ] **Step 3: Implement relation certainty mapping**
+
+Rules:
+
+```text
+Resolved=true and confidence >= 0.90 -> exact
+Resolved=true otherwise             -> scoped
+Resolved=false                      -> lexical
+No relation provenance              -> lexical only when an edge is not emitted
+```
+
+Do not emit an edge solely from a candidate role when there is no identifiable anchor.
+
+- [ ] **Step 4: Define intent presentation profiles**
+
+Use exact role order tables:
+
+```text
+definition/default:
+  target, implementation, definition, declaration, type, caller, callee, test,
+  import, reference, config, template, change, dependent, context, documentation
+
+callers:
+  target, caller, implementation, test, type, import, reference, dependent,
+  context, documentation
+
+callees:
+  target, callee, type, import, implementation, test, reference, context,
+  documentation
+
+tests:
+  target, test, implementation, type, config, context, documentation
+
+imports:
+  target, import, export, dependent, implementation, type, config, context,
+  documentation
+
+references:
+  target, reference, type, implementation, dependent, test, context,
+  documentation
+
+impact:
+  change, target, dependent, caller, reference, test, implementation, type,
+  config, context, documentation
+
+template:
+  target, template, import, implementation, caller, test, config, context,
+  documentation
+```
+
+Within the same role, preserve original retrieval rank, then path, start line, and handle.
+
+- [ ] **Step 5: Implement classifier and ordering API**
+
+Required signatures:
+
+```go
+func Classify(plan query.Plan, candidates []model.RankedCandidate) []ClassifiedCandidate
+func SortForPresentation(plan query.Plan, candidates []ClassifiedCandidate)
+```
+
+The input candidate slice must not be mutated.
+
+- [ ] **Step 6: Test determinism across repeated runs and shuffled maps**
+
+Run classification 100 times with the same candidates and assert byte-identical JSON after converting only stable fields. Include equal-score and duplicate-reason cases.
+
+- [ ] **Step 7: Verify and commit**
+
+```bash
+go test ./internal/evidence -run 'TestClassify|TestPresentation|TestWhy|TestCertainty' -count=1
+go test ./...
+git add internal/evidence/roles.go internal/evidence/roles_test.go
+git commit -m "feat: classify and order LLM evidence by intent"
+```
+
+---
+
+### Task 4: Build Source-Faithful Focused Excerpts
+
+**Files:**
+- Create: `internal/evidence/fidelity.go`
+- Create: `internal/evidence/fidelity_test.go`
+- Create: `internal/evidence/segments.go`
+- Create: `internal/evidence/segments_test.go`
+- Create: `testdata/repos/evidencesample/auth/service.go`
+- Create: `testdata/repos/evidencesample/auth/service_test.go`
+- Create: `testdata/repos/evidencesample/http/middleware.go`
+- Create: `testdata/repos/evidencesample/config/auth.json`
+- Create: `testdata/repos/evidencesample/unrelated/report.go`
+
+**Interfaces:**
+- Consumes: classified candidate, query plan, selected mode, item token allowance
+- Produces: exactly one valid content representation with explicit source or omitted segments
+
+- [ ] **Step 1: Add a late-hit fixture that exposes current tail truncation**
+
+Create `auth/service.go` with a `ValidateToken` function longer than 120 lines. Place routine normalization and logging near the beginning and the decisive branch near the end:
+
+```go
+if token.ExpiresAt.Before(now) {
+    return ErrExpiredToken
+}
+```
+
+The exact source line containing `ErrExpiredToken` must be expected evidence for the query:
+
+```text
+where is an expired authentication token rejected?
+```
+
+Add a caller, a test, a compact JSON config file, and a large unrelated Go file.
+
+- [ ] **Step 2: Write fidelity invariant tests**
+
+Test `verbatim`, `excerpt`, `signature`, and `synthetic` item construction. For every source segment, assert:
+
+```go
+want := linesFromOriginal(candidate.Content, segment.Lines, candidate.StartLine)
+if segment.Text != want {
+    t.Fatalf("segment differs from indexed source")
+}
+```
+
+Also assert no generated line-number prefixes and no literal `[...]` marker is inserted into source text.
+
+- [ ] **Step 3: Define internal content variants**
+
+Required private type:
+
+```go
+type ContentVariant struct {
+    Fidelity Fidelity
+    Source   string
+    Segments []Segment
+    Outline  string
+    Signature string
+    EvidenceTokens int
+}
+```
+
+Required API:
+
+```go
+func BuildVariants(
+    candidate ClassifiedCandidate,
+    plan query.Plan,
+    mode Mode,
+    estimator budget.TokenEstimator,
+) []ContentVariant
+```
+
+Return variants from richest to cheapest. Every candidate must have a signature fallback; when the original signature is blank, build a compact fallback from symbol, kind, and location without pretending it is source.
+
+- [ ] **Step 4: Implement line indexing without rescanning per hit**
+
+Create a line table once per candidate content. Preserve line endings in source segments. Calculate absolute source lines as:
+
+```text
+candidate.StartLine + local zero-based line index
+```
+
+Do not split a UTF-8 code point or alter CRLF/LF bytes in verbatim text.
+
+- [ ] **Step 5: Implement focused hit detection**
+
+Use `query.Plan` terms and anchors. Match:
+
+```text
+case-sensitive exact identifiers first
+ASCII case-insensitive identifiers second
+qualified terminal symbol names
+quoted phrases
+Unicode lexical terms of length >= 2
+relation anchor symbol terminal names when available
+```
+
+Do not treat every punctuation token as a hit.
+
+- [ ] **Step 6: Implement deterministic source windows**
+
+For each hit line, start with:
+
+```text
+2 lines before
+4 lines after
+```
+
+Always attempt to include a declaration prefix from candidate line 1 through the first opening body delimiter or a maximum of six lines. Merge windows whose gap is two lines or fewer. Keep at most three source windows, selected in this order:
+
+```text
+declaration prefix
+window with the most distinct query terms
+remaining windows by distinct-term count descending, then source order
+```
+
+Represent every excluded gap between selected windows as:
+
+```go
+Segment{Kind: SegmentOmitted, Lines: [2]int{start, end}}
+```
+
+Omitted segments have no `text` field.
+
+- [ ] **Step 7: Implement mode rules**
+
+Exact behavior:
+
+```text
+outline:
+  signature for source symbols;
+  synthetic outline for extractor-generated outline chunks.
+
+focused:
+  target/implementation under 40 lines -> verbatim;
+  large target or evidence with query hits -> excerpt;
+  direct caller/callee/test under 24 lines -> verbatim;
+  remaining supporting items -> signature or synthetic outline.
+
+source:
+  full verbatim candidate when it fits the item allowance;
+  otherwise focused excerpt;
+  otherwise signature.
+```
+
+Recognize synthetic outline chunks through existing kinds/signals rather than path-specific rules. Record the helper in one place so new languages can extend it.
+
+- [ ] **Step 8: Test that the late decisive branch survives**
+
+At 512, 1200, and 4000 token allowances, `focused` must include the exact `ErrExpiredToken` branch or its containing source lines. It must not return only the beginning of the function.
+
+- [ ] **Step 9: Test hard cases**
+
+Cover:
+
+```text
+single-line function
+content with no trailing newline
+CRLF
+Japanese comment before a hit
+UTF-8 identifier
+multiple distant hits
+more than three candidate windows
+hit on first line
+hit on last line
+no lexical hit
+synthetic outline
+blank signature
+source shorter than allowance
+source larger than allowance
+```
+
+- [ ] **Step 10: Verify and commit**
+
+```bash
+go test ./internal/evidence -run 'TestBuildVariants|TestFocused|TestSegments|TestFidelity' -count=1
+go test ./...
+git add internal/evidence testdata/repos/evidencesample
+git commit -m "feat: add source-faithful focused evidence excerpts"
+```
+
+---
+
+### Task 5: Compile Ranked Candidates into a Wire-Budgeted Packet
+
+**Files:**
+- Create: `internal/evidence/compiler.go`
+- Create: `internal/evidence/compiler_test.go`
+- Create: `internal/evidence/wire.go`
+- Create: `internal/evidence/wire_test.go`
+
+**Interfaces:**
+- Consumes: query plan, revision, mode, token budget, ranked candidates, known handles
+- Produces: `CompileResult` containing a valid `Packet`, canonical short summary measurement, and internal-only accounting statistics
+
+- [ ] **Step 1: Define compiler input and internal statistics**
+
+Implement:
+
+```go
+type CompileRequest struct {
+    Plan             query.Plan
+    Revision         string
+    TokenBudget      int
+    Mode             Mode
+    Candidates       []model.RankedCandidate
+    KnownHandles     []string
+    ExpansionAnchors []string
+}
+
+type Stats struct {
+    WireTokens          int
+    EvidenceTokens      int
+    MetadataTokens      int
+    DuplicateSourceBytes int
+    Selected            int
+    Omitted             int
+    SkippedKnown        int
+}
+
+type CompileResult struct {
+    Packet Packet
+    Stats  Stats
+}
+
+type Compiler struct {
+    estimator budget.TokenEstimator
+}
+
+func NewCompiler(estimator budget.TokenEstimator) *Compiler
+func (c *Compiler) Compile(req CompileRequest) (CompileResult, error)
+```
+
+If estimator is nil, use `budget.NewEstimator()`.
+
+- [ ] **Step 2: Write failing tests for model-visible budget compliance**
+
+For budgets 256, 512, 1200, 4000, and 64000, measure the same compact JSON plus canonical summary that the MCP handler will expose:
+
+```go
+used := evidence.MeasureModelVisible(result.Packet, estimator)
+if used > result.Packet.Budget.Limit {
+    t.Fatalf("wire packet uses %d > %d", used, result.Packet.Budget.Limit)
+}
+if used != result.Packet.Budget.Used {
+    t.Fatalf("reported %d, measured %d", result.Packet.Budget.Used, used)
+}
+```
+
+Also test clamping to existing `budget.MinBudget` and `budget.MaxBudget`.
+
+- [ ] **Step 3: Implement candidate preprocessing**
+
+Before selection:
+
+```text
+remove candidates with blank handles only when no stable fallback can be generated
+remove exact duplicate handles, preserving strongest provenance
+remove duplicate content hashes, preserving the higher presentation priority
+remove identical path/start/end spans
+filter known handles and increment skipped_known
+classify roles
+build content variants
+```
+
+Do not count candidates rejected before ranking as omitted evidence.
+
+- [ ] **Step 4: Implement marginal utility per wire cost**
+
+Use deterministic internal utility. Define named constants with these initial values:
+
+```go
+const (
+    rankBaseUtility       = 100.0
+    newRoleBonus          = 18.0
+    newPathBonus          = 10.0
+    directRelationBonus   = 16.0
+    resolvedRelationBonus = 8.0
+    exactIdentityBonus    = 14.0
+    changedSpanBonus      = 12.0
+    repeatedPathPenalty   = 7.0
+)
+```
+
+Base utility:
+
+```text
+rankBaseUtility / (1 + original rank)
++ intent role weight
++ bonuses
+- repeated path penalty
+```
+
+Use these role weights by intent:
+
+```text
+default target=45 implementation=34 definition=30 declaration=24 type=18
+callers target=40 caller=46 test=20 implementation=18
+callees target=40 callee=46 type=20 import=18
+tests target=36 test=50 implementation=18 config=12
+imports target=34 import=46 export=38 dependent=24 config=14
+references target=38 reference=44 type=30 dependent=20
+impact change=50 dependent=46 caller=30 test=28 target=26
+template target=42 template=44 import=28 implementation=22
+```
+
+Unlisted roles receive 8. Divide the resulting utility by the incremental serialized token cost of adding the selected content variant. Use original rank, path, start line, and handle as deterministic tie breakers.
+
+- [ ] **Step 5: Guarantee a compact anchor before greedy selection**
+
+When candidates exist, include the highest-priority target/change item at least as a signature if the minimal valid packet can fit. For callers, callees, tests, imports, and references intents, preserve a compact target signature even when the richest relation candidate scores above it.
+
+Do not violate the wire budget to force an anchor. A 256-token packet may contain one signature item or an empty evidence array plus limitations.
+
+- [ ] **Step 6: Add variants using incremental serialized cost**
+
+For each candidate, try richest-to-cheapest allowed variants. Measure each trial packet with `MeasureModelVisible`, including the canonical summary. Select the variant with the highest utility per incremental model-visible token that fits. Recompute role/path diversity after each selection.
+
+Do not estimate candidate source alone as the hard-cap decision.
+
+- [ ] **Step 7: Assemble edges only after final item selection**
+
+Use relation provenance and stable-handle-to-local-ID mapping. Edge orientation:
+
+```text
+incoming candidate relation: candidate local ID -> anchor local ID
+outgoing candidate relation: anchor local ID -> candidate local ID
+related/ambiguous relation: omit edge; retain a lexical why code and limitation
+```
+
+Map certainty through Task 3. If the anchor was suppressed by `known_handles`, do not emit a dangling edge. The item may retain role and why; add `known_anchor_not_repeated` to limitations once per packet.
+
+- [ ] **Step 8: Implement canonical summary and fixed-point model-visible token reporting**
+
+Add these functions in `wire.go`:
+
+```go
+func Summary(packet Packet) string
+func MeasureModelVisible(packet Packet, estimator budget.TokenEstimator) int
+```
+
+`Summary` must produce exactly the same short sentence later used by MCP and must contain no source, path, handle, query, score, or savings data. `MeasureModelVisible` estimates compact `json.Marshal(packet)` plus one newline plus `Summary(packet)`. Because changing `budget.used` can change both serialized length and summary digits, use at most four iterations:
+
+```go
+for i := 0; i < 4; i++ {
+    measured := MeasureModelVisible(packet, estimator)
+    if measured == packet.Budget.Used {
+        break
+    }
+    packet.Budget.Used = measured
+}
+```
+
+After the loop, remeasure. If the packet exceeds the limit, degrade or remove the lowest-utility non-anchor item and repeat. If only the anchor remains, degrade verbatim to excerpt to signature before removing it. Return an error only when even the empty valid packet cannot fit after budget clamping.
+
+- [ ] **Step 9: Implement internal accounting**
+
+Definitions:
+
+```text
+WireTokens: estimator over compact final packet JSON plus the canonical short summary.
+EvidenceTokens: estimator over concatenated signature/source/segment text/outline values only.
+MetadataTokens: max(0, WireTokens - EvidenceTokens).
+DuplicateSourceBytes: bytes repeated by overlapping source line ranges on the same path plus identical verbatim text reused across items.
+```
+
+Do not serialize `Stats` into normal MCP output.
+
+- [ ] **Step 10: Validate every compiled packet**
+
+Call `evidence.Validate` before returning success. Compiler tests must fail if a future change produces a dangling edge, mixed content representation, invalid line range, duplicate handle, or wrong `budget.used`.
+
+- [ ] **Step 11: Test deterministic packing**
+
+Run the same request 100 times, including candidates with tied scores and tied utility. Assert byte-identical `json.Marshal(result.Packet)` output.
+
+- [ ] **Step 12: Verify and commit**
+
+```bash
+go test ./internal/evidence -run 'TestCompiler|TestWire|TestBudget|TestUtility|TestDeterministic' -count=1
+go test ./...
+git add internal/evidence/compiler.go internal/evidence/compiler_test.go internal/evidence/wire.go internal/evidence/wire_test.go
+git commit -m "feat: compile evidence within serialized token budgets"
+```
+
+---
+
+### Task 6: Generate Compact Limitations and Follow-Up Actions
+
+**Files:**
+- Create: `internal/evidence/next.go`
+- Create: `internal/evidence/next_test.go`
+- Modify: `internal/evidence/compiler.go`
+- Modify: `internal/evidence/compiler_test.go`
+
+**Interfaces:**
+- Consumes: query plan, selected/omitted classified candidates, selected variants, known handles, packet budget state
+- Produces: bounded stable `limitations` and `next` entries
+
+- [ ] **Step 1: Define the v1 limitation vocabulary**
+
+Use these exact codes only:
+
+```text
+budget_limited
+source_reduced_to_excerpt
+source_reduced_to_signature
+additional_callers_omitted
+additional_callees_omitted
+additional_tests_omitted
+additional_imports_omitted
+additional_references_omitted
+dynamic_dispatch_unresolved
+lexical_relation_only
+known_anchor_not_repeated
+no_relevant_source_found
+syntax_only_impact
+```
+
+Remove duplicates and order by the list above.
+
+- [ ] **Step 2: Define the v1 next-action reasons**
+
+Use these exact values:
+
+```text
+more_callers_omitted
+more_callees_omitted
+more_tests_omitted
+more_imports_omitted
+more_references_omitted
+source_body_omitted
+parent_context_available
+children_available
+```
+
+Supported next relations remain the current stable relation vocabulary.
+
+- [ ] **Step 3: Write action-generation tests**
+
+Cover:
+
+```text
+callers omitted -> anchor/callers action
+callee source reduced to signature -> callee/self action
+related test omitted -> target/tests action
+parent context exists -> item/parent action
+no duplicate handle/relation action
+known target still usable as action anchor
+no more than four actions
+actions stable across candidate input ordering
+```
+
+- [ ] **Step 4: Implement `BuildGuidance`**
+
+Required signature:
+
+```go
+func BuildGuidance(input GuidanceInput) (limitations []string, next []NextAction)
+```
+
+Define `GuidanceInput` with explicit selected, omitted, known, plan, and truncation fields. Do not let it inspect serialized JSON or global mutable state.
+
+- [ ] **Step 5: Integrate guidance after final packet selection**
+
+Guidance must be part of wire budgeting. If adding all guidance exceeds budget:
+
+1. retain `budget_limited` when true;
+2. retain the most intent-relevant next action;
+3. remove lower-priority next actions;
+4. remove lower-priority limitations;
+5. never remove source evidence solely to preserve optional guidance.
+
+Re-run the fixed-point token loop afterward.
+
+- [ ] **Step 6: Verify and commit**
+
+```bash
+go test ./internal/evidence -run 'TestGuidance|TestLimitations|TestNext' -count=1
+go test ./...
+git add internal/evidence/next.go internal/evidence/next_test.go internal/evidence/compiler.go internal/evidence/compiler_test.go
+git commit -m "feat: add compact evidence limitations and follow-ups"
+```
+
+---
+
+### Task 7: Add Stateless `known_handles` Delta Suppression
+
+**Files:**
+- Modify: `internal/app/service.go`
+- Modify: `internal/app/service_test.go`
+- Modify: `internal/mcpserver/server.go`
+- Modify: `internal/mcpserver/mcp_test.go`
+- Modify: `internal/cli/run.go`
+- Modify: `internal/cli/run_test.go`
+- Modify: `internal/evidence/compiler_test.go`
+
+**Interfaces:**
+- Consumes: caller-supplied stable handles
+- Produces: no retransmission of known evidence while preserving those handles as relation anchors
+
+- [ ] **Step 1: Add validation tests for known handles**
+
+Exact validation rules:
+
+```text
+maximum 512 input entries
+trim surrounding ASCII/Unicode whitespace
+ignore empty entries after trimming
+deduplicate while preserving first occurrence
+maximum 256 bytes per handle
+reject NUL
+reject control characters below U+0020 except no character is permitted after trimming
+```
+
+Do not require a specific prefix because existing handles vary by symbol/chunk type.
+
+- [ ] **Step 2: Implement a shared validator**
+
+Place validation in `internal/evidence` or an existing shared request-validation package, not separately in CLI and MCP. Required signature:
+
+```go
+func NormalizeKnownHandles(values []string) ([]string, error)
+```
+
+- [ ] **Step 3: Extend MCP tool inputs**
+
+Add:
+
+```go
+KnownHandles []string `json:"known_handles,omitempty" jsonschema:"stable handles already present in the model context and not to be retransmitted"`
+```
+
+To:
+
+```text
+CodeContextInput
+CodeExpandInput
+CodeImpactInput
+```
+
+Do not add server-side session IDs or hidden state.
+
+- [ ] **Step 4: Add CLI flags for evidence-format testing**
+
+For `query`, `expand`, and `impact`, support repeatable:
+
+```text
+--known-handle HANDLE
+```
+
+Use a small `flag.Value` implementation in the CLI package. Do not parse comma-separated values because handles may evolve to contain punctuation.
+
+- [ ] **Step 5: Preserve known handles as expansion anchors**
+
+Filtering occurs only during packet compilation. Retrieval and relation expansion must still receive requested handles. Example:
+
+```text
+code_expand(handles=[A], relation=callers, known_handles=[A,B])
+```
+
+must expand from `A`, omit `A` and `B` from returned evidence, and return only new caller evidence.
+
+- [ ] **Step 6: Test exact retransmission behavior**
+
+Run two calls:
+
+1. query returning handles A, B, C;
+2. expand with known A, B, C.
+
+Assert:
+
+```text
+none of A/B/C appears in packet.evidence
+packet.skipped_known equals the number of otherwise selected known items
+new relations do not reference missing local IDs
+known_anchor_not_repeated appears when relevant
+next actions may still name stable handle A
+```
+
+- [ ] **Step 7: Test deterministic normalization and limits**
+
+Include duplicate handles, whitespace, Unicode, 256-byte boundary, 257-byte rejection, 512-entry boundary, 513-entry rejection, NUL, and cancellation through the enclosing request.
+
+- [ ] **Step 8: Verify and commit**
+
+```bash
+go test ./internal/evidence ./internal/app ./internal/cli ./internal/mcpserver -run 'Known|Delta|Retransmit' -count=1
+go test ./...
+git add internal/evidence internal/app/service.go internal/app/service_test.go internal/mcpserver/server.go internal/mcpserver/mcp_test.go internal/cli/run.go internal/cli/run_test.go
+git commit -m "feat: suppress previously delivered evidence by handle"
+```
+
+---
+
+### Task 8: Add Evidence APIs to the Application Service Without Breaking Legacy Bundles
+
+**Files:**
+- Modify: `internal/app/service.go`
+- Modify: `internal/app/service_test.go`
+- Create: `internal/app/evidence.go`
+- Create: `internal/app/evidence_test.go`
+
+**Interfaces:**
+- Consumes: existing query/expand/impact retrieval and new `evidence.Compiler`
+- Produces: `QueryEvidence`, `ExpandEvidence`, and `ImpactEvidence` while preserving existing `Query`, `Expand`, and `Impact`
+
+- [ ] **Step 1: Refactor candidate retrieval behind private result types**
+
+Create private types:
+
+```go
+type candidateResult struct {
+    Plan       query.Plan
+    Revision   string
+    Candidates []model.RankedCandidate
+}
+```
+
+Create private methods that perform validation, optional index update, changed-range calculation, search, and revision lookup exactly once. Both legacy and evidence paths consume these methods.
+
+Do not make `QueryEvidence` call legacy `Query` and reconstruct candidates from a packed bundle; that would lose omitted candidates and provenance.
+
+- [ ] **Step 2: Preserve public legacy methods**
+
+These signatures and defaults remain unchanged:
+
+```go
+func (s *Service) Query(ctx context.Context, req QueryRequest) (model.ContextBundle, error)
+func (s *Service) Expand(ctx context.Context, req ExpandRequest) (model.ContextBundle, error)
+func (s *Service) Impact(ctx context.Context, req ImpactRequest) (model.ContextBundle, error)
+```
+
+Existing CLI behavior and evaluator tests must pass byte-for-byte where they currently assert output.
+
+- [ ] **Step 3: Add Evidence request types**
+
+```go
+type EvidenceQueryRequest struct {
+    Query         string
+    TokenBudget   int
+    Mode          evidence.Mode
+    ChangedOnly   bool
+    Paths         []string
+    NoUpdate      bool
+    RetrievalMode search.RetrievalMode
+    KnownHandles  []string
+}
+
+type EvidenceExpandRequest struct {
+    Handles      []string
+    Relation     string
+    TokenBudget  int
+    Mode         evidence.Mode
+    KnownHandles []string
+}
+
+type EvidenceImpactRequest struct {
+    BaseRef      string
+    HeadRef      string
+    TokenBudget  int
+    Mode         evidence.Mode
+    KnownHandles []string
+}
+```
+
+- [ ] **Step 4: Add service Evidence methods**
+
+Required signatures:
+
+```go
+func (s *Service) QueryEvidence(ctx context.Context, req EvidenceQueryRequest) (evidence.CompileResult, error)
+func (s *Service) ExpandEvidence(ctx context.Context, req EvidenceExpandRequest) (evidence.CompileResult, error)
+func (s *Service) ImpactEvidence(ctx context.Context, req EvidenceImpactRequest) (evidence.CompileResult, error)
+```
+
+Defaults:
+
+```text
+TokenBudget: service configuration default
+Mode: focused
+Query auto-update: same rule as legacy Query
+Expand relation: self when blank, preserving current behavior
+Impact limitation: syntax_only_impact
+```
+
+- [ ] **Step 5: Create deterministic plans for expand and impact**
+
+Do not synthesize plan intent through loose English query text. Implement explicit helpers:
+
+```go
+func planForRelation(relation string) query.Plan
+func planForImpact() query.Plan
+```
+
+Map relation to intent:
+
+```text
+callers -> callers
+callees -> callees
+tests -> tests
+imports/exports -> imports
+references -> references
+parent/children/neighbors/self -> definition/default
+```
+
+- [ ] **Step 6: Construct the compiler once per service**
+
+Extend `Service`:
+
+```go
+evidenceCompiler *evidence.Compiler
+```
+
+Initialize it with the same deterministic estimator family used by the legacy packer. Do not create compiler state per MCP request.
+
+- [ ] **Step 7: Test shared retrieval parity**
+
+For the same query:
+
+```text
+legacy and evidence paths receive the same ranked candidate handles before packing
+evidence result contains the expected target path/symbol
+legacy ContextBundle remains unchanged
+auto-update runs once, not once per output representation
+cancellation is propagated
+evidence mode default is focused
+```
+
+Add an internal test seam only if needed; do not expose ranked candidates publicly.
+
+- [ ] **Step 8: Verify and commit**
+
+```bash
+go test ./internal/app -run 'Test.*Evidence|TestQueryLegacy|TestExpandLegacy|TestImpactLegacy' -count=1
+go test ./...
+git add internal/app/service.go internal/app/service_test.go internal/app/evidence.go internal/app/evidence_test.go
+git commit -m "feat: expose evidence compilation through application service"
+```
+
+---
+
+### Task 9: Add a Human and JSON Evidence CLI Format
+
+**Files:**
+- Create: `internal/render/evidence.go`
+- Create: `internal/render/evidence_test.go`
+- Modify: `internal/cli/run.go`
+- Modify: `internal/cli/run_test.go`
+- Modify: `README.md`
+
+**Interfaces:**
+- Consumes: `evidence.Packet`
+- Produces: compact human-readable evidence and exact JSON while keeping current CLI output as default
+
+- [ ] **Step 1: Add CLI format flags**
+
+For `query`, `expand`, and `impact`, add:
+
+```text
+--format legacy|evidence
+```
+
+Default remains `legacy` in v0.4.
+
+Mode behavior:
+
+```text
+legacy format: outline|source
+Evidence format: outline|focused|source
+Evidence default when --format evidence is selected: focused
+```
+
+Reject `--format legacy --mode focused` with a clear validation error.
+
+- [ ] **Step 2: Implement JSON rendering**
+
+Required function:
+
+```go
+func EvidenceJSON(packet evidence.Packet) ([]byte, error)
+```
+
+Use indented JSON for CLI output. Validate the packet before marshaling. Do not add a CLI-only envelope that changes the contract.
+
+- [ ] **Step 3: Implement compact human rendering**
+
+Required function:
+
+```go
+func EvidenceCompact(packet evidence.Packet) string
+```
+
+Expected structure:
+
+```text
+schema: focalspan.context.v1
+intent: callers
+mode: focused
+budget: 934/1200
+
+[e1 target] auth/service.go:44-87
+Service.ValidateToken
+------------------------------------------------
+<source or segment text>
+
+[e2 caller] http/middleware.go:21-38
+Authenticate
+why: direct_caller
+------------------------------------------------
+<source>
+
+relations:
+  e2 -calls/exact-> e1
+
+next:
+  callers sym_Q7K... (more_callers_omitted)
+```
+
+Rules:
+
+- no floating-point scores;
+- no per-line number prefix;
+- omitted segments render as `--- lines 53-113 omitted ---` outside code text;
+- source text remains unchanged;
+- no token-savings section;
+- no debug reasons/weights;
+- omit empty sections;
+- deterministic newline behavior.
+
+- [ ] **Step 4: Keep debug ranking separate**
+
+`--debug-scores` remains valid only for legacy output or existing `explain`. Reject `--format evidence --debug-scores` and direct the user to `focalspan explain`.
+
+- [ ] **Step 5: Wire CLI commands to the correct service method**
+
+Dispatch:
+
+```text
+legacy -> Query/Expand/Impact
+Evidence -> QueryEvidence/ExpandEvidence/ImpactEvidence
+```
+
+Pass repeatable `--known-handle` values only to Evidence methods. `--json` selects JSON versus human rendering, not the underlying contract.
+
+- [ ] **Step 6: Add CLI tests**
+
+Cover:
+
+```text
+legacy output unchanged by default
+evidence JSON validates and has schema
+evidence human output includes roles
+evidence human output excludes score and savings
+focused accepted only for Evidence
+known handles passed through
+debug-scores rejected for Evidence
+invalid format rejected
+query shortcut still uses legacy default
+stdout/stderr separation
+```
+
+- [ ] **Step 7: Document preview commands**
+
+Add to README:
+
+```bash
+focalspan query --format evidence --mode focused --query "ValidateToken の呼び出し元" --budget 1200
+focalspan query --format evidence --mode focused --query "ValidateToken の呼び出し元" --budget 1200 --json
+focalspan expand --format evidence --handle sym_... --relation callers --known-handle sym_...
+```
+
+State clearly that MCP always uses Evidence Packet v1 while CLI defaults to legacy during v0.4.
+
+- [ ] **Step 8: Verify and commit**
+
+```bash
+go test ./internal/render ./internal/cli -count=1
+go test ./...
+git add internal/render/evidence.go internal/render/evidence_test.go internal/cli/run.go internal/cli/run_test.go README.md
+git commit -m "feat: add evidence packet CLI rendering"
+```
+
+---
+
+### Task 10: Switch MCP Context Tools to Evidence Packet v1
+
+**Files:**
+- Modify: `internal/mcpserver/server.go`
+- Modify: `internal/mcpserver/mcp_test.go`
+- Modify: `README.md`
+- Modify: `docs/design.md`
+
+**Interfaces:**
+- Consumes: service Evidence APIs
+- Produces: versioned typed structured output for context, expand, and impact with source appearing once
+
+- [ ] **Step 1: Write failing typed-output tests**
+
+For `code_context`, assert the typed handler returns `evidence.Packet` and that the SDK-generated output schema requires:
+
+```text
+schema
+mode
+budget
+evidence
+```
+
+Assert `schema` serializes as `focalspan.context.v1` and each evidence item schema includes `id`, `handle`, `role`, `location`, and `fidelity`.
+
+- [ ] **Step 2: Change the three handler output types**
+
+Change only:
+
+```text
+code_context
+code_expand
+code_impact
+```
+
+To return `evidence.Packet` as structured output. Keep status and restart outputs unchanged.
+
+- [ ] **Step 3: Make MCP mode default `focused`**
+
+Input accepts:
+
+```text
+outline
+focused
+source
+```
+
+Blank mode becomes `focused`. Invalid mode returns a typed tool validation error with no stack trace.
+
+- [ ] **Step 4: Pass normalized known handles**
+
+Normalize and validate `known_handles` once in each handler before calling the service. Return a compact user-correctable error when invalid.
+
+- [ ] **Step 5: Improve tool descriptions for model use**
+
+Use these descriptions or text with identical semantics:
+
+```text
+code_context:
+  Find and return a role-labeled packet of repository evidence for a code question.
+  Call this before broad file reads. Use handles and next actions for follow-up expansion.
+
+code_expand:
+  Return new evidence related to stable handles. Pass known_handles to avoid retransmitting
+  context already present in the conversation.
+
+code_impact:
+  Return syntax-based changed spans, dependents, and related tests for Git changes within
+  a token budget. Results may omit unresolved dynamic relationships.
+```
+
+Do not turn descriptions into a long tutorial.
+
+- [ ] **Step 6: Keep text content to one short summary**
+
+Text content must be produced by `evidence.Summary(packet)` and have this exact format:
+
+```text
+FocalSpan evidence: <n> items, <used>/<limit> tokens, <omitted> omitted.
+```
+
+Maximum 160 Unicode code points. It must not contain query text, source code, signatures, paths, handles, score details, or savings values.
+
+- [ ] **Step 7: Add in-memory MCP integration tests**
+
+Using the SDK client/session, verify:
+
+```text
+initialize succeeds
+tools/list still returns exactly the five existing tool names
+code_context returns structuredContent with schema v1
+code_expand accepts known_handles
+code_impact includes syntax_only_impact limitation
+invalid mode returns tool error
+invalid known handle returns tool error
+cancellation propagates
+code_status contract unchanged
+code_restart contract unchanged
+```
+
+- [ ] **Step 8: Add raw stdio JSON-RPC duplication test**
+
+Start the actual `focalspan serve` subprocess against the evidence fixture. Send initialize, tools/list, and tools/call requests. Place a unique source marker in the fixture:
+
+```text
+FOCALSPAN_UNIQUE_EVIDENCE_MARKER_9F2A
+```
+
+Assert the raw tools/call response line contains that marker exactly once. Also assert:
+
+```text
+structuredContent contains the marker
+content[0].text does not contain the marker
+raw response has no "score" key
+raw response has no "weight" key
+raw response has no "token_savings" key
+stdout contains JSON-RPC only
+stderr may contain logs but no source marker
+```
+
+Count escaped JSON occurrences carefully by parsing first and use raw counting only for the unique marker.
+
+- [ ] **Step 9: Bump the MCP implementation version**
+
+Change:
+
+```go
+mcp.Implementation{Name: "focalspan", Version: "0.1.0"}
+```
+
+To:
+
+```go
+mcp.Implementation{Name: "focalspan", Version: "0.4.0"}
+```
+
+Do not infer the executable release version from this field elsewhere.
+
+- [ ] **Step 10: Document the intentional pre-1.0 output change**
+
+README and design docs must say:
+
+```text
+- Tool names and inputs remain compatible except for the additive known_handles and focused mode.
+- code_context/code_expand/code_impact structured outputs now use focalspan.context.v1.
+- Consumers must read structuredContent rather than parse the short text summary.
+- Numeric ranking diagnostics remain available through focalspan explain, not MCP context responses.
+```
+
+- [ ] **Step 11: Verify and commit**
+
+```bash
+go test ./internal/mcpserver -count=1
+go test ./...
+go vet ./...
+git add internal/mcpserver/server.go internal/mcpserver/mcp_test.go README.md docs/design.md
+git commit -m "feat: return evidence packets from MCP context tools"
+```
+
+---
+
+### Task 11: Add Evidence Contract Evaluation and Legacy A/B Comparison
+
+**Files:**
+- Create: `internal/eval/evidence.go`
+- Create: `internal/eval/evidence_test.go`
+- Modify: `internal/eval/eval.go`
+- Modify: `internal/cli/run.go`
+- Modify: `internal/cli/run_test.go`
+- Create: `testdata/eval/evidence-cases.jsonl`
+- Modify: `docs/evaluation.md`
+
+**Interfaces:**
+- Consumes: legacy and Evidence service methods, evidence fixture, token estimator
+- Produces: measurable wire/quality comparisons without weakening existing retrieval evaluation
+
+- [ ] **Step 1: Define evidence evaluation cases**
+
+Implement:
+
+```go
+type EvidenceExpectation struct {
+    Path       string          `json:"path"`
+    Symbol     string          `json:"symbol,omitempty"`
+    Roles      []evidence.Role `json:"roles,omitempty"`
+    Contains   []string        `json:"contains,omitempty"`
+    Fidelity   []evidence.Fidelity `json:"fidelity,omitempty"`
+}
+
+type EvidenceCase struct {
+    Name             string                `json:"name"`
+    Query            string                `json:"query"`
+    TokenBudget      int                   `json:"token_budget"`
+    Mode             evidence.Mode         `json:"mode"`
+    Expected         []EvidenceExpectation `json:"expected"`
+    ForbiddenPaths   []string              `json:"forbidden_paths,omitempty"`
+    FollowUpRelation string                `json:"follow_up_relation,omitempty"`
+}
+```
+
+- [ ] **Step 2: Create cross-language evidence cases**
+
+At minimum include:
+
+```text
+Go late expired-token branch
+Go caller relationship
+PHP method plus PHPUnit test
+C++ declaration plus implementation/caller
+C# method plus test
+TypeScript function plus importer/caller
+Smarty block plus embedded JavaScript
+```
+
+Use current checked-in fixtures where suitable and the dedicated `evidencesample` for late-hit and delta scenarios. Do not add production hard-coding for case names.
+
+- [ ] **Step 3: Define evidence metrics**
+
+Implement per-case and aggregate metrics:
+
+```go
+type EvidenceCaseResult struct {
+    Name                  string  `json:"name"`
+    ExpectedCoverage      float64 `json:"expected_coverage"`
+    RoleAccuracy          float64 `json:"role_accuracy"`
+    FidelityValid         int     `json:"fidelity_valid"`
+    RelationValid         int     `json:"relation_valid"`
+    WireBudgetCompliant   int     `json:"wire_budget_compliant"`
+    WireTokens            int     `json:"wire_tokens"`
+    EvidenceTokens        int     `json:"evidence_tokens"`
+    MetadataOverheadRatio float64 `json:"metadata_overhead_ratio"`
+    DuplicateSourceRatio  float64 `json:"duplicate_source_ratio"`
+    KnownResendCount      int     `json:"known_resend_count"`
+    Deterministic         int     `json:"deterministic"`
+    LegacyWireTokens      int     `json:"legacy_wire_tokens"`
+    EvidenceVsLegacyRatio float64 `json:"evidence_vs_legacy_ratio"`
+}
+```
+
+Aggregate medians and compliance rates in an `EvidenceReport`.
+
+Definitions:
+
+```text
+ExpectedCoverage: expected path/symbol/content expectations found / total expectations.
+RoleAccuracy: matched expectations whose returned role is allowed / matched expectations.
+FidelityValid: all item fidelity invariants pass.
+RelationValid: all edges reference local IDs and expected direct relations are present.
+MetadataOverheadRatio: metadata tokens / wire tokens; zero when wire tokens are zero.
+DuplicateSourceRatio: duplicate source bytes / total returned source bytes; zero when no source.
+KnownResendCount: number of known stable handles incorrectly retransmitted.
+EvidenceVsLegacyRatio: Evidence Packet serialized tokens / legacy ContextBundle serialized tokens.
+```
+
+- [ ] **Step 4: Add evaluator contract modes**
+
+Extend `focalspan eval` with:
+
+```text
+--contract legacy|evidence|compare
+```
+
+Default remains `legacy`.
+
+Behavior:
+
+```text
+legacy: current evaluator and report unchanged
+Evidence: load EvidenceCase and emit EvidenceReport
+compare: run both output paths for compatible evidence cases and include A/B fields
+```
+
+Do not reinterpret old case files as Evidence cases without an explicit contract flag.
+
+- [ ] **Step 5: Add a two-step delta evaluation**
+
+For cases with `follow_up_relation`:
+
+1. run `QueryEvidence`;
+2. collect all returned stable handles;
+3. expand the best target handle with those handles in `known_handles`;
+4. assert no known handle is retransmitted;
+5. compare cumulative wire tokens with and without `known_handles`.
+
+Add aggregate `delta_token_ratio`.
+
+- [ ] **Step 6: Add A/B acceptance tests**
+
+The checked-in evidence suite must meet:
+
+```text
+wire budget compliance                 = 1.0
+fidelity validity                      = 1.0
+relation validity                      = 1.0
+deterministic output                   = 1.0
+forbidden path violations              = 0
+known resend count                     = 0
+expected evidence coverage             = 1.0
+role accuracy                          = 1.0
+focused late-hit preservation          = 1.0
+median duplicate source ratio          <= 0.05
+median metadata overhead ratio         <= 0.35 for budgets >= 1200
+median Evidence-vs-legacy wire ratio   <= 1.00 for focused cases
+median two-step delta token ratio      <= 0.70
+```
+
+Do not weaken current legacy hit@5, recall, forbidden-path, budget, reduction, relation, intent, or determinism thresholds.
+
+- [ ] **Step 7: Test forbidden output fields**
+
+Every evaluated serialized packet must be recursively inspected and fail if any object key equals:
+
+```text
+score
+retrieval_score
+weight
+detail
+token_savings
+baseline_tokens
+saved_tokens
+savings_ratio
+```
+
+This must inspect keys, not naive substring matches inside source code.
+
+- [ ] **Step 8: Document metric meaning and limitations**
+
+Update `docs/evaluation.md` with:
+
+```text
+wire budget versus evidence token count
+metadata overhead
+source duplication
+role and relation correctness
+focused late-hit preservation
+stateless delta savings
+legacy A/B comparison
+why one-response size is not enough without cumulative tool-result tokens
+```
+
+Record actual measured results after implementation; do not copy acceptance thresholds into the results section as if they were measurements.
+
+- [ ] **Step 9: Verify and commit**
+
+```bash
+go test ./internal/eval ./internal/cli -count=1
+go test ./...
+go build -o ./focalspan-eval ./cmd/focalspan
+./focalspan-eval eval --root testdata/repos/evidencesample --cases testdata/eval/evidence-cases.jsonl --contract compare --json
+rm -f ./focalspan-eval ./focalspan-eval.exe
+git add internal/eval internal/cli/run.go internal/cli/run_test.go testdata/eval/evidence-cases.jsonl docs/evaluation.md
+git commit -m "test: evaluate LLM evidence packets and delta savings"
+```
+
+On Windows, use an output path under a temporary directory and remove the `.exe` afterward.
+
+---
+
+### Task 12: Harden Edge Cases, Fuzz Invariants, and Compatibility
+
+**Files:**
+- Create: `internal/evidence/fuzz_test.go`
+- Modify: `internal/evidence/*_test.go`
+- Modify: `internal/mcpserver/mcp_test.go`
+- Modify: `internal/app/evidence_test.go`
+
+**Interfaces:**
+- Consumes: complete Evidence implementation
+- Produces: robust invariants for malformed source content, tiny budgets, repeated relations, and protocol output
+
+- [ ] **Step 1: Add packet/compiler fuzz seeds**
+
+Seed with:
+
+```text
+empty candidate list
+single compact signature
+long Go function
+C++ raw string
+C# interpolated raw string
+JavaScript template literal and JSX
+PHP heredoc
+Smarty block with embedded script
+CRLF
+Japanese identifiers/comments
+invalid UTF-8 bytes already converted to indexed replacement text only where current scanner permits
+```
+
+- [ ] **Step 2: Enforce fuzz invariants**
+
+For every successful compile:
+
+```text
+no panic
+Validate succeeds
+serialized packet fits budget
+budget.used matches remeasurement
+local IDs sequential
+all edges local and valid
+one content representation per item
+source/segment UTF-8 valid
+same request produces identical JSON
+known handles absent from evidence
+no forbidden debug key
+```
+
+Fuzz tests may discard impossible malformed model candidates, but must not hide panics.
+
+- [ ] **Step 3: Add tiny-budget regression matrix**
+
+Test budgets before clamping and at exact boundaries:
+
+```text
+0
+1
+255
+256
+257
+511
+512
+1199
+1200
+63999
+64000
+64001
+```
+
+Expected: clamped budget is reported, packet remains valid, no over-budget output.
+
+- [ ] **Step 4: Add relation ambiguity tests**
+
+Construct multiple `Validate` methods. Assert lexical unresolved provenance does not produce an `exact` edge. It may return multiple caller/reference items with `lexical_relation_only`, but must not invent a resolved target.
+
+- [ ] **Step 5: Add mixed known-anchor relation tests**
+
+Cover:
+
+```text
+anchor known, candidate new
+anchor new, candidate known
+both known
+neither known
+multiple anchors with one known
+```
+
+No dangling edge is allowed.
+
+- [ ] **Step 6: Add protocol compatibility tests**
+
+Assert:
+
+```text
+five MCP tool names unchanged
+project/user MCP registration still lists all five enabled tools
+code_status JSON unchanged
+code_restart behavior unchanged
+legacy CLI query output remains available
+focalspan explain remains source-free
+```
+
+- [ ] **Step 7: Run bounded fuzzing locally**
+
+```bash
+go test ./internal/evidence -run '^$' -fuzz FuzzCompile -fuzztime 20s
+go test ./internal/evidence -run '^$' -fuzz FuzzValidate -fuzztime 20s
+```
+
+If the Go toolchain requires one fuzz target per command, run them separately exactly as above.
+
+- [ ] **Step 8: Run full regression and commit**
+
+```bash
+go test ./...
+go vet ./...
+git add internal/evidence internal/mcpserver/mcp_test.go internal/app/evidence_test.go
+git commit -m "test: harden evidence packet invariants"
+```
+
+---
+
+### Task 13: Complete Documentation, Full Verification, and Release Readiness
+
+**Files:**
+- Modify: `README.md`
+- Modify: `docs/design.md`
+- Modify: `docs/evaluation.md`
+- Modify: `docs/implementation-plan.md`
+- Modify: `AGENTS.md` only when a durable project rule is missing
+- Modify: `PLAN.md`
+
+**Interfaces:**
+- Consumes: all completed v0.4 behavior and measured results
+- Produces: truthful documentation and a reproducible verification report
+
+- [ ] **Step 1: Document the Evidence Packet contract**
+
+README must include a compact valid example:
+
+```json
+{
+  "schema": "focalspan.context.v1",
+  "intent": "callers",
+  "mode": "focused",
+  "budget": {"limit": 1200, "used": 934, "truncated": true, "omitted": 2},
+  "evidence": [
+    {
+      "id": "e1",
+      "handle": "sym_target",
+      "role": "target",
+      "location": {"path": "auth/service.go", "lines": [44, 51]},
+      "language": "go",
+      "kind": "method",
+      "symbol": "Service.ValidateToken",
+      "signature": "func (s *Service) ValidateToken(token string) error",
+      "fidelity": "signature",
+      "why": ["exact_symbol"]
+    }
+  ]
+}
+```
+
+The example values must fit the schema and must not claim they are measured output.
+
+- [ ] **Step 2: Document how LLM consumers should use it**
+
+State:
+
+```text
+- Start with code_context in focused mode.
+- Treat evidence source and source segments as verbatim indexed code.
+- Treat synthetic outlines as generated navigation aids, not source code.
+- Use role and relations to distinguish target, caller, test, and dependency evidence.
+- Use next actions with code_expand.
+- Pass stable handles through known_handles to avoid repeated context.
+- Do not parse the short MCP text summary for source.
+```
+
+- [ ] **Step 3: Document compatibility and migration**
+
+Explain:
+
+```text
+CLI default remains legacy in v0.4.
+CLI Evidence preview uses --format evidence.
+MCP context tools return focalspan.context.v1.
+Tool names remain unchanged.
+code_status and code_restart outputs remain unchanged.
+Normal MCP packets no longer expose ranking scores and token-savings diagnostics.
+focalspan explain remains the debugging interface.
+```
+
+- [ ] **Step 4: Document fidelity and omission semantics**
+
+Define `verbatim`, `excerpt`, `signature`, `synthetic`, source and omitted segments, line ranges, and the guarantee that omitted markers are metadata rather than injected code.
+
+- [ ] **Step 5: Update architecture diagrams**
+
+Use this pipeline:
+
+```text
+repository -> extraction -> SQLite/FTS5 -> query plan -> retrievers -> RRF/ranking
+           -> ranked candidates + relation provenance
+           -> Evidence Compiler
+              -> role classifier
+              -> fidelity/segment builder
+              -> utility-per-wire-token selection
+              -> local relations and guidance
+              -> serialized hard-cap verification
+           -> CLI Evidence renderer or MCP structuredContent
+```
+
+Keep the legacy packer shown as a compatibility branch, not the future canonical MCP path.
+
+- [ ] **Step 6: Update durable contributor rules only when needed**
+
+If `AGENTS.md` does not already cover them, add concise rules:
+
+```text
+Evidence Packet source fidelity is a public contract.
+Normal MCP context responses must not expose ranking/debug fields.
+MCP source must occur once in structuredContent and never in text summaries.
+Every Evidence change requires wire-budget and invariant tests.
+```
+
+Do not paste task-specific checklists into `AGENTS.md`.
+
+- [ ] **Step 7: Run formatting and static checks**
+
+```bash
+gofmt -w .
+git diff --check
+go test ./...
+go vet ./...
+```
+
+Expected: PASS.
+
+- [ ] **Step 8: Run race tests where supported**
+
+```bash
+go test -race ./...
+```
+
+If the current Windows environment lacks a compatible C compiler/linker, report it as unverified rather than passed. Run it in Linux CI or another supported environment before a release claim when available.
+
+- [ ] **Step 9: Run CGO-free native and cross-builds**
+
+```bash
 CGO_ENABLED=0 go build ./cmd/focalspan
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/focalspan
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/focalspan
 GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/focalspan
 ```
 
-Cross-build artifactsをrepository rootへ残さない。
+Direct artifacts to a temporary directory or remove generated binaries after verification.
 
-- [ ] **Step 9: CLI/MCP regression**
+- [ ] **Step 10: Run every legacy evaluation**
 
-The supported setup/status/update/query and MCP regression checks passed, but
-the direct public `serve` harness remains unverified because the PowerShell
-stdin path delivered a BOM before the server received JSON. This step remains
-unchecked rather than treating the partial regression as complete.
-
-Verify:
+Run all checked-in legacy case files using their matching fixture roots. Compare against Task 0 baseline. Requirements:
 
 ```text
-focalspan init
-focalspan index
-focalspan update
-focalspan status --json
-focalspan query
-focalspan expand
-focalspan impact
-focalspan eval
-focalspan explain
-focalspan doctor
-focalspan serve
-focalspan mcp install/status/uninstall/print
+no lower hit@5
+no lower symbol/path recall
+no new forbidden-path violation
+budget compliance remains 1.0
+no lower determinism
+no lower expected relation/intent/kind recall
 ```
 
-MCP:
+- [ ] **Step 11: Run Evidence comparison evaluation**
 
-```text
-code_context
-code_expand
-code_impact
-code_restart
-code_status
+```bash
+focalspan eval \
+  --root testdata/repos/evidencesample \
+  --cases testdata/eval/evidence-cases.jsonl \
+  --contract compare \
+  --json
 ```
 
-stdoutへlogが混入しない。
+Run any additional language-specific Evidence case roots documented by Task 11. Confirm all v0.4 acceptance thresholds from Task 11.
 
-- [x] **Step 10: Run self-review**
+- [ ] **Step 12: Run manual MCP smoke tests**
 
-Check:
+Against an indexed fixture or safe local repository:
 
 ```text
-all target languages select dedicated extractor
-ambiguous .inc obeys override/content rules
-no duplicate parser implementation remains in generic
-no invalid spans
-no duplicate handles
-no resolved relation from simple-name ambiguity
-no fixture hard-code
-no full-file duplication
-no production unfinished marker/stub/panic
-all docs match implementation
-all existing cases retained
+code_context(query="ValidateToken の呼び出し元", token_budget=1200)
+code_expand(handles=[target], relation="callers", known_handles=[all prior handles], token_budget=1200)
+code_impact(token_budget=1600)
+code_status()
+code_restart()
 ```
 
-- [x] **Step 11: Commit**
+Inspect the actual payload and confirm:
 
 ```text
-git add internal/indexer README.md docs PLAN.md
-git commit -m "docs: complete polyglot coverage v0.3"
+roles make sense
+source appears once
+late relevant lines survive focused mode
+known evidence is not resent
+relations reference valid local IDs
+no debug weights or savings fields appear
+```
+
+- [ ] **Step 13: Self-review the full diff**
+
+Check every item:
+
+```text
+internal ContextBundle still works
+MCP output uses only Evidence Packet for three context tools
+focused is MCP default
+source/segments are faithful
+wire budget uses final JSON
+budget.used is truthful
+no dangling relation IDs
+known handles are stateless
+normal packet excludes numeric debug data
+text content is short and source-free
+legacy CLI/eval remain available
+no SQLite migration
+no extractor regression
+no fixture-specific production branch
+no incomplete production path
+README matches implementation
+```
+
+Fix discovered issues and rerun affected tests.
+
+- [ ] **Step 14: Mark this plan with actual completion evidence**
+
+Check a box only after its command or assertion has been verified. Add a short final section to `docs/evaluation.md` containing actual command results, dates, platform, Go version, and any unverified race coverage.
+
+- [ ] **Step 15: Commit final docs and verification updates**
+
+```bash
+git add README.md docs/design.md docs/evaluation.md docs/implementation-plan.md AGENTS.md PLAN.md
+git commit -m "docs: complete LLM evidence contract v0.4"
+```
+
+Stage `AGENTS.md` only if it changed.
+
+---
+
+## Definition of Done
+
+The milestone is complete only when all statements below are true:
+
+```text
+focalspan.context.v1 exists as a validated typed contract.
+MCP code_context returns role-labeled Evidence Packet structured output.
+MCP code_expand returns delta-friendly Evidence Packet structured output.
+MCP code_impact returns Evidence Packet with syntax-only limitation.
+code_status and code_restart contracts are unchanged.
+MCP default output mode is focused.
+CLI legacy output remains the default during v0.4.
+CLI can preview Evidence format in human and JSON forms.
+Each item has a stable role and exactly one fidelity representation.
+Verbatim source and source segments match indexed source exactly.
+Large functions preserve query-relevant late branches.
+Omitted source ranges are metadata, not fake code lines.
+Relations use packet-local IDs and never dangle.
+Relation certainty distinguishes exact/scoped/lexical evidence.
+Normal packets omit floating-point ranking and savings diagnostics.
+Compact packet JSON plus the canonical short summary respects the token budget.
+Reported budget.used matches final serialized remeasurement.
+Known handles are not retransmitted but remain usable as expansion anchors.
+No conversation/session state is stored on the MCP server.
+Text content is a short source-free summary.
+Source appears exactly once in raw MCP tools/call output.
+Evidence evaluation measures wire cost, metadata, duplication, fidelity, roles, relations, and delta savings.
+All v0.4 Evidence acceptance thresholds pass.
+All existing retrieval and language evaluations meet or exceed the recorded baseline.
+All unit and integration tests pass.
+go vet passes.
+CGO-free native and required cross-builds pass.
+Race results are reported truthfully.
+Documentation matches the implemented contract.
+No database schema change or extractor redesign was introduced.
+No user changes were reset, restored, cleaned, or stashed.
 ```
 
 ---
 
-## Milestone Gates
+## Required Final Report from Codex
 
-### Gate A — Existing First-Class Profiles
+Report in this exact order:
 
-Tasks 0-7 complete:
+1. Starting commit and whether the working tree was dirty.
+2. Evidence Packet architecture and why the legacy bundle remains.
+3. Public `focalspan.context.v1` fields and compatibility impact.
+4. Role-classification and presentation-order behavior.
+5. Verbatim/excerpt/signature/synthetic fidelity behavior.
+6. Focused excerpt algorithm and late-hit proof.
+7. Relation provenance, local edge IDs, and certainty mapping.
+8. Serialized wire-budget algorithm and measured accuracy.
+9. `known_handles` behavior and cumulative token reduction.
+10. MCP text-versus-structured output and source-duplication result.
+11. CLI Evidence preview commands.
+12. New or modified major files.
+13. Unit/integration/fuzz commands and results.
+14. Legacy evaluation comparison against the recorded baseline.
+15. Evidence evaluation metrics and acceptance results.
+16. Native and cross-build results.
+17. Race-test result or exact reason it remains unverified.
+18. Git commits created.
+19. Known limitations that remain after v0.4.
+20. Confirmation that user changes were not reset, restored, cleaned, or stashed.
 
-- Existing six profile evaluations pass.
-- Go、C/C++、C#/.NET、PHP/Smarty、JS/TS regressions are documented.
-- XAML/WinForms/WPF profile has fixture and evaluation.
-- Language detection/override behavior is stable.
-
-### Gate B — High-Priority New Languages
-
-Tasks 8-9 complete:
-
-- Rust and Python are no longer generic.
-- Each has first-class fixture, relation tests, and acceptance metrics.
-
-### Gate C — Scripting and Legacy Profiles
-
-Tasks 10-13 complete:
-
-- Ruby、Lua、Pawn、VB6、VB.NET select dedicated extractors.
-- `.inc` conflict is deterministic and configurable.
-- AMXX handler-string relations and VB event relations are tested.
-
-### Gate D — Systems Long-Tail Profiles
-
-Tasks 14-15 complete:
-
-- Nim and Zig are first-class structural profiles.
-- Compile-time/runtime semantics are not falsely claimed.
-
-### Gate E — Repository-Aware Linking
-
-Tasks 16-17 implementation and release checks executed:
-
-- Static manifest facts improve cross-file retrieval.
-- Ambiguity remains explicit.
-- All executed evaluations, tests, cross-builds, docs, and MCP regression
-  checks pass; race coverage and the direct public `serve` harness remain
-  environment-unverified as recorded below.
-
----
-
-## Final Acceptance Table
-
-The following values were measured on 2026-08-30 from the current checkout
-with `extractors-v5-polyglot`; each case was queried twice.
-
-| Profile | Cases | hit@1 | hit@3 | hit@5 | Symbol recall | Path recall | Budget | Forbidden | Deterministic | Median reduction |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Go/auth | 6 | 0.6667 | 1.0000 | 1.0000 | 1.0000 | 0.9167 | 1.0000 | 0 | 1.0000 | 0.04007084348018596 |
-| PHP | 4 | 0.2500 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.05550387596899225 |
-| Smarty/template | 5 | 0.8000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.026568430453226165 |
-| C/C++ | 8 | 0.5000 | 0.8750 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.15639269406392695 |
-| C# | 5 | 0.6000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.15507246376811595 |
-| .NET WinForms/WPF | 6 | 0.8333 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.20833333333333334 |
-| JS/TS/Node | 6 | 0.6667 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.15419501133786848 |
-| Rust | 5 | 0.4000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.19542619542619544 |
-| Python | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.22857142857142856 |
-| Ruby | 5 | 0.8000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.23061630218687873 |
-| Lua | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.08498583569405099 |
-| Pawn/AMXX | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.07951070336391437 |
-| VB6 | 5 | 0.8000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.11160714285714286 |
-| VB.NET | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.0864 |
-| Nim | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.07947019867549669 |
-| Zig | 5 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0 | 1.0000 | 0.12133891213389121 |
-
-Race coverage is `UNVERIFIED` because the available Windows cgo compiler
-cannot compile 64-bit cgo code. The direct public `serve` harness is also
-`UNVERIFIED` because the PowerShell stdin path delivered a BOM before the
-server received JSON; the in-process MCP and subprocess stdout checks passed.
-
----
-
-## Out of Scope for This Plan
-
-次は別計画へ分離する。
-
-```text
-compiler-grade type checking
-Clang/Roslyn/rust-analyzer/TypeScript Compiler API invocation
-SCIP import
-Tree-sitter adapter
-embedding/vector database
-learned reranker
-query-aware control-flow semantic zoom
-model-specific tokenizer
-HTTP MCP transport
-Web UI
-filesystem watcher
-remote telemetry
-runtime package resolution
-macro expansion
-dependency injection/container resolution
-```
-
----
-
-## Final Report Format
-
-実装完了時は次の順序で報告する。
-
-1. 開始時commitとworktree状態。
-2. 実装したTaskと未実装Task。
-3. language detectionとoverride規則。
-4. 既存言語の強化内容。
-5. 新規Extractorごとの対応構文。
-6. WinForms/WPF/XAML対応。
-7. project metadataとlinkerの解決規則。
-8. ambiguity/error recovery方針。
-9. 変更した主要file。
-10. 追加したfixture/evaluation。
-11. 全profileの実測table。
-12. `go test ./...`結果。
-13. `go vet ./...`結果。
-14. race test結果または未検証理由。
-15. CGO-free native/cross-build結果。
-16. CLI/MCP regression結果。
-17. Git commit一覧またはcommit不能理由。
-18. 既知のsemantic limitation。
-19. 次に実装すべき別計画。
-20. ユーザーの既存変更をreset、restore、stash、cleanしていないこと。
-
-失敗、未実行、未達thresholdが残る場合は「完了」と表現しない。
-
+Do not claim completion when any required test, evaluation threshold, schema invariant, wire budget, or cross-build remains unsuccessful. State the exact failing command, observed result, likely impact, and remaining work instead.

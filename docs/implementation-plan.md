@@ -303,6 +303,21 @@ dedicated structural extractors, and static project metadata can conservatively
 link repository relations. Semantic zoom, compiler-grade semantic providers,
 and optional semantic facts remain design-only follow-up work.
 
+## LLM Evidence Contract v0.4 milestone boundary
+
+Version 0.4 adds an LLM-facing transport model around the existing ranked
+candidates. Its scope is Evidence Packet transport modeling, deterministic role
+assignment, source-faithful focused excerpts, final serialized wire budgeting,
+stateless `known_handles` delta suppression, MCP integration, and Evidence
+quality/A-B evaluation. The existing extractors, SQLite schema, retrieval and
+ranking pipeline, legacy `ContextBundle`, and default CLI representation remain
+compatibility inputs to this work.
+
+Learned reranking, embeddings, model-specific tokenizers, semantic-provider
+work, repository-linker redesign, and HTTP MCP transport are explicitly outside
+v0.4. They remain possible later milestones and are not partial production
+paths in this implementation.
+
 ## Verification checklist
 
 ### Completed PHP structural extraction workstream

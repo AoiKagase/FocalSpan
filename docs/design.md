@@ -451,6 +451,26 @@ writes while allowing safe read transactions.
 15. Keep advanced retrieval operations on the MCP surface; the public CLI
     remains limited to a positional question and repository maintenance.
 
+### LLM Evidence Contract v0.4 decision
+
+The v0.4 presentation boundary supersedes decision 14 only for the three MCP
+context tools; it does not replace the internal retrieval or legacy CLI model.
+
+- Keep `model.ContextBundle` as an internal and legacy CLI representation.
+- Introduce `internal/evidence` as the LLM-facing presentation boundary.
+- Switch `code_context`, `code_expand`, and `code_impact` to
+  `focalspan.context.v1`.
+- Keep `code_status` and `code_restart` unchanged.
+- Keep normal ranking diagnostics out of the Evidence Packet.
+- Budget the final serialized packet rather than source text alone.
+- Make MCP default mode `focused`.
+- Use stateless `known_handles` instead of server-side conversation state.
+- Preserve the SQLite schema and all extractors in this milestone.
+
+The legacy bundle remains available for current CLI users, retrieval regression
+evaluation, and direct comparison while the pre-1.0 MCP contract moves to the
+smaller role-aware representation.
+
 ## Roadmap (design only)
 
 1. SCIP semantic index importer.
