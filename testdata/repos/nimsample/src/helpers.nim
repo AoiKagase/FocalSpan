@@ -1,0 +1,2 @@
+proc helperValue*(): string =
+  "helper"

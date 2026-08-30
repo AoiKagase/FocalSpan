@@ -1819,11 +1819,11 @@ git commit -m "feat: add VB6 and VB.NET structural extraction"
 - Create: `testdata/repos/nimsample/*`
 - Create: `testdata/eval/nim-cases.jsonl`
 
-- [ ] **Step 1: Lexer/indent tests**
+- [x] **Step 1: Lexer/indent tests**
 
 Cover indentation、`#[ ]#` nested comments、triple strings、raw strings、pragmas、backtick identifiers、continuation inside delimiters。
 
-- [ ] **Step 2: Declarations**
+- [x] **Step 2: Declarations**
 
 ```text
 module
@@ -1845,7 +1845,7 @@ var
 test
 ```
 
-- [ ] **Step 3: Relations**
+- [x] **Step 3: Relations**
 
 ```text
 import/include/from imports
@@ -1858,7 +1858,7 @@ contains
 
 Compile-time macro expansionは行わない。
 
-- [ ] **Step 4: Fixture/eval/verify**
+- [x] **Step 4: Fixture/eval/verify**
 
 ```text
 go test ./internal/extract/nim -v

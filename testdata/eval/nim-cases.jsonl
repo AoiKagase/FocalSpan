@@ -1,0 +1,5 @@
+{"name":"nim-validation","query":"where is validateToken defined in Nim?","token_budget":512,"expected_symbols":["validateToken"],"expected_paths":["src/auth.nim"],"forbidden_paths":["unrelated/report.nim"]}
+{"name":"nim-authorization-caller","query":"what Nim method calls validateToken?","token_budget":512,"expected_symbols":["authorize"],"expected_paths":["src/auth.nim"],"forbidden_paths":["unrelated/report.nim"]}
+{"name":"nim-types","query":"where is the Nim AuthState enum?","token_budget":512,"expected_symbols":["AuthState"],"expected_paths":["src/auth.nim"],"forbidden_paths":["unrelated/report.nim"]}
+{"name":"nim-template","query":"where is the Nim withAuth template?","token_budget":512,"expected_symbols":["withAuth"],"expected_paths":["src/auth.nim"],"forbidden_paths":["unrelated/report.nim"]}
+{"name":"nim-test","query":"which Nim test covers the expired token?","token_budget":512,"expected_symbols":["expired token"],"expected_paths":["src/auth.nim"],"forbidden_paths":["unrelated/report.nim"]}
