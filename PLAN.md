@@ -686,7 +686,7 @@ git commit -m "test: add extractor conformance infrastructure"
 - Retains `go-ast`
 - Adds symbols/relations without public schema change
 
-- [ ] **Step 1: Add failing Go tests**
+- [x] **Step 1: Add failing Go tests**
 
 Cover:
 
@@ -710,11 +710,11 @@ same-package call
 selector call remains conservative
 ```
 
-- [ ] **Step 2: Preserve partial parse results**
+- [x] **Step 2: Preserve partial parse results**
 
 `parser.ParseFile`がASTとerrorを同時に返した場合、ASTを捨てない。確定済みsymbol/chunk/relationを返し、`go_parse_partial` diagnosticを追加する。ASTがnilの場合だけfallbackまたはerror。
 
-- [ ] **Step 3: Add member symbols**
+- [x] **Step 3: Add member symbols**
 
 Interface method、struct field、embedded fieldを独立symbolまたは短いoutline memberとして保持する。大量のanonymous field occurrenceを作らない。
 
@@ -727,11 +727,11 @@ embedded_field
 type_alias
 ```
 
-- [ ] **Step 4: Improve signatures and handles**
+- [x] **Step 4: Improve signatures and handles**
 
 Generics、receiver、parameter、return typeを正規化signatureへ含める。同名overloadはGoにはないが、method ownerをqualified nameへ必ず含める。
 
-- [ ] **Step 5: Improve relations**
+- [x] **Step 5: Improve relations**
 
 ```text
 contains
@@ -744,11 +744,11 @@ references
 
 Interface embedding、field type、parameter/return typeを`references`として保持する。selector receiver型を解決したふりをしない。
 
-- [ ] **Step 6: Add fixture cases**
+- [x] **Step 6: Add fixture cases**
 
 Go fixtureへinterface、generics、Fuzz test、parse-recoverable fileを追加。既存caseを削除しない。
 
-- [ ] **Step 7: Verify**
+- [x] **Step 7: Verify**
 
 ```text
 go test ./internal/extract/goast -v
@@ -757,7 +757,7 @@ focalspan index --root testdata/repos/authsample --quiet
 focalspan eval --root testdata/repos/authsample --cases testdata/eval/cases.jsonl --json
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```text
 git add internal/extract/goast testdata/repos/authsample testdata/eval/cases.jsonl

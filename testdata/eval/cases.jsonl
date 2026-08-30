@@ -2,3 +2,5 @@
 {"name":"validate-token-callers","query":"what calls ValidateToken?","token_budget":1200,"expected_symbols":["ValidateToken"],"expected_paths":["http/middleware.go"],"forbidden_paths":["unrelated/report.go"]}
 {"name":"expired-token-tests","query":"what tests cover expired tokens?","token_budget":1200,"expected_symbols":["TestValidateExpiredToken"],"expected_paths":["auth/service_test.go"],"forbidden_paths":["unrelated/report.go"]}
 {"name":"validate-token-impact","query":"what changes could be affected by modifying ValidateToken?","token_budget":1200,"expected_symbols":["ValidateToken"],"expected_paths":["auth/service.go","auth/service_test.go"],"forbidden_paths":["unrelated/report.go"]}
+{"name":"generic-token-box","query":"where is the generic TokenLike box defined?","token_budget":1200,"expected_symbols":["TokenLike"],"expected_paths":["auth/advanced.go"],"forbidden_paths":["unrelated/report.go"]}
+{"name":"generic-identity","query":"where is the generic Identity helper?","token_budget":1200,"expected_symbols":["Identity"],"expected_paths":["auth/advanced.go"],"forbidden_paths":["unrelated/report.go"]}
