@@ -19,6 +19,7 @@ import (
 	"github.com/focalspan/focalspan/internal/extract/php"
 	pythonstr "github.com/focalspan/focalspan/internal/extract/python"
 	"github.com/focalspan/focalspan/internal/extract/resx"
+	rubystructural "github.com/focalspan/focalspan/internal/extract/ruby"
 	rustructural "github.com/focalspan/focalspan/internal/extract/rust"
 	templateextract "github.com/focalspan/focalspan/internal/extract/template"
 	"github.com/focalspan/focalspan/internal/extract/xaml"
@@ -70,6 +71,7 @@ func newExtractorRegistry() *extract.Registry {
 		jsts.NewExtractor(),
 		rustructural.NewExtractor(),
 		pythonstr.NewExtractor(),
+		rubystructural.NewExtractor(),
 		templateextract.NewExtractor(),
 		xaml.NewExtractor(),
 		resx.NewExtractor(),

@@ -1439,11 +1439,11 @@ git commit -m "feat: add first-class Python extraction"
 - Create: `testdata/repos/rubysample/*`
 - Create: `testdata/eval/ruby-cases.jsonl`
 
-- [ ] **Step 1: Write lexer tests**
+- [x] **Step 1: Write lexer tests**
 
 Cover Ruby strings、interpolation、symbols、regex、percent literals、heredoc、comments、`=begin/=end`、`do/end` nesting、modifier `if/unless`。
 
-- [ ] **Step 2: Write declaration tests**
+- [x] **Step 2: Write declaration tests**
 
 ```text
 module
@@ -1460,7 +1460,7 @@ test
 
 Blocks are not all symbols. Named RSpec examples can be test symbols.
 
-- [ ] **Step 3: Implement relations**
+- [x] **Step 3: Implement relations**
 
 ```text
 require/require_relative imports
@@ -1473,13 +1473,13 @@ contains
 
 Dynamic metaprogramming is unresolved.
 
-- [ ] **Step 4: Add fixture/eval**
+- [x] **Step 4: Add fixture/eval**
 
 Include Gemfile、gemspec、service、middleware、RSpec、Minitest、unrelated file。
 
-- [ ] **Step 5: Register and remove Ruby from generic indentation dispatch**
+- [x] **Step 5: Register and remove Ruby from generic indentation dispatch**
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 ```text
 go test ./internal/extract/ruby -v
@@ -1488,7 +1488,7 @@ focalspan index --root testdata/repos/rubysample --quiet
 focalspan eval --root testdata/repos/rubysample --cases testdata/eval/ruby-cases.jsonl --json
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```text
 git add internal/extract/ruby internal/app internal/extract/generic testdata/repos/rubysample testdata/eval/ruby-cases.jsonl

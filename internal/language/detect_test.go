@@ -20,6 +20,7 @@ func TestDetectKnownProfilesAndAmbiguousContent(t *testing.T) {
 		{"python stub", "types.pyi", "", "python"},
 		{"ruby", "script.rb", "", "ruby"},
 		{"ruby rakefile", "Rakefile", "", "ruby"},
+		{"ruby gemfile", "Gemfile", "", "ruby"},
 		{"nim", "tool.nim", "", "nim"},
 		{"nim script", "build.nims", "", "nim"},
 		{"nim package", "package.nimble", "", "nim"},

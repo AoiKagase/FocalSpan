@@ -74,14 +74,9 @@ class TokenService {
 	}
 }
 
-func TestPythonAndMarkdownBoundaries(t *testing.T) {
-	py := "class Service:\n    def validate(self):\n        return True\n\ndef helper():\n    return False\n"
-	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "service.py", Language: "python", Content: []byte(py)})
-	if err != nil || len(got.Chunks) != 2 {
-		t.Fatalf("python chunks=%+v err=%v", got.Chunks, err)
-	}
+func TestMarkdownBoundaries(t *testing.T) {
 	md := "# Auth\nintro\n\n## Expired tokens\nreject expired\n"
-	got, err = NewExtractor().Extract(context.Background(), model.SourceFile{Path: "README.md", Language: "markdown", Content: []byte(md)})
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "README.md", Language: "markdown", Content: []byte(md)})
 	if err != nil || len(got.Chunks) != 2 || got.Chunks[1].StartLine != 4 {
 		t.Fatalf("markdown chunks=%+v err=%v", got.Chunks, err)
 	}

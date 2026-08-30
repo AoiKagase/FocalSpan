@@ -1,0 +1,5 @@
+{"name":"ruby-expired-token","query":"where is validate_token implemented?","token_budget":1600,"expected_symbols":["validate_token"],"expected_paths":["lib/auth/token_service.rb"],"forbidden_paths":["unrelated/report.rb"]}
+{"name":"ruby-token-callers","query":"what calls validate_token?","token_budget":1600,"expected_symbols":["authorize"],"expected_paths":["lib/http/middleware.rb"],"forbidden_paths":["unrelated/report.rb"]}
+{"name":"ruby-token-tests","query":"what Ruby test covers expired tokens?","token_budget":1600,"expected_symbols":["test_expired_token_is_rejected"],"expected_paths":["test/token_service_test.rb"],"forbidden_paths":["unrelated/report.rb"]}
+{"name":"ruby-token-imports","query":"which middleware requires ../auth/token_service?","token_budget":1600,"expected_paths":["lib/http/middleware.rb"],"forbidden_paths":["unrelated/report.rb"]}
+{"name":"ruby-token-validator","query":"which class references TokenValidator mixin?","token_budget":1600,"expected_symbols":["TokenService"],"expected_paths":["lib/auth/token_service.rb"],"forbidden_paths":["unrelated/report.rb"]}

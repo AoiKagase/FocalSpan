@@ -76,7 +76,7 @@ func specialSuffixProfile(lowerPath, base string) (string, bool) {
 		return "vbnet", true
 	case strings.HasSuffix(base, ".d.ts"), strings.HasSuffix(base, ".d.mts"), strings.HasSuffix(base, ".d.cts"):
 		return "typescript", true
-	case base == "rakefile", strings.HasSuffix(base, ".gemspec"):
+	case base == "rakefile", base == "gemfile", strings.HasSuffix(base, ".gemspec"):
 		return "ruby", true
 	case base == "build.nims":
 		return "nim", true
