@@ -167,7 +167,18 @@ func sameUserRegistration(current userRegistration, expected RegistrationSpec) b
 	return current.Command == expected.Command && stringSlicesEqual(current.Args, expected.Args)
 }
 
-func managedUserRegistration(current userRegistration, root string) bool {
+func managedUserRegistration(current userRegistration) bool {
+	return managedFocalSpanCommand(current.Command) && managedGlobalServeArgs(current.Args)
+}
+
+func managedGlobalServeArgs(args []string) bool {
+	if len(args) != 1 && len(args) != 2 {
+		return false
+	}
+	return args[0] == "serve" && (len(args) == 1 || args[1] == "--no-auto-update" || args[1] == "--auto-update=false")
+}
+
+func managedLegacyUserRegistration(current userRegistration, root string) bool {
 	return managedFocalSpanCommand(current.Command) && managedServeArgs(current.Args, root)
 }
 

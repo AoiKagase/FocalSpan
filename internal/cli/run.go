@@ -457,9 +457,13 @@ func runMCP(ctx context.Context, args []string, stdout io.Writer) error {
 	if *project && (*codexCommandArg != "" || *force) {
 		return errors.New("--codex and --force are available only for global MCP registration")
 	}
-	root, _, err := resolveRoot(ctx, *rootArg)
-	if err != nil {
-		return err
+	var root string
+	var err error
+	if *project || (operation == "install" && visited["root"]) {
+		root, _, err = resolveRoot(ctx, *rootArg)
+		if err != nil {
+			return err
+		}
 	}
 	scope := codex.ScopeUser
 	if *project {
@@ -469,7 +473,12 @@ func runMCP(ctx context.Context, args []string, stdout io.Writer) error {
 	if err := codex.ValidateName(name); err != nil {
 		return err
 	}
-	req := codex.Request{Root: root, Scope: scope, Name: name, CodexCommand: *codexCommandArg, NoAutoUpdate: !*autoUpdate, DryRun: *dryRun, Force: *force}
+	req := codex.Request{Scope: scope, Name: name, CodexCommand: *codexCommandArg, NoAutoUpdate: !*autoUpdate, DryRun: *dryRun, Force: *force}
+	if scope == codex.ScopeProject {
+		req.Root = root
+	} else if operation == "install" && visited["root"] {
+		req.MigrationRoot = root
+	}
 	service := codex.NewService(nil)
 	if operation == "status" {
 		status, err := service.Status(ctx, req)
@@ -491,7 +500,9 @@ func runMCP(ctx context.Context, args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	result.Root = root
+	if scope == codex.ScopeProject {
+		result.Root = root
+	}
 	if *jsonOutput {
 		return writeJSON(stdout, result)
 	}
@@ -499,8 +510,17 @@ func runMCP(ctx context.Context, args []string, stdout io.Writer) error {
 }
 
 func writeMCPOperation(w io.Writer, result codex.OperationResult) error {
-	if _, err := fmt.Fprintf(w, "client: %s\nscope: %s\nserver: %s\nroot: %s\n", result.Client, result.Scope, result.Name, result.Root); err != nil {
+	if _, err := fmt.Fprintf(w, "client: %s\nscope: %s\nserver: %s\n", result.Client, result.Scope, result.Name); err != nil {
 		return err
+	}
+	if result.Root != "" {
+		if _, err := fmt.Fprintf(w, "root: %s\n", result.Root); err != nil {
+			return err
+		}
+	} else if result.RootMode != "" {
+		if _, err := fmt.Fprintf(w, "root: %s\n", result.RootMode); err != nil {
+			return err
+		}
 	}
 	if result.ConfigPath != "" {
 		if _, err := fmt.Fprintf(w, "config: %s\n", result.ConfigPath); err != nil {
@@ -541,8 +561,17 @@ func writeMCPOperation(w io.Writer, result codex.OperationResult) error {
 }
 
 func writeMCPStatus(w io.Writer, status codex.RegistrationStatus) error {
-	if _, err := fmt.Fprintf(w, "client: %s\nscope: %s\nstate: %s\nserver: %s\nroot: %s\n", status.Client, status.Scope, status.State, status.Name, status.Root); err != nil {
+	if _, err := fmt.Fprintf(w, "client: %s\nscope: %s\nstate: %s\nserver: %s\n", status.Client, status.Scope, status.State, status.Name); err != nil {
 		return err
+	}
+	if status.Root != "" {
+		if _, err := fmt.Fprintf(w, "root: %s\n", status.Root); err != nil {
+			return err
+		}
+	} else if status.RootMode != "" {
+		if _, err := fmt.Fprintf(w, "root: %s\n", status.RootMode); err != nil {
+			return err
+		}
 	}
 	if status.ConfigPath != "" {
 		if _, err := fmt.Fprintf(w, "config: %s\n", status.ConfigPath); err != nil {

@@ -78,6 +78,13 @@ func TestMCPProjectFlagUsesProjectScope(t *testing.T) {
 	if result["scope"] != "project" {
 		t.Fatalf("result=%v", result)
 	}
+	if result["root"] != root || result["root_mode"] != nil {
+		t.Fatalf("project root contract=%v", result)
+	}
+	args, ok := result["args"].([]any)
+	if !ok || len(args) < 3 || args[0] != "serve" || args[1] != "--root" || args[2] != root {
+		t.Fatalf("project args=%v", result["args"])
+	}
 }
 
 func TestMCPInstallDefaultsToGlobalCodexScope(t *testing.T) {
@@ -92,6 +99,39 @@ func TestMCPInstallDefaultsToGlobalCodexScope(t *testing.T) {
 	}
 	if result["client"] != "codex" || result["scope"] != "user" {
 		t.Fatalf("result=%v", result)
+	}
+	if result["name"] != "focalspan" || result["root_mode"] != "runtime_cwd" {
+		t.Fatalf("result=%v", result)
+	}
+	if _, found := result["root"]; found {
+		t.Fatalf("global result exposed root: %v", result)
+	}
+	args, ok := result["args"].([]any)
+	if !ok || len(args) != 1 || args[0] != "serve" {
+		t.Fatalf("global args=%v", result["args"])
+	}
+	if strings.Contains(out.String(), root) {
+		t.Fatalf("global dry-run exposed root %q: %s", root, out.String())
+	}
+}
+
+func TestMCPGlobalDryRunNeedsNoRoot(t *testing.T) {
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"mcp", "install", "--dry-run", "--json"}, &out, &errOut); code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, errOut.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatalf("invalid JSON: %v; output=%s", err, out.String())
+	}
+	if result["name"] != "focalspan" || result["root_mode"] != "runtime_cwd" || result["root"] != nil {
+		t.Fatalf("result=%v", result)
+	}
+	if diagnostics, found := result["diagnostics"]; found {
+		encoded, _ := json.Marshal(diagnostics)
+		if strings.Contains(strings.ToLower(string(encoded)), "legacy") {
+			t.Fatalf("unexpected legacy migration: %v", diagnostics)
+		}
 	}
 }
 

@@ -397,10 +397,15 @@ Codex project scope writes a deterministic marked block to the canonical
 root's `.codex/config.toml` after validating both the old and new TOML. The
 unmarked portion is preserved byte-for-byte, managed updates are idempotent,
 and an unmanaged same-name table is a conflict. Global user scope is the MCP
-default; project scope requires `--project`. User scope uses separated
-arguments with the installed `codex mcp` CLI; FocalSpan never
-edits the user Codex config directly. Project trust and existing Codex session
-reload state are intentionally not changed or guessed.
+default and uses one fixed `focalspan` registration whose command is
+`focalspan serve`; the server resolves the repository from its process working
+directory when each Codex task starts. Project scope requires `--project` and
+retains the explicit `serve --root PATH` binding. User scope uses separated
+arguments with the installed `codex mcp` CLI; FocalSpan never edits the user
+Codex config directly. An explicitly supplied global `--root` is only a
+migration hint for safely removing the matching legacy managed registration
+after the fixed registration succeeds. Project trust and existing Codex
+session reload state are intentionally not changed or guessed.
 
 The MCP server binds one startup root and exposes exactly `code_context`,
 `code_expand`, `code_impact`, `code_restart`, and `code_status`. Handlers

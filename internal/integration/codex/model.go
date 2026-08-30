@@ -59,7 +59,8 @@ type RegistrationStatus struct {
 	Scope       string            `json:"scope"`
 	State       string            `json:"state"`
 	Name        string            `json:"name"`
-	Root        string            `json:"root"`
+	Root        string            `json:"root,omitempty"`
+	RootMode    string            `json:"root_mode,omitempty"`
 	ConfigPath  string            `json:"config_path,omitempty"`
 	Command     string            `json:"command,omitempty"`
 	Args        []string          `json:"args,omitempty"`
@@ -75,7 +76,8 @@ type OperationResult struct {
 	Action      string   `json:"action"`
 	State       string   `json:"state,omitempty"`
 	Name        string   `json:"name"`
-	Root        string   `json:"root"`
+	Root        string   `json:"root,omitempty"`
+	RootMode    string   `json:"root_mode,omitempty"`
 	ConfigPath  string   `json:"config_path,omitempty"`
 	Command     string   `json:"command,omitempty"`
 	Args        []string `json:"args,omitempty"`
@@ -86,14 +88,15 @@ type OperationResult struct {
 }
 
 type Request struct {
-	Root         string
-	Scope        string
-	Name         string
-	Command      string
-	CodexCommand string
-	NoAutoUpdate bool
-	DryRun       bool
-	Force        bool
+	Root          string
+	MigrationRoot string
+	Scope         string
+	Name          string
+	Command       string
+	CodexCommand  string
+	NoAutoUpdate  bool
+	DryRun        bool
+	Force         bool
 }
 
 type CommandResult struct {
@@ -122,11 +125,14 @@ func validateRequest(req Request) error {
 	if err := ValidateName(req.Name); err != nil {
 		return err
 	}
-	if req.Root == "" {
+	if req.Scope == ScopeProject && req.Root == "" {
 		return errors.New("repository root is required")
 	}
 	if strings.ContainsAny(req.Root, "\x00\r\n") {
 		return errors.New("repository root contains NUL or a newline")
+	}
+	if strings.ContainsAny(req.MigrationRoot, "\x00\r\n") {
+		return errors.New("migration root contains NUL or a newline")
 	}
 	if strings.ContainsAny(req.CodexCommand, "\x00\r\n") {
 		return errors.New("Codex command contains NUL or a newline")

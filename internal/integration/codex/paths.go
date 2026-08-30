@@ -39,9 +39,12 @@ func UserConfigPath() (string, error) {
 }
 
 func DefaultServerName(scope, root string) string {
-	if scope == ScopeProject {
-		return "focalspan"
-	}
+	return "focalspan"
+}
+
+// LegacyUserServerName returns the root-specific name used by releases before
+// global registrations became runtime-cwd based.
+func LegacyUserServerName(root string) string {
 	base := filepath.Base(filepath.Clean(root))
 	base = sanitizeNamePart(base)
 	if base == "" {

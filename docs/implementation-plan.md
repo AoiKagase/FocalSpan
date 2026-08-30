@@ -245,6 +245,9 @@
 **Interfaces:**
 - Produces only `focalspan mcp install|status|uninstall`, with global user
   scope as the default and explicit `--project` for project-local registration.
+- Global scope installs one fixed root-independent `focalspan serve`
+  registration; project scope retains `serve --root PATH`. An explicit global
+  `--root` is accepted only to migrate the matching legacy managed entry.
 - The Codex client positional argument, top-level aliases, and `mcp print` are
   removed; `install --dry-run` is the single preview path.
 - Project scope uses a validated, atomic, marked TOML block and preserves all

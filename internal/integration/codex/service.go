@@ -29,7 +29,7 @@ func (s *Service) installUser(ctx context.Context, req Request, spec Registratio
 	if err != nil {
 		return OperationResult{}, err
 	}
-	result := OperationResult{Client: ClientName, Scope: ScopeUser, Name: req.Name, Root: req.Root, ConfigPath: configPath, Command: spec.Command, Args: append([]string(nil), spec.Args...), DryRun: req.DryRun}
+	result := OperationResult{Client: ClientName, Scope: ScopeUser, Name: req.Name, RootMode: "runtime_cwd", ConfigPath: configPath, Command: spec.Command, Args: append([]string(nil), spec.Args...), DryRun: req.DryRun}
 	codexCommand := req.CodexCommand
 	if codexCommand == "" {
 		codexCommand = "codex"
@@ -40,6 +40,9 @@ func (s *Service) installUser(ctx context.Context, req Request, spec Registratio
 	}
 	if req.DryRun {
 		result.Action, result.State = "create", StateAbsent
+		if req.MigrationRoot != "" {
+			result.Diagnostics = append(result.Diagnostics, fmt.Sprintf("would remove managed legacy Codex MCP server %q after installing %q", LegacyUserServerName(req.MigrationRoot), req.Name))
+		}
 		if _, _, err := s.codexRunner(req); err != nil && !errors.Is(err, ErrCodexNotFound) {
 			return OperationResult{}, err
 		} else if errors.Is(err, ErrCodexNotFound) {
@@ -56,7 +59,7 @@ func (s *Service) installUser(ctx context.Context, req Request, spec Registratio
 	}
 	if found && sameUserRegistration(current, spec) {
 		result.Action, result.State = "unchanged", StateManagedMatch
-		return result, nil
+		return s.migrateLegacyUser(ctx, req, result, resolvedCodex)
 	}
 	if found && !req.Force {
 		result.Action, result.State = "conflict", StateConflict
@@ -74,6 +77,30 @@ func (s *Service) installUser(ctx context.Context, req Request, spec Registratio
 	if !found {
 		result.Action, result.State = "create", StateManagedMatch
 	}
+	return s.migrateLegacyUser(ctx, req, result, resolvedCodex)
+}
+
+func (s *Service) migrateLegacyUser(ctx context.Context, req Request, result OperationResult, codexCommand string) (OperationResult, error) {
+	if req.MigrationRoot == "" {
+		return result, nil
+	}
+	legacyName := LegacyUserServerName(req.MigrationRoot)
+	current, found, _, err := s.userGet(ctx, req, legacyName)
+	if err != nil {
+		result.Diagnostics = append(result.Diagnostics, fmt.Sprintf("could not inspect legacy Codex MCP server %q: %v", legacyName, err))
+		return result, nil
+	}
+	if !found {
+		return result, nil
+	}
+	if !managedLegacyUserRegistration(current, req.MigrationRoot) {
+		result.Diagnostics = append(result.Diagnostics, fmt.Sprintf("legacy Codex MCP server %q was not removed because it is not managed by FocalSpan for the specified root", legacyName))
+		return result, nil
+	}
+	if err := s.userRemove(ctx, req, legacyName, codexCommand); err != nil {
+		return result, fmt.Errorf("remove legacy Codex MCP server %q: %w", legacyName, err)
+	}
+	result.Diagnostics = append(result.Diagnostics, fmt.Sprintf("migrated legacy Codex MCP server %q", legacyName))
 	return result, nil
 }
 
@@ -97,7 +124,7 @@ func (s *Service) Status(ctx context.Context, req Request) (RegistrationStatus, 
 	if err != nil {
 		return RegistrationStatus{}, err
 	}
-	status := RegistrationStatus{Client: ClientName, Scope: ScopeUser, Name: req.Name, Root: req.Root, ConfigPath: configPath, Expected: specPtr(spec)}
+	status := RegistrationStatus{Client: ClientName, Scope: ScopeUser, Name: req.Name, RootMode: "runtime_cwd", ConfigPath: configPath, Expected: specPtr(spec)}
 	current, found, _, err := s.userGet(ctx, req, req.Name)
 	if errors.Is(err, ErrCodexNotFound) {
 		status.State = StateCodexNotFound
@@ -116,7 +143,7 @@ func (s *Service) Status(ctx context.Context, req Request) (RegistrationStatus, 
 		status.State = StateAbsent
 	} else {
 		status.Command, status.Args = current.Command, append([]string(nil), current.Args...)
-		status.Matches = managedUserRegistration(current, req.Root)
+		status.Matches = managedUserRegistration(current)
 		if status.Matches {
 			status.State, status.Managed = StateManagedMatch, true
 		} else {
@@ -148,7 +175,7 @@ func (s *Service) Uninstall(ctx context.Context, req Request) (OperationResult, 
 	if err != nil {
 		return OperationResult{}, err
 	}
-	result := OperationResult{Client: ClientName, Scope: ScopeUser, Name: req.Name, Root: req.Root, ConfigPath: configPath, Command: spec.Command, Args: append([]string(nil), spec.Args...), Action: "unchanged", State: StateAbsent, DryRun: req.DryRun}
+	result := OperationResult{Client: ClientName, Scope: ScopeUser, Name: req.Name, RootMode: "runtime_cwd", ConfigPath: configPath, Command: spec.Command, Args: append([]string(nil), spec.Args...), Action: "unchanged", State: StateAbsent, DryRun: req.DryRun}
 	codexCommand := req.CodexCommand
 	if codexCommand == "" {
 		codexCommand = "codex"
@@ -171,7 +198,7 @@ func (s *Service) Uninstall(ctx context.Context, req Request) (OperationResult, 
 	if !found {
 		return result, nil
 	}
-	if !managedUserRegistration(current, req.Root) && !req.Force {
+	if !managedUserRegistration(current) && !req.Force {
 		return OperationResult{}, fmt.Errorf("Codex MCP server %q is not the expected FocalSpan registration; use --force to remove it", req.Name)
 	}
 	if err := s.userRemove(ctx, req, req.Name, resolvedCodex); err != nil {
@@ -186,7 +213,7 @@ func (s *Service) registrationSpec(req Request) (RegistrationSpec, string, error
 	if err != nil {
 		return RegistrationSpec{}, "", err
 	}
-	spec := makeSpec(req.Root, command, req.NoAutoUpdate)
+	spec := makeSpec(req.Scope, req.Root, command, req.NoAutoUpdate)
 	if err := validateTOMLValues(spec); err != nil {
 		return RegistrationSpec{}, "", err
 	}
@@ -198,15 +225,18 @@ func (s *Service) registrationSpecForStatus(req Request) (RegistrationSpec, stri
 	if err != nil {
 		return RegistrationSpec{}, "", err
 	}
-	spec := makeSpec(req.Root, command, false)
+	spec := makeSpec(req.Scope, req.Root, command, false)
 	if err := validateTOMLValues(spec); err != nil {
 		return RegistrationSpec{}, "", err
 	}
 	return spec, warning, nil
 }
 
-func makeSpec(root, command string, noAutoUpdate bool) RegistrationSpec {
-	args := []string{"serve", "--root", root}
+func makeSpec(scope, root, command string, noAutoUpdate bool) RegistrationSpec {
+	args := []string{"serve"}
+	if scope == ScopeProject {
+		args = append(args, "--root", root)
+	}
 	if noAutoUpdate {
 		args = append(args, "--auto-update=false")
 	}

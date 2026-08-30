@@ -86,9 +86,9 @@ focalspan update --root . --if-repo --quiet
 Global Codex registration is the default:
 
 ```powershell
-focalspan mcp install --root .
-focalspan mcp status --root .
-focalspan mcp uninstall --root .
+focalspan mcp install
+focalspan mcp status
+focalspan mcp uninstall
 ```
 
 Use project-local registration explicitly:
@@ -102,14 +102,21 @@ focalspan mcp uninstall --project --root .
 Preview installation without changing configuration:
 
 ```powershell
-focalspan mcp install --root . --dry-run --json
+focalspan mcp install --dry-run --json
 ```
 
 Use `--auto-update=false` at install time to disable automatic index updates.
 The global-only options are `--codex PATH` and `--force`; both are rejected
 with `--project` because project registration does not call the Codex CLI.
+Global registration stores only `focalspan serve`; each Codex task resolves its
+repository from the MCP process working directory. A global
+`mcp install --root PATH` remains accepted only as a migration hint: after the
+new fixed `focalspan` registration succeeds, FocalSpan removes that root's old
+managed registration. The root path is not stored in the new registration.
 
-FocalSpan keeps MCP protocol output isolated on stdout and writes diagnostics only to stderr. Existing registrations continue to launch the internal `serve --root` entrypoint.
+FocalSpan keeps MCP protocol output isolated on stdout and writes diagnostics
+only to stderr. Project-local registrations continue to launch the internal
+`serve --root` entrypoint.
 
 The MCP server exposes exactly:
 

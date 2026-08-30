@@ -46,15 +46,27 @@ func TestManagedServeArgsAcceptsBinaryAndAutoUpdateVariants(t *testing.T) {
 		{"serve", "--root", root, "--auto-update=false"},
 		{"serve", "--root", root, "--no-auto-update"},
 	} {
-		if !managedUserRegistration(userRegistration{Command: filepath.Join(t.TempDir(), "focalspan.exe"), Args: args}, root) {
+		if !managedLegacyUserRegistration(userRegistration{Command: filepath.Join(t.TempDir(), "focalspan.exe"), Args: args}, root) {
 			t.Fatalf("managed registration rejected: %v", args)
 		}
 	}
-	if managedUserRegistration(userRegistration{Command: "other", Args: []string{"serve", "--root", filepath.Join(root, "other")}}, root) {
+	if managedLegacyUserRegistration(userRegistration{Command: "other", Args: []string{"serve", "--root", filepath.Join(root, "other")}}, root) {
 		t.Fatal("registration for another root was accepted")
 	}
-	if managedUserRegistration(userRegistration{Command: "other", Args: []string{"serve", "--root", root}}, root) {
+	if managedLegacyUserRegistration(userRegistration{Command: "other", Args: []string{"serve", "--root", root}}, root) {
 		t.Fatal("non-FocalSpan command was accepted")
+	}
+}
+
+func TestManagedGlobalRegistrationHasNoRoot(t *testing.T) {
+	command := filepath.Join(t.TempDir(), "focalspan.exe")
+	for _, args := range [][]string{{"serve"}, {"serve", "--auto-update=false"}, {"serve", "--no-auto-update"}} {
+		if !managedUserRegistration(userRegistration{Command: command, Args: args}) {
+			t.Fatalf("managed global registration rejected: %v", args)
+		}
+	}
+	if managedUserRegistration(userRegistration{Command: command, Args: []string{"serve", "--root", "/repo"}}) {
+		t.Fatal("root-bound registration was accepted as global")
 	}
 }
 
@@ -90,7 +102,7 @@ func TestUserInstallUsesSeparatedCodexArgv(t *testing.T) {
 		return CommandResult{}, nil
 	}
 	service := NewService(fake)
-	req := Request{Scope: ScopeUser, Root: `C:\repo with spaces`, Name: "focalspan-test", Command: command, NoAutoUpdate: true}
+	req := Request{Scope: ScopeUser, Name: "focalspan-test", Command: command, NoAutoUpdate: true}
 	result, err := service.Install(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +110,7 @@ func TestUserInstallUsesSeparatedCodexArgv(t *testing.T) {
 	if result.Action != "create" {
 		t.Fatalf("action=%q", result.Action)
 	}
-	want := []string{"mcp", "add", "focalspan-test", "--", command, "serve", "--root", `C:\repo with spaces`, "--auto-update=false"}
+	want := []string{"mcp", "add", "focalspan-test", "--", command, "serve", "--auto-update=false"}
 	if len(fake.calls) != 2 || fake.calls[0].Name != "codex" || !reflect.DeepEqual(fake.calls[1].Args, want) {
 		t.Fatalf("calls=%+v", fake.calls)
 	}
@@ -163,7 +175,7 @@ func TestUserInstallIdenticalIsNoOpAndConflictNeedsForce(t *testing.T) {
 		fake := &fakeCommandRunner{fn: func(_ context.Context, _ string, args []string) (CommandResult, error) {
 			if args[1] == "get" {
 				encodedCommand, _ := json.Marshal(command)
-				payload := `{"command":` + string(encodedCommand) + `,"args":["serve","--root","/repo"]}`
+				payload := `{"command":` + string(encodedCommand) + `,"args":["serve"]}`
 				return CommandResult{Stdout: []byte(payload)}, nil
 			}
 			return CommandResult{}, nil
@@ -186,11 +198,144 @@ func TestUserInstallIdenticalIsNoOpAndConflictNeedsForce(t *testing.T) {
 			return CommandResult{}, nil
 		}}
 		service := NewService(fake)
-		_, err := service.Install(context.Background(), Request{Scope: ScopeUser, Root: "/repo", Name: "focalspan-test", Command: command})
+		_, err := service.Install(context.Background(), Request{Scope: ScopeUser, Name: "focalspan-test", Command: command, MigrationRoot: "/repo"})
 		if err == nil || len(fake.calls) != 1 {
 			t.Fatalf("err=%v calls=%+v", err, fake.calls)
 		}
 	})
+}
+
+func TestUserInstallIgnoresAbsentLegacyRegistration(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repo")
+	command := testExecutable(t, "focalspan")
+	fake := &fakeCommandRunner{fn: func(_ context.Context, _ string, args []string) (CommandResult, error) {
+		if args[1] == "get" {
+			return CommandResult{ExitCode: 1}, errors.New("not found")
+		}
+		return CommandResult{}, nil
+	}}
+	result, err := NewService(fake).Install(context.Background(), Request{
+		Scope: ScopeUser, Name: "focalspan", Command: command, MigrationRoot: root,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Action != "create" || len(fake.calls) != 3 || fake.calls[2].Args[2] != LegacyUserServerName(root) {
+		t.Fatalf("result=%+v calls=%+v", result, fake.calls)
+	}
+}
+
+func TestUserInstallMigratesOnlyManagedLegacyRegistrationAfterGlobalInstall(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repo")
+	command := testExecutable(t, "focalspan")
+	legacyName := LegacyUserServerName(root)
+	fake := &fakeCommandRunner{fn: func(_ context.Context, _ string, args []string) (CommandResult, error) {
+		switch {
+		case args[1] == "get" && args[2] == "focalspan":
+			return CommandResult{ExitCode: 1}, errors.New("not found")
+		case args[1] == "get" && args[2] == legacyName:
+			encodedCommand, _ := json.Marshal(command)
+			encodedRoot, _ := json.Marshal(root)
+			payload := `{"command":` + string(encodedCommand) + `,"args":["serve","--root",` + string(encodedRoot) + `]}`
+			return CommandResult{Stdout: []byte(payload)}, nil
+		default:
+			return CommandResult{}, nil
+		}
+	}}
+
+	result, err := NewService(fake).Install(context.Background(), Request{
+		Scope: ScopeUser, Name: "focalspan", Command: command, MigrationRoot: root,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.calls) != 4 || fake.calls[1].Args[1] != "add" || fake.calls[2].Args[2] != legacyName || fake.calls[3].Args[1] != "remove" {
+		t.Fatalf("calls=%+v", fake.calls)
+	}
+	if !containsDiagnostic(result.Diagnostics, "migrated legacy") {
+		t.Fatalf("diagnostics=%v", result.Diagnostics)
+	}
+}
+
+func TestUserInstallLeavesUnmanagedLegacyRegistration(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repo")
+	command := testExecutable(t, "focalspan")
+	legacyName := LegacyUserServerName(root)
+	fake := &fakeCommandRunner{fn: func(_ context.Context, _ string, args []string) (CommandResult, error) {
+		switch {
+		case args[1] == "get" && args[2] == "focalspan":
+			return CommandResult{ExitCode: 1}, errors.New("not found")
+		case args[1] == "get" && args[2] == legacyName:
+			return CommandResult{Stdout: []byte(`{"command":"other","args":["serve"]}`)}, nil
+		default:
+			return CommandResult{}, nil
+		}
+	}}
+	result, err := NewService(fake).Install(context.Background(), Request{
+		Scope: ScopeUser, Name: "focalspan", Command: command, MigrationRoot: root,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.calls) != 3 || !containsDiagnostic(result.Diagnostics, "not managed") {
+		t.Fatalf("result=%+v calls=%+v", result, fake.calls)
+	}
+}
+
+func TestUserInstallDryRunReportsLegacyMigrationWithoutCommands(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repo")
+	command := testExecutable(t, "focalspan")
+	fake := &fakeCommandRunner{fn: func(_ context.Context, _ string, _ []string) (CommandResult, error) {
+		t.Fatal("dry-run executed Codex command")
+		return CommandResult{}, nil
+	}}
+	result, err := NewService(fake).Install(context.Background(), Request{
+		Scope: ScopeUser, Name: "focalspan", Command: command, MigrationRoot: root, DryRun: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.calls) != 0 || !containsDiagnostic(result.Diagnostics, LegacyUserServerName(root)) {
+		t.Fatalf("result=%+v calls=%+v", result, fake.calls)
+	}
+}
+
+func TestUserInstallReportsLegacyRemovalFailureAfterGlobalInstall(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repo")
+	command := testExecutable(t, "focalspan")
+	legacyName := LegacyUserServerName(root)
+	fake := &fakeCommandRunner{fn: func(_ context.Context, _ string, args []string) (CommandResult, error) {
+		switch {
+		case args[1] == "get" && args[2] == "focalspan":
+			return CommandResult{ExitCode: 1}, errors.New("not found")
+		case args[1] == "get" && args[2] == legacyName:
+			encodedCommand, _ := json.Marshal(command)
+			encodedRoot, _ := json.Marshal(root)
+			return CommandResult{Stdout: []byte(`{"command":` + string(encodedCommand) + `,"args":["serve","--root",` + string(encodedRoot) + `]}`)}, nil
+		case args[1] == "remove":
+			return CommandResult{ExitCode: 1, Stderr: []byte("locked")}, errors.New("exit status 1")
+		default:
+			return CommandResult{}, nil
+		}
+	}}
+	_, err := NewService(fake).Install(context.Background(), Request{
+		Scope: ScopeUser, Name: "focalspan", Command: command, MigrationRoot: root,
+	})
+	if err == nil || !strings.Contains(err.Error(), "locked") {
+		t.Fatalf("err=%v calls=%+v", err, fake.calls)
+	}
+	if len(fake.calls) != 4 || fake.calls[1].Args[1] != "add" || fake.calls[3].Args[1] != "remove" {
+		t.Fatalf("calls=%+v", fake.calls)
+	}
+}
+
+func containsDiagnostic(diagnostics []string, substring string) bool {
+	for _, diagnostic := range diagnostics {
+		if strings.Contains(diagnostic, substring) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestUserUninstallDoesNotRemoveMismatchedRegistrationWithoutForce(t *testing.T) {
@@ -205,6 +350,30 @@ func TestUserUninstallDoesNotRemoveMismatchedRegistrationWithoutForce(t *testing
 	_, err := service.Uninstall(context.Background(), Request{Scope: ScopeUser, Root: "/repo", Name: "focalspan-test", Command: command})
 	if err == nil || len(fake.calls) != 1 {
 		t.Fatalf("err=%v calls=%+v", err, fake.calls)
+	}
+}
+
+func TestUserStatusAndUninstallExposeRuntimeCWDMode(t *testing.T) {
+	fake := &fakeCommandRunner{fn: func(_ context.Context, _ string, args []string) (CommandResult, error) {
+		if args[1] == "get" {
+			return CommandResult{ExitCode: 1}, errors.New("not found")
+		}
+		return CommandResult{}, nil
+	}}
+	service := NewService(fake)
+	status, err := service.Status(context.Background(), Request{Scope: ScopeUser, Name: "focalspan"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Root != "" || status.RootMode != "runtime_cwd" {
+		t.Fatalf("status=%+v", status)
+	}
+	result, err := service.Uninstall(context.Background(), Request{Scope: ScopeUser, Name: "focalspan", DryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Root != "" || result.RootMode != "runtime_cwd" {
+		t.Fatalf("result=%+v", result)
 	}
 }
 
