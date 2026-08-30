@@ -476,7 +476,7 @@ func KnownLanguages() []string
 LanguageOverrides map[string]string `json:"language_overrides"`
 ```
 
-- [ ] **Step 1: Add failing detection tests**
+- [x] **Step 1: Add failing detection tests**
 
 最低限:
 
@@ -516,7 +516,7 @@ main.cts                -> typescript
 types.d.ts              -> typescript
 ```
 
-- [ ] **Step 2: Add override tests**
+- [x] **Step 2: Add override tests**
 
 設定例:
 
@@ -541,7 +541,7 @@ explicit language override
 
 無効language、NUL、root外path、無効globは`Config.Validate`でerrorにする。mapの順序に依存せず、最も具体的なmatchを選ぶ。同じspecificityならkey辞書順で決定的に選ぶ。
 
-- [ ] **Step 3: Implement known profiles**
+- [x] **Step 3: Implement known profiles**
 
 最低限のextension:
 
@@ -571,7 +571,7 @@ config: existing config extensions
 
 複合拡張子は`filepath.Ext`一回だけで判定しない。lowercase basename suffixで判定する。
 
-- [ ] **Step 4: Implement `.inc` scoring**
+- [x] **Step 4: Implement `.inc` scoring**
 
 PHP:
 
@@ -598,18 +598,18 @@ enum
 
 PHP markerがあればPHPを優先する。Pawn scoreが閾値以上ならPawn。それ以外はtext。単語がcomment/string内だけにある場合はscoreへ含めない軽量scanを行う。
 
-- [ ] **Step 5: Migrate scanner**
+- [x] **Step 5: Migrate scanner**
 
 `repository.DetectLanguage`と`DetectLanguageContent`は互換wrapperにするか削除し、実処理を`language.Detect`へ一本化する。同じロジックを二か所に残さない。
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 ```text
 go test ./internal/language ./internal/config ./internal/repository -v
 go test ./...
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```text
 git add internal/language internal/config internal/repository

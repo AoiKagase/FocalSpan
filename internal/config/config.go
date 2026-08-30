@@ -10,28 +10,32 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+
+	"github.com/focalspan/focalspan/internal/language"
 )
 
 const FileName = ".focalspan.json"
 
 type Config struct {
-	IndexDirectory        string   `json:"index_directory"`
-	DefaultTokenBudget    int      `json:"default_token_budget"`
-	MaxFileBytes          int64    `json:"max_file_bytes"`
-	Workers               int      `json:"workers"`
-	AutoUpdateBeforeQuery bool     `json:"auto_update_before_query"`
-	Include               []string `json:"include"`
-	Exclude               []string `json:"exclude"`
-	SecretExcludesEnabled bool     `json:"secret_excludes_enabled"`
-	GenericChunkLines     int      `json:"generic_chunk_lines"`
-	GenericChunkOverlap   int      `json:"generic_chunk_overlap"`
-	MaxCandidates         int      `json:"max_candidates"`
+	IndexDirectory        string            `json:"index_directory"`
+	DefaultTokenBudget    int               `json:"default_token_budget"`
+	MaxFileBytes          int64             `json:"max_file_bytes"`
+	Workers               int               `json:"workers"`
+	AutoUpdateBeforeQuery bool              `json:"auto_update_before_query"`
+	Include               []string          `json:"include"`
+	Exclude               []string          `json:"exclude"`
+	SecretExcludesEnabled bool              `json:"secret_excludes_enabled"`
+	GenericChunkLines     int               `json:"generic_chunk_lines"`
+	GenericChunkOverlap   int               `json:"generic_chunk_overlap"`
+	MaxCandidates         int               `json:"max_candidates"`
+	LanguageOverrides     map[string]string `json:"language_overrides"`
 }
 
 func Default() Config {
 	return Config{IndexDirectory: ".focalspan", DefaultTokenBudget: 4000, MaxFileBytes: 2 << 20,
 		Workers: 0, AutoUpdateBeforeQuery: true, Include: []string{}, Exclude: []string{},
-		SecretExcludesEnabled: true, GenericChunkLines: 80, GenericChunkOverlap: 10, MaxCandidates: 200}
+		SecretExcludesEnabled: true, GenericChunkLines: 80, GenericChunkOverlap: 10, MaxCandidates: 200,
+		LanguageOverrides: map[string]string{}}
 }
 
 func (c Config) Validate() error {
@@ -53,6 +57,11 @@ func (c Config) Validate() error {
 	if c.MaxCandidates < 1 || c.MaxCandidates > 1000 {
 		return errors.New("max_candidates must be between 1 and 1000")
 	}
+	for pattern, override := range c.LanguageOverrides {
+		if err := language.ValidateOverride(pattern, override); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -71,7 +80,7 @@ func Load(root string) (Config, []string, error) {
 		return cfg, nil, fmt.Errorf("parse %s: %w", FileName, err)
 	}
 	known := map[string]bool{}
-	for _, key := range []string{"index_directory", "default_token_budget", "max_file_bytes", "workers", "auto_update_before_query", "include", "exclude", "secret_excludes_enabled", "generic_chunk_lines", "generic_chunk_overlap", "max_candidates"} {
+	for _, key := range []string{"index_directory", "default_token_budget", "max_file_bytes", "workers", "auto_update_before_query", "include", "exclude", "secret_excludes_enabled", "generic_chunk_lines", "generic_chunk_overlap", "max_candidates", "language_overrides"} {
 		known[key] = true
 	}
 	warnings := make([]string, 0)
