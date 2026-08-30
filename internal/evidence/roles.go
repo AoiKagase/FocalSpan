@@ -170,6 +170,9 @@ func classifyRole(plan query.Plan, candidate model.RankedCandidate, target bool)
 	if isDocumentationEvidence(path, kind, candidate.Language) {
 		return RoleDocumentation
 	}
+	if isHeaderDeclaration(path, kind, candidate.Language) {
+		return RoleDeclaration
+	}
 	if isDeclarationEvidence(kind) {
 		return RoleDeclaration
 	}
@@ -183,6 +186,14 @@ func classifyRole(plan query.Plan, candidate model.RankedCandidate, target bool)
 		return RoleImplementation
 	}
 	return RoleContext
+}
+
+func isHeaderDeclaration(path, kind, language string) bool {
+	if language != "c" && language != "cpp" {
+		return false
+	}
+	header := strings.HasSuffix(path, ".h") || strings.HasSuffix(path, ".hh") || strings.HasSuffix(path, ".hpp") || strings.HasSuffix(path, ".hxx")
+	return header && (kind == "function" || kind == "method" || kind == "prototype")
 }
 
 func whyCodes(candidate model.RankedCandidate) []string {

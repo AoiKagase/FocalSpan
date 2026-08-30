@@ -294,6 +294,44 @@ The baseline commands also produced `go test ./...` with 263 passing tests,
 coverage and the later cross-build/evaluation matrix are not implied by this
 baseline section.
 
+## LLM Evidence Contract v0.4 evaluation
+
+The Evidence evaluator measures the final compact JSON plus canonical MCP
+summary, not source text alone. `wire_tokens` is the model-visible serialized
+cost; `evidence_tokens` is the source/signature/outline content contribution.
+Their difference is metadata overhead. Duplicate source ratio counts repeated
+source bytes, role accuracy checks allowed roles for matched expectations, and
+relation validity requires every edge to use local IDs. Focused late-hit
+preservation verifies that a match near the end of a long span survives
+excerpting. The stateless delta ratio compares cumulative query-plus-expand
+tokens with and without `known_handles`. One-response size alone is therefore
+insufficient because repeated tool results can retransmit the same evidence.
+
+On 2026-08-30 the eight checked-in Go, PHP, C/C++, C#, TypeScript, and Smarty
+Evidence cases produced these measured aggregate results with `--contract
+compare`:
+
+| Metric | Measured |
+| --- | ---: |
+| Expected coverage | 1.000000 |
+| Role accuracy | 1.000000 |
+| Fidelity validity | 1.000000 |
+| Relation validity | 1.000000 |
+| Wire budget compliance | 1.000000 |
+| Deterministic output | 1.000000 |
+| Forbidden path violations | 0 |
+| Known resend count | 0 |
+| Focused late-hit preservation | 1.000000 |
+| Median duplicate source ratio | 0.000000 |
+| Median metadata overhead, packets using at least 1200 wire tokens | 0.34496919917864477 |
+| Median Evidence/legacy wire ratio | 0.9371391917896087 |
+| Median two-step delta token ratio | 0.5578351609480015 |
+
+These fixtures measure deterministic syntax and lexical provenance, not
+compiler-resolved dispatch or runtime behavior. The A/B ratio compares
+serialized contracts for compatible focused queries and does not claim that
+the two representations expose identical fields.
+
 ## .NET WinForms/WPF/XAML Task 5 result
 
 The `dotnetsample` fixture was indexed with `focalspan setup` and evaluated
@@ -332,4 +370,3 @@ twice. The table below is copied from those current-checkout runs.
 | .NET WinForms/WPF/XAML/RESX | 6 | 0.8333 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 95 | 0.20833333333333334 |
 | Rust | 5 | 0.4000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 94 | 0.19542619542619544 |
 | Python | 5 | 1.0000 / 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 | 0 | 1.0000 | 78 | 0.22857142857142856 |
-

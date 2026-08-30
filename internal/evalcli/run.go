@@ -28,9 +28,16 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 	rootArg := fs.String("root", ".", "repository root")
 	casesPath := fs.String("cases", "testdata/eval/cases.jsonl", "evaluation cases")
 	ablation := fs.String("ablation", "full", "full, fts-only, no-relations, or all")
+	contract := fs.String("contract", "legacy", "legacy, evidence, or compare")
 	jsonOutput := fs.Bool("json", false, "JSON output")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *contract != "legacy" && *contract != "evidence" && *contract != "compare" {
+		return fmt.Errorf("unknown contract %q", *contract)
+	}
+	if *contract != "legacy" && *ablation != "full" {
+		return fmt.Errorf("--ablation is available only with --contract legacy")
 	}
 	modes, err := parseAblation(*ablation)
 	if err != nil {
@@ -40,15 +47,31 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	cases, err := eval.LoadCases(*casesPath)
-	if err != nil {
-		return err
-	}
 	service, err := app.New(root)
 	if err != nil {
 		return err
 	}
 	defer service.Close()
+	if *contract != "legacy" {
+		cases, err := eval.LoadEvidenceCases(*casesPath)
+		if err != nil {
+			return err
+		}
+		report, err := eval.EvaluateEvidence(ctx, service, cases, *contract == "compare")
+		if err != nil {
+			return err
+		}
+		if *jsonOutput {
+			encoder := json.NewEncoder(stdout)
+			encoder.SetIndent("", "  ")
+			return encoder.Encode(report)
+		}
+		return writeEvidenceReport(stdout, *contract, report)
+	}
+	cases, err := eval.LoadCases(*casesPath)
+	if err != nil {
+		return err
+	}
 	reports := make(map[string]eval.Report, len(modes))
 	for _, mode := range modes {
 		report, err := eval.EvaluateMode(ctx, service, cases, mode)
@@ -73,6 +96,11 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 		}
 	}
 	return nil
+}
+
+func writeEvidenceReport(w io.Writer, contract string, report eval.EvidenceReport) error {
+	_, err := fmt.Fprintf(w, "contract: %s\ncases: %d\ncoverage: %.2f\nrole accuracy: %.2f\nwire budget compliance: %.2f\ndeterministic: %.2f\nmetadata overhead median: %.4f\ndelta token ratio median: %.4f\n", contract, len(report.Cases), report.ExpectedCoverage, report.RoleAccuracy, report.WireBudgetCompliance, report.DeterministicOutput, report.MedianMetadataOverheadRatio, report.MedianDeltaTokenRatio)
+	return err
 }
 
 func resolveRoot(ctx context.Context, start string) (string, error) {

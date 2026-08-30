@@ -39,6 +39,7 @@ func TestClassifyMapsCandidateRoles(t *testing.T) {
 		{name: "documentation", candidate: model.RankedCandidate{Handle: "docs", Path: "README.md", Language: "markdown", Kind: "heading"}, want: RoleDocumentation},
 		{name: "implementation", candidate: model.RankedCandidate{Handle: "impl", Kind: "method"}, want: RoleImplementation},
 		{name: "declaration", candidate: model.RankedCandidate{Handle: "decl", Kind: "prototype"}, want: RoleDeclaration},
+		{name: "C++ header function declaration", candidate: model.RankedCandidate{Handle: "header-decl", Path: "include/token_validator.hpp", Language: "cpp", Kind: "function"}, want: RoleDeclaration},
 		{name: "definition", candidate: model.RankedCandidate{Handle: "def", Kind: "definition"}, want: RoleDefinition},
 		{name: "context", candidate: model.RankedCandidate{Handle: "context", Kind: "unknown"}, want: RoleContext},
 	}

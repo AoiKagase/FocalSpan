@@ -94,7 +94,7 @@ func (c *Compiler) Compile(req CompileRequest) (CompileResult, error) {
 	}
 	if anchorIndex >= 0 {
 		anchor := prepared[anchorIndex]
-		for index := len(anchor.variants) - 1; index >= 0; index-- {
+		for index := 0; index < len(anchor.variants); index++ {
 			trial := appendSelected(selected, selectedCandidate{prepared: anchor, variant: anchor.variants[index], utility: candidateUtility(req.Plan, anchor.classified, nil, nil)})
 			packet := buildPacket(req, mode, limit, trial, len(prepared)-len(trial)+baseOmitted, skippedKnown, c.estimator)
 			if packet.Budget.Used <= limit {
@@ -105,7 +105,7 @@ func (c *Compiler) Compile(req CompileRequest) (CompileResult, error) {
 		}
 	}
 
-	for {
+	for len(selected) < selectionLimit(req.Plan) {
 		roles, paths := selectedDiversity(selected)
 		current := buildPacket(req, mode, limit, selected, len(prepared)-len(selected)+baseOmitted, skippedKnown, c.estimator)
 		bestIndex, bestVariant := -1, -1
@@ -171,6 +171,17 @@ func (c *Compiler) Compile(req CompileRequest) (CompileResult, error) {
 		Selected: len(packet.Evidence), Omitted: omitted, SkippedKnown: skippedKnown,
 	}
 	return CompileResult{Packet: packet, Stats: stats}, nil
+}
+
+func selectionLimit(plan query.Plan) int {
+	switch plan.PrimaryIntent {
+	case query.IntentDefinition:
+		return 1
+	case query.IntentImpact:
+		return 6
+	default:
+		return 4
+	}
 }
 
 func (c *Compiler) preprocess(req CompileRequest, mode Mode) ([]preparedCandidate, int, int) {
@@ -266,7 +277,11 @@ func buildPacket(req CompileRequest, mode Mode, limit int, selected []selectedCa
 	items := make([]Item, 0, len(ordered))
 	for _, selectedItem := range ordered {
 		candidate := selectedItem.prepared.classified
-		item := Item{Handle: candidate.Candidate.Handle, Role: candidate.Role, Location: Location{Path: candidate.Candidate.Path, Lines: [2]int{candidate.Candidate.StartLine, candidate.Candidate.EndLine}}, Language: candidate.Candidate.Language, Kind: candidate.Candidate.Kind, Symbol: candidate.Candidate.Symbol, Fidelity: selectedItem.variant.Fidelity, Why: append([]string(nil), candidate.Why...)}
+		why := candidate.Why
+		if len(why) > 2 {
+			why = why[:2]
+		}
+		item := Item{Handle: candidate.Candidate.Handle, Role: candidate.Role, Location: Location{Path: candidate.Candidate.Path, Lines: [2]int{candidate.Candidate.StartLine, candidate.Candidate.EndLine}}, Language: candidate.Candidate.Language, Kind: candidate.Candidate.Kind, Symbol: candidate.Candidate.Symbol, Fidelity: selectedItem.variant.Fidelity, Why: append([]string(nil), why...)}
 		item.Source, item.Segments, item.Outline, item.Signature = selectedItem.variant.Source, append([]Segment(nil), selectedItem.variant.Segments...), selectedItem.variant.Outline, selectedItem.variant.Signature
 		items = append(items, item)
 	}
