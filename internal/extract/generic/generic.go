@@ -32,7 +32,7 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 	switch file.Language {
 	case "markdown":
 		return markdown(file), nil
-	case "python", "ruby", "powershell", "shell":
+	case "ruby", "powershell", "shell":
 		return indentation(file), nil
 	case "csharp":
 		return csharpStructured(file), nil

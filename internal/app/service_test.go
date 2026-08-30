@@ -25,7 +25,7 @@ func TestNewExtractorRegistrySelectsDedicatedExtractors(t *testing.T) {
 		{name: "javascript", path: "src/auth/token-service.ts", language: "typescript", want: "jsts-structural"},
 		{name: "template", path: "pages/login.tpl", language: "smarty", want: "template-structural"},
 		{name: "rust", path: "src/lib.rs", language: "rust", want: "rust-structural"},
-		{name: "python", path: "src/auth.py", language: "python", want: "generic-structural"},
+		{name: "python", path: "src/auth.py", language: "python", want: "python-structural"},
 		{name: "ruby", path: "lib/auth.rb", language: "ruby", want: "generic-structural"},
 		{name: "lua", path: "lua/auth.lua", language: "lua", want: "generic-structural"},
 		{name: "pawn", path: "addons/amxmodx/scripting/plugin.sma", language: "pawn", want: "generic-structural"},

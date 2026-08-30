@@ -1327,7 +1327,7 @@ git commit -m "feat: add first-class Rust extraction"
 - `Name() == "python-structural"`
 - Supports `.py`, `.pyw`, `.pyi`
 
-- [ ] **Step 1: Write lexer tests**
+- [x] **Step 1: Write lexer tests**
 
 Cover:
 
@@ -1346,7 +1346,7 @@ malformed triple string
 cancellation
 ```
 
-- [ ] **Step 2: Write declaration tests**
+- [x] **Step 2: Write declaration tests**
 
 Symbols:
 
@@ -1367,7 +1367,7 @@ test
 
 `@property`、`@classmethod`、`@staticmethod`をsignature/kindへ反映する。lambdaを独立symbolにしない。
 
-- [ ] **Step 3: Implement imports and calls**
+- [x] **Step 3: Implement imports and calls**
 
 ```text
 import x
@@ -1383,7 +1383,7 @@ constructor call
 
 同一scope・同一classで一意なtargetだけresolve。monkey patch、dynamic import、decorator semanticsは未解決。
 
-- [ ] **Step 4: Implement test recognition**
+- [x] **Step 4: Implement test recognition**
 
 ```text
 pytest test_*
@@ -1395,7 +1395,7 @@ fixtures as fixture kind
 
 Test body callから`tests` relationを作る。
 
-- [ ] **Step 5: Add fixture/evaluation**
+- [x] **Step 5: Add fixture/evaluation**
 
 Minimum:
 
@@ -1410,9 +1410,9 @@ unrelated/report.py
 
 Queriesはdefinition、callers、tests、imports、protocol implementation。
 
-- [ ] **Step 6: Register extractor and remove Python from generic indentation dispatch**
+- [x] **Step 6: Register extractor and remove Python from generic indentation dispatch**
 
-- [ ] **Step 7: Verify**
+- [x] **Step 7: Verify**
 
 ```text
 go test ./internal/extract/python -v
@@ -1421,7 +1421,7 @@ focalspan index --root testdata/repos/pythonsample --quiet
 focalspan eval --root testdata/repos/pythonsample --cases testdata/eval/python-cases.jsonl --json
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```text
 git add internal/extract/python internal/app internal/extract/generic testdata/repos/pythonsample testdata/eval/python-cases.jsonl
