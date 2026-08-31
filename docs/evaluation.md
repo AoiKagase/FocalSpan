@@ -519,6 +519,11 @@ After this local verification, `origin/master` advanced externally to commit
 `33358418421`. Its Windows amd64, Linux amd64, and Darwin arm64 CGO-free build
 jobs passed. Linux test and race jobs failed; vet was skipped after the test
 failure. The user cancelled the additional public benchmark while measurement
-was still running, so it produced no comparison result. Failure logs are not
-accessible with the invalid saved GitHub CLI token or unsigned browser
-sessions, so neither Linux failure is diagnosed or reported as verified.
+was still running, so it produced no comparison result. Authenticated browser
+logs showed that test and race failed only in
+`TestRunValidatePublicSchemaFixture` and `TestRunScaffoldContainsNoSource`:
+both require historical Git refs, but those jobs used the default depth-one
+checkout. A regression test now requires full history for test, race, and
+public-benchmark jobs, and the first two checkout steps use `fetch-depth: 0`.
+Focused and full local tests pass after the fix; no post-fix remote run has
+occurred, so Linux test, vet, and race remain remotely unverified.

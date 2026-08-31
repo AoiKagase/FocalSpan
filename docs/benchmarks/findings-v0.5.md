@@ -142,6 +142,9 @@ compiler cannot build 64-bit `runtime/cgo`.
 An externally triggered GitHub Actions run later passed all three CGO-free
 build jobs but failed Linux test and race. The user cancelled its additional
 public benchmark during measurement, before comparison. The saved GitHub CLI
-credential is invalid and unsigned browser sessions cannot view the failed
-step logs, so the Linux failures remain undiagnosed and no remote race or
-benchmark success is claimed.
+credential was invalid, but an authenticated browser session later exposed the
+logs: both jobs failed only because their depth-one checkout could not resolve
+the historical refs required by two benchmark CLI tests. Test and race now use
+`fetch-depth: 0`, protected by a focused workflow regression test. No post-fix
+remote run has occurred, so no remote test, vet, race, or benchmark success is
+claimed.

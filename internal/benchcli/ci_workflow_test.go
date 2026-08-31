@@ -44,3 +44,43 @@ func TestCIWorkflowCoversPublicVerificationWithoutPrivateState(t *testing.T) {
 		}
 	}
 }
+
+func TestCIHistoryDependentJobsCheckoutFullHistory(t *testing.T) {
+	path := filepath.Join("..", "..", ".github", "workflows", "ci.yml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := strings.ReplaceAll(string(data), "\r\n", "\n")
+	for _, job := range []string{"test", "race", "public-benchmark"} {
+		section := workflowJobSection(t, workflow, job)
+		if !strings.Contains(section, "fetch-depth: 0") {
+			t.Errorf("history-dependent job %q uses a shallow checkout", job)
+		}
+	}
+}
+
+func workflowJobSection(t *testing.T, workflow, job string) string {
+	t.Helper()
+	startMarker := "  " + job + ":"
+	found := false
+	var section strings.Builder
+	for _, line := range strings.Split(workflow, "\n") {
+		if line == startMarker {
+			found = true
+			continue
+		}
+		if !found {
+			continue
+		}
+		if len(line) > 2 && strings.HasPrefix(line, "  ") && line[2] != ' ' && strings.HasSuffix(line, ":") {
+			break
+		}
+		section.WriteString(line)
+		section.WriteByte('\n')
+	}
+	if !found {
+		t.Fatalf("workflow missing job %q", job)
+	}
+	return section.String()
+}

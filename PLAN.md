@@ -300,7 +300,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - [x] Task 10 acceptance gaps corrected before freezing measurements. (2026-08-31T01:43:50Z; deterministic matrix ordering, exact compatibility, full quality regression rules, timing-only warnings, human/JSON output, and source-free miss diagnostics verified by 7 focused tests.)
 - [x] Linux race CI and cross-platform build CI implemented. (2026-08-31T03:37:29Z; least-privilege workflow static test passed locally; no push occurred, so remote jobs remain unrun.)
 - [x] Public benchmark results and evidence-based v0.6 recommendation committed. (2026-08-31T03:31:40Z; two 8-case/48-result runs produced identical quality hash `f914facbfbf55c450fd26769bdc7bd6a992112dc` and compare exit 0.)
-- [ ] Full local verification completed and recorded, but remote CI follow-up remains incomplete. (2026-08-31T04:43:59Z local evidence passed; run `33358418421` later produced Linux test/race failures and a user-cancelled public benchmark whose failure logs are not accessible with the invalid local GitHub credential.)
+- [ ] Full local verification completed and recorded, but remote CI follow-up remains incomplete. (2026-08-31T04:43:59Z local evidence passed; authenticated logs later showed that run `33358418421` failed test/race because those jobs used a shallow checkout. The local workflow fix is verified, but no remote rerun has occurred.)
 
 ---
 
@@ -320,6 +320,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - 2026-08-31 UTC: The third and final full public-history run completed with 8 cases and 48 quality results. Its quality rows and aggregates exactly matched the checked-in report, `compare` returned exit 0 with zero regressions, and the only report difference was the later FocalSpan commit ID.
 - 2026-08-31 UTC: Final artifact review found an ignored root `focalspan.exe` left by an earlier native build. It was not tracked or staged and was removed explicitly; the final artifact scan found no executable, database, tar archive, candidate report, or benchmark workspace.
 - 2026-08-31 UTC: After the local Task 13 commit, `origin/master` unexpectedly advanced to the pre-amend commit `cb52479` without a push command from this execution. GitHub Actions run `33358418421` then passed all three CGO-free build jobs, failed Linux test and race jobs, and was cancelled by the user while the additional public benchmark was still measuring. The saved `gh` token is invalid and unsigned browser sessions cannot view logs, so the two failure root causes remain unverified rather than guessed.
+- 2026-08-31 UTC: After browser authentication, both failed remote logs showed only `TestRunValidatePublicSchemaFixture` and `TestRunScaffoldContainsNoSource`, each failing Git revision resolution with `fatal: Needed a single revision`. Test and race jobs used the default depth-one checkout while the tests require an older labeled commit and `HEAD~1`; a focused RED test caught both shallow jobs, and adding `fetch-depth: 0` to them produced GREEN locally.
 
 ---
 
@@ -334,6 +335,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - 2026-08-31: Configure, but do not claim, Linux race and public benchmark success in v0.5. This checkout is not pushed during execution, so only workflow structure and local commands can be verified now; remote job status stays explicitly unrun.
 - 2026-08-31: Replace whole-repository formatting with scoped formatting of Go package sources for Task 13 because the repository deliberately contains an invalid `.go` extractor fixture. This preserves the fixture's malformed-input contract; the consequence is that whole-tree `gofmt -w .` is recorded as failed rather than silently claimed as passing.
 - 2026-08-31: Supersede the earlier expectation that remote CI would remain unrun. An external push triggered run `33358418421`; record its three successful builds, failed test/race jobs, and cancelled public benchmark exactly. Do not rerun the public benchmark, and do not claim Linux race coverage until authenticated failure logs can be diagnosed and a later run passes.
+- 2026-08-31: Give test and race jobs full Git history because checked-in benchmark CLI tests deliberately validate historical refs. Keep the public benchmark cancelled and do not change its `--repeat 3`; a later remote verification may rerun only the failed test/race jobs after the workflow fix is pushed.
 
 - **Decision:** Use one active root `PLAN.md`, a durable root `PLANS.md`, and immutable completed/superseded archives.
   **Rationale:** Overwriting a completed plan loses an easy-to-review history, while keeping many active-looking plans creates ambiguity for Codex. One active file preserves the simple workflow; archives preserve evidence.
@@ -379,8 +381,10 @@ comparison, unit tests, vet, and five CGO-free builds retained their recorded
 results without production tuning. Local Windows race remains unverified due
 to the available C compiler. A later externally triggered GitHub Actions run
 passed all three build jobs but failed Linux test and race; its additional
-public benchmark was cancelled by the user before comparison. Failure logs are
-currently inaccessible, so the remote CI gate remains incomplete.
+public benchmark was cancelled by the user before comparison. Authenticated
+logs traced both failures to depth-one checkout missing historical refs. The
+workflow fix passes focused and full local tests, but no post-fix remote run has
+occurred, so the remote CI gate remains incomplete.
 
 ---
 
@@ -1842,7 +1846,7 @@ Run:
 
 Expected: all pass. Record actual package/test counts rather than copying old counts.
 
-- [ ] **Step 5: Run race tests where supported** (2026-08-31 UTC; local Windows attempt failed before tests in `runtime/cgo`; remote Linux run `33358418421` also failed, but its log is inaccessible with the invalid local GitHub credential, so root cause and race coverage remain unverified.)
+- [ ] **Step 5: Run race tests where supported** (2026-08-31 UTC; local Windows remains toolchain-blocked. Remote Linux run `33358418421` reached tests but failed only because its shallow checkout lacked historical refs; the full-history workflow fix is locally verified, but a post-fix remote race run remains unexecuted.)
 
 Run:
 
