@@ -9,34 +9,48 @@ import (
 )
 
 type QualityResult struct {
-	CaseID                           string   `json:"case_id"`
-	Profile                          string   `json:"profile"`
-	Budget                           int      `json:"budget"`
-	TargetRank                       int      `json:"target_rank"`
-	ReciprocalRank                   float64  `json:"reciprocal_rank"`
-	RequiredPathRecall               float64  `json:"required_path_recall"`
-	OptionalPathRecall               float64  `json:"optional_path_recall"`
-	RequiredSymbolRecall             float64  `json:"required_symbol_recall"`
-	IntentCorrect                    int      `json:"intent_correct"`
-	RoleAccuracy                     float64  `json:"role_accuracy"`
-	RelationValid                    int      `json:"relation_valid"`
-	BudgetCompliant                  int      `json:"budget_compliant"`
-	Deterministic                    int      `json:"deterministic"`
-	ForbiddenViolations              int      `json:"forbidden_violations"`
-	WireTokens                       int      `json:"wire_tokens"`
-	EvidenceTokens                   int      `json:"evidence_tokens"`
-	MetadataOverheadRatio            float64  `json:"metadata_overhead_ratio"`
-	DuplicateSourceRatio             float64  `json:"duplicate_source_ratio"`
-	ChangedPathRecall                float64  `json:"changed_path_recall"`
-	FailureCodes                     []string `json:"failure_codes,omitempty"`
-	ExpandRequiredPathRecall         float64  `json:"expand_required_path_recall,omitempty"`
-	ExpandRequiredSymbolRecall       float64  `json:"expand_required_symbol_recall,omitempty"`
-	ExpandForbiddenViolations        int      `json:"expand_forbidden_violations,omitempty"`
-	ExpandRelationValid              int      `json:"expand_relation_valid,omitempty"`
-	CumulativeWireTokens             int      `json:"cumulative_wire_tokens,omitempty"`
-	CumulativeWireTokensWithoutKnown int      `json:"cumulative_wire_tokens_without_known,omitempty"`
-	DeltaTokenRatio                  float64  `json:"delta_token_ratio,omitempty"`
-	KnownResendCount                 int      `json:"known_resend_count,omitempty"`
+	CaseID                           string           `json:"case_id"`
+	Profile                          string           `json:"profile"`
+	Budget                           int              `json:"budget"`
+	TargetRank                       int              `json:"target_rank"`
+	ReciprocalRank                   float64          `json:"reciprocal_rank"`
+	RequiredPathRecall               float64          `json:"required_path_recall"`
+	OptionalPathRecall               float64          `json:"optional_path_recall"`
+	RequiredSymbolRecall             float64          `json:"required_symbol_recall"`
+	IntentCorrect                    int              `json:"intent_correct"`
+	RoleAccuracy                     float64          `json:"role_accuracy"`
+	RelationValid                    int              `json:"relation_valid"`
+	BudgetCompliant                  int              `json:"budget_compliant"`
+	Deterministic                    int              `json:"deterministic"`
+	ForbiddenViolations              int              `json:"forbidden_violations"`
+	WireTokens                       int              `json:"wire_tokens"`
+	EvidenceTokens                   int              `json:"evidence_tokens"`
+	MetadataOverheadRatio            float64          `json:"metadata_overhead_ratio"`
+	DuplicateSourceRatio             float64          `json:"duplicate_source_ratio"`
+	ChangedPathRecall                float64          `json:"changed_path_recall"`
+	FailureCodes                     []string         `json:"failure_codes,omitempty"`
+	Misses                           []MissDiagnostic `json:"misses,omitempty"`
+	ExpandRequiredPathRecall         float64          `json:"expand_required_path_recall,omitempty"`
+	ExpandRequiredSymbolRecall       float64          `json:"expand_required_symbol_recall,omitempty"`
+	ExpandForbiddenViolations        int              `json:"expand_forbidden_violations,omitempty"`
+	ExpandRelationValid              int              `json:"expand_relation_valid,omitempty"`
+	CumulativeWireTokens             int              `json:"cumulative_wire_tokens,omitempty"`
+	CumulativeWireTokensWithoutKnown int              `json:"cumulative_wire_tokens_without_known,omitempty"`
+	DeltaTokenRatio                  float64          `json:"delta_token_ratio,omitempty"`
+	KnownResendCount                 int              `json:"known_resend_count,omitempty"`
+}
+
+type MissDiagnostic struct {
+	Code           string          `json:"code"`
+	ExpectedPath   string          `json:"expected_path"`
+	ExpectedSymbol string          `json:"expected_symbol,omitempty"`
+	Selected       []SelectedLabel `json:"selected"`
+}
+
+type SelectedLabel struct {
+	Path   string `json:"path"`
+	Symbol string `json:"symbol,omitempty"`
+	Role   string `json:"role,omitempty"`
 }
 
 type PerformanceResult struct {
@@ -90,6 +104,7 @@ func MeasurePacket(c Case, profile string, budget int, packet evidence.Packet, d
 	}
 	symbols := MatchRequiredSymbols(packet, c.RequiredSymbols)
 	r.RequiredSymbolRecall = ratio(symbols.Matched, symbols.Total)
+	r.Misses = missDiagnostics(packet, c)
 	if c.ExpectedIntent == "" || packet.Intent == c.ExpectedIntent {
 		r.IntentCorrect = 1
 	}
@@ -169,6 +184,25 @@ func MeasurePacket(c Case, profile string, budget int, packet evidence.Packet, d
 		r.ChangedPathRecall = ratio(selected, len(changedPaths))
 	}
 	return r
+}
+
+func missDiagnostics(packet evidence.Packet, benchmarkCase Case) []MissDiagnostic {
+	selected := make([]SelectedLabel, 0, len(packet.Evidence))
+	for _, item := range packet.Evidence {
+		selected = append(selected, SelectedLabel{Path: item.Location.Path, Symbol: item.Symbol, Role: string(item.Role)})
+	}
+	var misses []MissDiagnostic
+	for _, expectedPath := range benchmarkCase.RequiredPaths {
+		if MatchRequiredPaths(packet, []string{expectedPath}).Matched == 0 {
+			misses = append(misses, MissDiagnostic{Code: "required_path_missing", ExpectedPath: expectedPath, Selected: append([]SelectedLabel(nil), selected...)})
+		}
+	}
+	for _, expectedSymbol := range benchmarkCase.RequiredSymbols {
+		if MatchRequiredSymbols(packet, []SymbolExpectation{expectedSymbol}).Matched == 0 {
+			misses = append(misses, MissDiagnostic{Code: "required_symbol_missing", ExpectedPath: expectedSymbol.Path, ExpectedSymbol: expectedSymbol.Name, Selected: append([]SelectedLabel(nil), selected...)})
+		}
+	}
+	return misses
 }
 
 func roleAccuracy(packet evidence.Packet, expected []SymbolExpectation) float64 {

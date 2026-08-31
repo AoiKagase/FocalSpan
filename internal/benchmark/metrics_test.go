@@ -39,3 +39,18 @@ func TestMetricEvidenceTokensUseProductEstimator(t *testing.T) {
 		t.Fatalf("evidence tokens=%d, want product estimator=%d", result.EvidenceTokens, want)
 	}
 }
+
+func TestMetricMissDiagnosticsContainLabelsButNoSource(t *testing.T) {
+	packet := evidence.Packet{Budget: evidence.Budget{Limit: 1000, Used: 100}, Evidence: []evidence.Item{{ID: "e1", Role: evidence.RoleCaller, Location: evidence.Location{Path: "selected.go"}, Symbol: "Selected", Source: "secret body"}}}
+	result := MeasurePacket(Case{ID: "miss", RequiredPaths: []string{"required.go"}, RequiredSymbols: []SymbolExpectation{{Path: "required.go", Name: "Required"}}}, "p", 1000, packet, true, nil)
+	if len(result.Misses) != 2 {
+		t.Fatalf("misses=%+v", result.Misses)
+	}
+	encoded := result.Misses[0].Selected[0]
+	if encoded.Path != "selected.go" || encoded.Symbol != "Selected" || encoded.Role != "caller" {
+		t.Fatalf("selected label=%+v", encoded)
+	}
+	if strings.Contains(result.Misses[0].ExpectedPath+result.Misses[0].ExpectedSymbol+encoded.Path+encoded.Symbol+encoded.Role, "secret body") {
+		t.Fatalf("source leaked in diagnostic: %+v", result.Misses)
+	}
+}

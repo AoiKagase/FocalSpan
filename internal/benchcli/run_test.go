@@ -168,3 +168,26 @@ func TestRunRejectsUnknownCommandOnStderr(t *testing.T) {
 		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 }
+
+func TestRunCompareSupportsHumanAndJSONOutput(t *testing.T) {
+	root := t.TempDir()
+	baseline := filepath.Join(root, "baseline.json")
+	candidate := filepath.Join(root, "candidate.json")
+	left := `{"schema":"focalspan.benchmark-report.v1","suite":"s","quality":[{"case_id":"c","profile":"p","budget":100,"required_path_recall":1}],"aggregate":{}}`
+	right := `{"schema":"focalspan.benchmark-report.v1","suite":"s","quality":[{"case_id":"c","profile":"p","budget":100,"required_path_recall":0}],"aggregate":{}}`
+	if err := os.WriteFile(baseline, []byte(left), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(candidate, []byte(right), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if code := Run(context.Background(), []string{"compare", "--baseline", baseline, "--candidate", candidate}, &stdout, &stderr); code != 2 || !strings.Contains(stdout.String(), "c / p / 100") || strings.Contains(stdout.String(), `"compatible"`) {
+		t.Fatalf("human code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run(context.Background(), []string{"compare", "--baseline", baseline, "--candidate", candidate, "--json"}, &stdout, &stderr); code != 2 || !strings.Contains(stdout.String(), `"compatible": true`) {
+		t.Fatalf("json code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+}

@@ -1,7 +1,6 @@
 package benchcli
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -238,6 +237,7 @@ func runCompare(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	baseline := fs.String("baseline", "", "baseline")
 	candidate := fs.String("candidate", "", "candidate")
+	jsonOutput := fs.Bool("json", false, "JSON output")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -249,10 +249,6 @@ func runCompare(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if bytes.Equal(bytes.TrimSpace(left), bytes.TrimSpace(right)) {
-		fmt.Fprintln(stdout, "compatible: true\nregressions: 0")
-		return nil
-	}
 	var baseReport, candidateReport benchmark.RunReport
 	if err := json.Unmarshal(left, &baseReport); err != nil {
 		return exitStatusError{3, "baseline report unreadable"}
@@ -261,8 +257,12 @@ func runCompare(args []string, stdout, stderr io.Writer) error {
 		return exitStatusError{3, "candidate report unreadable"}
 	}
 	comparison := benchmark.CompareReports(baseReport, candidateReport)
-	encoded, _ := json.MarshalIndent(comparison, "", "  ")
-	fmt.Fprintf(stdout, "%s\n", encoded)
+	if *jsonOutput {
+		encoded, _ := json.MarshalIndent(comparison, "", "  ")
+		fmt.Fprintf(stdout, "%s\n", encoded)
+	} else {
+		renderHumanComparison(stdout, comparison)
+	}
 	if !comparison.Compatible {
 		return exitStatusError{3, "reports are incompatible"}
 	}
@@ -270,6 +270,19 @@ func runCompare(args []string, stdout, stderr io.Writer) error {
 		return exitStatusError{2, "quality regression detected"}
 	}
 	return nil
+}
+
+func renderHumanComparison(output io.Writer, comparison benchmark.Comparison) {
+	fmt.Fprintf(output, "compatible: %t\nregressions: %d\n", comparison.Compatible, len(comparison.Regressions))
+	for _, regression := range comparison.Regressions {
+		fmt.Fprintf(output, "regression %s / %s / %d: %s\n", regression.CaseID, regression.Profile, regression.Budget, strings.Join(regression.Details, "; "))
+	}
+	for _, improvement := range comparison.Improvements {
+		fmt.Fprintf(output, "improvement %s / %s / %d: %s\n", improvement.CaseID, improvement.Profile, improvement.Budget, strings.Join(improvement.Details, "; "))
+	}
+	for _, warning := range comparison.Warnings {
+		fmt.Fprintf(output, "warning: %s\n", warning)
+	}
 }
 func writeOutput(path string, data []byte, force bool) error {
 	if !force {

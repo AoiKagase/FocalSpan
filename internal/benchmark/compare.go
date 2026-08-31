@@ -1,6 +1,9 @@
 package benchmark
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 type Comparison struct {
 	Compatible   bool         `json:"compatible"`
@@ -29,22 +32,39 @@ func CompareReports(baseline, candidate RunReport) Comparison {
 		result.Warnings = append(result.Warnings, "suite incompatible")
 		return result
 	}
+	base, baseKeys, err := indexQuality(baseline.Quality)
+	if err != nil {
+		result.Warnings = append(result.Warnings, "baseline result matrix invalid: "+err.Error())
+		return result
+	}
+	cand, candidateKeys, err := indexQuality(candidate.Quality)
+	if err != nil {
+		result.Warnings = append(result.Warnings, "candidate result matrix invalid: "+err.Error())
+		return result
+	}
+	if !sameQualityKeys(baseKeys, candidateKeys) {
+		result.Warnings = append(result.Warnings, "quality result matrix incompatible")
+		return result
+	}
 	result.Compatible = true
-	base := indexQuality(baseline.Quality)
-	cand := indexQuality(candidate.Quality)
-	for key, left := range base {
-		right, ok := cand[key]
-		if !ok {
-			result.Regressions = append(result.Regressions, Regression{key.caseID, key.profile, key.budget, []string{"candidate result missing"}})
-			continue
-		}
+	for _, key := range baseKeys {
+		left := base[key]
+		right := cand[key]
 		var worse, better []string
 		compareHigher("required_path_recall", left.RequiredPathRecall, right.RequiredPathRecall, &worse, &better)
 		compareHigher("required_symbol_recall", left.RequiredSymbolRecall, right.RequiredSymbolRecall, &worse, &better)
+		compareHigher("intent_correct", float64(left.IntentCorrect), float64(right.IntentCorrect), &worse, &better)
+		compareHigher("role_accuracy", left.RoleAccuracy, right.RoleAccuracy, &worse, &better)
+		compareHigher("relation_valid", float64(left.RelationValid), float64(right.RelationValid), &worse, &better)
 		compareHigher("budget_compliant", float64(left.BudgetCompliant), float64(right.BudgetCompliant), &worse, &better)
 		compareHigher("deterministic", float64(left.Deterministic), float64(right.Deterministic), &worse, &better)
 		compareLower("forbidden_violations", float64(left.ForbiddenViolations), float64(right.ForbiddenViolations), &worse, &better)
 		compareLower("known_resend_count", float64(left.KnownResendCount), float64(right.KnownResendCount), &worse, &better)
+		if left.WireTokens > 0 && right.WireTokens*100 > left.WireTokens*110 && right.RequiredPathRecall <= left.RequiredPathRecall && right.RequiredSymbolRecall <= left.RequiredSymbolRecall {
+			worse = append(worse, fmt.Sprintf("wire_tokens %d -> %d (>10%% without required-recall improvement)", left.WireTokens, right.WireTokens))
+		} else if right.WireTokens < left.WireTokens {
+			better = append(better, fmt.Sprintf("wire_tokens %d -> %d", left.WireTokens, right.WireTokens))
+		}
 		if len(worse) > 0 {
 			result.Regressions = append(result.Regressions, Regression{key.caseID, key.profile, key.budget, worse})
 		}
@@ -52,12 +72,74 @@ func CompareReports(baseline, candidate RunReport) Comparison {
 			result.Improvements = append(result.Improvements, Regression{key.caseID, key.profile, key.budget, better})
 		}
 	}
+	appendPerformanceWarnings(&result, baseKeys, baseline.Performance, candidate.Performance)
 	return result
 }
-func indexQuality(values []QualityResult) map[qualityKey]QualityResult {
+func indexQuality(values []QualityResult) (map[qualityKey]QualityResult, []qualityKey, error) {
 	result := map[qualityKey]QualityResult{}
+	keys := make([]qualityKey, 0, len(values))
 	for _, value := range values {
-		result[qualityKey{value.CaseID, value.Profile, value.Budget}] = value
+		key := qualityKey{value.CaseID, value.Profile, value.Budget}
+		if _, exists := result[key]; exists {
+			return nil, nil, fmt.Errorf("duplicate result %s/%s/%d", key.caseID, key.profile, key.budget)
+		}
+		result[key] = value
+		keys = append(keys, key)
+	}
+	sortQualityKeys(keys)
+	return result, keys, nil
+}
+
+func sortQualityKeys(keys []qualityKey) {
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].caseID != keys[j].caseID {
+			return keys[i].caseID < keys[j].caseID
+		}
+		if keys[i].profile != keys[j].profile {
+			return keys[i].profile < keys[j].profile
+		}
+		return keys[i].budget < keys[j].budget
+	})
+}
+
+func sameQualityKeys(left, right []qualityKey) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func appendPerformanceWarnings(result *Comparison, keys []qualityKey, baseline, candidate []PerformanceResult) {
+	base := indexPerformance(baseline)
+	cand := indexPerformance(candidate)
+	for _, key := range keys {
+		left, leftExists := base[key]
+		right, rightExists := cand[key]
+		if !leftExists || !rightExists {
+			continue
+		}
+		if left.IndexMS > 0 && right.IndexMS*100 > left.IndexMS*120 {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("%s/%s/%d index_ms %d -> %d (>20%%)", key.caseID, key.profile, key.budget, left.IndexMS, right.IndexMS))
+		}
+		leftQuery, rightQuery := medianInt64(left.QueryMS), medianInt64(right.QueryMS)
+		if leftQuery > 0 && rightQuery*100 > leftQuery*120 {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("%s/%s/%d query_median_ms %d -> %d (>20%%)", key.caseID, key.profile, key.budget, leftQuery, rightQuery))
+		}
+	}
+}
+
+func indexPerformance(values []PerformanceResult) map[qualityKey]PerformanceResult {
+	result := make(map[qualityKey]PerformanceResult, len(values))
+	for _, value := range values {
+		key := qualityKey{value.CaseID, value.Profile, value.Budget}
+		if _, exists := result[key]; !exists {
+			result[key] = value
+		}
 	}
 	return result
 }
