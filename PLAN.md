@@ -289,7 +289,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - [x] Existing v0.3/v0.4 tests and evaluation baselines recorded without production changes. (2026-08-31 UTC; 604 tests, vet, 18 legacy suites, and 8-case Evidence compare measured.)
 - [x] Benchmark schema, validation, and profile definitions implemented. (2026-08-31 UTC; 6 focused tests and 610 full-suite tests passed.)
 - [x] Safe historical snapshot and diff diagnostics implemented. (2026-08-31 UTC; 10 focused tests and 620 full-suite tests passed.)
-- [ ] Benchmark engine and multi-budget runner implemented.
+- [ ] Benchmark engine and multi-budget runner implemented. (Engine adapter completed 2026-08-31 UTC; runner remains Task 5.)
 - [ ] Deterministic quality metrics and separate performance measurements implemented.
 - [ ] Development CLI, private registry handling, and scaffold flow implemented.
 - [ ] Query-plus-expand delta evaluation implemented.
@@ -863,7 +863,7 @@ Run:
 
 - Consumes: the current root-bound `app.Service` and existing evaluation/evidence paths
 
-- [ ] **Step 1: Write a fake-engine contract test**
+- [x] **Step 1: Write a fake-engine contract test**
 
 Create a fake engine and assert the runner-facing interface can:
 
@@ -874,7 +874,7 @@ Create a fake engine and assert the runner-facing interface can:
 - close exactly once;
 - propagate context cancellation.
 
-- [ ] **Step 2: Write an app-adapter integration test**
+- [x] **Step 2: Write an app-adapter integration test**
 
 Materialize or copy the existing `authsample` fixture to a temporary root, open the real adapter, build the index, and query:
 
@@ -888,19 +888,19 @@ Assert:
 - the adapter does not create files outside the temporary root except normal Go test temporary state;
 - close removes no source file.
 
-- [ ] **Step 3: Implement the adapter without duplicating search logic**
+- [x] **Step 3: Implement the adapter without duplicating search logic**
 
 Add `appEngineFactory` and `appEngine`. Use the current application service's existing methods. If the current service does not accept a retrieval mode directly, use the same internal option or constructor already used by `internal/eval` ablation. Do not add a public CLI flag.
 
-- [ ] **Step 4: Measure index state**
+- [x] **Step 4: Measure index state**
 
 After a successful build, read counts and database size through existing status/store APIs and `os.Stat` on the temporary index. Do not query private SQLite tables directly if a store method already exists.
 
-- [ ] **Step 5: Preserve current evaluation behavior**
+- [x] **Step 5: Preserve current evaluation behavior**
 
 If a metric helper moves from `internal/eval`, keep its old behavior and tests byte-for-byte. Do not merge benchmark case types with existing fixture `eval.Case`; the historical schema has different semantics.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run:
 
