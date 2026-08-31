@@ -664,7 +664,7 @@ language-specific aliases.
 **Produces:** exact current selected-row stages and positions before production
 changes.
 
-- [ ] Run static baseline verification:
+- [x] Run static baseline verification:
 
       git diff --check
       go test ./... -count=1
@@ -672,7 +672,7 @@ changes.
 
   Record actual test/package counts. Do not copy v0.6 counts.
 
-- [ ] Validate only the selected cases:
+- [x] Validate only the selected cases:
 
       go run ./cmd/focalspan-bench validate \
         --suite testdata/benchmark/focalspan-history.json \
@@ -683,7 +683,7 @@ changes.
 
   Expected: 4 cases, 0 invalid.
 
-- [ ] Run the selected current baseline exactly once:
+- [x] Run the selected current baseline exactly once:
 
       go run ./cmd/focalspan-bench run \
         --suite testdata/benchmark/focalspan-history.json \
@@ -699,7 +699,7 @@ changes.
         --attribution-markdown-out .focalspan-bench/v0.7-baseline-attribution.md \
         --force
 
-- [ ] Compare the quality report with the same rows in v0.5:
+- [x] Compare the quality report with the same rows in v0.5:
 
       go run ./cmd/focalspan-bench compare \
         --baseline docs/benchmarks/results-v0.5.json \
@@ -711,11 +711,11 @@ changes.
 
   Expected: compatible true, regressions 0.
 
-- [ ] Summarize all 44 selected label rows in
+- [x] Summarize all 44 selected label rows in
   `docs/benchmarks/findings-v0.7.md` by case, profile, budget, expectation,
   terminal stage, retriever hits, ranked position, and packed position.
 
-- [ ] Explicitly confirm from the fresh output:
+- [x] Explicitly confirm from the fresh output:
   - the number of selected `retrieval_missing` symbol/anchor rows;
   - v0.6 positions for `project-metadata-indexing::Run`;
   - current status of `jsts-search-integration::Search`;
@@ -726,7 +726,7 @@ changes.
   update numeric counts in the Decision Log before production work. Do not
   weaken the semantic gates.
 
-- [ ] Run the privacy scan used by v0.6 against attribution output. Require no:
+- [x] Run the privacy scan used by v0.6 against attribution output. Require no:
   - source/content fields;
   - absolute Windows or Unix paths;
   - usernames;
@@ -734,10 +734,10 @@ changes.
   - secret sentinel;
   - NaN or Infinity.
 
-- [ ] Record SHA-256 or Git blob-equivalent hashes of the temporary quality and
+- [x] Record SHA-256 or Git blob-equivalent hashes of the temporary quality and
   attribution outputs in findings, then remove all four temporary files.
 
-- [ ] Commit only the frozen baseline record:
+- [x] Commit only the frozen baseline record:
 
       git add PLAN.md docs/benchmarks/findings-v0.7.md
       git commit -m "docs: freeze path-scoped retrieval baseline"
@@ -1490,6 +1490,11 @@ Update with UTC timestamps while executing.
   both hash to Git blob `07c2dbdb3f1eec6b2c10a03e73feb611301f479d`;
   `go test ./... -count=1` passed 666 tests in 46 packages, `go vet ./...`
   and `git diff --check` passed. The transition is one documentation commit.
+- [x] `2026-08-31T15:31:26Z` Task 1 baseline measurement completed with one
+  valid run and zero retries: 4 cases, 24 quality results, 44 selected labels,
+  v0.5 compatible, zero regressions, and a clean attribution privacy scan.
+  Post-edit verification passed 666 tests in 46 packages, `go vet ./...`, and
+  `git diff --check`; the two documentation files were committed together.
 - [ ] Four-case current baseline measured and frozen.
 - [ ] Store file discovery implemented and verified.
 - [ ] Store scoped-symbol retrieval implemented and verified.
@@ -1512,6 +1517,10 @@ Update with UTC timestamps while executing.
   used because its title, Plan ID, Task 0 archive path, frozen gate, and stated
   exclusions exactly match the requested milestone. It remains preserved as
   pre-existing untracked input.
+- **2026-08-31:** `.focalspan-bench/` is described as ignored temporary state
+  by the plan, but `git check-ignore -v .focalspan-bench` returned exit 1 in
+  the current checkout. Task 1 kept the four outputs temporary and removes
+  them explicitly; `.gitignore` is outside this task's frozen file scope.
 
 ---
 
@@ -1532,6 +1541,16 @@ Update with UTC timestamps while executing.
   `docs/superpowers/plans/completed/2026-08-31-v0.6-candidate-attribution-and-coverage.md`
   produced that identical `git hash-object` value. The v0.6 plan had no
   unchecked task boxes and contained its final outcomes.
+  **Date/Author:** 2026-08-31 / Codex.
+
+- **Decision:** Freeze the fresh 44-row baseline without changing numeric or
+  semantic gates.
+  **Rationale:** The one baseline run produced 20 retrieval-missing, 20
+  packing-dropped, and 4 packed selected labels. All 44 rows match the public
+  v0.6 artifact exactly; the specified PHP/MCP symbol-and-anchor subset remains
+  16 retrieval misses, project metadata `Run` remains ranked 20, JSTS `Search`
+  remains ranked 10 and unpacked, and MCP `codeContext` plus PHP `Run` remain
+  retrieval-missing.
   **Date/Author:** 2026-08-31 / Codex.
 
 - **Decision:** Separate file discovery from symbol retrieval.
