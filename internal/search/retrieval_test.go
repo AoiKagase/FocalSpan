@@ -18,6 +18,7 @@ type retrievalRecordingStore struct {
 	exact       []model.RankedCandidate
 	prefix      []model.RankedCandidate
 	paths       []model.RankedCandidate
+	pathHints   [][]string
 	related     []model.RankedCandidate
 	relatedHits []model.RelationHit
 	errFor      RetrieverID
@@ -55,10 +56,11 @@ func (s *retrievalRecordingStore) SearchSymbolPrefixes(context.Context, []string
 	}
 	return append([]model.RankedCandidate(nil), s.prefix...), nil
 }
-func (s *retrievalRecordingStore) SearchPaths(context.Context, []string, int) ([]model.RankedCandidate, error) {
+func (s *retrievalRecordingStore) SearchPaths(_ context.Context, hints []string, _ int) ([]model.RankedCandidate, error) {
 	if err := s.record(RetrieverPath); err != nil {
 		return nil, err
 	}
+	s.pathHints = append(s.pathHints, append([]string(nil), hints...))
 	return append([]model.RankedCandidate(nil), s.paths...), nil
 }
 func (s *retrievalRecordingStore) RelatedCandidates(_ context.Context, handles []string, relation string) ([]model.RankedCandidate, error) {
@@ -111,6 +113,42 @@ func TestRetrieverSetSelectsBaseRetrieversByMode(t *testing.T) {
 				t.Fatalf("lists=%v, want %v", lists, test.wantCall)
 			}
 		})
+	}
+}
+
+func TestRetrieverSetPassesLexicalWordsToBoundedPathSearch(t *testing.T) {
+	store := &retrievalRecordingStore{paths: []model.RankedCandidate{{Handle: "run", Path: "internal/indexer/indexer.go", Symbol: "Run"}}}
+	plan := query.Plan{Terms: query.Terms{Words: []string{"index", "storage"}}, PrimaryIntent: query.IntentDefinition}
+
+	lists, err := NewRetrieverSet(store).Retrieve(context.Background(), plan, SearchRequest{Mode: RetrievalFull})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(store.pathHints, [][]string{{"index", "storage"}}) {
+		t.Fatalf("path hints=%v", store.pathHints)
+	}
+	for _, list := range lists {
+		if list.Retriever == RetrieverPath && len(list.Items) == 1 && list.Items[0].Symbol == "Run" {
+			return
+		}
+	}
+	t.Fatalf("path candidate absent: %+v", lists)
+}
+
+func TestRetrieverSetKeepsBroadLexicalHintsOutOfRelationAnchors(t *testing.T) {
+	store := &retrievalRecordingStore{}
+	plan := query.Plan{
+		Terms:         query.Terms{Paths: []string{"src/token.ts"}, Words: []string{"token", "module"}},
+		PrimaryIntent: query.IntentImports,
+		Intents:       []query.Intent{query.IntentImports},
+		Relations:     []string{"imports"},
+	}
+
+	if _, err := NewRetrieverSet(store).Retrieve(context.Background(), plan, SearchRequest{Mode: RetrievalFull}); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(store.pathHints, [][]string{{"src/token.ts"}}) {
+		t.Fatalf("relation path hints=%v", store.pathHints)
 	}
 }
 

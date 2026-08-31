@@ -64,7 +64,11 @@ func (r *RetrieverSet) Retrieve(ctx context.Context, plan query.Plan, req Search
 		return nil, fmt.Errorf("%s retriever: %w", RetrieverFTS, err)
 	}
 	lists = append(lists, RankedList{Retriever: RetrieverFTS, Items: fts})
-	paths, err := r.store.SearchPaths(ctx, plan.Terms.Paths, pathLimit)
+	pathHints := append([]string(nil), plan.Terms.Paths...)
+	if len(plan.Relations) == 0 {
+		pathHints = append(pathHints, plan.Terms.Words...)
+	}
+	paths, err := r.store.SearchPaths(ctx, pathHints, pathLimit)
 	if err != nil {
 		return nil, fmt.Errorf("%s retriever: %w", RetrieverPath, err)
 	}

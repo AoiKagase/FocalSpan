@@ -140,7 +140,8 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   completed. (2026-08-31; diagnostic 1 run, retry 0; 95 labels classified.)
 - [x] Task 5 exactly one improvement target and acceptance contract frozen in
   the Decision Log before production code changes. (2026-08-31; docs-only.)
-- [ ] Task 6 selected retriever or linker improvement implemented with TDD.
+- [x] Task 6 selected retriever improvement implemented with TDD. (2026-08-31;
+  focused 2, search 21, regression eval 1, full 667 tests/46 packages passed.)
 - [ ] Task 7 focused and bounded comparison gates passed.
 - [ ] Task 8 one final eight-case repeat-3 candidate comparison completed.
 - [ ] Task 9 final local/remote verification, documentation, and retrospective
@@ -183,6 +184,12 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   ranking terminal rows. Across 40 Evidence-profile results, 55 of 95 labels
   were retrieval misses, 35 were ranked but omitted by packing, and 5 required
   paths were packed. No required symbol or expansion anchor was packed.
+- 2026-08-31: The first full test after adding lexical path hints exposed a
+  Japanese JSTS relation-recall regression from 1.0 to 0.6667. Broad path hits
+  entered the eight-item relation-anchor pool before FTS candidates. Restricting
+  lexical path hints to plans with no relations preserves the selected PHP
+  hypothesis and the old relation behavior; explicit path hints remain enabled
+  for every plan.
 
 ---
 
@@ -225,6 +232,10 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   an earlier stage; affected recall or executable anchors increase; and all
   quality, legacy, wire, privacy, deterministic, test, vet, and run-count gates
   remain green.
+- 2026-08-31: Implement the selected retriever change without changing the
+  parser or store: append normalized words after explicit path hints only when
+  `plan.Relations` is empty. This keeps one bounded `SearchPaths` call and
+  prevents broad lexical candidates from becoming structural relation anchors.
 - 2026-08-31: Freeze the improvement only after the eight-case repeat-1 trace.
   Choose the stage with the greatest number of actionable misses; a tie selects
   retrieval because it is earlier in the pipeline and requires fewer semantic
@@ -284,6 +295,14 @@ bounded the production hypothesis to one general defect and 12 measured rows.
 It rejected linker changes, packing/Evidence work, FTS/fusion limit increases,
 ranking changes, parser changes, and corpus aliases. This decision changed only
 PLAN/findings; no production file changed.
+
+Task 6 first proved the missing behavior with `path hints=[[]]`, then added the
+minimal lexical path input. The first full suite caught a relation-anchor
+regression; a separate RED test reproduced broad hints entering a relation plan,
+and the implementation was constrained without weakening the eval. The two
+focused tests, the Japanese JSTS regression test, all 21 search tests, and 667
+full tests in 46 packages passed; diff check passed. Candidate benchmark gates
+remain Task 7 and have not yet been claimed.
 
 ---
 
@@ -505,11 +524,11 @@ subset of `internal/query`, `internal/search`, or matching store search method;
 linker work may touch only the exact subset of `internal/linker` or relation
 lookup. Neither may touch rank, evidence, parsers, packer, labels, or v0.5 data.
 
-- [ ] Name the mutation caught and derive literal expectations independently.
-- [ ] Write and run the focused failing test; record expected RED.
-- [ ] Implement the minimum corpus-independent rule.
-- [ ] Run focused GREEN, adjacent packages, full tests, and diff check.
-- [ ] Update living-plan sections and commit only selected code/tests plus PLAN.
+- [x] Name the mutation caught and derive literal expectations independently.
+- [x] Write and run the focused failing test; record expected RED.
+- [x] Implement the minimum corpus-independent rule.
+- [x] Run focused GREEN, adjacent packages, full tests, and diff check.
+- [x] Update living-plan sections and commit only selected code/tests plus PLAN.
 
 ### Task 7: Verify the Bounded Candidate Before the Full Suite
 
