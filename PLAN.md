@@ -288,7 +288,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - [x] Plan transition and durable `PLANS.md` policy committed. (2026-08-31T00:25:50Z; archive hash and planning links verified.)
 - [x] Existing v0.3/v0.4 tests and evaluation baselines recorded without production changes. (2026-08-31 UTC; 604 tests, vet, 18 legacy suites, and 8-case Evidence compare measured.)
 - [x] Benchmark schema, validation, and profile definitions implemented. (2026-08-31 UTC; 6 focused tests and 610 full-suite tests passed.)
-- [ ] Safe historical snapshot and diff diagnostics implemented.
+- [x] Safe historical snapshot and diff diagnostics implemented. (2026-08-31 UTC; 10 focused tests and 620 full-suite tests passed.)
 - [ ] Benchmark engine and multi-budget runner implemented.
 - [ ] Deterministic quality metrics and separate performance measurements implemented.
 - [ ] Development CLI, private registry handling, and scaffold flow implemented.
@@ -305,6 +305,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 
 - 2026-08-31 UTC: The checkout advanced from the proposed `b2139c5` baseline to `950a3b7` before Task 0 began. The previously observed Codex registration edits are now committed at that HEAD, so the current checkout remains the source of truth; only `.focalspan.json` remained as a pre-existing untracked file.
 - 2026-08-31 UTC: The untuned Lua baseline differs from the v0.4 release-readiness prose: `lua-token-tests` missed its expected symbol and path, producing aggregate hit@5/symbol/path recall 0.8. The other 17 legacy suites retained 1.0 for those metrics. This milestone records the discrepancy and does not tune production retrieval to hide it.
+- 2026-08-31 UTC: The first real `git archive` integration test timed out because `tar.Reader` stopped at the end marker while the subprocess still wrote record padding into `io.Pipe`. Draining the remaining pipe bytes before waiting removed the deadlock; the regression test now completes and proves repository HEAD/status remain unchanged.
 
 No implementation discoveries have been recorded at plan creation. Add concise observations with command output or test evidence as they arise. Do not delete earlier entries; correct them with a later entry.
 
@@ -739,7 +740,7 @@ Run:
 
 - Consumes: local Git executable only; may reuse parsing helpers from `internal/gitx` when their semantics match
 
-- [ ] **Step 1: Write a no-shell command-runner test**
+- [x] **Step 1: Write a no-shell command-runner test**
 
 Use a fake executable or argument-recording fake runner and assert arguments remain separate for:
 
@@ -749,7 +750,7 @@ Use a fake executable or argument-recording fake runner and assert arguments rem
 
 A ref containing spaces or shell metacharacters is passed as one argument and never executed by a shell.
 
-- [ ] **Step 2: Write temporary-repository snapshot tests**
+- [x] **Step 2: Write temporary-repository snapshot tests**
 
 Create a temporary Git repository in the test, commit:
 
@@ -765,7 +766,7 @@ Materialize `HEAD` and assert:
 - returned commit is the full verified commit ID;
 - running materialization twice into separate empty destinations produces identical file trees.
 
-- [ ] **Step 3: Write archive traversal rejection tests**
+- [x] **Step 3: Write archive traversal rejection tests**
 
 Feed handcrafted tar entries to the extraction helper:
 
@@ -779,7 +780,7 @@ Feed handcrafted tar entries to the extraction helper:
 
 Assert unsafe entries fail the extraction, symlinks are skipped and reported, and `safe/file` is extracted only when no fatal traversal entry exists. No file may appear outside the destination.
 
-- [ ] **Step 4: Implement snapshot materialization**
+- [x] **Step 4: Implement snapshot materialization**
 
 Implement:
 
@@ -795,11 +796,11 @@ Use `git archive --format=tar <full-commit>`. Stream stdout into `archive/tar`; 
 
 Cap retained stderr diagnostics at 16 KiB.
 
-- [ ] **Step 5: Write diff-oracle tests**
+- [x] **Step 5: Write diff-oracle tests**
 
 Create commits covering modified, added, deleted, renamed, and binary files. Assert `CollectChanges` returns stable slash-normalized paths and zero-context line ranges. Added files are marked `added`; they are not later accepted as required base evidence.
 
-- [ ] **Step 6: Implement read-only diff collection**
+- [x] **Step 6: Implement read-only diff collection**
 
 Implement:
 
@@ -811,11 +812,11 @@ Implement:
 
 Resolve both refs to commits first. Use existing `internal/gitx` parsing when possible. Add status parsing only where existing code does not expose rename/add/delete information needed by the benchmark.
 
-- [ ] **Step 7: Test cancellation and cleanup**
+- [x] **Step 7: Test cancellation and cleanup**
 
 Cancel during archive streaming. Assert the subprocess is terminated, partial destination is removed by the caller, the source repository is unchanged, and the error wraps `context.Canceled`.
 
-- [ ] **Step 8: Verify and commit**
+- [x] **Step 8: Verify and commit**
 
 Run:
 
