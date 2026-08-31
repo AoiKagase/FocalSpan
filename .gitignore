@@ -1,4 +1,6 @@
 .focalspan/
+.focalspan-bench.json
+.focalspan-bench/
 .worktrees/
 .gomodcache/
 .gocache/

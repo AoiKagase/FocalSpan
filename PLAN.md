@@ -291,7 +291,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - [x] Safe historical snapshot and diff diagnostics implemented. (2026-08-31 UTC; 10 focused tests and 620 full-suite tests passed.)
 - [x] Benchmark engine and multi-budget runner implemented. (2026-08-31 UTC; exact matching and deterministic case/profile/budget sequencing verified.)
 - [x] Deterministic quality metrics and separate performance measurements implemented. (2026-08-31 UTC; quality serialization excludes timing.)
-- [ ] Development CLI, private registry handling, and scaffold flow implemented.
+- [x] Development CLI, private registry handling, and scaffold flow implemented. (2026-08-31 UTC; validate/run/scaffold/compare boundaries and mapping precedence verified.)
 - [x] Query-plus-expand delta evaluation implemented. (2026-08-31 UTC; exact anchors, known-handle suppression, and control token ratio verified.)
 - [ ] Public FocalSpan history corpus labeled and validated.
 - [ ] Failure attribution and report comparison implemented.
@@ -1240,7 +1240,7 @@ Run:
       focalspan-bench run
       focalspan-bench compare
 
-- [ ] **Step 1: Ignore private benchmark state**
+- [x] **Step 1: Ignore private benchmark state**
 
 Add exactly:
 
@@ -1249,7 +1249,7 @@ Add exactly:
 
 Do not ignore checked-in `testdata/benchmark/` or `docs/benchmarks/`.
 
-- [ ] **Step 2: Write repository-resolution tests**
+- [x] **Step 2: Write repository-resolution tests**
 
 Resolution precedence:
 
@@ -1260,7 +1260,7 @@ Resolution precedence:
 
 Reject duplicate IDs with differing paths, missing IDs, non-directories, non-Git repositories, and NUL values. JSON output never includes resolved absolute paths.
 
-- [ ] **Step 3: Write scaffold tests**
+- [x] **Step 3: Write scaffold tests**
 
 Command shape:
 
@@ -1290,7 +1290,7 @@ Because `candidate_paths` is scaffold-only metadata and not part of the final Su
 
 The user must review and move selected paths into explicit labels.
 
-- [ ] **Step 4: Implement `validate`**
+- [x] **Step 4: Implement `validate`**
 
 Command:
 
@@ -1298,7 +1298,7 @@ Command:
 
 It validates schema, resolves refs, materializes each base snapshot, verifies every label exists at base, and prints one line per case plus a summary. `--json` emits a stable report without absolute paths.
 
-- [ ] **Step 5: Implement `run`**
+- [x] **Step 5: Implement `run`**
 
 Command:
 
@@ -1322,7 +1322,7 @@ Default behavior:
 - refuse to overwrite output unless `--force`;
 - `--keep-workspace` is an explicit debugging option and prints the retained path to stderr, never into checked-in report content.
 
-- [ ] **Step 6: Implement `compare`**
+- [x] **Step 6: Implement `compare`**
 
 Initial command shape:
 
@@ -1333,7 +1333,7 @@ Initial command shape:
 
 Task 10 defines comparison semantics. Wire the command now with a fake comparator test, then complete semantics there.
 
-- [ ] **Step 7: Keep stdout/stderr disciplined**
+- [x] **Step 7: Keep stdout/stderr disciplined**
 
 - normal command output and JSON go to stdout;
 - errors and retained workspace diagnostics go to stderr;
@@ -1341,7 +1341,7 @@ Task 10 defines comparison semantics. Wire the command now with a fake comparato
 - command errors return nonzero;
 - validation error output identifies case ID and field.
 
-- [ ] **Step 8: Verify and commit**
+- [x] **Step 8: Verify and commit**
 
 Run:
 

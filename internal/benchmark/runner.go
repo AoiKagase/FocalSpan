@@ -214,3 +214,7 @@ func validateLabelsAtBase(root string, benchmarkCase Case) error {
 	}
 	return nil
 }
+
+func ValidateLabelsAtBase(root string, benchmarkCase Case) error {
+	return validateLabelsAtBase(root, benchmarkCase)
+}
