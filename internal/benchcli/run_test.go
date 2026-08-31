@@ -43,8 +43,10 @@ func TestRunBenchmarkAndCompare(t *testing.T) {
 	}
 	out := filepath.Join(t.TempDir(), "result.json")
 	md := filepath.Join(t.TempDir(), "result.md")
+	attributionOut := filepath.Join(t.TempDir(), "attribution.json")
+	attributionMD := filepath.Join(t.TempDir(), "attribution.md")
 	var stdout, stderr bytes.Buffer
-	code := Run(context.Background(), []string{"run", "--suite", suite, "--repo", "fixture=" + repository, "--profile", "fts-evidence-focused", "--repeat", "2", "--json-out", out, "--markdown-out", md, "--keep-workspace"}, &stdout, &stderr)
+	code := Run(context.Background(), []string{"run", "--suite", suite, "--repo", "fixture=" + repository, "--profile", "fts-evidence-focused", "--repeat", "2", "--json-out", out, "--markdown-out", md, "--attribution-json-out", attributionOut, "--attribution-markdown-out", attributionMD, "--keep-workspace"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("run code=%d stderr=%q", code, stderr.String())
 	}
@@ -62,6 +64,15 @@ func TestRunBenchmarkAndCompare(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(retained) })
 	if _, err := os.Stat(out); err != nil {
 		t.Fatal(err)
+	}
+	for _, attributionPath := range []string{attributionOut, attributionMD} {
+		content, err := os.ReadFile(attributionPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Contains(content, []byte("focalspan.benchmark-attribution.v1")) || !bytes.Contains(content, []byte("service.go")) || bytes.Contains(content, []byte("package fixture")) || bytes.Contains(content, []byte(repository)) {
+			t.Fatalf("unsafe or incomplete attribution %s: %s", attributionPath, content)
+		}
 	}
 	stdout.Reset()
 	stderr.Reset()

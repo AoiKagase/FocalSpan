@@ -20,6 +20,7 @@ type RunRequest struct {
 	Profiles     []Profile
 	Repeat       int
 	Workspace    string
+	Attribution  bool
 }
 
 type Runner struct {
@@ -47,6 +48,7 @@ type RunReport struct {
 	Quality         []QualityResult     `json:"quality"`
 	Aggregate       AggregateQuality    `json:"aggregate"`
 	Performance     []PerformanceResult `json:"performance,omitempty"`
+	Attributions    []AttributionResult `json:"-"`
 	Runs            []CaseRun           `json:"-"`
 }
 
@@ -99,10 +101,21 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 			_ = engine.Close()
 			return RunReport{}, buildErr
 		}
+		expectations := attributionExpectations(benchmarkCase)
+		var indexed []AttributionIdentity
+		if request.Attribution {
+			indexed, err = engine.AttributionIdentities(ctx, expectations)
+			if err != nil {
+				_ = engine.Close()
+				return RunReport{}, err
+			}
+		}
 		for _, profile := range request.Profiles {
 			for _, budget := range profile.Budgets {
 				run := CaseRun{CaseID: benchmarkCase.ID, Profile: profile.Name, Budget: budget, Changes: changes, Index: measurement, Deterministic: true}
 				var canonical []byte
+				var canonicalAttribution []byte
+				var attribution AttributionResult
 				queryDurations := make([]int64, 0, request.Repeat)
 				for repeat := 0; repeat < request.Repeat; repeat++ {
 					queryStarted := time.Now()
@@ -119,7 +132,18 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 						}
 						canonical = encoded
 					} else {
-						packet, queryErr := engine.QueryEvidence(ctx, app.EvidenceQueryRequest{Query: benchmarkCase.Query, TokenBudget: budget, Mode: profile.EvidenceMode, NoUpdate: true, RetrievalMode: profile.RetrievalMode})
+						queryRequest := app.EvidenceQueryRequest{Query: benchmarkCase.Query, TokenBudget: budget, Mode: profile.EvidenceMode, NoUpdate: true, RetrievalMode: profile.RetrievalMode}
+						var packet evidence.Packet
+						var traceInput AttributionInput
+						var queryErr error
+						if request.Attribution {
+							var attributed app.AttributedEvidenceResult
+							attributed, queryErr = engine.QueryEvidenceAttributed(ctx, queryRequest)
+							packet = attributed.Compile.Packet
+							traceInput = attributionInput(indexed, attributed)
+						} else {
+							packet, queryErr = engine.QueryEvidence(ctx, queryRequest)
+						}
 						if queryErr != nil {
 							_ = engine.Close()
 							return RunReport{}, queryErr
@@ -131,10 +155,30 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 							run.Deterministic = false
 						}
 						canonical = encoded
+						if request.Attribution {
+							labels, attributionErr := AttributeLabels(expectations, traceInput)
+							if attributionErr != nil {
+								_ = engine.Close()
+								return RunReport{}, attributionErr
+							}
+							attribution = AttributionResult{Schema: AttributionSchemaV1, CaseID: benchmarkCase.ID, RepositoryID: benchmarkCase.Repository, Profile: profile.Name, Budget: budget, Labels: labels}
+							encodedAttribution, attributionErr := MarshalAttribution([]AttributionResult{attribution})
+							if attributionErr != nil {
+								_ = engine.Close()
+								return RunReport{}, attributionErr
+							}
+							if repeat > 0 && string(encodedAttribution) != string(canonicalAttribution) {
+								run.Deterministic = false
+							}
+							canonicalAttribution = encodedAttribution
+						}
 					}
 					queryDurations = append(queryDurations, time.Since(queryStarted).Milliseconds())
 				}
 				report.Runs = append(report.Runs, run)
+				if request.Attribution && profile.Contract != "legacy" {
+					report.Attributions = append(report.Attributions, attribution)
+				}
 				if run.Packet != nil {
 					changedPaths := make([]string, 0, len(changes.Files))
 					for _, changed := range changes.Files {
@@ -195,6 +239,38 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 	}
 	report.Aggregate = AggregateResults(report.Quality)
 	return report, nil
+}
+
+func attributionExpectations(benchmarkCase Case) []AttributionExpectation {
+	expectations := make([]AttributionExpectation, 0, len(benchmarkCase.RequiredPaths)+len(benchmarkCase.RequiredSymbols)+len(benchmarkCase.Expand))
+	for _, requiredPath := range benchmarkCase.RequiredPaths {
+		expectations = append(expectations, AttributionExpectation{Expectation: "required_path", Path: requiredPath})
+	}
+	for _, requiredSymbol := range benchmarkCase.RequiredSymbols {
+		expectations = append(expectations, AttributionExpectation{Expectation: "required_symbol", Path: requiredSymbol.Path, Symbol: requiredSymbol.Name, Kind: requiredSymbol.Kind})
+	}
+	for _, expansion := range benchmarkCase.Expand {
+		expectations = append(expectations, AttributionExpectation{Expectation: "expansion_anchor", Path: expansion.From.Path, Symbol: expansion.From.Name, Kind: expansion.From.Kind, Relation: expansion.Relation})
+	}
+	return expectations
+}
+
+func attributionInput(indexed []AttributionIdentity, result app.AttributedEvidenceResult) AttributionInput {
+	input := AttributionInput{Indexed: append([]AttributionIdentity(nil), indexed...)}
+	for _, retrieved := range result.Trace.Retrieved {
+		input.Retrieved = append(input.Retrieved, AttributionObservation{
+			AttributionIdentity: AttributionIdentity{Path: retrieved.Path, Symbol: retrieved.Symbol, Kind: retrieved.Kind},
+			Retriever:           string(retrieved.Retriever), Position: retrieved.Position,
+			Relation: retrieved.Relation, RelationResolved: retrieved.RelationResolved,
+		})
+	}
+	for _, candidate := range result.Trace.Candidates {
+		input.Ranked = append(input.Ranked, AttributionIdentity{Path: candidate.Path, Symbol: candidate.Symbol, Kind: candidate.Kind})
+	}
+	for _, item := range result.Compile.Packet.Evidence {
+		input.Packed = append(input.Packed, AttributionIdentity{Path: item.Location.Path, Symbol: item.Symbol, Kind: item.Kind})
+	}
+	return input
 }
 
 func boolInt(value bool) int {

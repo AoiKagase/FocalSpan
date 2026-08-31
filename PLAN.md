@@ -136,8 +136,8 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   normal-output changes. (2026-08-31; 105 focused package tests, 157 dedicated
   CLI/MCP/Evidence tests, and 664 full tests/46 packages passed; diff check
   passed.)
-- [ ] Task 4 two-case smoke and one eight-case repeat-1 attribution diagnostic
-  completed.
+- [x] Task 4 two-case smoke and one eight-case repeat-1 attribution diagnostic
+  completed. (2026-08-31; diagnostic 1 run, retry 0; 95 labels classified.)
 - [ ] Task 5 exactly one improvement target and acceptance contract frozen in
   the Decision Log before production code changes.
 - [ ] Task 6 selected retriever or linker improvement implemented with TDD.
@@ -179,6 +179,10 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   retriever. The trace intentionally preserves every list occurrence in
   retriever execution order with a one-based position; later attribution keeps
   all matching hits rather than prematurely deduplicating stage evidence.
+- 2026-08-31: The eight-case diagnostic produced no not-indexed, linker, or
+  ranking terminal rows. Across 40 Evidence-profile results, 55 of 95 labels
+  were retrieval misses, 35 were ranked but omitted by packing, and 5 required
+  paths were packed. No required symbol or expansion anchor was packed.
 
 ---
 
@@ -203,6 +207,10 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   validation, retrieval, and compile path. The only switch is the internal
   search `Trace` flag; benchmark code receives the compile result and trace,
   while ordinary callers continue to receive the original `CompileResult`.
+- 2026-08-31: Indexed-label checks belong in the benchmark engine adapter, not
+  product APIs. They use existing capped exact-symbol/path store searches and
+  exact path/name/optional-kind filtering once per historical case, after the
+  shared index build and before profile/budget queries.
 - 2026-08-31: Freeze the improvement only after the eight-case repeat-1 trace.
   Choose the stage with the greatest number of actionable misses; a tie selects
   retrieval because it is earlier in the pipeline and requires fewer semantic
@@ -244,6 +252,18 @@ so its existing one-index-per-case lifecycle is unchanged. Search/app/benchmark
 focused packages passed 105 tests; the full repository passed 664 tests in 46
 packages, the dedicated CLI/MCP/Evidence packages passed 157 tests, and diff
 check passed.
+
+Task 4 joined indexed, raw-retrieved, ranked, and packed identities only when
+the new benchcli attribution outputs are requested. The development two-case
+repeat-1 smoke ran once and returned 12 quality results, compatible true and
+zero regressions; its 25 labels were retrieval misses. The planned eight-case
+repeat-1 diagnostic then ran once with retry count zero and returned 48 quality
+results, also compatible true with zero regressions. Its 40 Evidence-profile
+results classified 95 labels as 55 retrieval missing, 35 packing dropped, and
+5 packed. Privacy, finite-value, JSON, LF, and residue checks passed; temporary
+quality/workspace artifacts were removed. Focused benchmark/benchcli tests
+passed 61 tests, the full suite passed 665 tests in 46 packages, and diff check
+passed. No full repeat-3 candidate run has occurred.
 
 ---
 
@@ -432,16 +452,16 @@ report or metrics type needs to change.
 **Files:** modify benchmark runner/report, benchcli run/tests, PLAN/findings;
 create `docs/benchmarks/attribution-v0.6.{json,md}`.
 
-- [ ] Write failing runner tests requiring labels for every required path,
+- [x] Write failing runner tests requiring labels for every required path,
   required symbol, and expansion anchor in each Evidence result; legacy gets no
   fabricated attribution.
-- [ ] Verify RED, implement exact joins and deterministic source-free output.
-- [ ] Run the two development cases at repeat 1; require unchanged comparison
+- [x] Verify RED, implement exact joins and deterministic source-free output.
+- [x] Run the two development cases at repeat 1; require unchanged comparison
   and clean privacy fields.
-- [ ] Record before the diagnostic: eight cases, repeat 1, planned count 1,
+- [x] Record before the diagnostic: eight cases, repeat 1, planned count 1,
   reason = classify frozen labels.
-- [ ] Run that eight-case repeat-1 diagnostic once; do not rebuild v0.5.
-- [ ] Scan for source, absolute path, username, environment, NaN/Infinity, and
+- [x] Run that eight-case repeat-1 diagnostic once; do not rebuild v0.5.
+- [x] Scan for source, absolute path, username, environment, NaN/Infinity, and
   generated residue; record stage counts and commit code/artifacts.
 
 ### Task 5: Freeze One Improvement Decision Before Production Code

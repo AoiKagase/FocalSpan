@@ -133,6 +133,8 @@ func runBenchmark(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	repeat := fs.Int("repeat", 3, "repeat")
 	jsonOut := fs.String("json-out", "", "JSON output")
 	markdownOut := fs.String("markdown-out", "", "Markdown output")
+	attributionJSONOut := fs.String("attribution-json-out", "", "development attribution JSON output")
+	attributionMarkdownOut := fs.String("attribution-markdown-out", "", "development attribution Markdown output")
 	force := fs.Bool("force", false, "overwrite")
 	keepWorkspace := fs.Bool("keep-workspace", false, "retain temporary benchmark workspace")
 	registryPath := fs.String("registry", "", "repository registry")
@@ -145,6 +147,10 @@ func runBenchmark(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	}
 	if *suitePath == "" || *jsonOut == "" || *markdownOut == "" {
 		return fmt.Errorf("--suite, --json-out, and --markdown-out are required")
+	}
+	attributionEnabled := *attributionJSONOut != "" || *attributionMarkdownOut != ""
+	if attributionEnabled && (*attributionJSONOut == "" || *attributionMarkdownOut == "") {
+		return fmt.Errorf("--attribution-json-out and --attribution-markdown-out must be used together")
 	}
 	suite, err := benchmark.LoadSuite(*suitePath)
 	if err != nil {
@@ -176,7 +182,7 @@ func runBenchmark(ctx context.Context, args []string, stdout, stderr io.Writer) 
 		return err
 	}
 	runner := benchmark.Runner{Snapshotter: benchmark.NewGitSnapshotter(benchmark.ExecCommandRunner{}), EngineFactory: benchmark.NewAppEngineFactory(), GitRunner: benchmark.ExecCommandRunner{}}
-	report, err := runner.Run(ctx, benchmark.RunRequest{Suite: suite, Repositories: repositories, Profiles: profiles, Repeat: *repeat, Workspace: workspace})
+	report, err := runner.Run(ctx, benchmark.RunRequest{Suite: suite, Repositories: repositories, Profiles: profiles, Repeat: *repeat, Workspace: workspace, Attribution: attributionEnabled})
 	if err != nil {
 		return err
 	}
@@ -194,6 +200,22 @@ func runBenchmark(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	}
 	if err := writeOutput(*markdownOut, []byte(markdown), *force); err != nil {
 		return err
+	}
+	if attributionEnabled {
+		attributionJSON, marshalErr := benchmark.MarshalAttribution(report.Attributions)
+		if marshalErr != nil {
+			return marshalErr
+		}
+		attributionMarkdown, renderErr := benchmark.RenderAttributionMarkdown(report.Attributions)
+		if renderErr != nil {
+			return renderErr
+		}
+		if err := writeOutput(*attributionJSONOut, append(attributionJSON, '\n'), *force); err != nil {
+			return err
+		}
+		if err := writeOutput(*attributionMarkdownOut, []byte(attributionMarkdown), *force); err != nil {
+			return err
+		}
 	}
 	fmt.Fprintf(stdout, "cases: %d\nquality results: %d\n", len(suite.Cases), len(report.Quality))
 	return nil

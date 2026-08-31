@@ -20,6 +20,7 @@ type Engine interface {
 	QueryLegacy(ctx context.Context, req app.QueryRequest) (model.ContextBundle, error)
 	QueryEvidence(ctx context.Context, req app.EvidenceQueryRequest) (evidence.Packet, error)
 	QueryEvidenceAttributed(ctx context.Context, req app.EvidenceQueryRequest) (app.AttributedEvidenceResult, error)
+	AttributionIdentities(ctx context.Context, expectations []AttributionExpectation) ([]AttributionIdentity, error)
 	ExpandEvidence(ctx context.Context, req app.EvidenceExpandRequest) (evidence.Packet, error)
 	Close() error
 }
@@ -81,6 +82,32 @@ func (engine *appEngine) QueryEvidence(ctx context.Context, req app.EvidenceQuer
 
 func (engine *appEngine) QueryEvidenceAttributed(ctx context.Context, req app.EvidenceQueryRequest) (app.AttributedEvidenceResult, error) {
 	return engine.service.QueryEvidenceAttributed(ctx, req)
+}
+
+func (engine *appEngine) AttributionIdentities(ctx context.Context, expectations []AttributionExpectation) ([]AttributionIdentity, error) {
+	identities := make([]AttributionIdentity, 0, len(expectations))
+	for _, expectation := range expectations {
+		var candidates []model.RankedCandidate
+		var err error
+		if expectation.Expectation == "required_path" {
+			candidates, err = engine.service.Store.SearchPaths(ctx, []string{expectation.Path}, 500)
+		} else {
+			candidates, err = engine.service.Store.SearchExactSymbols(ctx, []string{expectation.Symbol}, 500)
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, candidate := range candidates {
+			if candidate.Path != expectation.Path {
+				continue
+			}
+			if expectation.Expectation != "required_path" && (candidate.Symbol != expectation.Symbol || expectation.Kind != "" && candidate.Kind != expectation.Kind) {
+				continue
+			}
+			identities = append(identities, AttributionIdentity{Path: candidate.Path, Symbol: candidate.Symbol, Kind: candidate.Kind})
+		}
+	}
+	return identities, nil
 }
 
 func (engine *appEngine) ExpandEvidence(ctx context.Context, req app.EvidenceExpandRequest) (evidence.Packet, error) {

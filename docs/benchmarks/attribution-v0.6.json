@@ -1,0 +1,2727 @@
+[
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "php-extractor-integration",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 1024,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/indexer/indexer.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/indexer/indexer.go",
+        "symbol": "Run",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "expansion_anchor",
+        "path": "internal/indexer/indexer.go",
+        "symbol": "Run",
+        "relation": "callers",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "php-extractor-integration",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/indexer/indexer.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/indexer/indexer.go",
+        "symbol": "Run",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "expansion_anchor",
+        "path": "internal/indexer/indexer.go",
+        "symbol": "Run",
+        "relation": "callers",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "php-extractor-integration",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 4096,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/indexer/indexer.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/indexer/indexer.go",
+        "symbol": "Run",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "expansion_anchor",
+        "path": "internal/indexer/indexer.go",
+        "symbol": "Run",
+        "relation": "callers",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "php-extractor-integration",
+    "repository_id": "self",
+    "profile": "fts-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/indexer/indexer.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/indexer/indexer.go",
+        "symbol": "Run",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "expansion_anchor",
+        "path": "internal/indexer/indexer.go",
+        "symbol": "Run",
+        "relation": "callers",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "php-extractor-integration",
+    "repository_id": "self",
+    "profile": "no-relations-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/indexer/indexer.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/indexer/indexer.go",
+        "symbol": "Run",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "expansion_anchor",
+        "path": "internal/indexer/indexer.go",
+        "symbol": "Run",
+        "relation": "callers",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "cpp-extractor-registry",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 1024,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/app/service.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/app/service.go",
+        "symbol": "NewWithConfig",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "cpp-extractor-registry",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/app/service.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/app/service.go",
+        "symbol": "NewWithConfig",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "cpp-extractor-registry",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 4096,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/app/service.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/app/service.go",
+        "symbol": "NewWithConfig",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "cpp-extractor-registry",
+    "repository_id": "self",
+    "profile": "fts-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/app/service.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/app/service.go",
+        "symbol": "NewWithConfig",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "cpp-extractor-registry",
+    "repository_id": "self",
+    "profile": "no-relations-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/app/service.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/app/service.go",
+        "symbol": "NewWithConfig",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "jsts-search-integration",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 1024,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/search/search.go",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 6,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 40,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 41,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 42,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 43,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 44,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 46,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 47,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 50,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 51,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 53,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 56,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 57,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 58,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 60,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 62,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 66,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 71,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 83,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 10
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/search/search.go",
+        "symbol": "Search",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 6,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 10
+      },
+      {
+        "expectation": "expansion_anchor",
+        "path": "internal/search/search.go",
+        "symbol": "Search",
+        "relation": "callers",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 6,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 10
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "jsts-search-integration",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/search/search.go",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 6,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 40,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 41,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 42,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 43,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 44,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 46,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 47,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 50,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 51,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 53,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 56,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 57,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 58,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 60,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 62,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 66,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 71,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 83,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 10
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/search/search.go",
+        "symbol": "Search",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 6,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 10
+      },
+      {
+        "expectation": "expansion_anchor",
+        "path": "internal/search/search.go",
+        "symbol": "Search",
+        "relation": "callers",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 6,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 10
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "jsts-search-integration",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 4096,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/search/search.go",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 6,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 40,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 41,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 42,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 43,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 44,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 46,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 47,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 50,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 51,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 53,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 56,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 57,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 58,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 60,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 62,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 66,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 71,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 83,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 10
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/search/search.go",
+        "symbol": "Search",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 6,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 10
+      },
+      {
+        "expectation": "expansion_anchor",
+        "path": "internal/search/search.go",
+        "symbol": "Search",
+        "relation": "callers",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 6,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 10
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "jsts-search-integration",
+    "repository_id": "self",
+    "profile": "fts-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/search/search.go",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 6,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 40,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 41,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 42,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 43,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 44,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 46,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 47,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 50,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 51,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 53,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 56,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 57,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 58,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 60,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 62,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 66,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 71,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 83,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 2
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/search/search.go",
+        "symbol": "Search",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 6,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 2
+      },
+      {
+        "expectation": "expansion_anchor",
+        "path": "internal/search/search.go",
+        "symbol": "Search",
+        "relation": "callers",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 6,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 2
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "jsts-search-integration",
+    "repository_id": "self",
+    "profile": "no-relations-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/search/search.go",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 6,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 40,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 41,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 42,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 43,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 44,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 46,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 47,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 50,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 51,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 53,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 56,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 57,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 58,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 60,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 62,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 66,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 71,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 83,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 10
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/search/search.go",
+        "symbol": "Search",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 6,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 10
+      },
+      {
+        "expectation": "expansion_anchor",
+        "path": "internal/search/search.go",
+        "symbol": "Search",
+        "relation": "callers",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 6,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 10
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "rust-registry-integration",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 1024,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/app/service.go",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 21,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 23,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 24,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 35,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 37,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 39,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 49,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 63,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 89,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 96,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 97,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 98,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 99,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 100,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 3
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/app/service.go",
+        "symbol": "NewWithConfig",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 21,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 32
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "rust-registry-integration",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/app/service.go",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 21,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 23,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 24,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 35,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 37,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 39,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 49,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 63,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 89,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 96,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 97,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 98,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 99,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 100,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 3
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/app/service.go",
+        "symbol": "NewWithConfig",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 21,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 32
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "rust-registry-integration",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 4096,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/app/service.go",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 21,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 23,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 24,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 35,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 37,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 39,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 49,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 63,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 89,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 96,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 97,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 98,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 99,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 100,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 3
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/app/service.go",
+        "symbol": "NewWithConfig",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 21,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 32
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "rust-registry-integration",
+    "repository_id": "self",
+    "profile": "fts-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/app/service.go",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 21,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 23,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 24,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 35,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 37,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 39,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 49,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 63,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 89,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 96,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 97,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 98,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 99,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 100,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 3
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/app/service.go",
+        "symbol": "NewWithConfig",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 21,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 32
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "rust-registry-integration",
+    "repository_id": "self",
+    "profile": "no-relations-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/app/service.go",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 21,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 23,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 24,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 35,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 37,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 39,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 49,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 63,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 89,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 96,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 97,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 98,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 99,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 100,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 3
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/app/service.go",
+        "symbol": "NewWithConfig",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 21,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 32
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "dotnet-structural-registry",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 1024,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/app/service.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/app/service.go",
+        "symbol": "NewWithConfig",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "dotnet-structural-registry",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/app/service.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/app/service.go",
+        "symbol": "NewWithConfig",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "dotnet-structural-registry",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 4096,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/app/service.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/app/service.go",
+        "symbol": "NewWithConfig",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "dotnet-structural-registry",
+    "repository_id": "self",
+    "profile": "fts-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/app/service.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/app/service.go",
+        "symbol": "NewWithConfig",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "dotnet-structural-registry",
+    "repository_id": "self",
+    "profile": "no-relations-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/app/service.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/app/service.go",
+        "symbol": "NewWithConfig",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "japanese-query-normalization",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 1024,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/search/query.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/search/query.go",
+        "symbol": "NormalizeQuery",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "japanese-query-normalization",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/search/query.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/search/query.go",
+        "symbol": "NormalizeQuery",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "japanese-query-normalization",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 4096,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/search/query.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/search/query.go",
+        "symbol": "NormalizeQuery",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "japanese-query-normalization",
+    "repository_id": "self",
+    "profile": "fts-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/search/query.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/search/query.go",
+        "symbol": "NormalizeQuery",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "japanese-query-normalization",
+    "repository_id": "self",
+    "profile": "no-relations-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/search/query.go",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/search/query.go",
+        "symbol": "NormalizeQuery",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "project-metadata-indexing",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 1024,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/indexer/indexer.go",
+        "terminal_stage": "packed",
+        "reason_code": "selected_in_packet",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 13,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 17,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 36,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 37,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 49,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 50,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 52,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 53,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 54,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 55,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 56,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 57,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 58,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 59,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 60,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 61,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 71,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 72,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 73,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 74,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 75,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 76,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 77,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 86,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 88,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 2,
+        "packed_position": 1
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/indexer/indexer.go",
+        "symbol": "Run",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 50,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 20
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "project-metadata-indexing",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/indexer/indexer.go",
+        "terminal_stage": "packed",
+        "reason_code": "selected_in_packet",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 13,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 17,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 36,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 37,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 49,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 50,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 52,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 53,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 54,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 55,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 56,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 57,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 58,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 59,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 60,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 61,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 71,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 72,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 73,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 74,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 75,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 76,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 77,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 86,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 88,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 2,
+        "packed_position": 1
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/indexer/indexer.go",
+        "symbol": "Run",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 50,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 20
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "project-metadata-indexing",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 4096,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/indexer/indexer.go",
+        "terminal_stage": "packed",
+        "reason_code": "selected_in_packet",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 13,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 17,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 36,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 37,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 49,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 50,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 52,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 53,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 54,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 55,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 56,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 57,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 58,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 59,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 60,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 61,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 71,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 72,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 73,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 74,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 75,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 76,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 77,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 86,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 88,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 2,
+        "packed_position": 1
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/indexer/indexer.go",
+        "symbol": "Run",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 50,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 20
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "project-metadata-indexing",
+    "repository_id": "self",
+    "profile": "fts-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/indexer/indexer.go",
+        "terminal_stage": "packed",
+        "reason_code": "selected_in_packet",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 13,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 17,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 36,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 37,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 49,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 50,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 52,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 53,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 54,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 55,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 56,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 57,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 58,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 59,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 60,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 61,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 71,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 72,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 73,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 74,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 75,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 76,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 77,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 86,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 88,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 2,
+        "packed_position": 1
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/indexer/indexer.go",
+        "symbol": "Run",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 50,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 20
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "project-metadata-indexing",
+    "repository_id": "self",
+    "profile": "no-relations-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/indexer/indexer.go",
+        "terminal_stage": "packed",
+        "reason_code": "selected_in_packet",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 13,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 17,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 36,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 37,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 49,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 50,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 52,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 53,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 54,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 55,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 56,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 57,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 58,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 59,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 60,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 61,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 71,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 72,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 73,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 74,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 75,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 76,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 77,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 86,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 88,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 2,
+        "packed_position": 1
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/indexer/indexer.go",
+        "symbol": "Run",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 50,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 20
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "mcp-evidence-output",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 1024,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/mcpserver/server.go",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 11,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 81,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 12
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/mcpserver/server.go",
+        "symbol": "codeContext",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "expansion_anchor",
+        "path": "internal/mcpserver/server.go",
+        "symbol": "codeContext",
+        "relation": "references",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "mcp-evidence-output",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/mcpserver/server.go",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 11,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 81,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 12
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/mcpserver/server.go",
+        "symbol": "codeContext",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "expansion_anchor",
+        "path": "internal/mcpserver/server.go",
+        "symbol": "codeContext",
+        "relation": "references",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "mcp-evidence-output",
+    "repository_id": "self",
+    "profile": "full-evidence-focused",
+    "budget": 4096,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/mcpserver/server.go",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 11,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 81,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 12
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/mcpserver/server.go",
+        "symbol": "codeContext",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "expansion_anchor",
+        "path": "internal/mcpserver/server.go",
+        "symbol": "codeContext",
+        "relation": "references",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "mcp-evidence-output",
+    "repository_id": "self",
+    "profile": "fts-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/mcpserver/server.go",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 11,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 81,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 12
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/mcpserver/server.go",
+        "symbol": "codeContext",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "expansion_anchor",
+        "path": "internal/mcpserver/server.go",
+        "symbol": "codeContext",
+        "relation": "references",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  },
+  {
+    "schema": "focalspan.benchmark-attribution.v1",
+    "case_id": "mcp-evidence-output",
+    "repository_id": "self",
+    "profile": "no-relations-evidence-focused",
+    "budget": 2048,
+    "labels": [
+      {
+        "expectation": "required_path",
+        "path": "internal/mcpserver/server.go",
+        "terminal_stage": "packing_dropped",
+        "reason_code": "omitted_by_packer",
+        "retriever_hits": [
+          {
+            "retriever": "fts",
+            "position": 11,
+            "relation_state": "none"
+          },
+          {
+            "retriever": "fts",
+            "position": 81,
+            "relation_state": "none"
+          }
+        ],
+        "ranked_position": 12
+      },
+      {
+        "expectation": "required_symbol",
+        "path": "internal/mcpserver/server.go",
+        "symbol": "codeContext",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      },
+      {
+        "expectation": "expansion_anchor",
+        "path": "internal/mcpserver/server.go",
+        "symbol": "codeContext",
+        "relation": "references",
+        "terminal_stage": "retrieval_missing",
+        "reason_code": "no_retriever_match"
+      }
+    ]
+  }
+]

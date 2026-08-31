@@ -27,8 +27,46 @@ after comparison. No eight-case quality run was performed in Task 1.
 
 ## Attribution measurement
 
-This section will receive source-free stage counts from the single eight-case
-repeat-1 diagnostic after the attribution schema and adapter pass their privacy
-and determinism gates. It is not a placeholder for a chosen optimization: the
-selection rule is already frozen in root `PLAN.md`, and no production change is
-allowed before the measured Decision Log commit.
+Task 4 added an opt-in development-only trace and exact-label join without
+changing normal CLI, MCP, or Evidence Packet output. Focused RED tests first
+failed for the absent runner and benchcli attribution APIs. The implementation
+then passed 61 benchmark/benchcli tests and 665 full repository tests in 46
+packages; `git diff --check` passed.
+
+The bounded two-case repeat-1 smoke ran once after integration:
+
+- Cases: `php-extractor-integration`, `cpp-extractor-registry`.
+- Profiles: `default`; repeat: 1.
+- Quality: 2 cases, 12 results; v0.5 comparison compatible true, 0 regressions.
+- Attribution: 25 labels, all `retrieval_missing`.
+- Privacy scan: no source field/text sentinel, absolute path, username, secret
+  sentinel, environment value, NaN, or Infinity.
+
+The single planned diagnostic then ran once, with no retry:
+
+- Reason: classify the frozen required paths, required symbols, and expansion
+  anchors before selecting any production change.
+- Scope: 8 cases, `default` profiles, repeat 1; 48 quality results.
+- Attribution: 40 Evidence-profile results and 95 labels. Legacy profiles
+  received no fabricated attribution.
+- v0.5 quality comparison: compatible true, 0 regressions.
+- Terminal stages: 55 `retrieval_missing`, 35 `packing_dropped`, 5 `packed`,
+  and zero `label_not_indexed`, `linking_unresolved`, or `ranking_dropped`.
+
+| Expectation | Retrieval missing | Packing dropped | Packed |
+|---|---:|---:|---:|
+| Required path | 20 | 15 | 5 |
+| Required symbol | 25 | 15 | 0 |
+| Expansion anchor | 10 | 5 | 0 |
+
+Artifacts are `attribution-v0.6.json` and `attribution-v0.6.md`; their Git blob
+IDs before commit are `a90fb06e00db7a6f9240fa9935ff1c823b1f5878` and
+`e61943f97ea06edf5b7d1dd8fd47df6de87fe6cc`. Both parse/render with LF endings
+and contain no source, absolute path, username, environment value, secret
+sentinel, NaN, Infinity, or normal-output debug field. Temporary candidate
+quality files, indexes, and workspaces were removed.
+
+These counts are measurements, not a selected optimization. The Task 5
+Decision Log commit must exclude the zero `label_not_indexed` rows, compare the
+actionable retrieval and linking misses under the predeclared rule, freeze one
+coherent subset and numeric gates, and contain no production change.

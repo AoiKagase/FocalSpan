@@ -40,6 +40,9 @@ func (f *fakeSnapshotter) Materialize(context.Context, string, string, string, s
 type fakeEngineFactory struct {
 	opens, builds, queries, closes int
 	retrievalModes                 []search.RetrievalMode
+	indexed                        []AttributionIdentity
+	attributed                     app.AttributedEvidenceResult
+	indexedCalls                   int
 }
 
 func (f *fakeEngineFactory) Open(string) (Engine, error) {
@@ -65,8 +68,17 @@ func (f *fakeEngine) QueryEvidence(_ context.Context, req app.EvidenceQueryReque
 }
 
 func (f *fakeEngine) QueryEvidenceAttributed(ctx context.Context, req app.EvidenceQueryRequest) (app.AttributedEvidenceResult, error) {
+	if f.factory.attributed.Compile.Packet.Schema != "" {
+		f.factory.queries++
+		f.factory.retrievalModes = append(f.factory.retrievalModes, req.RetrievalMode)
+		return f.factory.attributed, nil
+	}
 	packet, err := f.QueryEvidence(ctx, req)
 	return app.AttributedEvidenceResult{Compile: evidence.CompileResult{Packet: packet}}, err
+}
+func (f *fakeEngine) AttributionIdentities(context.Context, []AttributionExpectation) ([]AttributionIdentity, error) {
+	f.factory.indexedCalls++
+	return append([]AttributionIdentity(nil), f.factory.indexed...), nil
 }
 func (f *fakeEngine) ExpandEvidence(context.Context, app.EvidenceExpandRequest) (evidence.Packet, error) {
 	return evidence.Packet{}, nil
@@ -113,5 +125,49 @@ func TestRunnerSequencesCasesProfilesBudgetsAndRepeats(t *testing.T) {
 	}
 	if len(report.Performance) != 4 || len(report.Performance[0].QueryMS) != 2 {
 		t.Fatalf("performance = %+v", report.Performance)
+	}
+}
+
+func TestRunnerAttributesEveryRequiredLabelAndExpansionAnchor(t *testing.T) {
+	root := t.TempDir()
+	for _, path := range []string{"required.go", "anchor.go"} {
+		if err := os.WriteFile(root+"/"+path, []byte("package fixture"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	factory := &fakeEngineFactory{
+		indexed: []AttributionIdentity{{Path: "required.go", Symbol: "Target", Kind: "function"}, {Path: "anchor.go", Symbol: "Anchor", Kind: "function"}},
+		attributed: app.AttributedEvidenceResult{
+			Compile: evidence.CompileResult{Packet: evidence.Packet{Schema: evidence.SchemaContextV1, Intent: "definition", Mode: evidence.ModeFocused, Budget: evidence.Budget{Limit: 1024}, Evidence: []evidence.Item{{Location: evidence.Location{Path: "required.go"}, Symbol: "Target", Kind: "function"}}}},
+			Trace: search.SearchTrace{
+				Retrieved:  []search.StageCandidateTrace{{Retriever: search.RetrieverSymbol, Position: 1, Path: "required.go", Symbol: "Target", Kind: "function"}},
+				Candidates: []search.CandidateTrace{{Path: "required.go", Symbol: "Target", Kind: "function", RankedPosition: 1}},
+			},
+		},
+	}
+	runner := Runner{Snapshotter: &fakeSnapshotter{root: root}, EngineFactory: factory}
+	report, err := runner.Run(context.Background(), RunRequest{
+		Suite: Suite{Name: "suite", Cases: []Case{{
+			ID: "case", Repository: "self", BaseRef: "base", TargetRef: "target", Query: "Target", Budgets: []int{1024},
+			RequiredPaths: []string{"required.go"}, RequiredSymbols: []SymbolExpectation{{Path: "required.go", Name: "Target", Kind: "function"}},
+			Expand: []ExpandExpectation{{Relation: "callers", From: SymbolExpectation{Path: "anchor.go", Name: "Anchor", Kind: "function"}, Budget: 512}},
+		}}},
+		Repositories: map[string]string{"self": root}, Profiles: []Profile{
+			{Name: "evidence", Contract: "evidence", EvidenceMode: evidence.ModeFocused, Budgets: []int{1024}},
+			{Name: "legacy", Contract: "legacy", EvidenceMode: evidence.ModeFocused, Budgets: []int{1024}},
+		},
+		Repeat: 1, Workspace: t.TempDir(), Attribution: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if factory.indexedCalls != 1 || len(report.Attributions) != 1 || len(report.Attributions[0].Labels) != 3 {
+		t.Fatalf("indexed calls=%d attributions=%+v", factory.indexedCalls, report.Attributions)
+	}
+	want := []string{StagePacked, StagePacked, StageRetrievalMissing}
+	for index, stage := range want {
+		if report.Attributions[0].Labels[index].TerminalStage != stage {
+			t.Fatalf("label %d=%+v, want %s", index, report.Attributions[0].Labels[index], stage)
+		}
 	}
 }
