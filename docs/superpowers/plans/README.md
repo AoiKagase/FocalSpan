@@ -8,6 +8,7 @@ Policy: [`../../../PLANS.md`](../../../PLANS.md)
 - [`2026-08-28-v0.1-bootstrap.md`](completed/2026-08-28-v0.1-bootstrap.md)
 - [`2026-08-30-v0.4-llm-evidence-contract.md`](completed/2026-08-30-v0.4-llm-evidence-contract.md)
 - [`2026-08-31-v0.5-real-repository-evaluation.md`](completed/2026-08-31-v0.5-real-repository-evaluation.md)
+- [`2026-08-31-v0.6-candidate-attribution-and-coverage.md`](completed/2026-08-31-v0.6-candidate-attribution-and-coverage.md)
 - [`2026-08-28-php-structural-extraction.md`](2026-08-28-php-structural-extraction.md)
 
 ## Superseded
