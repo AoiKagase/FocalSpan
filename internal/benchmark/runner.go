@@ -90,16 +90,16 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 				return RunReport{}, err
 			}
 		}
+		engine, openErr := runner.EngineFactory.Open(snapshot.Root)
+		if openErr != nil {
+			return RunReport{}, openErr
+		}
+		measurement, buildErr := engine.Build(ctx)
+		if buildErr != nil {
+			_ = engine.Close()
+			return RunReport{}, buildErr
+		}
 		for _, profile := range request.Profiles {
-			engine, openErr := runner.EngineFactory.Open(snapshot.Root, profile.RetrievalMode)
-			if openErr != nil {
-				return RunReport{}, openErr
-			}
-			measurement, buildErr := engine.Build(ctx)
-			if buildErr != nil {
-				_ = engine.Close()
-				return RunReport{}, buildErr
-			}
 			for _, budget := range profile.Budgets {
 				run := CaseRun{CaseID: benchmarkCase.ID, Profile: profile.Name, Budget: budget, Changes: changes, Index: measurement, Deterministic: true}
 				var canonical []byte
@@ -107,7 +107,7 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 				for repeat := 0; repeat < request.Repeat; repeat++ {
 					queryStarted := time.Now()
 					if profile.Contract == "legacy" {
-						bundle, queryErr := engine.QueryLegacy(ctx, app.QueryRequest{Query: benchmarkCase.Query, TokenBudget: budget, Mode: string(profile.EvidenceMode), NoUpdate: true})
+						bundle, queryErr := engine.QueryLegacy(ctx, app.QueryRequest{Query: benchmarkCase.Query, TokenBudget: budget, Mode: string(profile.EvidenceMode), NoUpdate: true, RetrievalMode: profile.RetrievalMode})
 						if queryErr != nil {
 							_ = engine.Close()
 							return RunReport{}, queryErr
@@ -119,7 +119,7 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 						}
 						canonical = encoded
 					} else {
-						packet, queryErr := engine.QueryEvidence(ctx, app.EvidenceQueryRequest{Query: benchmarkCase.Query, TokenBudget: budget, Mode: profile.EvidenceMode, NoUpdate: true})
+						packet, queryErr := engine.QueryEvidence(ctx, app.EvidenceQueryRequest{Query: benchmarkCase.Query, TokenBudget: budget, Mode: profile.EvidenceMode, NoUpdate: true, RetrievalMode: profile.RetrievalMode})
 						if queryErr != nil {
 							_ = engine.Close()
 							return RunReport{}, queryErr
@@ -188,9 +188,9 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 				}
 				report.Performance = append(report.Performance, PerformanceResult{CaseID: benchmarkCase.ID, Profile: profile.Name, Budget: budget, SnapshotMS: snapshotDuration.Milliseconds(), IndexMS: measurement.Duration.Milliseconds(), QueryMS: queryDurations, DatabaseBytes: measurement.DatabaseBytes, Files: measurement.Files, Symbols: measurement.Symbols, Chunks: measurement.Chunks, Relations: measurement.Relations})
 			}
-			if closeErr := engine.Close(); closeErr != nil {
-				return RunReport{}, closeErr
-			}
+		}
+		if closeErr := engine.Close(); closeErr != nil {
+			return RunReport{}, closeErr
 		}
 	}
 	report.Aggregate = AggregateResults(report.Quality)

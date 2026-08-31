@@ -60,7 +60,9 @@ func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) e
 	jsonOutput := fs.Bool("json", false, "JSON output")
 	registryPath := fs.String("registry", "", "repository registry")
 	var repoFlags stringList
+	var caseFlags stringList
 	fs.Var(&repoFlags, "repo", "ID=PATH repository mapping")
+	fs.Var(&caseFlags, "case", "case ID to validate (repeatable)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -68,6 +70,10 @@ func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) e
 		return fmt.Errorf("--suite is required")
 	}
 	suite, err := benchmark.LoadSuite(*suitePath)
+	if err != nil {
+		return err
+	}
+	suite, err = selectSuiteCases(suite, caseFlags)
 	if err != nil {
 		return err
 	}
@@ -131,7 +137,9 @@ func runBenchmark(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	keepWorkspace := fs.Bool("keep-workspace", false, "retain temporary benchmark workspace")
 	registryPath := fs.String("registry", "", "repository registry")
 	var repoFlags stringList
+	var caseFlags stringList
 	fs.Var(&repoFlags, "repo", "ID=PATH repository mapping")
+	fs.Var(&caseFlags, "case", "case ID to run (repeatable)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -139,6 +147,10 @@ func runBenchmark(ctx context.Context, args []string, stdout, stderr io.Writer) 
 		return fmt.Errorf("--suite, --json-out, and --markdown-out are required")
 	}
 	suite, err := benchmark.LoadSuite(*suitePath)
+	if err != nil {
+		return err
+	}
+	suite, err = selectSuiteCases(suite, caseFlags)
 	if err != nil {
 		return err
 	}
@@ -238,6 +250,8 @@ func runCompare(args []string, stdout, stderr io.Writer) error {
 	baseline := fs.String("baseline", "", "baseline")
 	candidate := fs.String("candidate", "", "candidate")
 	jsonOutput := fs.Bool("json", false, "JSON output")
+	var caseFlags stringList
+	fs.Var(&caseFlags, "case", "case ID to compare (repeatable)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -255,6 +269,14 @@ func runCompare(args []string, stdout, stderr io.Writer) error {
 	}
 	if err := json.Unmarshal(right, &candidateReport); err != nil {
 		return exitStatusError{3, "candidate report unreadable"}
+	}
+	baseReport, err = selectReportCases(baseReport, caseFlags)
+	if err != nil {
+		return exitStatusError{3, "baseline report: " + err.Error()}
+	}
+	candidateReport, err = selectReportCases(candidateReport, caseFlags)
+	if err != nil {
+		return exitStatusError{3, "candidate report: " + err.Error()}
 	}
 	comparison := benchmark.CompareReports(baseReport, candidateReport)
 	if *jsonOutput {

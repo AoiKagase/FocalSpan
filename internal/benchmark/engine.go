@@ -9,11 +9,10 @@ import (
 	"github.com/focalspan/focalspan/internal/app"
 	"github.com/focalspan/focalspan/internal/evidence"
 	"github.com/focalspan/focalspan/internal/model"
-	"github.com/focalspan/focalspan/internal/search"
 )
 
 type EngineFactory interface {
-	Open(root string, retrievalMode search.RetrievalMode) (Engine, error)
+	Open(root string) (Engine, error)
 }
 
 type Engine interface {
@@ -37,17 +36,16 @@ type appEngineFactory struct{}
 
 func NewAppEngineFactory() EngineFactory { return appEngineFactory{} }
 
-func (appEngineFactory) Open(root string, retrievalMode search.RetrievalMode) (Engine, error) {
+func (appEngineFactory) Open(root string) (Engine, error) {
 	service, err := app.New(root)
 	if err != nil {
 		return nil, err
 	}
-	return &appEngine{service: service, retrievalMode: retrievalMode}, nil
+	return &appEngine{service: service}, nil
 }
 
 type appEngine struct {
-	service       *app.Service
-	retrievalMode search.RetrievalMode
+	service *app.Service
 }
 
 func (engine *appEngine) Build(ctx context.Context) (IndexMeasurement, error) {
@@ -72,12 +70,10 @@ func (engine *appEngine) Build(ctx context.Context) (IndexMeasurement, error) {
 }
 
 func (engine *appEngine) QueryLegacy(ctx context.Context, req app.QueryRequest) (model.ContextBundle, error) {
-	req.RetrievalMode = engine.retrievalMode
 	return engine.service.Query(ctx, req)
 }
 
 func (engine *appEngine) QueryEvidence(ctx context.Context, req app.EvidenceQueryRequest) (evidence.Packet, error) {
-	req.RetrievalMode = engine.retrievalMode
 	result, err := engine.service.QueryEvidence(ctx, req)
 	return result.Packet, err
 }

@@ -527,3 +527,23 @@ checkout. A regression test now requires full history for test, race, and
 public-benchmark jobs, and the first two checkout steps use `fetch-depth: 0`.
 Focused and full local tests pass after the fix; no post-fix remote run has
 occurred, so Linux test, vet, and race remain remotely unverified.
+
+## Benchmark execution policy after v0.5
+
+The benchmark runner now builds one index per historical case and shares it
+across every profile and budget. Retrieval mode is supplied on each query, so
+full, FTS-only, no-relations, and legacy measurements retain their existing
+production behavior without rebuilding an identical snapshot index. No
+persistent cross-run cache was added.
+
+Push and pull-request CI now runs a two-case, repeat-1 smoke comparison against
+the corresponding rows of the checked-in v0.5 baseline. The eight-case,
+repeat-3 suite is manual-dispatch only. This change did not run a new full
+benchmark and therefore makes no measured wall-clock speedup claim. It changes
+neither the frozen evaluation values nor production parser, retrieval,
+relation-resolution, ranking, packing, or Evidence Packet behavior.
+
+Focused RED-to-GREEN tests verified the case-level build count, query-local
+retrieval modes, report filtering, and automatic/manual workflow split. Final
+local verification passed 657 tests in 46 packages and `go vet ./...`; no
+remote workflow or full public benchmark was run for this follow-up.

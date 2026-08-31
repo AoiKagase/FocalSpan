@@ -7,12 +7,11 @@ import (
 
 	"github.com/focalspan/focalspan/internal/app"
 	"github.com/focalspan/focalspan/internal/evidence"
-	"github.com/focalspan/focalspan/internal/search"
 )
 
 func TestAppEngineBuildAndQueryEvidence(t *testing.T) {
 	root := filepath.Join("..", "..", "testdata", "repos", "authsample")
-	engine, err := NewAppEngineFactory().Open(root, search.RetrievalFull)
+	engine, err := NewAppEngineFactory().Open(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +34,7 @@ func TestAppEngineBuildAndQueryEvidence(t *testing.T) {
 
 func TestAppEnginePropagatesCancellation(t *testing.T) {
 	root := filepath.Join("..", "..", "testdata", "repos", "authsample")
-	engine, err := NewAppEngineFactory().Open(root, search.RetrievalFull)
+	engine, err := NewAppEngineFactory().Open(root)
 	if err != nil {
 		t.Fatal(err)
 	}

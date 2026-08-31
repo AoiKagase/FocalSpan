@@ -301,6 +301,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - [x] Linux race CI and cross-platform build CI implemented. (2026-08-31T03:37:29Z; least-privilege workflow static test passed locally; no push occurred, so remote jobs remain unrun.)
 - [x] Public benchmark results and evidence-based v0.6 recommendation committed. (2026-08-31T03:31:40Z; two 8-case/48-result runs produced identical quality hash `f914facbfbf55c450fd26769bdc7bd6a992112dc` and compare exit 0.)
 - [ ] Full local verification completed and recorded, but remote CI follow-up remains incomplete. (2026-08-31T04:43:59Z local evidence passed; authenticated logs later showed that run `33358418421` failed test/race because those jobs used a shallow checkout. The local workflow fix is verified, but no remote rerun has occurred.)
+- [x] Benchmark execution accelerated without production tuning. (2026-08-31T05:26:52Z; runner/CLI/CI RED-to-GREEN coverage passed, then 657 tests in 46 packages and `go vet ./...` passed. Privacy and whitespace checks found no issue; the full benchmark was not run.)
 
 ---
 
@@ -321,6 +322,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - 2026-08-31 UTC: Final artifact review found an ignored root `focalspan.exe` left by an earlier native build. It was not tracked or staged and was removed explicitly; the final artifact scan found no executable, database, tar archive, candidate report, or benchmark workspace.
 - 2026-08-31 UTC: After the local Task 13 commit, `origin/master` unexpectedly advanced to the pre-amend commit `cb52479` without a push command from this execution. GitHub Actions run `33358418421` then passed all three CGO-free build jobs, failed Linux test and race jobs, and was cancelled by the user while the additional public benchmark was still measuring. The saved `gh` token is invalid and unsigned browser sessions cannot view logs, so the two failure root causes remain unverified rather than guessed.
 - 2026-08-31 UTC: After browser authentication, both failed remote logs showed only `TestRunValidatePublicSchemaFixture` and `TestRunScaffoldContainsNoSource`, each failing Git revision resolution with `fatal: Needed a single revision`. Test and race jobs used the default depth-one checkout while the tests require an older labeled commit and `HEAD~1`; a focused RED test caught both shallow jobs, and adding `fetch-depth: 0` to them produced GREEN locally.
+- 2026-08-31 UTC: Profiling the benchmark control flow confirmed the 50-minute run was dominated by redundant indexing, not query latency: one immutable historical snapshot was opened and force-indexed separately for every profile even though retrieval mode is already a per-query app request field. A RED runner test observed two builds for one case and two profiles; the shared-index implementation reduced that test to one build without changing result order or query modes.
 
 ---
 
@@ -336,6 +338,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - 2026-08-31: Replace whole-repository formatting with scoped formatting of Go package sources for Task 13 because the repository deliberately contains an invalid `.go` extractor fixture. This preserves the fixture's malformed-input contract; the consequence is that whole-tree `gofmt -w .` is recorded as failed rather than silently claimed as passing.
 - 2026-08-31: Supersede the earlier expectation that remote CI would remain unrun. An external push triggered run `33358418421`; record its three successful builds, failed test/race jobs, and cancelled public benchmark exactly. Do not rerun the public benchmark, and do not claim Linux race coverage until authenticated failure logs can be diagnosed and a later run passes.
 - 2026-08-31: Give test and race jobs full Git history because checked-in benchmark CLI tests deliberately validate historical refs. Keep the public benchmark cancelled and do not change its `--repeat 3`; a later remote verification may rerun only the failed test/race jobs after the workflow fix is pushed.
+- 2026-08-31: Supersede the earlier CI benchmark execution policy after the cancelled long run. Build one index per historical case and pass retrieval mode on each query, because all profiles inspect the same immutable snapshot and the product app already accepts query-local retrieval modes. Automatic push/PR CI compares two representative cases at repeat 1; the eight-case repeat-3 suite is manual-only. Do not add a persistent cache, rerun the full suite during this change, alter evaluation labels, or tune production retrieval/Evidence behavior.
 
 - **Decision:** Use one active root `PLAN.md`, a durable root `PLANS.md`, and immutable completed/superseded archives.
   **Rationale:** Overwriting a completed plan loses an easy-to-review history, while keeping many active-looking plans creates ambiguity for Codex. One active file preserves the simple workflow; archives preserve evidence.
@@ -385,6 +388,13 @@ public benchmark was cancelled by the user before comparison. Authenticated
 logs traced both failures to depth-one checkout missing historical refs. The
 workflow fix passes focused and full local tests, but no post-fix remote run has
 occurred, so the remote CI gate remains incomplete.
+
+The follow-up benchmark execution change removes profile-proportional index
+rebuilds: each historical case now has one engine/index shared by its profile
+and budget queries. Automatic CI uses a two-case repeat-1 comparison, while the
+eight-case repeat-3 measurement remains available only by manual dispatch. No
+new full benchmark timing is claimed; the speedup is verified by build-count
+tests and the long suite was deliberately not started.
 
 ---
 
@@ -1007,7 +1017,8 @@ Rules:
 For one case, two budgets, two profiles, and repeat count two, assert:
 
 - snapshot is materialized once per case/base commit, not once per budget;
-- index is built once per snapshot/profile only when retrieval mode requires a distinct service;
+- index is built once per case snapshot and shared across every profile and budget;
+- retrieval mode is passed on each quality query rather than stored on a separately rebuilt engine;
 - each quality query runs twice;
 - one warm-up query may run before timed repetitions but is excluded from quality counts;
 - engines close and workspace cleanup occurs after success and error;
@@ -1753,7 +1764,11 @@ On Ubuntu:
     go run ./cmd/focalspan-bench validate \
       --suite testdata/benchmark/focalspan-history.json
 
-Run the suite to a temporary candidate report and compare against `docs/benchmarks/results-v0.5.json`. Fail on quality regression exit code `2` or incompatibility `3`. Do not fail on timing warnings.
+For push and pull-request CI, validate and run only `php-extractor-integration` and
+`cpp-extractor-registry` with `--repeat 1`, then filter the checked-in baseline
+to the same two case IDs during comparison. Fail on quality regression exit
+code `2` or incompatibility `3`. Do not fail on timing warnings. Keep the full
+eight-case `--repeat 3` run in a separate `workflow_dispatch`-only job.
 
 - [x] **Step 4: Add workflow safety tests or static review**
 

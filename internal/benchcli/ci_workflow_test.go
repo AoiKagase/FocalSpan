@@ -52,11 +52,40 @@ func TestCIHistoryDependentJobsCheckoutFullHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	workflow := strings.ReplaceAll(string(data), "\r\n", "\n")
-	for _, job := range []string{"test", "race", "public-benchmark"} {
+	for _, job := range []string{"test", "race", "public-benchmark-smoke", "public-benchmark-full"} {
 		section := workflowJobSection(t, workflow, job)
 		if !strings.Contains(section, "fetch-depth: 0") {
 			t.Errorf("history-dependent job %q uses a shallow checkout", job)
 		}
+	}
+}
+
+func TestCISeparatesTwoCaseSmokeFromManualFullBenchmark(t *testing.T) {
+	path := filepath.Join("..", "..", ".github", "workflows", "ci.yml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := strings.ReplaceAll(string(data), "\r\n", "\n")
+	if !strings.Contains(workflow, "workflow_dispatch:") {
+		t.Fatal("workflow has no manual dispatch trigger")
+	}
+	smoke := workflowJobSection(t, workflow, "public-benchmark-smoke")
+	if !strings.Contains(smoke, "github.event_name != 'workflow_dispatch'") || !strings.Contains(smoke, "--repeat 1") {
+		t.Fatalf("smoke job is not limited to automatic repeat-1 runs:\n%s", smoke)
+	}
+	if got := strings.Count(smoke, "--case "); got != 6 {
+		t.Fatalf("smoke job --case count = %d, want 6 (two each for validate, run, and compare)", got)
+	}
+	if strings.Contains(smoke, "--repeat 3") {
+		t.Fatal("smoke job contains the full repeat count")
+	}
+	full := workflowJobSection(t, workflow, "public-benchmark-full")
+	if !strings.Contains(full, "github.event_name == 'workflow_dispatch'") || !strings.Contains(full, "--repeat 3") {
+		t.Fatalf("full job is not manual repeat-3 only:\n%s", full)
+	}
+	if strings.Contains(full, "--case ") {
+		t.Fatal("manual full job filters the eight-case suite")
 	}
 }
 

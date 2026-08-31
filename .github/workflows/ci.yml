@@ -4,6 +4,7 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -71,7 +72,43 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: go build -o "${{ runner.temp }}/focalspan${{ matrix.extension }}" ./cmd/focalspan
 
-  public-benchmark:
+  public-benchmark-smoke:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Validate public history labels
+        run: >-
+          go run ./cmd/focalspan-bench validate
+          --suite testdata/benchmark/focalspan-history.json
+          --case php-extractor-integration
+          --case cpp-extractor-registry
+      - name: Measure public history quality
+        run: >-
+          go run ./cmd/focalspan-bench run
+          --suite testdata/benchmark/focalspan-history.json
+          --case php-extractor-integration
+          --case cpp-extractor-registry
+          --profile default --repeat 1
+          --json-out "$RUNNER_TEMP/candidate.json"
+          --markdown-out "$RUNNER_TEMP/candidate.md" --force
+      - name: Compare public history quality
+        run: >-
+          go run ./cmd/focalspan-bench compare
+          --baseline docs/benchmarks/results-v0.5.json
+          --candidate "$RUNNER_TEMP/candidate.json"
+          --case php-extractor-integration
+          --case cpp-extractor-registry
+
+  public-benchmark-full:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -84,7 +121,7 @@ jobs:
           cache: true
       - name: Validate public history labels
         run: go run ./cmd/focalspan-bench validate --suite testdata/benchmark/focalspan-history.json
-      - name: Measure public history quality
+      - name: Measure full public history quality
         run: go run ./cmd/focalspan-bench run --suite testdata/benchmark/focalspan-history.json --profile default --repeat 3 --json-out "$RUNNER_TEMP/candidate.json" --markdown-out "$RUNNER_TEMP/candidate.md" --force
-      - name: Compare public history quality
+      - name: Compare full public history quality
         run: go run ./cmd/focalspan-bench compare --baseline docs/benchmarks/results-v0.5.json --candidate "$RUNNER_TEMP/candidate.json"
