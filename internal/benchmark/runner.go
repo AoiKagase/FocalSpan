@@ -136,7 +136,40 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 							changedPaths = append(changedPaths, changed.NewPath)
 						}
 					}
-					report.Quality = append(report.Quality, MeasurePacket(benchmarkCase, profile.Name, budget, *run.Packet, run.Deterministic, changedPaths))
+					quality := MeasurePacket(benchmarkCase, profile.Name, budget, *run.Packet, run.Deterministic, changedPaths)
+					if profile.RunExpansion {
+						for _, expectation := range benchmarkCase.Expand {
+							anchor, anchorErr := FindExpansionAnchor(*run.Packet, expectation.From)
+							if anchorErr != nil {
+								quality.FailureCodes = append(quality.FailureCodes, "expansion_anchor_missing")
+								continue
+							}
+							knownHandles := make([]string, 0, len(run.Packet.Evidence))
+							for _, item := range run.Packet.Evidence {
+								knownHandles = append(knownHandles, item.Handle)
+							}
+							knownPacket, expandErr := engine.ExpandEvidence(ctx, app.EvidenceExpandRequest{Handles: []string{anchor}, Relation: expectation.Relation, TokenBudget: expectation.Budget, Mode: profile.EvidenceMode, KnownHandles: knownHandles})
+							if expandErr != nil {
+								_ = engine.Close()
+								return RunReport{}, expandErr
+							}
+							controlPacket, controlErr := engine.ExpandEvidence(ctx, app.EvidenceExpandRequest{Handles: []string{anchor}, Relation: expectation.Relation, TokenBudget: expectation.Budget, Mode: profile.EvidenceMode})
+							if controlErr != nil {
+								_ = engine.Close()
+								return RunReport{}, controlErr
+							}
+							metrics := MeasureExpansion(*run.Packet, knownPacket, controlPacket, expectation)
+							quality.ExpandRequiredPathRecall = metrics.RequiredPathRecall
+							quality.ExpandRequiredSymbolRecall = metrics.RequiredSymbolRecall
+							quality.ExpandForbiddenViolations += metrics.ForbiddenViolations
+							quality.ExpandRelationValid = metrics.RelationValid
+							quality.CumulativeWireTokens = metrics.CumulativeWireTokens
+							quality.CumulativeWireTokensWithoutKnown = metrics.CumulativeWireTokensWithoutKnown
+							quality.DeltaTokenRatio = metrics.DeltaTokenRatio
+							quality.KnownResendCount += metrics.KnownResendCount
+						}
+					}
+					report.Quality = append(report.Quality, quality)
 				} else {
 					report.Quality = append(report.Quality, QualityResult{CaseID: benchmarkCase.ID, Profile: profile.Name, Budget: budget, BudgetCompliant: 1, Deterministic: boolInt(run.Deterministic), RelationValid: 1})
 				}

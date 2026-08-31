@@ -292,7 +292,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - [x] Benchmark engine and multi-budget runner implemented. (2026-08-31 UTC; exact matching and deterministic case/profile/budget sequencing verified.)
 - [x] Deterministic quality metrics and separate performance measurements implemented. (2026-08-31 UTC; quality serialization excludes timing.)
 - [ ] Development CLI, private registry handling, and scaffold flow implemented.
-- [ ] Query-plus-expand delta evaluation implemented.
+- [x] Query-plus-expand delta evaluation implemented. (2026-08-31 UTC; exact anchors, known-handle suppression, and control token ratio verified.)
 - [ ] Public FocalSpan history corpus labeled and validated.
 - [ ] Failure attribution and report comparison implemented.
 - [ ] Linux race CI and cross-platform build CI implemented.
@@ -1172,7 +1172,7 @@ Run:
       DeltaTokenRatio float64 `json:"delta_token_ratio,omitempty"`
       KnownResendCount int `json:"known_resend_count,omitempty"`
 
-- [ ] **Step 1: Write anchor-selection tests**
+- [x] **Step 1: Write anchor-selection tests**
 
 The expansion anchor must be selected only by exact `From.Path` plus `From.Name`, optionally narrowed by kind. Never choose the first evidence item when the exact anchor is absent.
 
@@ -1182,7 +1182,7 @@ Expected failures:
     anchor_ambiguous
     unsupported_relation
 
-- [ ] **Step 2: Write a known-handle delta test**
+- [x] **Step 2: Write a known-handle delta test**
 
 Create an initial packet containing target, caller, and test. Expand `callers` twice:
 
@@ -1197,19 +1197,19 @@ Assert:
 - `DeltaTokenRatio = withKnown / withoutKnown`;
 - no divide-by-zero yields NaN or infinity.
 
-- [ ] **Step 3: Implement expansion execution**
+- [x] **Step 3: Implement expansion execution**
 
 For every `ExpandExpectation` and Evidence profile with `RunExpansion`, locate the exact anchor, call existing `ExpandEvidence`, and pass all handles already visible in the initial packet. Run the control expansion without known handles only for measurement; do not expose it to users.
 
-- [ ] **Step 4: Match expansion expectations**
+- [x] **Step 4: Match expansion expectations**
 
 Use the same exact path/symbol rules as initial queries. Required expansion labels are independent of initial labels. A path already returned initially may still be required context, but it must not be retransmitted when known handles are used; count it as already satisfied only when the suite expectation explicitly targets the initial packet.
 
-- [ ] **Step 5: Add aggregate delta metrics**
+- [x] **Step 5: Add aggregate delta metrics**
 
 Report median delta-token ratio and total known resend count. Preserve the v0.4 invariant that known resend count is zero.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run:
 

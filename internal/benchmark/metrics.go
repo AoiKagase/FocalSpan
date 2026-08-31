@@ -7,26 +7,34 @@ import (
 )
 
 type QualityResult struct {
-	CaseID                string   `json:"case_id"`
-	Profile               string   `json:"profile"`
-	Budget                int      `json:"budget"`
-	TargetRank            int      `json:"target_rank"`
-	ReciprocalRank        float64  `json:"reciprocal_rank"`
-	RequiredPathRecall    float64  `json:"required_path_recall"`
-	OptionalPathRecall    float64  `json:"optional_path_recall"`
-	RequiredSymbolRecall  float64  `json:"required_symbol_recall"`
-	IntentCorrect         int      `json:"intent_correct"`
-	RoleAccuracy          float64  `json:"role_accuracy"`
-	RelationValid         int      `json:"relation_valid"`
-	BudgetCompliant       int      `json:"budget_compliant"`
-	Deterministic         int      `json:"deterministic"`
-	ForbiddenViolations   int      `json:"forbidden_violations"`
-	WireTokens            int      `json:"wire_tokens"`
-	EvidenceTokens        int      `json:"evidence_tokens"`
-	MetadataOverheadRatio float64  `json:"metadata_overhead_ratio"`
-	DuplicateSourceRatio  float64  `json:"duplicate_source_ratio"`
-	ChangedPathRecall     float64  `json:"changed_path_recall"`
-	FailureCodes          []string `json:"failure_codes,omitempty"`
+	CaseID                           string   `json:"case_id"`
+	Profile                          string   `json:"profile"`
+	Budget                           int      `json:"budget"`
+	TargetRank                       int      `json:"target_rank"`
+	ReciprocalRank                   float64  `json:"reciprocal_rank"`
+	RequiredPathRecall               float64  `json:"required_path_recall"`
+	OptionalPathRecall               float64  `json:"optional_path_recall"`
+	RequiredSymbolRecall             float64  `json:"required_symbol_recall"`
+	IntentCorrect                    int      `json:"intent_correct"`
+	RoleAccuracy                     float64  `json:"role_accuracy"`
+	RelationValid                    int      `json:"relation_valid"`
+	BudgetCompliant                  int      `json:"budget_compliant"`
+	Deterministic                    int      `json:"deterministic"`
+	ForbiddenViolations              int      `json:"forbidden_violations"`
+	WireTokens                       int      `json:"wire_tokens"`
+	EvidenceTokens                   int      `json:"evidence_tokens"`
+	MetadataOverheadRatio            float64  `json:"metadata_overhead_ratio"`
+	DuplicateSourceRatio             float64  `json:"duplicate_source_ratio"`
+	ChangedPathRecall                float64  `json:"changed_path_recall"`
+	FailureCodes                     []string `json:"failure_codes,omitempty"`
+	ExpandRequiredPathRecall         float64  `json:"expand_required_path_recall,omitempty"`
+	ExpandRequiredSymbolRecall       float64  `json:"expand_required_symbol_recall,omitempty"`
+	ExpandForbiddenViolations        int      `json:"expand_forbidden_violations,omitempty"`
+	ExpandRelationValid              int      `json:"expand_relation_valid,omitempty"`
+	CumulativeWireTokens             int      `json:"cumulative_wire_tokens,omitempty"`
+	CumulativeWireTokensWithoutKnown int      `json:"cumulative_wire_tokens_without_known,omitempty"`
+	DeltaTokenRatio                  float64  `json:"delta_token_ratio,omitempty"`
+	KnownResendCount                 int      `json:"known_resend_count,omitempty"`
 }
 
 type PerformanceResult struct {
@@ -60,6 +68,8 @@ type AggregateGroup struct {
 	BudgetCompliance           float64 `json:"budget_compliance"`
 	DeterministicOutput        float64 `json:"deterministic_output"`
 	ForbiddenViolations        int     `json:"forbidden_violations"`
+	MedianDeltaTokenRatio      float64 `json:"median_delta_token_ratio,omitempty"`
+	KnownResendCount           int     `json:"known_resend_count,omitempty"`
 }
 
 func MeasurePacket(c Case, profile string, budget int, packet evidence.Packet, deterministic bool, changedPaths []string) QualityResult {
@@ -191,7 +201,7 @@ func AggregateResults(results []QualityResult) AggregateQuality {
 	for _, k := range keys {
 		values := groups[k]
 		g := AggregateGroup{Profile: k.p, Budget: k.b, Cases: len(values)}
-		var recalls, symbols []float64
+		var recalls, symbols, deltas []float64
 		for _, r := range values {
 			if r.TargetRank == 1 {
 				g.HitAt1++
@@ -208,6 +218,10 @@ func AggregateResults(results []QualityResult) AggregateQuality {
 			g.BudgetCompliance += float64(r.BudgetCompliant)
 			g.DeterministicOutput += float64(r.Deterministic)
 			g.ForbiddenViolations += r.ForbiddenViolations
+			if r.DeltaTokenRatio > 0 {
+				deltas = append(deltas, r.DeltaTokenRatio)
+			}
+			g.KnownResendCount += r.KnownResendCount
 		}
 		n := float64(len(values))
 		g.HitAt1 /= n
@@ -218,6 +232,7 @@ func AggregateResults(results []QualityResult) AggregateQuality {
 		g.DeterministicOutput /= n
 		g.MedianRequiredPathRecall = median(recalls)
 		g.MedianRequiredSymbolRecall = median(symbols)
+		g.MedianDeltaTokenRatio = median(deltas)
 		result.Groups = append(result.Groups, g)
 	}
 	return result
