@@ -287,7 +287,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 
 - [x] Plan transition and durable `PLANS.md` policy committed. (2026-08-31T00:25:50Z; archive hash and planning links verified.)
 - [x] Existing v0.3/v0.4 tests and evaluation baselines recorded without production changes. (2026-08-31 UTC; 604 tests, vet, 18 legacy suites, and 8-case Evidence compare measured.)
-- [ ] Benchmark schema, validation, and profile definitions implemented.
+- [x] Benchmark schema, validation, and profile definitions implemented. (2026-08-31 UTC; 6 focused tests and 610 full-suite tests passed.)
 - [ ] Safe historical snapshot and diff diagnostics implemented.
 - [ ] Benchmark engine and multi-budget runner implemented.
 - [ ] Deterministic quality metrics and separate performance measurements implemented.
@@ -592,7 +592,7 @@ Run:
 - Produces: `benchmark.LoadSuite`, `benchmark.ValidateSuite`, `benchmark.LoadRegistry`, `benchmark.ResolveProfiles`, and the schema types defined earlier
 - Consumes: existing `search.RetrievalMode` and `evidence.Mode` values without changing them
 
-- [ ] **Step 1: Write failing valid-suite load tests**
+- [x] **Step 1: Write failing valid-suite load tests**
 
 Create `TestLoadSuiteValid` using a fixture equivalent to:
 
@@ -633,7 +633,7 @@ Create `TestLoadSuiteValid` using a fixture equivalent to:
 
 Assert exact field preservation and forward-slash paths.
 
-- [ ] **Step 2: Write failing validation table tests**
+- [x] **Step 2: Write failing validation table tests**
 
 Cover these errors with stable message fragments:
 
@@ -658,7 +658,7 @@ Cover these errors with stable message fragments:
 
 Validation must return all case-specific errors in deterministic order rather than stopping after a random map iteration.
 
-- [ ] **Step 3: Implement exact schema types and normalization**
+- [x] **Step 3: Implement exact schema types and normalization**
 
 Implement:
 
@@ -669,15 +669,15 @@ Implement:
 
 `NormalizeSuite` may trim strings and sort/deduplicate tags, but it must not silently repair invalid paths, refs, budgets, or expectations.
 
-- [ ] **Step 4: Add profile tests**
+- [x] **Step 4: Add profile tests**
 
 Assert that `ResolveProfiles("default")` yields the four profiles defined in this plan in stable order. Also support selecting one or more comma-separated exact profile names. Unknown profiles return an error listing valid names.
 
-- [ ] **Step 5: Add a schema round-trip determinism test**
+- [x] **Step 5: Add a schema round-trip determinism test**
 
 Load `schema-valid.json`, marshal with `json.MarshalIndent`, unmarshal, normalize, marshal again, and assert byte equality. Timing fields do not exist in suite files.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run:
 
