@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"time"
 
 	"github.com/focalspan/focalspan/internal/app"
 	"github.com/focalspan/focalspan/internal/evidence"
@@ -73,7 +74,9 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 			return RunReport{}, err
 		}
 		destination := filepath.Join(request.Workspace, "snapshots", repositoryID, caseID)
+		snapshotStarted := time.Now()
 		snapshot, err := runner.Snapshotter.Materialize(ctx, benchmarkCase.Repository, repositoryPath, benchmarkCase.BaseRef, destination)
+		snapshotDuration := time.Since(snapshotStarted)
 		if err != nil {
 			return RunReport{}, fmt.Errorf("case %q snapshot: %w", benchmarkCase.ID, err)
 		}
@@ -100,7 +103,9 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 			for _, budget := range profile.Budgets {
 				run := CaseRun{CaseID: benchmarkCase.ID, Profile: profile.Name, Budget: budget, Changes: changes, Index: measurement, Deterministic: true}
 				var canonical []byte
+				queryDurations := make([]int64, 0, request.Repeat)
 				for repeat := 0; repeat < request.Repeat; repeat++ {
+					queryStarted := time.Now()
 					if profile.Contract == "legacy" {
 						bundle, queryErr := engine.QueryLegacy(ctx, app.QueryRequest{Query: benchmarkCase.Query, TokenBudget: budget, Mode: string(profile.EvidenceMode), NoUpdate: true})
 						if queryErr != nil {
@@ -127,6 +132,7 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 						}
 						canonical = encoded
 					}
+					queryDurations = append(queryDurations, time.Since(queryStarted).Milliseconds())
 				}
 				report.Runs = append(report.Runs, run)
 				if run.Packet != nil {
@@ -180,7 +186,7 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 				} else {
 					report.Quality = append(report.Quality, QualityResult{CaseID: benchmarkCase.ID, Profile: profile.Name, Budget: budget, BudgetCompliant: 1, Deterministic: boolInt(run.Deterministic), RelationValid: 1})
 				}
-				report.Performance = append(report.Performance, PerformanceResult{CaseID: benchmarkCase.ID, Profile: profile.Name, Budget: budget, IndexMS: measurement.Duration.Milliseconds(), DatabaseBytes: measurement.DatabaseBytes, Files: measurement.Files, Symbols: measurement.Symbols, Chunks: measurement.Chunks, Relations: measurement.Relations})
+				report.Performance = append(report.Performance, PerformanceResult{CaseID: benchmarkCase.ID, Profile: profile.Name, Budget: budget, SnapshotMS: snapshotDuration.Milliseconds(), IndexMS: measurement.Duration.Milliseconds(), QueryMS: queryDurations, DatabaseBytes: measurement.DatabaseBytes, Files: measurement.Files, Symbols: measurement.Symbols, Chunks: measurement.Chunks, Relations: measurement.Relations})
 			}
 			if closeErr := engine.Close(); closeErr != nil {
 				return RunReport{}, closeErr

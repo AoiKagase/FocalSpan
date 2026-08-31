@@ -73,4 +73,7 @@ func TestRunnerSequencesCasesProfilesBudgetsAndRepeats(t *testing.T) {
 	if report.Runs[0].Budget != 512 || report.Runs[1].Budget != 1024 || report.Runs[2].Profile != "two" {
 		t.Fatalf("order = %+v", report.Runs)
 	}
+	if len(report.Performance) != 4 || len(report.Performance[0].QueryMS) != 2 {
+		t.Fatalf("performance = %+v", report.Performance)
+	}
 }

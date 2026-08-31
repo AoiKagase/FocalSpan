@@ -2,6 +2,52 @@
   "schema": "focalspan.benchmark-report.v1",
   "suite": "golden",
   "focalspan_commit": "0000000000000000000000000000000000000000",
-  "quality": [],
-  "aggregate": {}
+  "quality": [
+    {
+      "case_id": "case-a",
+      "profile": "full-evidence-focused",
+      "budget": 1024,
+      "target_rank": 1,
+      "reciprocal_rank": 1,
+      "required_path_recall": 1,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 1,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 320,
+      "evidence_tokens": 200,
+      "metadata_overhead_ratio": 0.375,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0.5
+    }
+  ],
+  "aggregate": {
+    "groups": [
+      {
+        "profile": "full-evidence-focused",
+        "budget": 1024,
+        "cases": 1,
+        "invalid_cases": 0,
+        "hit_at_1": 1,
+        "hit_at_3": 1,
+        "hit_at_5": 1,
+        "mean_reciprocal_rank": 1,
+        "median_required_path_recall": 1,
+        "median_required_symbol_recall": 1,
+        "intent_accuracy": 1,
+        "role_accuracy": 1,
+        "budget_compliance": 1,
+        "deterministic_output": 1,
+        "forbidden_violations": 0,
+        "median_wire_tokens": 320,
+        "median_metadata_overhead": 0.375,
+        "median_duplicate_source_ratio": 0,
+        "median_changed_path_recall": 0.5
+      }
+    ]
+  }
 }

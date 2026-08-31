@@ -2,7 +2,9 @@ package benchmark
 
 import (
 	"sort"
+	"strings"
 
+	budgetpkg "github.com/focalspan/focalspan/internal/budget"
 	"github.com/focalspan/focalspan/internal/evidence"
 )
 
@@ -65,9 +67,15 @@ type AggregateGroup struct {
 	MeanReciprocalRank         float64 `json:"mean_reciprocal_rank"`
 	MedianRequiredPathRecall   float64 `json:"median_required_path_recall"`
 	MedianRequiredSymbolRecall float64 `json:"median_required_symbol_recall"`
+	IntentAccuracy             float64 `json:"intent_accuracy"`
+	RoleAccuracy               float64 `json:"role_accuracy"`
 	BudgetCompliance           float64 `json:"budget_compliance"`
 	DeterministicOutput        float64 `json:"deterministic_output"`
 	ForbiddenViolations        int     `json:"forbidden_violations"`
+	MedianWireTokens           int     `json:"median_wire_tokens"`
+	MedianMetadataOverhead     float64 `json:"median_metadata_overhead"`
+	MedianDuplicateSourceRatio float64 `json:"median_duplicate_source_ratio"`
+	MedianChangedPathRecall    float64 `json:"median_changed_path_recall"`
 	MedianDeltaTokenRatio      float64 `json:"median_delta_token_ratio,omitempty"`
 	KnownResendCount           int     `json:"known_resend_count,omitempty"`
 }
@@ -109,23 +117,32 @@ func MeasurePacket(c Case, profile string, budget int, packet evidence.Packet, d
 	}
 	r.RoleAccuracy = roleAccuracy(packet, c.RequiredSymbols)
 	r.WireTokens = packet.Budget.Used
-	evidenceBytes, totalSource, duplicate := 0, 0, 0
+	var evidenceText strings.Builder
+	totalSource, duplicate := 0, 0
 	seen := map[string]bool{}
 	for _, item := range packet.Evidence {
-		text := item.Signature + item.Source + item.Outline
-		for _, s := range item.Segments {
-			text += s.Text
-		}
-		evidenceBytes += len(text)
+		evidenceText.WriteString(item.Signature)
+		evidenceText.WriteString(item.Source)
+		evidenceText.WriteString(item.Outline)
+		fragments := make([]string, 0, len(item.Segments)+1)
 		if item.Source != "" {
-			totalSource += len(item.Source)
-			if seen[item.Source] {
-				duplicate += len(item.Source)
+			fragments = append(fragments, item.Source)
+		}
+		for _, s := range item.Segments {
+			evidenceText.WriteString(s.Text)
+			if s.Text != "" {
+				fragments = append(fragments, s.Text)
 			}
-			seen[item.Source] = true
+		}
+		for _, fragment := range fragments {
+			totalSource += len(fragment)
+			if seen[fragment] {
+				duplicate += len(fragment)
+			}
+			seen[fragment] = true
 		}
 	}
-	r.EvidenceTokens = (evidenceBytes + 3) / 4
+	r.EvidenceTokens = budgetpkg.NewEstimator().Estimate(evidenceText.String())
 	if r.WireTokens > 0 {
 		overhead := float64(r.WireTokens-r.EvidenceTokens) / float64(r.WireTokens)
 		if overhead < 0 {
@@ -201,7 +218,8 @@ func AggregateResults(results []QualityResult) AggregateQuality {
 	for _, k := range keys {
 		values := groups[k]
 		g := AggregateGroup{Profile: k.p, Budget: k.b, Cases: len(values)}
-		var recalls, symbols, deltas []float64
+		var recalls, symbols, roles, metadata, duplicates, changed, deltas []float64
+		var wireTokens []int
 		for _, r := range values {
 			if r.TargetRank == 1 {
 				g.HitAt1++
@@ -215,9 +233,15 @@ func AggregateResults(results []QualityResult) AggregateQuality {
 			g.MeanReciprocalRank += r.ReciprocalRank
 			recalls = append(recalls, r.RequiredPathRecall)
 			symbols = append(symbols, r.RequiredSymbolRecall)
+			g.IntentAccuracy += float64(r.IntentCorrect)
+			roles = append(roles, r.RoleAccuracy)
 			g.BudgetCompliance += float64(r.BudgetCompliant)
 			g.DeterministicOutput += float64(r.Deterministic)
 			g.ForbiddenViolations += r.ForbiddenViolations
+			wireTokens = append(wireTokens, r.WireTokens)
+			metadata = append(metadata, r.MetadataOverheadRatio)
+			duplicates = append(duplicates, r.DuplicateSourceRatio)
+			changed = append(changed, r.ChangedPathRecall)
 			if r.DeltaTokenRatio > 0 {
 				deltas = append(deltas, r.DeltaTokenRatio)
 			}
@@ -228,14 +252,32 @@ func AggregateResults(results []QualityResult) AggregateQuality {
 		g.HitAt3 /= n
 		g.HitAt5 /= n
 		g.MeanReciprocalRank /= n
+		g.IntentAccuracy /= n
 		g.BudgetCompliance /= n
 		g.DeterministicOutput /= n
 		g.MedianRequiredPathRecall = median(recalls)
 		g.MedianRequiredSymbolRecall = median(symbols)
+		g.RoleAccuracy = median(roles)
+		g.MedianWireTokens = medianInts(wireTokens)
+		g.MedianMetadataOverhead = median(metadata)
+		g.MedianDuplicateSourceRatio = median(duplicates)
+		g.MedianChangedPathRecall = median(changed)
 		g.MedianDeltaTokenRatio = median(deltas)
 		result.Groups = append(result.Groups, g)
 	}
 	return result
+}
+
+func medianInts(values []int) int {
+	if len(values) == 0 {
+		return 0
+	}
+	sort.Ints(values)
+	middle := len(values) / 2
+	if len(values)%2 == 0 {
+		return (values[middle-1] + values[middle]) / 2
+	}
+	return values[middle]
 }
 func median(v []float64) float64 {
 	if len(v) == 0 {
