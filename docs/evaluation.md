@@ -490,8 +490,7 @@ Evidence Packet behavior.
   passed. The malformed fixture was preserved byte-for-byte.
 - Local `go test -race ./...` remains unverified. All 45 listed packages failed
   before tests while `runtime/cgo` invoked a compiler whose `cc1.exe` reported
-  `64-bit mode not compiled in`. The configured Linux race job has not run
-  remotely because this checkout was not pushed.
+  `64-bit mode not compiled in`.
 - Five CGO-free builds passed: native and Windows amd64, Linux amd64, and
   Darwin arm64 `focalspan`, plus native `focalspan-bench`. All build artifacts
   were removed.
@@ -515,5 +514,11 @@ Evidence Packet behavior.
   path, NaN, or infinity, and no benchmark workspace, report, database, or
   binary remained after cleanup.
 
-Remote GitHub Actions results remain unrun and are not included in these local
-successes.
+After this local verification, `origin/master` advanced externally to commit
+`cb5247933e7fc4778f7e31315c07a4654462d95a` and triggered GitHub Actions run
+`33358418421`. Its Windows amd64, Linux amd64, and Darwin arm64 CGO-free build
+jobs passed. Linux test and race jobs failed; vet was skipped after the test
+failure. The user cancelled the additional public benchmark while measurement
+was still running, so it produced no comparison result. Failure logs are not
+accessible with the invalid saved GitHub CLI token or unsigned browser
+sessions, so neither Linux failure is diagnosed or reported as verified.

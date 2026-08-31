@@ -137,5 +137,11 @@ cleanup. No fourth full run was performed.
 The full local unit suite and vet passed, all five requested CGO-free builds
 passed, and all legacy and Evidence evaluations retained their recorded
 metrics. Local Windows race remains unverified because the available C
-compiler cannot build 64-bit `runtime/cgo`; the configured Linux race workflow
-was not pushed or run remotely.
+compiler cannot build 64-bit `runtime/cgo`.
+
+An externally triggered GitHub Actions run later passed all three CGO-free
+build jobs but failed Linux test and race. The user cancelled its additional
+public benchmark during measurement, before comparison. The saved GitHub CLI
+credential is invalid and unsigned browser sessions cannot view the failed
+step logs, so the Linux failures remain undiagnosed and no remote race or
+benchmark success is claimed.
