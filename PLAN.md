@@ -124,8 +124,11 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   GitHub Actions evidence inspected. (2026-08-31T07:23:33Z; run `33361467769`.)
 - [x] v0.5 completion evidence committed as `56d0f84`, then its final root plan
   copied byte-for-byte for archive transition.
-- [ ] Task 0 plan archive/index/new active-plan transition committed.
-- [ ] Task 1 current baseline, fixtures, v0.5 report, and suite frozen.
+- [x] Task 0 plan archive/index/new active-plan transition committed.
+  (2026-08-31T07:26:00Z; commit `6582dc5`.)
+- [x] Task 1 current baseline, fixtures, v0.5 report, and suite frozen.
+  (2026-08-31T07:38:26Z; 657 tests/46 packages, vet, 8-case validation,
+  and two-case repeat-1 comparison passed.)
 - [ ] Task 2 source-free attribution schema and classifiers implemented.
 - [ ] Task 3 internal search/app/benchmark trace adapter implemented without
   normal-output changes.
@@ -158,6 +161,11 @@ legacy, wire, privacy, and deterministic contracts remain intact.
 - 2026-08-31: Link resolution provenance already exists on relation candidates
   as resolved versus lexical `RelationContext`. The trace can sanitize this to
   reason codes without exposing source content or linker internals.
+- 2026-08-31: The v0.6 starting checkout at `6582dc5` is two documentation
+  commits ahead of `origin/master`. Fresh tests passed 657 tests in 46 packages;
+  vet and diff check passed; all eight historical labels validated; and the
+  bounded two-case repeat-1 run produced 12 quality results with compatible
+  true and zero regressions. No full quality suite was run.
 
 ---
 
@@ -190,6 +198,12 @@ coverage, the selected single change, rejected alternatives, benchmark run
 counts, remaining misses, and next-milestone recommendation here as each gate
 completes. Do not claim improvement, Linux race, remote CI, or full-suite
 success without the corresponding fresh command or Actions evidence.
+
+Task 1 froze the starting state at `6582dc5`: Go 1.27.0 on Windows amd64 with
+CGO enabled, v0.5 report object `f914facbfbf55c450fd26769bdc7bd6a992112dc`,
+and v0.5 archive object `281211f6754bd3b1e45a7b321d8aaab1a1a27094`.
+The ignored temporary two-case artifacts were removed; `.focalspan.json`
+remained the sole untracked path.
 
 ---
 
@@ -324,22 +338,22 @@ index `docs/superpowers/plans/README.md`; new root `PLAN.md`.
 - [x] Commit only final v0.5 evidence documents as `56d0f84`.
 - [x] Copy the final v0.5 root plan to the completed archive and verify both
   files have Git blob hash `281211f6754bd3b1e45a7b321d8aaab1a1a27094`.
-- [ ] Update the archive index, install this root plan, run
+- [x] Update the archive index, install this root plan, run
   `git diff --check`, stage only archive/index/root plan, and commit
-  `docs: start candidate attribution milestone v0.6`.
+  `docs: start candidate attribution milestone v0.6`. (Commit `6582dc5`.)
 
 ### Task 1: Freeze the v0.6 Starting Baseline
 
 **Files:** modify `PLAN.md`; create
 `docs/benchmarks/findings-v0.6.md` as the living measurement record.
 
-- [ ] Record status/branch/HEAD/origin delta, Go environment, and the v0.5
+- [x] Record status/branch/HEAD/origin delta, Go environment, and the v0.5
   report object hash.
-- [ ] Run `go test ./... -count=1`, `go vet ./...`, and `git diff --check`.
-- [ ] Validate all eight public cases without running the full quality matrix.
-- [ ] Run the existing two-case repeat-1 smoke to a temporary report and compare
+- [x] Run `go test ./... -count=1`, `go vet ./...`, and `git diff --check`.
+- [x] Validate all eight public cases without running the full quality matrix.
+- [x] Run the existing two-case repeat-1 smoke to a temporary report and compare
   it with the same rows of `docs/benchmarks/results-v0.5.json`.
-- [ ] Record exact results and cleanup in PLAN/findings; commit only those docs.
+- [x] Record exact results and cleanup in PLAN/findings; commit only those docs.
 
 ### Task 2: Define the Source-Free Attribution Schema and Classification
 
