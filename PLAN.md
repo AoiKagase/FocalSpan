@@ -129,7 +129,9 @@ legacy, wire, privacy, and deterministic contracts remain intact.
 - [x] Task 1 current baseline, fixtures, v0.5 report, and suite frozen.
   (2026-08-31T07:38:26Z; 657 tests/46 packages, vet, 8-case validation,
   and two-case repeat-1 comparison passed.)
-- [ ] Task 2 source-free attribution schema and classifiers implemented.
+- [x] Task 2 source-free attribution schema and classifiers implemented.
+  (2026-08-31; focused 7 tests, package 46 tests, full 664 tests/46 packages,
+  and diff check passed.)
 - [ ] Task 3 internal search/app/benchmark trace adapter implemented without
   normal-output changes.
 - [ ] Task 4 two-case smoke and one eight-case repeat-1 attribution diagnostic
@@ -166,6 +168,11 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   vet and diff check passed; all eight historical labels validated; and the
   bounded two-case repeat-1 run produced 12 quality results with compatible
   true and zero regressions. No full quality suite was run.
+- 2026-08-31: The attribution schema needs no floating-point values: positions,
+  ranks, and budgets are integers. JSON therefore cannot encode NaN or Infinity,
+  while output validation rejects absolute/non-normalized paths, control
+  characters, unknown retrievers/relation states, and unpaired stage/reason
+  codes before serialization.
 
 ---
 
@@ -180,6 +187,12 @@ legacy, wire, privacy, and deterministic contracts remain intact.
 - 2026-08-31: Derive packing outcome by exact path/symbol/kind matching between
   ranked trace and Packet. Do not expose Evidence compiler internal source
   variants or utilities.
+- 2026-08-31: Preserve expectation and trace slice order in attribution output;
+  do not sort through maps. A required path matches any identity at that exact
+  path, while a symbol or expansion anchor matches exact path/name and, when
+  supplied, exact kind. Classify `linking_unresolved` only when all matching raw
+  hits are unresolved relation hits; an ordinary or resolved hit makes an
+  unranked label `ranking_dropped`.
 - 2026-08-31: Freeze the improvement only after the eight-case repeat-1 trace.
   Choose the stage with the greatest number of actionable misses; a tie selects
   retrieval because it is earlier in the pipeline and requires fewer semantic
@@ -204,6 +217,13 @@ CGO enabled, v0.5 report object `f914facbfbf55c450fd26769bdc7bd6a992112dc`,
 and v0.5 archive object `281211f6754bd3b1e45a7b321d8aaab1a1a27094`.
 The ignored temporary two-case artifacts were removed; `.focalspan.json`
 remained the sole untracked path.
+
+Task 2 established `focalspan.benchmark-attribution.v1` entirely inside
+`internal/benchmark`. The initial focused test failed at compile time because
+the attribution API was absent. The minimal implementation then passed 7
+focused tests, all 46 `internal/benchmark` tests, and `go test ./... -count=1`
+with 664 tests in 46 packages; `git diff --check` passed. The schema has no
+source-content field and does not alter normal CLI, MCP, or Evidence output.
 
 ---
 
@@ -358,17 +378,18 @@ index `docs/superpowers/plans/README.md`; new root `PLAN.md`.
 ### Task 2: Define the Source-Free Attribution Schema and Classification
 
 **Files:** create `internal/benchmark/attribution.go` and
-`attribution_test.go`; modify `report.go`, `report_test.go`, and `metrics.go`.
+`attribution_test.go`. Keep serialization with the schema because no legacy
+report or metrics type needs to change.
 
-- [ ] Write failing privacy tests whose candidates contain source and absolute
+- [x] Write failing privacy tests whose candidates contain source and absolute
   path sentinels; assert output contains neither and rejects absolute labels.
-- [ ] Verify expected RED because the attribution API is absent.
-- [ ] Implement the stable schema and terminal-stage precedence defined above.
-- [ ] Test exact required path, symbol, optional kind, and expansion-anchor
+- [x] Verify expected RED because the attribution API is absent.
+- [x] Implement the stable schema and terminal-stage precedence defined above.
+- [x] Test exact required path, symbol, optional kind, and expansion-anchor
   matching plus constrained `linking_unresolved` classification.
-- [ ] Test deterministic ordering, finite numbers, sanitized reason codes, LF
+- [x] Test deterministic ordering, finite numbers, sanitized reason codes, LF
   goldens, and JSON round-trip.
-- [ ] Run focused tests, full tests, and diff check; commit only schema/report.
+- [x] Run focused tests, full tests, and diff check; commit only schema/report.
 
 ### Task 3: Add the Opt-In Pre-Packet Trace Adapter
 
