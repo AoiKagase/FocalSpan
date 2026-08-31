@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/focalspan/focalspan/internal/model"
+	"github.com/focalspan/focalspan/internal/query"
 )
 
 func TestSearchExactSymbolsDoesNotDependOnFTSContent(t *testing.T) {
@@ -185,6 +186,175 @@ func TestSearchFilePathsIsBoundedAndDeterministicAcrossManyFiles(t *testing.T) {
 	}
 }
 
+func TestSearchSymbolsInPathsFindsLateOwnedSymbol(t *testing.T) {
+	s := openTestStore(t)
+	path := "internal/indexer/indexer.go"
+	extraction := model.Extraction{}
+	for index := 0; index < 55; index++ {
+		handle := fmt.Sprintf("helper-%02d", index)
+		name := fmt.Sprintf("Helper%02d", index)
+		extraction.Symbols = append(extraction.Symbols, model.Symbol{
+			Handle: handle, FilePath: path, Language: "go", Kind: "function",
+			Name: name, QualifiedName: name, Signature: "func " + name + "()",
+			StartLine: index + 1, EndLine: index + 1, Confidence: 1,
+		})
+		extraction.Chunks = append(extraction.Chunks, model.Chunk{
+			Handle: handle + "-chunk", FilePath: path, Language: "go", Kind: "function",
+			SymbolHandle: handle, SymbolName: name, Signature: "func " + name + "()",
+			StartLine: index + 1, EndLine: index + 1, Content: "short helper", ContentHash: handle,
+		})
+	}
+	extraction.Symbols = append(extraction.Symbols, model.Symbol{
+		Handle: "run", FilePath: path, Language: "go", Kind: "function", Name: "Run",
+		QualifiedName: "Indexer.Run", Signature: "func Run() error", StartLine: 100, EndLine: 120, Confidence: 1,
+	})
+	extraction.Chunks = append(extraction.Chunks,
+		model.Chunk{Handle: "run-body", FilePath: path, Language: "go", Kind: "function", SymbolHandle: "run", SymbolName: "Run", Signature: "func Run() error", StartLine: 100, EndLine: 120, Content: "extract index store metadata", ContentHash: "run-body"},
+		model.Chunk{Handle: "run-outline", FilePath: path, Language: "go", Kind: "go-outline", SymbolHandle: "run", SymbolName: "Run", Signature: "func Run() error", StartLine: 99, EndLine: 121, Content: "Run outline extract index store metadata", ContentHash: "run-outline"},
+		model.Chunk{Handle: "generic-noise", FilePath: path, Language: "go", Kind: "window", StartLine: 90, EndLine: 90, Content: strings.Repeat("extract index store metadata ", 20), ContentHash: "generic-noise"},
+	)
+	storeReplaceExtraction(t, s, path, extraction)
+
+	old, err := s.SearchPaths(context.Background(), []string{path}, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.ContainsFunc(old, func(candidate model.RankedCandidate) bool { return candidate.Symbol == "Run" }) {
+		t.Fatalf("generic path search unexpectedly guaranteed Run in first 50: %+v", old)
+	}
+
+	fts := query.BuildFTS(query.Terms{Words: []string{"extract", "index", "store", "metadata"}})
+	got, err := s.SearchSymbolsInPaths(context.Background(), []string{path}, []string{"Run"}, fts, 8, 40)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) < 2 || got[0].Handle != "run-body" || got[1].Handle != "run-outline" {
+		t.Fatalf("scoped Run order=%+v", got)
+	}
+	if slices.ContainsFunc(got, func(candidate model.RankedCandidate) bool { return candidate.Handle == "generic-noise" }) {
+		t.Fatalf("unowned generic chunk entered scoped symbols: %+v", got)
+	}
+	seen := make(map[string]bool)
+	for _, candidate := range got {
+		if seen[candidate.Handle] {
+			t.Fatalf("duplicate scoped handle %q in %+v", candidate.Handle, got)
+		}
+		seen[candidate.Handle] = true
+	}
+}
+
+func TestSearchSymbolsInPathsMatchesVariantsAndOrdersPassStrength(t *testing.T) {
+	s := openTestStore(t)
+	path := "internal/mcpserver/server.go"
+	extraction := model.Extraction{
+		Symbols: []model.Symbol{
+			{Handle: "code-context", FilePath: path, Language: "go", Kind: "method", Name: "codeContext", QualifiedName: "server.codeContext", Signature: "func codeContext()", StartLine: 1, EndLine: 2, Confidence: 1},
+			{Handle: "search", FilePath: path, Language: "go", Kind: "method", Name: "Search", QualifiedName: "server.Search", Signature: "func Search()", StartLine: 3, EndLine: 4, Confidence: 1},
+			{Handle: "qualified", FilePath: path, Language: "go", Kind: "method", Name: "Run", QualifiedName: "Service.Run", Signature: "func Run()", StartLine: 5, EndLine: 6, Confidence: 1},
+			{Handle: "simple", FilePath: path, Language: "go", Kind: "method", Name: "Service.Run", QualifiedName: "Other.ServiceRun", Signature: "func ServiceRun()", StartLine: 7, EndLine: 8, Confidence: 1},
+			{Handle: "prefix", FilePath: path, Language: "go", Kind: "method", Name: "Service.Runner", QualifiedName: "Other.ServiceRunner", Signature: "func ServiceRunner()", StartLine: 9, EndLine: 10, Confidence: 1},
+			{Handle: "fts-only", FilePath: path, Language: "go", Kind: "method", Name: "Execute", QualifiedName: "Other.Execute", Signature: "func Execute()", StartLine: 11, EndLine: 12, Confidence: 1},
+		},
+	}
+	for _, symbol := range extraction.Symbols {
+		content := "ordinary body"
+		if symbol.Handle == "fts-only" {
+			content = "lexicalonly body"
+		}
+		extraction.Chunks = append(extraction.Chunks, model.Chunk{Handle: symbol.Handle + "-chunk", FilePath: path, Language: "go", Kind: symbol.Kind, SymbolHandle: symbol.Handle, SymbolName: symbol.Name, Signature: symbol.Signature, StartLine: symbol.StartLine, EndLine: symbol.EndLine, Content: content, ContentHash: symbol.Handle})
+	}
+	storeReplaceExtraction(t, s, path, extraction)
+
+	got, err := s.SearchSymbolsInPaths(context.Background(), []string{path}, []string{"code_context", "codeContext", "CodeContext", "search", "Service.Run"}, query.BuildFTS(query.Terms{Words: []string{"lexicalonly"}}), 8, 40)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, handle := range []string{"code-context-chunk", "search-chunk"} {
+		if !slices.ContainsFunc(got, func(candidate model.RankedCandidate) bool { return candidate.Handle == handle }) {
+			t.Fatalf("missing variant/case handle %q in %+v", handle, got)
+		}
+	}
+	positions := candidatePositions(got)
+	if !(positions["qualified-chunk"] < positions["simple-chunk"] && positions["simple-chunk"] < positions["prefix-chunk"] && positions["prefix-chunk"] < positions["fts-only-chunk"]) {
+		t.Fatalf("pass strength positions=%v candidates=%+v", positions, got)
+	}
+}
+
+func TestSearchSymbolsInPathsConstrainsFTSToExactPaths(t *testing.T) {
+	s := openTestStore(t)
+	for _, path := range []string{"scoped/run.go", "other/run.go"} {
+		extraction := model.Extraction{
+			Symbols: []model.Symbol{{Handle: path + "-run", FilePath: path, Language: "go", Kind: "function", Name: "Run", QualifiedName: path + ".Run", Signature: "func Run()", StartLine: 1, EndLine: 4, Confidence: 1}},
+			Chunks:  []model.Chunk{{Handle: path + "-chunk", FilePath: path, Language: "go", Kind: "function", SymbolHandle: path + "-run", SymbolName: "Run", Signature: "func Run()", StartLine: 1, EndLine: 4, Content: "extract index store metadata", ContentHash: path}},
+		}
+		storeReplaceExtraction(t, s, path, extraction)
+	}
+
+	safeFTS := query.BuildFTS(query.Terms{Words: []string{"extract", `bad" OR *`}})
+	got, err := s.SearchSymbolsInPaths(context.Background(), []string{"scoped/run.go"}, nil, safeFTS, 8, 40)
+	if err != nil || len(got) != 1 || got[0].Path != "scoped/run.go" {
+		t.Fatalf("path-constrained FTS=%+v err=%v expression=%q", got, err, safeFTS)
+	}
+
+	empty, err := s.SearchSymbolsInPaths(context.Background(), []string{"scoped/run.go"}, nil, "", 8, 40)
+	if err != nil || empty == nil || len(empty) != 0 {
+		t.Fatalf("empty FTS results=%v nil=%v err=%v", empty, empty == nil, err)
+	}
+}
+
+func TestSearchSymbolsInPathsEnforcesFairnessCapsAndStableOrder(t *testing.T) {
+	s := openTestStore(t)
+	counts := []int{12, 3, 6, 6, 6, 6, 6, 6}
+	paths := make([]string, 0, len(counts))
+	for fileIndex, count := range counts {
+		path := fmt.Sprintf("scope/%c.go", 'a'+rune(fileIndex))
+		paths = append(paths, path)
+		extraction := model.Extraction{}
+		for symbolIndex := 0; symbolIndex < count; symbolIndex++ {
+			handle := fmt.Sprintf("worker-%d-%02d", fileIndex, symbolIndex)
+			name := fmt.Sprintf("Worker%d%02d", fileIndex, symbolIndex)
+			extraction.Symbols = append(extraction.Symbols, model.Symbol{Handle: handle, FilePath: path, Language: "go", Kind: "function", Name: name, QualifiedName: name, Signature: "func " + name + "()", StartLine: symbolIndex + 1, EndLine: symbolIndex + 1, Confidence: 1})
+			extraction.Chunks = append(extraction.Chunks, model.Chunk{Handle: handle + "-chunk", FilePath: path, Language: "go", Kind: "function", SymbolHandle: handle, SymbolName: name, Signature: "func " + name + "()", StartLine: symbolIndex + 1, EndLine: symbolIndex + 1, Content: "worker body", ContentHash: handle})
+		}
+		storeReplaceExtraction(t, s, path, extraction)
+	}
+
+	first, err := s.SearchSymbolsInPaths(context.Background(), paths, []string{"Worker"}, query.BuildFTS(query.Terms{Words: []string{"worker"}}), 8, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := s.SearchSymbolsInPaths(context.Background(), paths, []string{"Worker"}, query.BuildFTS(query.Terms{Words: []string{"worker"}}), 8, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first) != 40 || !slices.EqualFunc(first, second, func(left, right model.RankedCandidate) bool { return left.Handle == right.Handle }) {
+		t.Fatalf("total/stability count=%d stable=%v", len(first), slices.EqualFunc(first, second, func(left, right model.RankedCandidate) bool { return left.Handle == right.Handle }))
+	}
+	perPath := make(map[string]int)
+	seen := make(map[string]bool)
+	for _, candidate := range first {
+		perPath[candidate.Path]++
+		if perPath[candidate.Path] > 8 {
+			t.Fatalf("per-path cap exceeded: %v", perPath)
+		}
+		if seen[candidate.Handle] {
+			t.Fatalf("duplicate handle %q", candidate.Handle)
+		}
+		seen[candidate.Handle] = true
+	}
+	if perPath["scope/a.go"] != 8 || perPath["scope/b.go"] != 3 {
+		t.Fatalf("fairness counts=%v", perPath)
+	}
+}
+
+func candidatePositions(candidates []model.RankedCandidate) map[string]int {
+	positions := make(map[string]int, len(candidates))
+	for index, candidate := range candidates {
+		positions[candidate.Handle] = index + 1
+	}
+	return positions
+}
+
 func TestSearchMethodsUseStableTieBreaks(t *testing.T) {
 	s := openTestStore(t)
 	storeSeedFile(t, s, "z.go", "go", "z", "ValidateToken", "ValidateToken", "body", 10, 12, 1)
@@ -264,6 +434,13 @@ func storeSeedPath(t *testing.T, s *Store, path string) {
 		Language: "fixture",
 		SHA256:   path,
 	}, model.Extraction{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func storeReplaceExtraction(t *testing.T, s *Store, path string, extraction model.Extraction) {
+	t.Helper()
+	if err := s.ReplaceFile(context.Background(), model.SourceFile{Path: path, Language: "go", SHA256: path}, extraction); err != nil {
 		t.Fatal(err)
 	}
 }
