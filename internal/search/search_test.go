@@ -11,7 +11,10 @@ import (
 )
 
 func TestSearchDetailedReturnsPlanAndOptionalSourceFreeTrace(t *testing.T) {
-	store := fakeStore{results: []model.RankedCandidate{{Handle: "target", Path: "auth.go", Symbol: "ValidateToken", Kind: "function", Content: "secret source body"}}}
+	store := fakeStore{results: []model.RankedCandidate{
+		{Handle: "target", Path: "auth.go", Symbol: "ValidateToken", Kind: "function", Content: "secret source body"},
+		{Handle: "dropped", Path: "other.go", Symbol: "Other", Kind: "method", Content: "private dropped body"},
+	}}
 	s := New(store)
 	withoutTrace, err := s.SearchDetailed(context.Background(), SearchRequest{Query: "ValidateToken", Mode: RetrievalFull})
 	if err != nil {
@@ -20,18 +23,27 @@ func TestSearchDetailedReturnsPlanAndOptionalSourceFreeTrace(t *testing.T) {
 	if withoutTrace.Plan.PrimaryIntent != query.IntentDefinition || withoutTrace.Trace != nil {
 		t.Fatalf("without trace=%+v", withoutTrace)
 	}
-	withTrace, err := s.SearchDetailed(context.Background(), SearchRequest{Query: "ValidateToken", Mode: RetrievalFull, Trace: true})
+	withTrace, err := s.SearchDetailed(context.Background(), SearchRequest{Query: "ValidateToken", Mode: RetrievalFull, Limit: 1, Trace: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if withTrace.Trace == nil || len(withTrace.Trace.Candidates) == 0 || withTrace.Trace.Candidates[0].FinalScore <= 0 {
 		t.Fatalf("trace=%+v", withTrace.Trace)
 	}
+	if len(withTrace.Trace.Retrieved) != 10 {
+		t.Fatalf("raw retrieved trace count=%d, want 10", len(withTrace.Trace.Retrieved))
+	}
+	if got := withTrace.Trace.Retrieved[1]; got.Path != "other.go" || got.Symbol != "Other" || got.Kind != "method" || got.Position != 2 || got.Retriever != RetrieverQualified || got.Relation != "" || got.RelationResolved {
+		t.Fatalf("raw dropped identity=%+v", got)
+	}
+	if len(withTrace.Trace.Candidates) != 1 || withTrace.Trace.Candidates[0].Kind != "function" || withTrace.Trace.Candidates[0].RankedPosition != 1 {
+		t.Fatalf("ranked trace=%+v", withTrace.Trace.Candidates)
+	}
 	payload, err := json.Marshal(withTrace.Trace)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(payload), "secret source body") {
+	if strings.Contains(string(payload), "secret source body") || strings.Contains(string(payload), "private dropped body") {
 		t.Fatalf("trace contains source content: %s", payload)
 	}
 }
@@ -127,7 +139,7 @@ func TestSearchDetailedPreservesResolvedRelationProvenance(t *testing.T) {
 		},
 	})
 
-	result, err := s.SearchDetailed(context.Background(), SearchRequest{Query: "what calls ValidateToken?"})
+	result, err := s.SearchDetailed(context.Background(), SearchRequest{Query: "what calls ValidateToken?", Trace: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,6 +152,25 @@ func TestSearchDetailedPreservesResolvedRelationProvenance(t *testing.T) {
 		}
 		if *candidate.RelationContext != resolved {
 			t.Fatalf("context = %+v, want resolved %+v", *candidate.RelationContext, resolved)
+		}
+		foundTrace := false
+		for _, raw := range result.Trace.Retrieved {
+			if raw.Retriever == RetrieverRelation && raw.Path == caller.Path && raw.Symbol == caller.Symbol {
+				if raw.Relation != "callers" || !raw.RelationResolved {
+					t.Fatalf("relation trace=%+v", raw)
+				}
+				foundTrace = true
+			}
+		}
+		if !foundTrace {
+			t.Fatalf("relation raw trace absent: %+v", result.Trace)
+		}
+		payload, marshalErr := json.Marshal(result.Trace)
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		if strings.Contains(string(payload), "go-ast") || strings.Contains(string(payload), "generic") {
+			t.Fatalf("relation implementation detail leaked: %s", payload)
 		}
 		return
 	}

@@ -1,8 +1,11 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/focalspan/focalspan/internal/evidence"
@@ -30,6 +33,26 @@ func TestQueryEvidenceReturnsFocusedPacketAndPreservesLegacyQuery(t *testing.T) 
 	}
 	if result.Packet.Evidence[0].Location.Path != legacy.Items[0].Path {
 		t.Fatalf("retrieval diverged: evidence=%s legacy=%s", result.Packet.Evidence[0].Location.Path, legacy.Items[0].Path)
+	}
+	attributed, err := service.QueryEvidenceAttributed(context.Background(), EvidenceQueryRequest{Query: "ValidateToken", TokenBudget: 1200, NoUpdate: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalJSON, err := json.Marshal(result.Packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attributedJSON, err := json.Marshal(attributed.Compile.Packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(normalJSON, attributedJSON) || attributed.Trace.Candidates[0].RankedPosition != 1 || len(attributed.Trace.Retrieved) == 0 {
+		t.Fatalf("attributed result diverged: packet=%s trace=%+v", attributedJSON, attributed.Trace)
+	}
+	for _, forbidden := range []string{"trace", "retrieved", "ranked_position", "candidate", "token_savings", "debug"} {
+		if strings.Contains(string(normalJSON), forbidden) {
+			t.Fatalf("normal packet exposed %q: %s", forbidden, normalJSON)
+		}
 	}
 }
 

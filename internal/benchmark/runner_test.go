@@ -63,6 +63,11 @@ func (f *fakeEngine) QueryEvidence(_ context.Context, req app.EvidenceQueryReque
 	f.factory.retrievalModes = append(f.factory.retrievalModes, req.RetrievalMode)
 	return evidence.Packet{Schema: evidence.SchemaContextV1, Intent: "definition", Mode: req.Mode, Budget: evidence.Budget{Limit: req.TokenBudget}, Evidence: []evidence.Item{}}, nil
 }
+
+func (f *fakeEngine) QueryEvidenceAttributed(ctx context.Context, req app.EvidenceQueryRequest) (app.AttributedEvidenceResult, error) {
+	packet, err := f.QueryEvidence(ctx, req)
+	return app.AttributedEvidenceResult{Compile: evidence.CompileResult{Packet: packet}}, err
+}
 func (f *fakeEngine) ExpandEvidence(context.Context, app.EvidenceExpandRequest) (evidence.Packet, error) {
 	return evidence.Packet{}, nil
 }

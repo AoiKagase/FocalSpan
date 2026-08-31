@@ -84,25 +84,48 @@ func (s *Searcher) SearchDetailed(ctx context.Context, req SearchRequest) (Searc
 	if mode == "" {
 		mode = RetrievalFull
 	}
-	trace := &SearchTrace{Mode: mode, Lists: retrieverSummaries(lists), Candidates: make([]CandidateTrace, 0, len(result))}
+	trace := &SearchTrace{Mode: mode, Lists: retrieverSummaries(lists), Retrieved: stageCandidateTraces(lists), Candidates: make([]CandidateTrace, 0, len(result))}
 	traceByIdentity := make(map[string]CandidateTrace, len(traces))
 	for _, candidateTrace := range traces {
 		traceByIdentity[candidateTrace.Handle] = candidateTrace
 	}
-	for _, candidate := range result {
+	for rankedIndex, candidate := range result {
 		candidateTrace, ok := traceByIdentity[candidate.Handle]
 		if !ok {
 			candidateTrace = CandidateTrace{
-				Handle: candidate.Handle, Path: candidate.Path, Symbol: candidate.Symbol,
+				Handle: candidate.Handle, Path: candidate.Path, Symbol: candidate.Symbol, Kind: candidate.Kind,
 				StartLine: candidate.StartLine, EndLine: candidate.EndLine,
 			}
 		}
+		candidateTrace.Kind = candidate.Kind
+		candidateTrace.RankedPosition = rankedIndex + 1
 		candidateTrace.FinalScore = candidate.Score
 		candidateTrace.Reasons = append([]model.ScoreReason(nil), candidate.Reasons...)
 		trace.Candidates = append(trace.Candidates, candidateTrace)
 	}
 	searchResult.Trace = trace
 	return searchResult, nil
+}
+
+func stageCandidateTraces(lists []RankedList) []StageCandidateTrace {
+	var traces []StageCandidateTrace
+	for _, list := range lists {
+		for index, candidate := range list.Items {
+			trace := StageCandidateTrace{
+				Retriever: list.Retriever,
+				Position:  index + 1,
+				Path:      candidate.Path,
+				Symbol:    candidate.Symbol,
+				Kind:      candidate.Kind,
+				Relation:  candidate.Relation,
+			}
+			if candidate.RelationContext != nil {
+				trace.RelationResolved = candidate.RelationContext.Resolved
+			}
+			traces = append(traces, trace)
+		}
+	}
+	return traces
 }
 
 func pathMatches(path string, filters []string) bool {

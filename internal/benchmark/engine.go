@@ -19,6 +19,7 @@ type Engine interface {
 	Build(ctx context.Context) (IndexMeasurement, error)
 	QueryLegacy(ctx context.Context, req app.QueryRequest) (model.ContextBundle, error)
 	QueryEvidence(ctx context.Context, req app.EvidenceQueryRequest) (evidence.Packet, error)
+	QueryEvidenceAttributed(ctx context.Context, req app.EvidenceQueryRequest) (app.AttributedEvidenceResult, error)
 	ExpandEvidence(ctx context.Context, req app.EvidenceExpandRequest) (evidence.Packet, error)
 	Close() error
 }
@@ -76,6 +77,10 @@ func (engine *appEngine) QueryLegacy(ctx context.Context, req app.QueryRequest) 
 func (engine *appEngine) QueryEvidence(ctx context.Context, req app.EvidenceQueryRequest) (evidence.Packet, error) {
 	result, err := engine.service.QueryEvidence(ctx, req)
 	return result.Packet, err
+}
+
+func (engine *appEngine) QueryEvidenceAttributed(ctx context.Context, req app.EvidenceQueryRequest) (app.AttributedEvidenceResult, error) {
+	return engine.service.QueryEvidenceAttributed(ctx, req)
 }
 
 func (engine *appEngine) ExpandEvidence(ctx context.Context, req app.EvidenceExpandRequest) (evidence.Packet, error) {

@@ -1,7 +1,9 @@
 package benchmark
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"testing"
 
@@ -29,6 +31,15 @@ func TestAppEngineBuildAndQueryEvidence(t *testing.T) {
 	}
 	if packet.Schema != evidence.SchemaContextV1 || packet.Budget.Used > packet.Budget.Limit || len(packet.Evidence) == 0 {
 		t.Fatalf("packet = %+v", packet)
+	}
+	attributed, err := engine.QueryEvidenceAttributed(context.Background(), app.EvidenceQueryRequest{Query: "ValidateToken の呼び出し元はどこですか", TokenBudget: 2048, Mode: evidence.ModeFocused, NoUpdate: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	packetJSON, _ := json.Marshal(packet)
+	attributedJSON, _ := json.Marshal(attributed.Compile.Packet)
+	if !bytes.Equal(packetJSON, attributedJSON) || len(attributed.Trace.Retrieved) == 0 || len(attributed.Trace.Candidates) == 0 {
+		t.Fatalf("attributed query diverged: packet=%s trace=%+v", attributedJSON, attributed.Trace)
 	}
 }
 

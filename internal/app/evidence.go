@@ -20,6 +20,12 @@ type candidateResult struct {
 	Revision    string
 	Candidates  []model.RankedCandidate
 	Diagnostics []string
+	Trace       *search.SearchTrace
+}
+
+type AttributedEvidenceResult struct {
+	Compile evidence.CompileResult
+	Trace   search.SearchTrace
 }
 
 type EvidenceQueryRequest struct {
@@ -50,6 +56,10 @@ type EvidenceImpactRequest struct {
 }
 
 func (s *Service) queryCandidates(ctx context.Context, req QueryRequest) (candidateResult, error) {
+	return s.queryCandidatesDetailed(ctx, req, false)
+}
+
+func (s *Service) queryCandidatesDetailed(ctx context.Context, req QueryRequest, trace bool) (candidateResult, error) {
 	if err := ctx.Err(); err != nil {
 		return candidateResult{}, err
 	}
@@ -65,26 +75,43 @@ func (s *Service) queryCandidates(ctx context.Context, req QueryRequest) (candid
 	if retrievalMode == "" {
 		retrievalMode = search.RetrievalFull
 	}
-	result, err := s.searcher.SearchDetailed(ctx, search.SearchRequest{Query: req.Query, Paths: req.Paths, ChangedOnly: req.ChangedOnly, Changed: s.changedRanges(ctx, req.ChangedOnly), Limit: s.Config.MaxCandidates, Mode: retrievalMode})
+	result, err := s.searcher.SearchDetailed(ctx, search.SearchRequest{Query: req.Query, Paths: req.Paths, ChangedOnly: req.ChangedOnly, Changed: s.changedRanges(ctx, req.ChangedOnly), Limit: s.Config.MaxCandidates, Mode: retrievalMode, Trace: trace})
 	if err != nil {
 		return candidateResult{}, err
 	}
-	return candidateResult{Plan: result.Plan, Revision: s.revision(ctx), Candidates: result.Candidates}, nil
+	return candidateResult{Plan: result.Plan, Revision: s.revision(ctx), Candidates: result.Candidates, Trace: result.Trace}, nil
 }
 
 func (s *Service) QueryEvidence(ctx context.Context, req EvidenceQueryRequest) (evidence.CompileResult, error) {
+	result, err := s.queryEvidence(ctx, req, false)
+	return result.Compile, err
+}
+
+func (s *Service) QueryEvidenceAttributed(ctx context.Context, req EvidenceQueryRequest) (AttributedEvidenceResult, error) {
+	return s.queryEvidence(ctx, req, true)
+}
+
+func (s *Service) queryEvidence(ctx context.Context, req EvidenceQueryRequest, trace bool) (AttributedEvidenceResult, error) {
 	known, err := evidence.NormalizeKnownHandles(req.KnownHandles)
 	if err != nil {
-		return evidence.CompileResult{}, err
+		return AttributedEvidenceResult{}, err
 	}
 	if req.TokenBudget == 0 {
 		req.TokenBudget = s.Config.DefaultTokenBudget
 	}
-	result, err := s.queryCandidates(ctx, QueryRequest{Query: req.Query, TokenBudget: req.TokenBudget, ChangedOnly: req.ChangedOnly, Paths: req.Paths, NoUpdate: req.NoUpdate, RetrievalMode: req.RetrievalMode})
+	result, err := s.queryCandidatesDetailed(ctx, QueryRequest{Query: req.Query, TokenBudget: req.TokenBudget, ChangedOnly: req.ChangedOnly, Paths: req.Paths, NoUpdate: req.NoUpdate, RetrievalMode: req.RetrievalMode}, trace)
 	if err != nil {
-		return evidence.CompileResult{}, err
+		return AttributedEvidenceResult{}, err
 	}
-	return s.evidenceCompiler.Compile(evidence.CompileRequest{Plan: result.Plan, Revision: result.Revision, TokenBudget: req.TokenBudget, Mode: req.Mode, Candidates: result.Candidates, KnownHandles: known})
+	compiled, err := s.evidenceCompiler.Compile(evidence.CompileRequest{Plan: result.Plan, Revision: result.Revision, TokenBudget: req.TokenBudget, Mode: req.Mode, Candidates: result.Candidates, KnownHandles: known})
+	if err != nil {
+		return AttributedEvidenceResult{}, err
+	}
+	attributed := AttributedEvidenceResult{Compile: compiled}
+	if result.Trace != nil {
+		attributed.Trace = *result.Trace
+	}
+	return attributed, nil
 }
 
 func (s *Service) ExpandEvidence(ctx context.Context, req EvidenceExpandRequest) (evidence.CompileResult, error) {

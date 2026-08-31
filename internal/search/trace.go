@@ -36,15 +36,27 @@ type RetrievalContribution struct {
 }
 
 type CandidateTrace struct {
-	Handle        string                  `json:"handle"`
-	Path          string                  `json:"path"`
-	Symbol        string                  `json:"symbol"`
-	StartLine     int                     `json:"start_line"`
-	EndLine       int                     `json:"end_line"`
-	Contributions []RetrievalContribution `json:"contributions"`
-	FusionScore   float64                 `json:"fusion_score"`
-	FinalScore    float64                 `json:"final_score"`
-	Reasons       []model.ScoreReason     `json:"reasons"`
+	Handle         string                  `json:"handle"`
+	Path           string                  `json:"path"`
+	Symbol         string                  `json:"symbol"`
+	Kind           string                  `json:"kind"`
+	StartLine      int                     `json:"start_line"`
+	EndLine        int                     `json:"end_line"`
+	RankedPosition int                     `json:"ranked_position"`
+	Contributions  []RetrievalContribution `json:"contributions"`
+	FusionScore    float64                 `json:"fusion_score"`
+	FinalScore     float64                 `json:"final_score"`
+	Reasons        []model.ScoreReason     `json:"reasons"`
+}
+
+type StageCandidateTrace struct {
+	Retriever        RetrieverID `json:"retriever"`
+	Position         int         `json:"position"`
+	Path             string      `json:"path"`
+	Symbol           string      `json:"symbol"`
+	Kind             string      `json:"kind"`
+	Relation         string      `json:"relation,omitempty"`
+	RelationResolved bool        `json:"relation_resolved,omitempty"`
 }
 
 type RetrieverSummary struct {
@@ -53,9 +65,10 @@ type RetrieverSummary struct {
 }
 
 type SearchTrace struct {
-	Mode       RetrievalMode      `json:"mode"`
-	Lists      []RetrieverSummary `json:"lists"`
-	Candidates []CandidateTrace   `json:"candidates"`
+	Mode       RetrievalMode         `json:"mode"`
+	Lists      []RetrieverSummary    `json:"lists"`
+	Retrieved  []StageCandidateTrace `json:"retrieved"`
+	Candidates []CandidateTrace      `json:"candidates"`
 }
 
 type SearchResult struct {

@@ -132,8 +132,10 @@ legacy, wire, privacy, and deterministic contracts remain intact.
 - [x] Task 2 source-free attribution schema and classifiers implemented.
   (2026-08-31; focused 7 tests, package 46 tests, full 664 tests/46 packages,
   and diff check passed.)
-- [ ] Task 3 internal search/app/benchmark trace adapter implemented without
-  normal-output changes.
+- [x] Task 3 internal search/app/benchmark trace adapter implemented without
+  normal-output changes. (2026-08-31; 105 focused package tests, 157 dedicated
+  CLI/MCP/Evidence tests, and 664 full tests/46 packages passed; diff check
+  passed.)
 - [ ] Task 4 two-case smoke and one eight-case repeat-1 attribution diagnostic
   completed.
 - [ ] Task 5 exactly one improvement target and acceptance contract frozen in
@@ -173,6 +175,10 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   while output validation rejects absolute/non-normalized paths, control
   characters, unknown retrievers/relation states, and unpaired stage/reason
   codes before serialization.
+- 2026-08-31: Raw retriever lists can contain the same identity once per
+  retriever. The trace intentionally preserves every list occurrence in
+  retriever execution order with a one-based position; later attribution keeps
+  all matching hits rather than prematurely deduplicating stage evidence.
 
 ---
 
@@ -193,6 +199,10 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   supplied, exact kind. Classify `linking_unresolved` only when all matching raw
   hits are unresolved relation hits; an ordinary or resolved hit makes an
   unranked label `ranking_dropped`.
+- 2026-08-31: `QueryEvidence` and `QueryEvidenceAttributed` share one private
+  validation, retrieval, and compile path. The only switch is the internal
+  search `Trace` flag; benchmark code receives the compile result and trace,
+  while ordinary callers continue to receive the original `CompileResult`.
 - 2026-08-31: Freeze the improvement only after the eight-case repeat-1 trace.
   Choose the stage with the greatest number of actionable misses; a tie selects
   retrieval because it is earlier in the pipeline and requires fewer semantic
@@ -224,6 +234,16 @@ the attribution API was absent. The minimal implementation then passed 7
 focused tests, all 46 `internal/benchmark` tests, and `go test ./... -count=1`
 with 664 tests in 46 packages; `git diff --check` passed. The schema has no
 source-content field and does not alter normal CLI, MCP, or Evidence output.
+
+Task 3 extended the opt-in search trace with raw relative identity/position,
+sanitized relation state, kind, and final ranked position. Tests prove dropped
+raw candidates remain observable, relation implementation names and candidate
+content do not serialize, and traced and ordinary compilation produce identical
+Packet JSON. The benchmark engine adapter remains unused by the normal runner,
+so its existing one-index-per-case lifecycle is unchanged. Search/app/benchmark
+focused packages passed 105 tests; the full repository passed 664 tests in 46
+packages, the dedicated CLI/MCP/Evidence packages passed 157 tests, and diff
+check passed.
 
 ---
 
@@ -397,15 +417,15 @@ report or metrics type needs to change.
 `internal/app/{evidence.go,evidence_test.go}`, and
 `internal/benchmark/{engine.go,engine_test.go}`.
 
-- [ ] Write a failing search test requiring raw retriever identity/position,
+- [x] Write a failing search test requiring raw retriever identity/position,
   sanitized relation state, and ranked position for dropped/surviving items.
-- [ ] Verify RED, then populate only whitelisted fields when `Trace` is true.
-- [ ] Write failing app tests for `QueryEvidenceAttributed` and unchanged normal
+- [x] Verify RED, then populate only whitelisted fields when `Trace` is true.
+- [x] Write failing app tests for `QueryEvidenceAttributed` and unchanged normal
   Packet/MCP JSON with no trace/ranking/candidate/debug fields.
-- [ ] Verify RED, then share the smallest query/compile path so normal and
+- [x] Verify RED, then share the smallest query/compile path so normal and
   attributed calls produce identical Packet bytes.
-- [ ] Extend benchmark engine/fakes and retain one index per case.
-- [ ] Run focused tests, full tests, diff check; commit named adapter files.
+- [x] Extend benchmark engine/fakes and retain one index per case.
+- [x] Run focused tests, full tests, diff check; commit named adapter files.
 
 ### Task 4: Integrate Attribution and Measure the Frozen Corpus
 
