@@ -18,7 +18,11 @@ Authors describe a realistic question against a base revision and manually label
 
 ## Running the public self-history suite
 
-The public suite and exact commands are added by the benchmark implementation tasks. Validation must complete before a run.
+Validate the eight human-reviewed historical cases before running them:
+
+    go run ./cmd/focalspan-bench validate --suite testdata/benchmark/focalspan-history.json
+
+Labels and their rationale are recorded in `testdata/benchmark/focalspan-history-labels.md`.
 
 ## Running private local suites
 

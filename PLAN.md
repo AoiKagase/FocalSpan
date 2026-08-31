@@ -293,7 +293,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - [x] Deterministic quality metrics and separate performance measurements implemented. (2026-08-31 UTC; quality serialization excludes timing.)
 - [x] Development CLI, private registry handling, and scaffold flow implemented. (2026-08-31 UTC; validate/run/scaffold/compare boundaries and mapping precedence verified.)
 - [x] Query-plus-expand delta evaluation implemented. (2026-08-31 UTC; exact anchors, known-handle suppression, and control token ratio verified.)
-- [ ] Public FocalSpan history corpus labeled and validated.
+- [x] Public FocalSpan history corpus labeled and validated. (2026-08-31 UTC; 8 cases, 3 Japanese queries, 3 expansions, 0 invalid.)
 - [ ] Failure attribution and report comparison implemented.
 - [ ] Linux race CI and cross-platform build CI implemented.
 - [ ] Public benchmark results and evidence-based v0.6 recommendation committed.
@@ -1365,7 +1365,7 @@ Run:
 - Consumes: FocalSpan's own Git history
 - Produces: a source-free, reproducible real-history suite that exercises integration points across extraction, retrieval, linking, MCP, and Evidence compilation
 
-- [ ] **Step 1: Identify candidate target commits by feature, not by recency alone**
+- [x] **Step 1: Identify candidate target commits by feature, not by recency alone**
 
 Use `git log --all --oneline --decorate` and `git show --stat` to find commits that introduced or completed these eight themes:
 
@@ -1380,7 +1380,7 @@ Use `git log --all --oneline --decorate` and `git show --stat` to find commits t
 
 For each theme, select a target commit and an ancestor base immediately before the relevant implementation. A merge commit may use its first parent only when that parent is the actual pre-feature tree.
 
-- [ ] **Step 2: Enforce label feasibility**
+- [x] **Step 2: Enforce label feasibility**
 
 For each case:
 
@@ -1393,7 +1393,7 @@ For each case:
 
 Use `focalspan-bench scaffold` to inspect candidates, then manually label.
 
-- [ ] **Step 3: Write English and Japanese queries**
+- [x] **Step 3: Write English and Japanese queries**
 
 At least three of the eight cases use Japanese mixed with an exact code identifier, for example:
 
@@ -1403,7 +1403,7 @@ At least three of the eight cases use Japanese mixed with an exact code identifi
 
 Do not use target-only symbol names that did not exist at base. The remaining cases may use English.
 
-- [ ] **Step 4: Add at least three expansion expectations**
+- [x] **Step 4: Add at least three expansion expectations**
 
 Cover three different relations from:
 
@@ -1416,7 +1416,7 @@ Cover three different relations from:
 
 Each anchor must exist at base and be uniquely labeled by path and symbol.
 
-- [ ] **Step 5: Document human labeling rationale**
+- [x] **Step 5: Document human labeling rationale**
 
 In `testdata/benchmark/focalspan-history-labels.md`, for each case record:
 
@@ -1429,7 +1429,7 @@ In `testdata/benchmark/focalspan-history-labels.md`, for each case record:
 
 Do not include source code or absolute paths.
 
-- [ ] **Step 6: Validate the suite**
+- [x] **Step 6: Validate the suite**
 
 Run:
 
@@ -1443,7 +1443,7 @@ Expected:
 
 The exact human formatting may differ, but both values must be present.
 
-- [ ] **Step 7: Add anti-overfitting review**
+- [x] **Step 7: Add anti-overfitting review**
 
 Search production code for every case ID and distinctive query phrase:
 
@@ -1452,7 +1452,7 @@ Search production code for every case ID and distinctive query phrase:
 
 Matches are allowed only in benchmark data, tests directly loading that data, or documentation. No production ranking, parser, query, linker, or Evidence code may contain them.
 
-- [ ] **Step 8: Commit corpus separately**
+- [x] **Step 8: Commit corpus separately**
 
 Run:
 
