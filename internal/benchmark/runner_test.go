@@ -1,0 +1,76 @@
+package benchmark
+
+import (
+	"context"
+	"os"
+	"testing"
+
+	"github.com/focalspan/focalspan/internal/app"
+	"github.com/focalspan/focalspan/internal/evidence"
+	"github.com/focalspan/focalspan/internal/model"
+	"github.com/focalspan/focalspan/internal/search"
+)
+
+type fakeSnapshotter struct {
+	calls int
+	root  string
+}
+
+func (f *fakeSnapshotter) Materialize(context.Context, string, string, string, string) (Snapshot, error) {
+	f.calls++
+	return Snapshot{Commit: "base", Root: f.root}, nil
+}
+
+type fakeEngineFactory struct{ opens, builds, queries, closes int }
+
+func (f *fakeEngineFactory) Open(string, search.RetrievalMode) (Engine, error) {
+	f.opens++
+	return &fakeEngine{factory: f}, nil
+}
+
+type fakeEngine struct{ factory *fakeEngineFactory }
+
+func (f *fakeEngine) Build(context.Context) (IndexMeasurement, error) {
+	f.factory.builds++
+	return IndexMeasurement{}, nil
+}
+func (f *fakeEngine) QueryLegacy(context.Context, app.QueryRequest) (model.ContextBundle, error) {
+	f.factory.queries++
+	return model.ContextBundle{}, nil
+}
+func (f *fakeEngine) QueryEvidence(_ context.Context, req app.EvidenceQueryRequest) (evidence.Packet, error) {
+	f.factory.queries++
+	return evidence.Packet{Schema: evidence.SchemaContextV1, Intent: "definition", Mode: req.Mode, Budget: evidence.Budget{Limit: req.TokenBudget}, Evidence: []evidence.Item{}}, nil
+}
+func (f *fakeEngine) ExpandEvidence(context.Context, app.EvidenceExpandRequest) (evidence.Packet, error) {
+	return evidence.Packet{}, nil
+}
+func (f *fakeEngine) Close() error { f.factory.closes++; return nil }
+
+func TestRunnerSequencesCasesProfilesBudgetsAndRepeats(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(root+"/required.go", []byte("package fixture"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	snapshotter := &fakeSnapshotter{root: root}
+	factory := &fakeEngineFactory{}
+	runner := Runner{Snapshotter: snapshotter, EngineFactory: factory}
+	profiles := []Profile{{Name: "one", RetrievalMode: search.RetrievalFull, Contract: "evidence", EvidenceMode: evidence.ModeFocused, Budgets: []int{512, 1024}}, {Name: "two", RetrievalMode: search.RetrievalFTSOnly, Contract: "legacy", EvidenceMode: evidence.ModeSource, Budgets: []int{512, 1024}}}
+	report, err := runner.Run(context.Background(), RunRequest{
+		Suite: Suite{Name: "suite", Cases: []Case{{
+			ID: "case", Repository: "self", BaseRef: "base", TargetRef: "target",
+			Query: "query", Budgets: []int{512, 1024}, RequiredPaths: []string{"required.go"},
+		}}},
+		Repositories: map[string]string{"self": root}, Profiles: profiles,
+		Repeat: 2, Workspace: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshotter.calls != 1 || factory.opens != 2 || factory.builds != 2 || factory.queries != 8 || factory.closes != 2 || len(report.Runs) != 4 {
+		t.Fatalf("snapshot=%d opens=%d builds=%d queries=%d closes=%d runs=%d", snapshotter.calls, factory.opens, factory.builds, factory.queries, factory.closes, len(report.Runs))
+	}
+	if report.Runs[0].Budget != 512 || report.Runs[1].Budget != 1024 || report.Runs[2].Profile != "two" {
+		t.Fatalf("order = %+v", report.Runs)
+	}
+}

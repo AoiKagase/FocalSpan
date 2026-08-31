@@ -289,7 +289,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - [x] Existing v0.3/v0.4 tests and evaluation baselines recorded without production changes. (2026-08-31 UTC; 604 tests, vet, 18 legacy suites, and 8-case Evidence compare measured.)
 - [x] Benchmark schema, validation, and profile definitions implemented. (2026-08-31 UTC; 6 focused tests and 610 full-suite tests passed.)
 - [x] Safe historical snapshot and diff diagnostics implemented. (2026-08-31 UTC; 10 focused tests and 620 full-suite tests passed.)
-- [ ] Benchmark engine and multi-budget runner implemented. (Engine adapter completed 2026-08-31 UTC; runner remains Task 5.)
+- [x] Benchmark engine and multi-budget runner implemented. (2026-08-31 UTC; exact matching and deterministic case/profile/budget sequencing verified.)
 - [ ] Deterministic quality metrics and separate performance measurements implemented.
 - [ ] Development CLI, private registry handling, and scaffold flow implemented.
 - [ ] Query-plus-expand delta evaluation implemented.
@@ -944,7 +944,7 @@ Stage `internal/eval` only if it changed.
 
 - Consumes: validated suites, resolved repository paths, safe snapshots, existing FocalSpan engine
 
-- [ ] **Step 1: Write exact expectation-matching tests**
+- [x] **Step 1: Write exact expectation-matching tests**
 
 Implement tests for:
 
@@ -961,7 +961,7 @@ Rules:
 - a synthetic outline may satisfy a path expectation but only satisfies a symbol expectation when its symbol, path, kind, and role match;
 - invalid packet-local relation IDs do not count.
 
-- [ ] **Step 2: Write runner sequencing tests with fakes**
+- [x] **Step 2: Write runner sequencing tests with fakes**
 
 For one case, two budgets, two profiles, and repeat count two, assert:
 
@@ -972,7 +972,7 @@ For one case, two budgets, two profiles, and repeat count two, assert:
 - engines close and workspace cleanup occurs after success and error;
 - case/profile/budget output order follows suite and profile order, never map order.
 
-- [ ] **Step 3: Implement workspace layout**
+- [x] **Step 3: Implement workspace layout**
 
 Under the caller-provided temporary workspace, use:
 
@@ -982,17 +982,17 @@ Under the caller-provided temporary workspace, use:
 
 Sanitize IDs for filenames with `[A-Za-z0-9._-]`; reject rather than silently rewrite an empty result. Never include the original absolute repository path in a generated filename.
 
-- [ ] **Step 4: Implement query execution**
+- [x] **Step 4: Implement query execution**
 
 For Evidence profiles, create `app.QueryRequest` with the case query, selected budget, focused/source mode from the profile, and retrieval mode through the engine adapter. For legacy profile, call the existing legacy query path.
 
 Run each quality query twice and compare canonical serialized outputs after removing fields documented as volatile. Evidence packets should already contain no timestamps. Any nondeterminism is a case failure.
 
-- [ ] **Step 5: Collect query-plan intent**
+- [x] **Step 5: Collect query-plan intent**
 
 Compare the observed planned primary intent with `ExpectedIntent` when specified. Obtain it from the existing query planner or packet intent; do not infer it from selected paths.
 
-- [ ] **Step 6: Collect diff diagnostics without turning them into labels**
+- [x] **Step 6: Collect diff diagnostics without turning them into labels**
 
 Call `CollectChanges` once per case. Record:
 
@@ -1005,11 +1005,11 @@ Call `CollectChanges` once per case. Record:
 
 Do not add changed paths to `RequiredPaths`.
 
-- [ ] **Step 7: Add invalid-label checks against the materialized base**
+- [x] **Step 7: Add invalid-label checks against the materialized base**
 
 Before querying, validate every required, optional, forbidden, and symbol path exists at base. A missing required or forbidden path makes the case invalid. A target-added path may appear only in diff diagnostics, never as required evidence.
 
-- [ ] **Step 8: Verify and commit**
+- [x] **Step 8: Verify and commit**
 
 Run:
 
