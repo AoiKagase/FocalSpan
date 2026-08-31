@@ -142,7 +142,8 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   the Decision Log before production code changes. (2026-08-31; docs-only.)
 - [x] Task 6 selected retriever improvement implemented with TDD. (2026-08-31;
   focused 2, search 21, regression eval 1, full 667 tests/46 packages passed.)
-- [ ] Task 7 focused and bounded comparison gates passed.
+- [x] Task 7 bounded verification completed; the frozen expansion-anchor gate
+  failed, so the candidate was rejected and work stopped. (2026-08-31.)
 - [ ] Task 8 one final eight-case repeat-3 candidate comparison completed.
 - [ ] Task 9 final local/remote verification, documentation, and retrospective
   completed.
@@ -190,6 +191,10 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   lexical path hints to plans with no relations preserves the selected PHP
   hypothesis and the old relation behavior; explicit path hints remain enabled
   for every plan.
+- 2026-08-31: The bounded candidate moved the four selected required-path rows
+  from retrieval missing to packing dropped, but all four `Run` symbols and all
+  four expansion anchors remained retrieval missing. Selected misses improved
+  12 to 8, yet packed anchors remained 0; the frozen gate failed.
 
 ---
 
@@ -236,6 +241,10 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   parser or store: append normalized words after explicit path hints only when
   `plan.Relations` is empty. This keeps one bounded `SearchPaths` call and
   prevents broad lexical candidates from becoming structural relation anchors.
+- 2026-08-31: Treat the Task 7 result as a valid negative hypothesis and stop.
+  Do not adjust path-store result allocation, limits, fusion/ranking, or packing
+  in v0.6; any disposition of the experimental commit or successor hypothesis
+  requires a new approved plan.
 - 2026-08-31: Freeze the improvement only after the eight-case repeat-1 trace.
   Choose the stage with the greatest number of actionable misses; a tie selects
   retrieval because it is earlier in the pipeline and requires fewer semantic
@@ -303,6 +312,16 @@ and the implementation was constrained without weakening the eval. The two
 focused tests, the Japanese JSTS regression test, all 21 search tests, and 667
 full tests in 46 packages passed; diff check passed. Candidate benchmark gates
 remain Task 7 and have not yet been claimed.
+
+Task 7 passed 295 targeted legacy/Evidence/wire/privacy tests, then ran one
+two-case repeat-1 candidate smoke. Quality remained compatible with zero
+regressions and privacy checks passed, but only the four selected required-path
+rows advanced, to packing dropped. Selected retrieval misses fell from 12 to 8;
+`Run` and all four anchors remained retrieval missing, so executable anchors
+stayed zero and packet recall did not improve. Full tests passed 667 tests in 46
+packages, vet and diff check passed, and temporary artifacts were removed. The
+frozen gate failure ends v0.6 production work before Task 8; no full repeat-3
+candidate, push, or fresh remote CI was run.
 
 ---
 
@@ -532,13 +551,13 @@ lookup. Neither may touch rank, evidence, parsers, packer, labels, or v0.5 data.
 
 ### Task 7: Verify the Bounded Candidate Before the Full Suite
 
-- [ ] Run affected packages and attribution privacy/wire tests.
-- [ ] Run all legacy fixture evaluations and the Evidence compare suite without
+- [x] Run affected packages and attribution privacy/wire tests.
+- [x] Run all legacy fixture evaluations and the Evidence compare suite without
   weakening checked-in values.
-- [ ] Run the same two-case repeat-1 smoke and v0.5 comparison.
-- [ ] Require Task 5 frozen gates. If they fail, record the negative hypothesis
+- [x] Run the same two-case repeat-1 smoke and v0.5 comparison.
+- [x] Require Task 5 frozen gates. They failed; record the negative hypothesis
   and stop without a second production adjustment.
-- [ ] Run full tests, vet, diff check; commit the bounded verification record.
+- [x] Run full tests, vet, diff check; commit the bounded verification record.
 
 ### Task 8: Run the One Final Full Candidate Comparison
 

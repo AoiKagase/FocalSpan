@@ -120,3 +120,46 @@ and does not target this exact missing path signal; parser changes and
 corpus-specific aliases would violate the milestone constraints. The other
 retrieval-missing cases do not share the same directly observed lexical path
 hint and are not part of this hypothesis.
+
+## Bounded candidate result
+
+The selected implementation added normalized lexical words to the bounded path
+retriever only for plans without relations. An initial unrestricted version was
+rejected before commit because the Japanese JSTS fixture measured relation
+recall 0.6667 instead of 1.0: broad path candidates occupied the relation-anchor
+pool. A dedicated RED test fixed that boundary without weakening the fixture.
+
+The committed candidate then passed:
+
+- 2 focused retriever tests, 21 search tests, and the Japanese JSTS regression
+  test.
+- 295 affected/legacy fixture/Evidence/wire/privacy tests in 10 packages.
+- `go test ./... -count=1`: 667 tests in 46 packages.
+- `go vet ./...`: no issues.
+- `git diff --check`: no issues.
+
+The Task 7 two-case/default/repeat-1 smoke ran once and returned 2 cases and 12
+quality results. Comparison with v0.5 was compatible true with zero regressions;
+the privacy and finite-value scan passed, and temporary artifacts were removed.
+However, the frozen improvement gate failed:
+
+| Frozen PHP non-FTS rows | Baseline | Candidate |
+|---|---:|---:|
+| `retrieval_missing` total | 12 | 8 |
+| Required path beyond retrieval | 0 of 4 | 4 of 4 (`packing_dropped`) |
+| Required symbol `Run` beyond retrieval | 0 of 4 | 0 of 4 |
+| Expansion anchor `Run` packed | 0 of 4 | 0 of 4 |
+
+The candidate met the numeric 12-to-at-most-11 retrieval-miss condition, but it
+did not make any expansion executable and did not improve packet recall. The
+path search exposed other chunks from `internal/indexer/indexer.go`; it did not
+surface the `Run` identity within its bounded results, and the required path was
+ranked but still omitted by packing. Addressing either behavior would require a
+second store/retriever-selection or ranking/packing change, which this milestone
+forbids.
+
+Therefore this is a valid negative hypothesis. No second production adjustment,
+eight-case rerun, repeat-3 full candidate run, result-v0.6 artifact, push, or new
+remote CI claim was made. The committed retriever change remains explicit
+experimental evidence, not an accepted v0.6 release candidate; disposition
+requires a new user-approved plan or successor milestone.
