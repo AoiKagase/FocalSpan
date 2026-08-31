@@ -87,6 +87,93 @@ func TestMissingRegistrationRecognizesCurrentCodexMessage(t *testing.T) {
 	}
 }
 
+func TestUserGetParsesCurrentCodexStdioRegistration(t *testing.T) {
+	fake := &fakeCommandRunner{fn: func(_ context.Context, _ string, _ []string) (CommandResult, error) {
+		return CommandResult{Stdout: []byte(`{
+			"name": "focalspan",
+			"enabled": true,
+			"transport": {
+				"type": "stdio",
+				"command": "C:\\Tools\\focalspan.exe",
+				"args": ["serve"],
+				"env": null,
+				"env_vars": [],
+				"cwd": null
+			}
+		}`)}, nil
+	}}
+
+	registration, exists, _, err := NewService(fake).userGet(
+		context.Background(),
+		Request{Scope: ScopeUser, Name: "focalspan"},
+		"focalspan",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !exists {
+		t.Fatal("userGet() exists = false, want true")
+	}
+	want := userRegistration{Command: `C:\Tools\focalspan.exe`, Args: []string{"serve"}}
+	if !reflect.DeepEqual(registration, want) {
+		t.Fatalf("userGet() registration = %+v, want %+v", registration, want)
+	}
+}
+
+func TestParseUserRegistrationDiagnostics(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		wantErr string
+	}{
+		{
+			name:    "unreadable JSON",
+			payload: `{"transport":`,
+			wantErr: "Codex returned an unreadable MCP registration",
+		},
+		{
+			name:    "null transport",
+			payload: `{"name":"focalspan","transport":null}`,
+			wantErr: "Codex returned an MCP registration with a null transport",
+		},
+		{
+			name:    "unsupported transport",
+			payload: `{"name":"focalspan","transport":{"type":"streamable_http","url":"https://example.invalid/secret","env":{"TOKEN":"do-not-expose"}}}`,
+			wantErr: `Codex returned an unsupported MCP transport "streamable_http"`,
+		},
+		{
+			name:    "empty stdio command",
+			payload: `{"name":"focalspan","transport":{"type":"stdio","command":"","args":["serve"],"env":{"TOKEN":"do-not-expose"}}}`,
+			wantErr: "Codex returned an MCP registration without a command",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseUserRegistration([]byte(tt.payload))
+			if err == nil || err.Error() != tt.wantErr {
+				t.Fatalf("parseUserRegistration() error = %v, want %q", err, tt.wantErr)
+			}
+			if strings.Contains(err.Error(), "do-not-expose") || strings.Contains(err.Error(), "example.invalid") {
+				t.Fatalf("parseUserRegistration() exposed registration data: %v", err)
+			}
+		})
+	}
+}
+
+func TestParseUserRegistrationAcceptsLegacyFlatJSON(t *testing.T) {
+	payload := []byte(`{"command":"C:\\Tools\\focalspan.exe","args":["serve"]}`)
+
+	got, err := parseUserRegistration(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := userRegistration{Command: `C:\Tools\focalspan.exe`, Args: []string{"serve"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("parseUserRegistration() = %+v, want %+v", got, want)
+	}
+}
+
 func (f *fakeCommandRunner) Run(ctx context.Context, name string, args ...string) (CommandResult, error) {
 	f.calls = append(f.calls, fakeCommandCall{Name: name, Args: append([]string(nil), args...)})
 	return f.fn(ctx, name, args)
@@ -128,7 +215,7 @@ func TestUserForceRemovesBeforeAddingAndRemoveFailurePreventsAdd(t *testing.T) {
 		fake.fn = func(_ context.Context, _ string, args []string) (CommandResult, error) {
 			switch args[1] {
 			case "get":
-				return CommandResult{Stdout: []byte(`{"command":"other","args":["serve"]}`)}, nil
+				return CommandResult{Stdout: currentCodexRegistrationJSON(t, "other", []string{"serve"})}, nil
 			case "remove":
 				return CommandResult{}, nil
 			default:
@@ -150,7 +237,7 @@ func TestUserForceRemovesBeforeAddingAndRemoveFailurePreventsAdd(t *testing.T) {
 		fake.fn = func(_ context.Context, _ string, args []string) (CommandResult, error) {
 			switch args[1] {
 			case "get":
-				return CommandResult{Stdout: []byte(`{"command":"other","args":["serve"]}`)}, nil
+				return CommandResult{Stdout: currentCodexRegistrationJSON(t, "other", []string{"serve"})}, nil
 			case "remove":
 				return CommandResult{ExitCode: 1}, errors.New("remove failed")
 			default:
@@ -174,9 +261,7 @@ func TestUserInstallIdenticalIsNoOpAndConflictNeedsForce(t *testing.T) {
 	t.Run("identical", func(t *testing.T) {
 		fake := &fakeCommandRunner{fn: func(_ context.Context, _ string, args []string) (CommandResult, error) {
 			if args[1] == "get" {
-				encodedCommand, _ := json.Marshal(command)
-				payload := `{"command":` + string(encodedCommand) + `,"args":["serve"]}`
-				return CommandResult{Stdout: []byte(payload)}, nil
+				return CommandResult{Stdout: currentCodexRegistrationJSON(t, command, []string{"serve"})}, nil
 			}
 			return CommandResult{}, nil
 		}}
@@ -193,7 +278,7 @@ func TestUserInstallIdenticalIsNoOpAndConflictNeedsForce(t *testing.T) {
 	t.Run("conflict", func(t *testing.T) {
 		fake := &fakeCommandRunner{fn: func(_ context.Context, _ string, args []string) (CommandResult, error) {
 			if args[1] == "get" {
-				return CommandResult{Stdout: []byte(`{"command":"other","args":[]}`)}, nil
+				return CommandResult{Stdout: currentCodexRegistrationJSON(t, "other", nil)}, nil
 			}
 			return CommandResult{}, nil
 		}}
@@ -234,10 +319,7 @@ func TestUserInstallMigratesOnlyManagedLegacyRegistrationAfterGlobalInstall(t *t
 		case args[1] == "get" && args[2] == "focalspan":
 			return CommandResult{ExitCode: 1}, errors.New("not found")
 		case args[1] == "get" && args[2] == legacyName:
-			encodedCommand, _ := json.Marshal(command)
-			encodedRoot, _ := json.Marshal(root)
-			payload := `{"command":` + string(encodedCommand) + `,"args":["serve","--root",` + string(encodedRoot) + `]}`
-			return CommandResult{Stdout: []byte(payload)}, nil
+			return CommandResult{Stdout: currentCodexRegistrationJSON(t, command, []string{"serve", "--root", root})}, nil
 		default:
 			return CommandResult{}, nil
 		}
@@ -266,7 +348,7 @@ func TestUserInstallLeavesUnmanagedLegacyRegistration(t *testing.T) {
 		case args[1] == "get" && args[2] == "focalspan":
 			return CommandResult{ExitCode: 1}, errors.New("not found")
 		case args[1] == "get" && args[2] == legacyName:
-			return CommandResult{Stdout: []byte(`{"command":"other","args":["serve"]}`)}, nil
+			return CommandResult{Stdout: currentCodexRegistrationJSON(t, "other", []string{"serve"})}, nil
 		default:
 			return CommandResult{}, nil
 		}
@@ -309,9 +391,7 @@ func TestUserInstallReportsLegacyRemovalFailureAfterGlobalInstall(t *testing.T) 
 		case args[1] == "get" && args[2] == "focalspan":
 			return CommandResult{ExitCode: 1}, errors.New("not found")
 		case args[1] == "get" && args[2] == legacyName:
-			encodedCommand, _ := json.Marshal(command)
-			encodedRoot, _ := json.Marshal(root)
-			return CommandResult{Stdout: []byte(`{"command":` + string(encodedCommand) + `,"args":["serve","--root",` + string(encodedRoot) + `]}`)}, nil
+			return CommandResult{Stdout: currentCodexRegistrationJSON(t, command, []string{"serve", "--root", root})}, nil
 		case args[1] == "remove":
 			return CommandResult{ExitCode: 1, Stderr: []byte("locked")}, errors.New("exit status 1")
 		default:
@@ -341,7 +421,7 @@ func containsDiagnostic(diagnostics []string, substring string) bool {
 func TestUserUninstallDoesNotRemoveMismatchedRegistrationWithoutForce(t *testing.T) {
 	fake := &fakeCommandRunner{fn: func(_ context.Context, _ string, args []string) (CommandResult, error) {
 		if args[1] == "get" {
-			return CommandResult{Stdout: []byte(`{"command":"other","args":[]}`)}, nil
+			return CommandResult{Stdout: currentCodexRegistrationJSON(t, "other", nil)}, nil
 		}
 		return CommandResult{}, nil
 	}}
@@ -384,6 +464,35 @@ func testExecutable(t *testing.T, name string) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+func currentCodexRegistrationJSON(t *testing.T, command string, args []string) []byte {
+	t.Helper()
+	if args == nil {
+		args = []string{}
+	}
+	payload := struct {
+		Name      string `json:"name"`
+		Enabled   bool   `json:"enabled"`
+		Transport struct {
+			Type    string            `json:"type"`
+			Command string            `json:"command"`
+			Args    []string          `json:"args"`
+			Env     map[string]string `json:"env"`
+			EnvVars []string          `json:"env_vars"`
+			CWD     *string           `json:"cwd"`
+		} `json:"transport"`
+	}{Name: "focalspan", Enabled: true}
+	payload.Transport.Type = "stdio"
+	payload.Transport.Command = command
+	payload.Transport.Args = args
+	payload.Transport.EnvVars = []string{}
+
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encoded
 }
 
 func TestUserCommandRunnerHonorsCancellation(t *testing.T) {

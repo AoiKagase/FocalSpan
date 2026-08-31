@@ -73,17 +73,49 @@ func (s *Service) userGet(ctx context.Context, req Request, name string) (userRe
 	if err := commandContextError(commandCtx, runErr); err != nil {
 		return userRegistration{}, false, codexCommand, err
 	}
+	registration, err := parseUserRegistration(result.Stdout)
+	if err != nil {
+		return userRegistration{}, false, codexCommand, err
+	}
+	return registration, true, codexCommand, nil
+}
+
+func parseUserRegistration(data []byte) (userRegistration, error) {
 	var payload struct {
+		Command   string          `json:"command"`
+		Args      []string        `json:"args"`
+		Transport json.RawMessage `json:"transport"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return userRegistration{}, errors.New("Codex returned an unreadable MCP registration")
+	}
+
+	if len(payload.Transport) == 0 {
+		return validatedUserRegistration(payload.Command, payload.Args)
+	}
+	if string(bytes.TrimSpace(payload.Transport)) == "null" {
+		return userRegistration{}, errors.New("Codex returned an MCP registration with a null transport")
+	}
+
+	var transport struct {
+		Type    string   `json:"type"`
 		Command string   `json:"command"`
 		Args    []string `json:"args"`
 	}
-	if err := json.Unmarshal(result.Stdout, &payload); err != nil {
-		return userRegistration{}, false, codexCommand, errors.New("Codex returned an unreadable MCP registration")
+	if err := json.Unmarshal(payload.Transport, &transport); err != nil {
+		return userRegistration{}, errors.New("Codex returned an unreadable MCP registration")
 	}
-	if payload.Command == "" {
-		return userRegistration{}, false, codexCommand, errors.New("Codex returned an MCP registration without a command")
+	if transport.Type != "stdio" {
+		return userRegistration{}, fmt.Errorf("Codex returned an unsupported MCP transport %q", transport.Type)
 	}
-	return userRegistration{Command: payload.Command, Args: append([]string(nil), payload.Args...)}, true, codexCommand, nil
+	return validatedUserRegistration(transport.Command, transport.Args)
+}
+
+func validatedUserRegistration(command string, args []string) (userRegistration, error) {
+	if command == "" {
+		return userRegistration{}, errors.New("Codex returned an MCP registration without a command")
+	}
+	return userRegistration{Command: command, Args: append([]string(nil), args...)}, nil
 }
 
 func (s *Service) userAdd(ctx context.Context, req Request, name string, spec RegistrationSpec, codexCommand string) error {
