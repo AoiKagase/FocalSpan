@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -65,6 +67,121 @@ func TestSearchPathsMatchesNormalizedPathHints(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].Path != "src/Auth/TokenService.php" {
 		t.Fatalf("paths=%+v", got)
+	}
+}
+
+func TestSearchFilePathsUsesFrozenOrdering(t *testing.T) {
+	s := openTestStore(t)
+	for _, path := range []string{
+		"internal/indexer/indexer.go",
+		"internal/indexer/config.go",
+		"internal/mcpserver/server.go",
+		"internal/search/search.go",
+		"internal/searchable/helpers.go",
+		"docs/index.md",
+		"testdata/repos/sample/indexer.go",
+	} {
+		storeSeedPath(t, s, path)
+	}
+
+	got, err := s.SearchFilePaths(context.Background(), []string{"index"}, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) < 2 || got[0] != "docs/index.md" || !slices.Contains(got, "internal/indexer/indexer.go") {
+		t.Fatalf("index paths=%v, want shorter final-prefix docs path first and internal indexer in scope", got)
+	}
+
+	got, err = s.SearchFilePaths(context.Background(), []string{"internal/indexer/indexer.go"}, 8)
+	if err != nil || len(got) == 0 || got[0] != "internal/indexer/indexer.go" {
+		t.Fatalf("exact path=%v err=%v", got, err)
+	}
+
+	got, err = s.SearchFilePaths(context.Background(), []string{"indexer.go"}, 8)
+	wantExactFinal := []string{"internal/indexer/indexer.go", "testdata/repos/sample/indexer.go"}
+	if err != nil || !slices.Equal(got, wantExactFinal) {
+		t.Fatalf("exact final paths=%v err=%v, want %v", got, err, wantExactFinal)
+	}
+
+	got, err = s.SearchFilePaths(context.Background(), []string{"search"}, 8)
+	if err != nil || len(got) < 2 || got[0] != "internal/search/search.go" || got[1] != "internal/searchable/helpers.go" {
+		t.Fatalf("final-prefix before path-segment-prefix paths=%v err=%v", got, err)
+	}
+
+	got, err = s.SearchFilePaths(context.Background(), []string{"mcp"}, 1)
+	if err != nil || !slices.Equal(got, []string{"internal/mcpserver/server.go"}) {
+		t.Fatalf("mcp paths=%v err=%v", got, err)
+	}
+}
+
+func TestSearchFilePathsNormalizesDeduplicatesAndLimits(t *testing.T) {
+	s := openTestStore(t)
+	for _, path := range []string{
+		"internal/indexer/indexer.go",
+		"internal/indexer/config.go",
+		"docs/index.md",
+	} {
+		storeSeedPath(t, s, path)
+	}
+
+	first, err := s.SearchFilePaths(context.Background(), []string{`internal\indexer`, "INTERNAL/indexer", " internal/indexer "}, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := s.SearchFilePaths(context.Background(), []string{`internal\indexer`, "INTERNAL/indexer"}, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"internal/indexer/config.go", "internal/indexer/indexer.go"}
+	if !slices.Equal(first, want) || !slices.Equal(second, want) {
+		t.Fatalf("normalized paths first=%v second=%v, want %v", first, second, want)
+	}
+
+	empty, err := s.SearchFilePaths(context.Background(), []string{"", "  "}, 2)
+	if err != nil || empty == nil || len(empty) != 0 {
+		t.Fatalf("empty paths=%v nil=%v err=%v", empty, empty == nil, err)
+	}
+}
+
+func TestSearchFilePathsWrapsCancellationAndSQLErrors(t *testing.T) {
+	s := openTestStore(t)
+	storeSeedPath(t, s, "internal/indexer/indexer.go")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	got, err := s.SearchFilePaths(ctx, []string{"index"}, 8)
+	if err == nil || !errors.Is(err, context.Canceled) || got != nil || !strings.Contains(err.Error(), "file path search") {
+		t.Fatalf("canceled paths=%v err=%v", got, err)
+	}
+
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.SearchFilePaths(context.Background(), []string{"index"}, 8)
+	if err == nil || got != nil || !strings.Contains(err.Error(), "file path search") || !strings.Contains(err.Error(), "closed") {
+		t.Fatalf("closed database paths=%v err=%v", got, err)
+	}
+}
+
+func TestSearchFilePathsIsBoundedAndDeterministicAcrossManyFiles(t *testing.T) {
+	s := openTestStore(t)
+	for index := 0; index < 500; index++ {
+		storeSeedPath(t, s, fmt.Sprintf("src/generated/%03d.go", index))
+	}
+
+	first, err := s.SearchFilePaths(context.Background(), []string{"generated"}, 13)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := s.SearchFilePaths(context.Background(), []string{"generated"}, 13)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first) != 13 || !slices.Equal(first, second) {
+		t.Fatalf("bounded paths count=%d stable=%v first=%v second=%v", len(first), slices.Equal(first, second), first, second)
+	}
+	if first[0] != "src/generated/000.go" || first[12] != "src/generated/012.go" {
+		t.Fatalf("bounded lexical paths first=%q last=%q", first[0], first[12])
 	}
 }
 
@@ -136,6 +253,17 @@ func storeSeedFile(t *testing.T, s *Store, path, language, handle, name, qualifi
 		Symbols: []model.Symbol{{Handle: handle, FilePath: path, Language: language, Kind: "function", Name: name, QualifiedName: qualified, StartLine: startLine, EndLine: endLine, StartByte: 0, EndByte: len(content), Confidence: confidence}},
 		Chunks:  []model.Chunk{{Handle: handle + "-chunk", FilePath: path, Language: language, Kind: "function", SymbolHandle: handle, SymbolName: name, Signature: name, StartLine: startLine, EndLine: endLine, StartByte: 0, EndByte: len(content), Content: content, ContentHash: handle}},
 	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func storeSeedPath(t *testing.T, s *Store, path string) {
+	t.Helper()
+	if err := s.ReplaceFile(context.Background(), model.SourceFile{
+		Path:     path,
+		Language: "fixture",
+		SHA256:   path,
+	}, model.Extraction{}); err != nil {
 		t.Fatal(err)
 	}
 }
