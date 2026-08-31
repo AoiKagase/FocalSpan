@@ -286,7 +286,7 @@ Create or modify these files. Adjust a filename only when the current checkout a
 Update this section at every stopping point. Add UTC timestamps to completed entries and split partially completed work into completed and remaining statements.
 
 - [x] Plan transition and durable `PLANS.md` policy committed. (2026-08-31T00:25:50Z; archive hash and planning links verified.)
-- [ ] Existing v0.3/v0.4 tests and evaluation baselines recorded without production changes.
+- [x] Existing v0.3/v0.4 tests and evaluation baselines recorded without production changes. (2026-08-31 UTC; 604 tests, vet, 18 legacy suites, and 8-case Evidence compare measured.)
 - [ ] Benchmark schema, validation, and profile definitions implemented.
 - [ ] Safe historical snapshot and diff diagnostics implemented.
 - [ ] Benchmark engine and multi-budget runner implemented.
@@ -304,6 +304,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 ## Surprises & Discoveries
 
 - 2026-08-31 UTC: The checkout advanced from the proposed `b2139c5` baseline to `950a3b7` before Task 0 began. The previously observed Codex registration edits are now committed at that HEAD, so the current checkout remains the source of truth; only `.focalspan.json` remained as a pre-existing untracked file.
+- 2026-08-31 UTC: The untuned Lua baseline differs from the v0.4 release-readiness prose: `lua-token-tests` missed its expected symbol and path, producing aggregate hit@5/symbol/path recall 0.8. The other 17 legacy suites retained 1.0 for those metrics. This milestone records the discrepancy and does not tune production retrieval to hide it.
 
 No implementation discoveries have been recorded at plan creation. Add concise observations with command output or test evidence as they arise. Do not delete earlier entries; correct them with a later entry.
 
@@ -504,7 +505,7 @@ Do not include benchmark implementation code in this commit.
 - Consumes: all current tests, all checked-in fixture evaluations, Evidence comparison evaluation, current CLI/MCP smoke behavior
 - Produces: a truthful pre-benchmark record that later tasks must not misrepresent as an improvement
 
-- [ ] **Step 1: Run the current static and unit baseline**
+- [x] **Step 1: Run the current static and unit baseline**
 
 Run:
 
@@ -514,7 +515,7 @@ Run:
 
 If one fails before benchmark code is added, record it under `Surprises & Discoveries` with the exact failing package and message. Do not attribute it to v0.5.
 
-- [ ] **Step 2: Run the current Evidence contract checks**
+- [x] **Step 2: Run the current Evidence contract checks**
 
 Run the current checked-in Evidence comparison command documented by the repository. At minimum, execute the equivalent of:
 
@@ -526,7 +527,7 @@ Run the current checked-in Evidence comparison command documented by the reposit
 
 Adapt only the executable path if the current checkout names the development evaluator differently. Record expected coverage, role accuracy, fidelity validity, relation validity, wire-budget compliance, deterministic output, forbidden violations, known resends, duplicate-source ratio, metadata overhead, Evidence/legacy ratio, and two-step delta ratio.
 
-- [ ] **Step 3: Run every current language fixture evaluation**
+- [x] **Step 3: Run every current language fixture evaluation**
 
 Discover case files from the current tree rather than a stale hard-coded list:
 
@@ -538,7 +539,7 @@ On Windows PowerShell, use:
 
 Run each case file against its documented fixture root with a freshly rebuilt index. Record which suites have a numeric historical baseline and which only have a current measurement. Do not call a current-only measurement an improvement.
 
-- [ ] **Step 4: Create the benchmark documentation shell**
+- [x] **Step 4: Create the benchmark documentation shell**
 
 Create `docs/benchmarks/README.md` with these headings and prose:
 
@@ -554,7 +555,7 @@ Create `docs/benchmarks/README.md` with these headings and prose:
 
 State explicitly that no source text is written to reports and that a target diff is not automatic ground truth.
 
-- [ ] **Step 5: Record the v0.5 starting record**
+- [x] **Step 5: Record the v0.5 starting record**
 
 Append `## Real-Repository Evaluation v0.5 starting baseline` to `docs/evaluation.md`. Include:
 
@@ -568,7 +569,7 @@ Append `## Real-Repository Evaluation v0.5 starting baseline` to `docs/evaluatio
 - number of checked-in language suites;
 - unverified race coverage, if any.
 
-- [ ] **Step 6: Commit only baseline documentation**
+- [x] **Step 6: Commit only baseline documentation**
 
 Run:
 

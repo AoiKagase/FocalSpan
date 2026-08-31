@@ -412,3 +412,29 @@ Go 1.27.0. It is a verification record, not a copy of acceptance thresholds.
   emitted no dangling relation. The normal packets contained no ranking or
   token-savings debug fields. Impact returned the syntax-only limitation, and
   status/restart retained their established contracts.
+
+## Real-Repository Evaluation v0.5 starting baseline
+
+Recorded on 2026-08-31 UTC from commit
+`950a3b74b59ec65d372695c6a28489202c9bf1ee`, on Windows amd64 with Go
+1.27.0 and `CGO_ENABLED=1`. The checkout contained the pre-existing untracked
+`.focalspan.json`; no production source change was made for this baseline.
+
+- `go test ./... -count=1`: PASS, 604 tests in 43 packages.
+- `go vet ./...`: PASS with no reported issues.
+- `git diff --check`: PASS.
+- Evidence `--contract compare`: eight cases; expected coverage, role accuracy,
+  fidelity validity, relation validity, wire-budget compliance, deterministic
+  output, and focused late-hit preservation were all `1.0`. Forbidden-path
+  violations and known resends were `0`. Median metadata overhead was
+  `0.34496919917864477`, Evidence/legacy wire ratio `0.9371391917896087`, and
+  two-step delta ratio `0.5578351609480015`.
+- All 18 checked-in legacy suites were measured, covering 86 cases. Every suite
+  had budget compliance `1.0`, zero forbidden-path violations, and deterministic
+  output `1.0`.
+- Seventeen legacy suites had hit@5, symbol recall, and path recall `1.0`.
+  Lua measured `0.8` for all three because `lua-token-tests` returned no
+  expected symbol or path. This was present before benchmark implementation and
+  is a starting-baseline discrepancy, not a v0.5 regression or an improvement.
+- Local and Linux race coverage were not run during baseline capture and remain
+  unverified here.
