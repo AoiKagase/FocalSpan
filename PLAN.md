@@ -290,7 +290,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - [x] Benchmark schema, validation, and profile definitions implemented. (2026-08-31 UTC; 6 focused tests and 610 full-suite tests passed.)
 - [x] Safe historical snapshot and diff diagnostics implemented. (2026-08-31 UTC; 10 focused tests and 620 full-suite tests passed.)
 - [x] Benchmark engine and multi-budget runner implemented. (2026-08-31 UTC; exact matching and deterministic case/profile/budget sequencing verified.)
-- [ ] Deterministic quality metrics and separate performance measurements implemented.
+- [x] Deterministic quality metrics and separate performance measurements implemented. (2026-08-31 UTC; quality serialization excludes timing.)
 - [ ] Development CLI, private registry handling, and scaffold flow implemented.
 - [ ] Query-plus-expand delta evaluation implemented.
 - [ ] Public FocalSpan history corpus labeled and validated.
@@ -1081,7 +1081,7 @@ Run:
           Performance []PerformanceResult `json:"performance,omitempty"`
       }
 
-- [ ] **Step 1: Write metric unit tests**
+- [x] **Step 1: Write metric unit tests**
 
 Use hand-built packets to verify:
 
@@ -1097,7 +1097,7 @@ Use hand-built packets to verify:
 - duplicate-source ratio counts repeated verbatim/excerpt source bytes, not repeated signatures or metadata;
 - changed-path recall is diagnostic and does not affect required recall.
 
-- [ ] **Step 2: Add aggregate metrics**
+- [x] **Step 2: Add aggregate metrics**
 
 Aggregate by profile and budget. Include:
 
@@ -1118,11 +1118,11 @@ Aggregate by profile and budget. Include:
 
 Use stable integer/rational accumulation where possible, then format floats consistently.
 
-- [ ] **Step 3: Separate quality and timing serialization**
+- [x] **Step 3: Separate quality and timing serialization**
 
 `MarshalQuality` excludes the `performance` field and is byte-deterministic. `MarshalFullReport` includes timings. Golden determinism tests compare only `MarshalQuality`.
 
-- [ ] **Step 4: Implement sanitized Markdown rendering**
+- [x] **Step 4: Implement sanitized Markdown rendering**
 
 The Markdown report includes repository IDs, case IDs, commit IDs, labels, ranks, ratios, failure codes, and timings. It must not include:
 
@@ -1134,11 +1134,11 @@ The Markdown report includes repository IDs, case IDs, commit IDs, labels, ranks
 
 Queries may be included because suite authors explicitly wrote them, but escape Markdown tables safely.
 
-- [ ] **Step 5: Add golden report tests**
+- [x] **Step 5: Add golden report tests**
 
 Generate the JSON and Markdown goldens from fixed fake results. Run twice and assert identical bytes and LF newlines.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run:
 

@@ -40,9 +40,13 @@ type CaseRun struct {
 }
 
 type RunReport struct {
-	Schema string
-	Suite  string
-	Runs   []CaseRun
+	Schema          string              `json:"schema"`
+	Suite           string              `json:"suite"`
+	FocalSpanCommit string              `json:"focalspan_commit"`
+	Quality         []QualityResult     `json:"quality"`
+	Aggregate       AggregateQuality    `json:"aggregate"`
+	Performance     []PerformanceResult `json:"performance,omitempty"`
+	Runs            []CaseRun           `json:"-"`
 }
 
 const ReportSchemaV1 = "focalspan.benchmark-report.v1"
@@ -125,13 +129,33 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 					}
 				}
 				report.Runs = append(report.Runs, run)
+				if run.Packet != nil {
+					changedPaths := make([]string, 0, len(changes.Files))
+					for _, changed := range changes.Files {
+						if changed.Status != "add" {
+							changedPaths = append(changedPaths, changed.NewPath)
+						}
+					}
+					report.Quality = append(report.Quality, MeasurePacket(benchmarkCase, profile.Name, budget, *run.Packet, run.Deterministic, changedPaths))
+				} else {
+					report.Quality = append(report.Quality, QualityResult{CaseID: benchmarkCase.ID, Profile: profile.Name, Budget: budget, BudgetCompliant: 1, Deterministic: boolInt(run.Deterministic), RelationValid: 1})
+				}
+				report.Performance = append(report.Performance, PerformanceResult{CaseID: benchmarkCase.ID, Profile: profile.Name, Budget: budget, IndexMS: measurement.Duration.Milliseconds(), DatabaseBytes: measurement.DatabaseBytes, Files: measurement.Files, Symbols: measurement.Symbols, Chunks: measurement.Chunks, Relations: measurement.Relations})
 			}
 			if closeErr := engine.Close(); closeErr != nil {
 				return RunReport{}, closeErr
 			}
 		}
 	}
+	report.Aggregate = AggregateResults(report.Quality)
 	return report, nil
+}
+
+func boolInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 var workspaceIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)

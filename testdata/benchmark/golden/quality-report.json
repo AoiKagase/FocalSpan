@@ -1,0 +1,7 @@
+{
+  "schema": "focalspan.benchmark-report.v1",
+  "suite": "golden",
+  "focalspan_commit": "0000000000000000000000000000000000000000",
+  "quality": [],
+  "aggregate": {}
+}
