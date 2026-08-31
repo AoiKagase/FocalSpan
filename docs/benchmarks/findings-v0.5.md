@@ -123,3 +123,19 @@ the first move while required coverage is near zero.
 
 No production parser, retrieval weight, relation resolver, ranker, packer, or
 Evidence Packet contract was tuned during v0.5.
+
+## Task 13 regression verification
+
+The third and final full public-history run completed with eight cases and 48
+quality results. Its quality rows and aggregates were identical to the
+checked-in baseline; the only report difference was the later FocalSpan commit
+ID. `compare` returned exit code 0 with `compatible: true` and zero regressions.
+Candidate-report privacy searches found no source field, absolute local path,
+NaN, or infinity, and retained benchmark workspace count was zero after
+cleanup. No fourth full run was performed.
+
+The full local unit suite and vet passed, all five requested CGO-free builds
+passed, and all legacy and Evidence evaluations retained their recorded
+metrics. Local Windows race remains unverified because the available C
+compiler cannot build 64-bit `runtime/cgo`; the configured Linux race workflow
+was not pushed or run remotely.

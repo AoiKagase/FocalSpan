@@ -432,10 +432,12 @@ Recorded on 2026-08-31 UTC from commit
 - All 18 checked-in legacy suites were measured, covering 86 cases. Every suite
   had budget compliance `1.0`, zero forbidden-path violations, and deterministic
   output `1.0`.
-- Seventeen legacy suites had hit@5, symbol recall, and path recall `1.0`.
-  Lua measured `0.8` for all three because `lua-token-tests` returned no
-  expected symbol or path. This was present before benchmark implementation and
-  is a starting-baseline discrepancy, not a v0.5 regression or an improvement.
+- Sixteen legacy suites had hit@5, symbol recall, and path recall `1.0`.
+  Go/auth had hit@5 and symbol recall `1.0` with path recall
+  `0.9166666666666666`. Lua measured `0.8` for all three because
+  `lua-token-tests` returned no expected symbol or path. Both values were
+  present before benchmark implementation and are starting-baseline
+  discrepancies, not v0.5 regressions or improvements.
 - Local and Linux race coverage were not run during baseline capture and remain
   unverified here.
 
@@ -473,3 +475,45 @@ compaction is only a secondary candidate after coverage is restored. See
 [`docs/benchmarks/findings-v0.5.md`](benchmarks/findings-v0.5.md) for the
 per-theme distribution, language comparison, limitations, and decision logic.
 No production retrieval or Evidence Packet tuning occurred during v0.5.
+
+## Real-Repository Evaluation v0.5 final verification
+
+Task 13 reverified the final local checkout on 2026-08-31 UTC without changing
+production parser, retrieval, relation-resolution, ranking, packing, or
+Evidence Packet behavior.
+
+- `go test ./... -count=1` passed 653 tests in 46 packages, and
+  `go vet ./...` reported no issues.
+- Whole-tree `gofmt -w .` stopped at the intentionally incomplete extractor
+  fixture `testdata/repos/authsample/auth/recoverable.go`. Formatting the Go
+  packages under `cmd/` and `internal/` succeeded, and `git diff --check`
+  passed. The malformed fixture was preserved byte-for-byte.
+- Local `go test -race ./...` remains unverified. All 45 listed packages failed
+  before tests while `runtime/cgo` invoked a compiler whose `cc1.exe` reported
+  `64-bit mode not compiled in`. The configured Linux race job has not run
+  remotely because this checkout was not pushed.
+- Five CGO-free builds passed: native and Windows amd64, Linux amd64, and
+  Darwin arm64 `focalspan`, plus native `focalspan-bench`. All build artifacts
+  were removed.
+- Fresh rebuilds of all 18 legacy suites covered 86 cases. Hit@5 and symbol
+  recall matched the checked-in baselines; path recall remained
+  `0.9166666666666666` for Go/auth and `0.8` for Lua, with the other 16 suites
+  at `1.0`. Every suite retained budget compliance and deterministic output
+  `1.0` with zero forbidden-path violations.
+- The eight-case Evidence comparison retained coverage, role accuracy, source
+  fidelity, relation validity, budget compliance, deterministic output, and
+  late-hit preservation at `1.0`; forbidden violations, known resends, and
+  duplicate sources remained zero. Median metadata overhead was
+  `0.34496919917864477`, Evidence/legacy ratio `0.9371391917896087`, and
+  two-step delta ratio `0.5578351609480015`.
+- The third and final full public-history run completed with eight cases and 48
+  quality results at FocalSpan commit
+  `a9e7f776e2a6134c3467b7a4e569de29c4b1c15a`. Comparison against the checked-in
+  v0.5 report returned `compatible: true`, zero regressions, and exit code 0.
+  Quality rows and aggregates were identical; only the report's FocalSpan
+  commit field changed. Privacy searches found no source field, absolute local
+  path, NaN, or infinity, and no benchmark workspace, report, database, or
+  binary remained after cleanup.
+
+Remote GitHub Actions results remain unrun and are not included in these local
+successes.
