@@ -148,3 +148,13 @@ the historical refs required by two benchmark CLI tests. Test and race now use
 `fetch-depth: 0`, protected by a focused workflow regression test. No post-fix
 remote run has occurred, so no remote test, vet, race, or benchmark success is
 claimed.
+
+## Post-fix remote CI closure
+
+GitHub Actions run [`33361467769`](https://github.com/AoiKagase/FocalSpan/actions/runs/33361467769)
+later completed successfully at `ca54f11`. Authenticated logs confirmed Linux
+`go test ./...`, `go vet ./...`, and `go test -race ./...`; CGO-free Windows
+amd64, Linux amd64, and Darwin arm64 builds; and the bounded two-case repeat-1
+benchmark flow. The smoke validated 2 cases with 0 invalid, produced 12 quality
+results, and compared as compatible with 0 regressions. The manual full job was
+skipped, so no additional eight-case repeat-3 result is claimed.

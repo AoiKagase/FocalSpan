@@ -547,3 +547,25 @@ Focused RED-to-GREEN tests verified the case-level build count, query-local
 retrieval modes, report filtering, and automatic/manual workflow split. Final
 local verification passed 657 tests in 46 packages and `go vet ./...`; no
 remote workflow or full public benchmark was run for this follow-up.
+
+## Real-Repository Evaluation v0.5 post-fix remote CI
+
+GitHub Actions run [`33361467769`](https://github.com/AoiKagase/FocalSpan/actions/runs/33361467769)
+completed successfully on 2026-08-31 at commit
+`ca54f11c6a2098c19ec6f1b33431be73d02d3351`. Authenticated job logs verified:
+
+- Linux `go test ./...` passed for every listed command and internal package,
+  followed by `go vet ./...` with no output or failure;
+- Linux `go test -race ./...` passed across the same package set;
+- `CGO_ENABLED=0` builds of `./cmd/focalspan` passed for Windows amd64, Linux
+  amd64, and Darwin arm64;
+- the push-only public smoke validated the two selected cases with `invalid: 0`,
+  produced 12 quality results at repeat 1, and compared as `compatible: true`
+  with `regressions: 0`;
+- the manual-only eight-case repeat-3 job was skipped as designed, so this run
+  does not replace or add a full-suite measurement.
+
+This closes the remote test, vet, Linux race, cross-build, and bounded smoke
+gates that remained unverified in the earlier v0.5 record. The six workflow
+warnings were Node.js action-runtime deprecation notices, not test or build
+failures.
