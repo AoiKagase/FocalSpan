@@ -908,7 +908,7 @@ changes.
 
 **Produces:** deterministic unexported scope/hint helpers.
 
-- [ ] Write failing table tests for `pathScopeHints`.
+- [x] Write failing table tests for `pathScopeHints`.
 
   Inputs and required outputs:
 
@@ -926,7 +926,7 @@ changes.
 
   Assert cap 8, stable order, and case-insensitive deduplication.
 
-- [ ] Write failing table tests for `identifierStyleVariants`.
+- [x] Write failing table tests for `identifierStyleVariants`.
 
   Required exact sets:
 
@@ -946,7 +946,7 @@ changes.
 
   Do not require fuzzy or synonym variants.
 
-- [ ] Write failing tests for `pathScopedSymbolHints`.
+- [x] Write failing tests for `pathScopedSymbolHints`.
 
   Assert:
   - anchors precede symbols, identifiers, then words;
@@ -956,7 +956,7 @@ changes.
   - cap is 16;
   - original spelling is retained before generated variants.
 
-- [ ] Write failing tests for `collectScopedPaths`:
+- [x] Write failing tests for `collectScopedPaths`:
   - request path filters first;
   - explicit path-list results second;
   - FTS paths third;
@@ -966,23 +966,23 @@ changes.
   - no lexical probe path is used when `plan.Relations` is non-empty;
   - FTS-only mode produces no scoped paths.
 
-- [ ] Confirm RED for all absent helpers.
+- [x] Confirm RED for all absent helpers.
 
-- [ ] Implement the helpers without changing `query.Normalize`,
+- [x] Implement the helpers without changing `query.Normalize`,
   `query.PlanQuery`, FTS terms, or the original `SearchPaths` call.
 
-- [ ] Add property-style tests over punctuation, Unicode, empty terms, and long
+- [x] Add property-style tests over punctuation, Unicode, empty terms, and long
   inputs. Output must contain no NUL and no item over the existing query token
   bound.
 
-- [ ] Run:
+- [x] Run:
 
       go test ./internal/search -run "TestPathScope|TestIdentifierStyle|TestCollectScoped" -count=1
       go test ./internal/query ./internal/search -count=1
       go test ./... -count=1
       git diff --check
 
-- [ ] Commit only scope planning:
+- [x] Commit only scope planning:
 
       git add internal/search/retrieval.go internal/search/retrieval_test.go
       git commit -m "feat: plan bounded path-scoped symbol hints"
@@ -1509,10 +1509,16 @@ Update with UTC timestamps while executing.
   4 tests, all store tests passed 32 tests, and the full repository passed 674
   tests in 46 packages. `go vet ./...`, `git diff --check`, and the migration
   diff check passed. The production/test commit is `e095634`.
+- [x] `2026-08-31T23:56:56Z` Task 4 implementation and verification completed.
+  The expected RED named all four absent helpers. Focused GREEN passed 11
+  tests, query/search passed 51 tests, and the full repository passed 685
+  tests in 46 packages. `go vet ./...` and `git diff --check` passed; only
+  `internal/search/retrieval.go` and its test changed. The task commit is
+  production/test commit is `a7f005f`.
 - [ ] Four-case current baseline measured and frozen.
 - [x] Store file discovery implemented and verified.
 - [x] Store scoped-symbol retrieval implemented and verified.
-- [ ] Path-scope and naming-variant planning implemented.
+- [x] Path-scope and naming-variant planning implemented.
 - [ ] `path-scoped-symbol` integrated into full/no-relations retrieval.
 - [ ] Attribution accepts and safely reports the new retriever.
 - [ ] Frozen four-case candidate run executed once.
@@ -1551,6 +1557,10 @@ Update with UTC timestamps while executing.
   separate store results. The old generic path query can omit a late `Run`
   after 50 smaller chunks, while the new exact-path symbol passes return its
   body before its outline and exclude a higher-frequency unowned window.
+- **2026-09-01:** The first Task 4 GREEN run exposed a test-fixture arithmetic
+  error: case-insensitive duplicates left seven unique cap inputs, not eight.
+  Adding one independent literal term corrected the fixture; no production
+  behavior or expected cap changed. The corrected suite passed 11 tests.
 
 ---
 
@@ -1608,6 +1618,15 @@ Update with UTC timestamps while executing.
   ordered before deduplication. Store-side caps retain at most 8 paths, 16
   hints, 8 candidates per path, and 40 total; only symbol-owned chunks enter.
   This adds no schema, migration, global FTS, rank, or packer change.
+  **Date/Author:** 2026-09-01 / Codex.
+
+- **Decision:** Derive file and symbol hints only from the existing `query.Plan`.
+  **Rationale:** Pure helpers retain source priority, exclude only the frozen
+  navigation vocabulary, bound tokens at the existing 128-rune limit, and cap
+  file hints/symbol hints/scopes at 8/16/8. `collectScopedPaths` preserves
+  request, explicit-path list, FTS list, and lexical-probe order while disabling
+  probes for relation plans and all scopes for FTS-only mode. Query
+  normalization, planning, FTS terms, and ordinary path retrieval are untouched.
   **Date/Author:** 2026-09-01 / Codex.
 
 - **Decision:** Separate file discovery from symbol retrieval.
