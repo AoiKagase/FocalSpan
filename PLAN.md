@@ -827,7 +827,7 @@ changes.
 
 **Produces:** `Store.SearchSymbolsInPaths`.
 
-- [ ] Create a failing store test with one file containing more than 50
+- [x] Create a failing store test with one file containing more than 50
   symbol-owned chunks. Put the intended function `Run` after the generic path
   search's old bounded region. Include these contents:
   - unrelated short helper functions;
@@ -841,9 +841,9 @@ changes.
   - the unowned generic chunk is absent;
   - the non-outline `Run` chunk precedes its outline.
 
-- [ ] Confirm RED because the new method is absent.
+- [x] Confirm RED because the new method is absent.
 
-- [ ] Add exact and naming-style test cases:
+- [x] Add exact and naming-style test cases:
   - `code_context`, `codeContext`, and `CodeContext` can retrieve symbol
     `codeContext` when those variants are supplied;
   - `search` retrieves `Search` case-insensitively;
@@ -851,21 +851,21 @@ changes.
   - simple exact beats prefix;
   - prefix beats FTS-only matches.
 
-- [ ] Add FTS-within-path tests:
+- [x] Add FTS-within-path tests:
   - query terms match the body of `Run` even when no symbol hint matches;
   - the same body in an unscoped path is excluded;
   - invalid FTS text is not built in the store; the safe expression arrives
     from `query.BuildFTS`;
   - empty FTS string skips the FTS pass.
 
-- [ ] Add fairness tests with 12 candidates in one file and 3 in another:
+- [x] Add fairness tests with 12 candidates in one file and 3 in another:
   - per-path cap 8;
   - total cap 40;
   - both paths appear when relevant;
   - duplicate handles are removed;
   - stable ordering across two calls.
 
-- [ ] Implement:
+- [x] Implement:
 
       func (s *Store) SearchSymbolsInPaths(
           ctx context.Context,
@@ -878,9 +878,9 @@ changes.
 
   exactly as specified in `Store Query Semantics`.
 
-- [ ] Keep schema version unchanged and add no migration.
+- [x] Keep schema version unchanged and add no migration.
 
-- [ ] Run:
+- [x] Run:
 
       go test ./internal/store -run "TestSearchSymbolsInPaths" -count=1
       go test ./internal/store -count=1
@@ -888,7 +888,7 @@ changes.
       go vet ./...
       git diff --check
 
-- [ ] Commit only scoped symbol store behavior:
+- [x] Commit only scoped symbol store behavior:
 
       git add internal/store/store.go internal/store/store_test.go
       git add internal/store/sqlite_spike_test.go
@@ -1504,9 +1504,14 @@ Update with UTC timestamps while executing.
   tests, all store tests passed 28 tests, and the full repository passed 670
   tests in 46 packages. `go vet ./...` and `git diff --check` passed. The task
   production/test commit is `70d7b51`.
+- [x] `2026-08-31T23:51:15Z` Task 3 implementation and verification completed.
+  The expected RED was `SearchSymbolsInPaths undefined`; focused GREEN passed
+  4 tests, all store tests passed 32 tests, and the full repository passed 674
+  tests in 46 packages. `go vet ./...`, `git diff --check`, and the migration
+  diff check passed. The production/test commit is `e095634`.
 - [ ] Four-case current baseline measured and frozen.
 - [x] Store file discovery implemented and verified.
-- [ ] Store scoped-symbol retrieval implemented and verified.
+- [x] Store scoped-symbol retrieval implemented and verified.
 - [ ] Path-scope and naming-variant planning implemented.
 - [ ] `path-scoped-symbol` integrated into full/no-relations retrieval.
 - [ ] Attribution accepts and safely reports the new retriever.
@@ -1542,6 +1547,10 @@ Update with UTC timestamps while executing.
   the narrow cache permission produced the expected missing-method compile
   failure; it was the latter result, not the infrastructure error, that counted
   as RED.
+- **2026-09-01:** A files-only scope and a symbol candidate are deliberately
+  separate store results. The old generic path query can omit a late `Run`
+  after 50 smaller chunks, while the new exact-path symbol passes return its
+  body before its outline and exclude a higher-frequency unowned window.
 
 ---
 
@@ -1590,6 +1599,15 @@ Update with UTC timestamps while executing.
   ordering; the requested limit is capped at 16 and all hints/limits are bound.
   Files with no chunks are returned, proving this stage does not read candidate
   content or delegate to the ordinary chunk-returning `SearchPaths` behavior.
+  **Date/Author:** 2026-09-01 / Codex.
+
+- **Decision:** Merge scoped symbol passes by fixed evidence strength and
+  enforce fairness after each query.
+  **Rationale:** Case-sensitive qualified, case-insensitive qualified, simple
+  exact, prefix, and safe path-constrained FTS results remain separately
+  ordered before deduplication. Store-side caps retain at most 8 paths, 16
+  hints, 8 candidates per path, and 40 total; only symbol-owned chunks enter.
+  This adds no schema, migration, global FTS, rank, or packer change.
   **Date/Author:** 2026-09-01 / Codex.
 
 - **Decision:** Separate file discovery from symbol retrieval.
