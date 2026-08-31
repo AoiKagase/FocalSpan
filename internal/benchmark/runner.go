@@ -169,6 +169,13 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 							quality.KnownResendCount += metrics.KnownResendCount
 						}
 					}
+					explicitCodes := append([]string(nil), quality.FailureCodes...)
+					quality.FailureCodes = FailureCodes(quality)
+					for _, code := range explicitCodes {
+						if !containsString(quality.FailureCodes, code) {
+							quality.FailureCodes = append(quality.FailureCodes, code)
+						}
+					}
 					report.Quality = append(report.Quality, quality)
 				} else {
 					report.Quality = append(report.Quality, QualityResult{CaseID: benchmarkCase.ID, Profile: profile.Name, Budget: budget, BudgetCompliant: 1, Deterministic: boolInt(run.Deterministic), RelationValid: 1})
@@ -189,6 +196,14 @@ func boolInt(value bool) int {
 		return 1
 	}
 	return 0
+}
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 var workspaceIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)

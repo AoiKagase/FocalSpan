@@ -36,6 +36,9 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	if err != nil {
 		fmt.Fprintf(stderr, "focalspan-bench: %v\n", err)
+		if status, ok := err.(exitStatusError); ok {
+			return status.code
+		}
 		return 1
 	}
 	return 0
@@ -209,6 +212,13 @@ func runScaffold(ctx context.Context, args []string, stdout, stderr io.Writer) e
 	_, err = fmt.Fprintf(stdout, "%s\n", data)
 	return err
 }
+
+type exitStatusError struct {
+	code    int
+	message string
+}
+
+func (e exitStatusError) Error() string { return e.message }
 func runCompare(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("compare", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -225,10 +235,26 @@ func runCompare(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if !bytes.Equal(bytes.TrimSpace(left), bytes.TrimSpace(right)) {
-		return fmt.Errorf("quality reports differ")
+	if bytes.Equal(bytes.TrimSpace(left), bytes.TrimSpace(right)) {
+		fmt.Fprintln(stdout, "compatible: true\nregressions: 0")
+		return nil
 	}
-	fmt.Fprintln(stdout, "compatible: true\nregressions: 0")
+	var baseReport, candidateReport benchmark.RunReport
+	if err := json.Unmarshal(left, &baseReport); err != nil {
+		return exitStatusError{3, "baseline report unreadable"}
+	}
+	if err := json.Unmarshal(right, &candidateReport); err != nil {
+		return exitStatusError{3, "candidate report unreadable"}
+	}
+	comparison := benchmark.CompareReports(baseReport, candidateReport)
+	encoded, _ := json.MarshalIndent(comparison, "", "  ")
+	fmt.Fprintf(stdout, "%s\n", encoded)
+	if !comparison.Compatible {
+		return exitStatusError{3, "reports are incompatible"}
+	}
+	if len(comparison.Regressions) > 0 {
+		return exitStatusError{2, "quality regression detected"}
+	}
 	return nil
 }
 func writeOutput(path string, data []byte, force bool) error {

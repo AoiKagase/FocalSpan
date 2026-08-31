@@ -294,7 +294,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - [x] Development CLI, private registry handling, and scaffold flow implemented. (2026-08-31 UTC; validate/run/scaffold/compare boundaries and mapping precedence verified.)
 - [x] Query-plus-expand delta evaluation implemented. (2026-08-31 UTC; exact anchors, known-handle suppression, and control token ratio verified.)
 - [x] Public FocalSpan history corpus labeled and validated. (2026-08-31 UTC; 8 cases, 3 Japanese queries, 3 expansions, 0 invalid.)
-- [ ] Failure attribution and report comparison implemented.
+- [x] Failure attribution and report comparison implemented. (2026-08-31 UTC; stable codes, quality-only comparison, exit 2/3 semantics verified.)
 - [ ] Linux race CI and cross-platform build CI implemented.
 - [ ] Public benchmark results and evidence-based v0.6 recommendation committed.
 - [ ] Full verification completed and recorded.
@@ -314,6 +314,7 @@ No implementation discoveries have been recorded at plan creation. Add concise o
 ## Decision Log
 
 - 2026-08-31: Use `950a3b74b59ec65d372695c6a28489202c9bf1ee` as the actual v0.5 baseline because the checkout advanced before execution. This follows the current-checkout source-of-truth rule and preserves commit `950a3b7` as pre-existing history.
+- 2026-08-31: Do not add a new public or production ranking trace for benchmark attribution. The benchmark emits observable required-evidence failures and preserves `ranked_candidate_not_packed` only when a future safe internal adapter supplies that fact; current results document the attribution limit.
 
 - **Decision:** Use one active root `PLAN.md`, a durable root `PLANS.md`, and immutable completed/superseded archives.
   **Rationale:** Overwriting a completed plan loses an easy-to-review history, while keeping many active-looking plans creates ambiguity for Codex. One active file preserves the simple workflow; archives preserve evidence.
@@ -1503,17 +1504,17 @@ Run:
           Warnings []string `json:"warnings,omitempty"`
       }
 
-- [ ] **Step 1: Write failure-code tests**
+- [x] **Step 1: Write failure-code tests**
 
 Given controlled case and packet outcomes, assert exact codes and deterministic ordering. A single case may have multiple codes. Do not attempt to infer compiler-level root cause.
 
-- [ ] **Step 2: Distinguish ranking from packing where current internals permit it**
+- [x] **Step 2: Distinguish ranking from packing where current internals permit it**
 
 Use the current app/search trace only through an internal benchmark adapter. If the required candidate appears in the ranked pre-packet candidate list but not the Evidence Packet, emit `ranked_candidate_not_packed`. If the current checkout has no safe internal trace, do not add a public debug command; record only `required_*_missing` and document the attribution limit.
 
 Any adapter added to `internal/app` must be unexported outside internal packages or explicitly named as development-only.
 
-- [ ] **Step 3: Implement quality comparison**
+- [x] **Step 3: Implement quality comparison**
 
 Reports are compatible only when these match:
 
@@ -1536,7 +1537,7 @@ A candidate regression is:
 
 Performance changes are warnings only by default. A query or index median slowdown greater than 20% is a warning, not exit-code failure.
 
-- [ ] **Step 4: Define compare exit codes**
+- [x] **Step 4: Define compare exit codes**
 
 - `0`: compatible and no quality regression;
 - `2`: compatible with one or more quality regressions;
@@ -1545,11 +1546,11 @@ Performance changes are warnings only by default. A query or index median slowdo
 
 Human output lists exact case/profile/budget regressions. JSON output contains no ANSI escapes.
 
-- [ ] **Step 5: Add source-free diagnostic detail**
+- [x] **Step 5: Add source-free diagnostic detail**
 
 For misses, report expected path/symbol, selected path/symbol/role list, and failure code. Never include source content, source segments, absolute paths, or full private registry data.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run:
 
