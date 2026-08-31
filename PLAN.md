@@ -754,7 +754,7 @@ changes.
 
 **Produces:** `Store.SearchFilePaths`.
 
-- [ ] Add a failing test fixture with paths:
+- [x] Add a failing test fixture with paths:
 
       internal/indexer/indexer.go
       internal/indexer/config.go
@@ -779,9 +779,9 @@ changes.
   - limit 2 returns exactly 2;
   - no candidate content is read or returned.
 
-- [ ] Confirm RED because `SearchFilePaths` is absent.
+- [x] Confirm RED because `SearchFilePaths` is absent.
 
-- [ ] Implement:
+- [x] Implement:
 
       func (s *Store) SearchFilePaths(
           ctx context.Context,
@@ -791,16 +791,16 @@ changes.
 
   using the semantics in `Store Query Semantics`.
 
-- [ ] Build dynamic SQL only from fixed query text and placeholders. Bind every
+- [x] Build dynamic SQL only from fixed query text and placeholders. Bind every
   hint and limit.
 
-- [ ] Add cancellation and SQL-error tests. Cancellation must return a wrapped
+- [x] Add cancellation and SQL-error tests. Cancellation must return a wrapped
   context error without partial nondeterministic output.
 
-- [ ] Add a 500-path bounded test and assert the result remains at the requested
+- [x] Add a 500-path bounded test and assert the result remains at the requested
   cap and stable across two calls.
 
-- [ ] Run:
+- [x] Run:
 
       go test ./internal/store -run "TestSearchFilePaths" -count=1
       go test ./internal/store -count=1
@@ -808,7 +808,7 @@ changes.
       go vet ./...
       git diff --check
 
-- [ ] Commit only store file discovery:
+- [x] Commit only store file discovery:
 
       git add internal/store/store.go internal/store/store_test.go
       git commit -m "feat: add bounded file path discovery"
@@ -1499,8 +1499,13 @@ Update with UTC timestamps while executing.
   v0.5 compatible, zero regressions, and a clean attribution privacy scan.
   Post-edit verification passed 666 tests in 46 packages, `go vet ./...`, and
   `git diff --check`; the two documentation files were committed together.
+- [x] `2026-08-31T23:45:36Z` Task 2 implementation and verification completed.
+  The expected RED was `SearchFilePaths undefined`; focused GREEN passed 4
+  tests, all store tests passed 28 tests, and the full repository passed 670
+  tests in 46 packages. `go vet ./...` and `git diff --check` passed. The task
+  production/test commit is `70d7b51`.
 - [ ] Four-case current baseline measured and frozen.
-- [ ] Store file discovery implemented and verified.
+- [x] Store file discovery implemented and verified.
 - [ ] Store scoped-symbol retrieval implemented and verified.
 - [ ] Path-scope and naming-variant planning implemented.
 - [ ] `path-scoped-symbol` integrated into full/no-relations retrieval.
@@ -1532,6 +1537,11 @@ Update with UTC timestamps while executing.
   before writing production tests; no source-code priority, extension
   priority, symbol-count priority, match-count priority, or other new ranking
   rule was introduced.
+- **2026-09-01:** The first focused RED command was blocked before compilation
+  by sandbox denial for the Go build cache. Re-running that same command with
+  the narrow cache permission produced the expected missing-method compile
+  failure; it was the latter result, not the infrastructure error, that counted
+  as RED.
 
 ---
 
@@ -1573,6 +1583,14 @@ Update with UTC timestamps while executing.
   bounded file scope; Task 3 owns symbol selection inside that scope. Changing
   production semantics would confound the single milestone hypothesis.
   **Date/Author:** 2026-09-01 / Codex and user clarification.
+
+- **Decision:** Implement file discovery as a fixed, parameterized files-table
+  query with path-only output.
+  **Rationale:** Match class, shorter path, and lexical path remain the frozen
+  ordering; the requested limit is capped at 16 and all hints/limits are bound.
+  Files with no chunks are returned, proving this stage does not read candidate
+  content or delegate to the ordinary chunk-returning `SearchPaths` behavior.
+  **Date/Author:** 2026-09-01 / Codex.
 
 - **Decision:** Separate file discovery from symbol retrieval.
   **Rationale:** v0.6 showed that exposing a correct file via generic path
