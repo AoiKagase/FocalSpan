@@ -138,8 +138,8 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   passed.)
 - [x] Task 4 two-case smoke and one eight-case repeat-1 attribution diagnostic
   completed. (2026-08-31; diagnostic 1 run, retry 0; 95 labels classified.)
-- [ ] Task 5 exactly one improvement target and acceptance contract frozen in
-  the Decision Log before production code changes.
+- [x] Task 5 exactly one improvement target and acceptance contract frozen in
+  the Decision Log before production code changes. (2026-08-31; docs-only.)
 - [ ] Task 6 selected retriever or linker improvement implemented with TDD.
 - [ ] Task 7 focused and bounded comparison gates passed.
 - [ ] Task 8 one final eight-case repeat-3 candidate comparison completed.
@@ -211,6 +211,20 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   product APIs. They use existing capped exact-symbol/path store searches and
   exact path/name/optional-kind filtering once per historical case, after the
   shared index build and before profile/budget queries.
+- 2026-08-31: Select the path retriever's missing lexical path signal. Freeze
+  12 `php-extractor-integration` retrieval-missing rows: required path,
+  `Run`, and its `callers` expansion anchor across the three full-profile
+  budgets and the no-relations profile. The query contains normalized `index`,
+  but `SearchPaths` currently receives only explicit path-shaped terms.
+  Production scope is exactly `internal/search/retrieval.go` and
+  `retrieval_test.go`; FTS-only is excluded because it bypasses this retriever.
+- 2026-08-31: Freeze the selected numeric gates before implementation:
+  retrieval misses decrease from 12 to at most 11; at least one selected label
+  advances; at least one of four selected expansion-anchor rows becomes
+  `packed`; no selected row becomes not-indexed; no diagnostic label moves to
+  an earlier stage; affected recall or executable anchors increase; and all
+  quality, legacy, wire, privacy, deterministic, test, vet, and run-count gates
+  remain green.
 - 2026-08-31: Freeze the improvement only after the eight-case repeat-1 trace.
   Choose the stage with the greatest number of actionable misses; a tie selects
   retrieval because it is earlier in the pipeline and requires fewer semantic
@@ -264,6 +278,12 @@ results classified 95 labels as 55 retrieval missing, 35 packing dropped, and
 quality/workspace artifacts were removed. Focused benchmark/benchcli tests
 passed 61 tests, the full suite passed 665 tests in 46 packages, and diff check
 passed. No full repeat-3 candidate run has occurred.
+
+Task 5 applied the frozen 55-versus-0 retrieval/linking selection rule and then
+bounded the production hypothesis to one general defect and 12 measured rows.
+It rejected linker changes, packing/Evidence work, FTS/fusion limit increases,
+ranking changes, parser changes, and corpus aliases. This decision changed only
+PLAN/findings; no production file changed.
 
 ---
 
@@ -468,14 +488,14 @@ create `docs/benchmarks/attribution-v0.6.{json,md}`.
 
 **Files:** modify only `PLAN.md` and `docs/benchmarks/findings-v0.6.md`.
 
-- [ ] Exclude `label_not_indexed`; count actionable retrieval/linking misses.
-- [ ] Select the greater count, retrieval on tie; choose the smallest coherent
+- [x] Exclude `label_not_indexed`; count actionable retrieval/linking misses.
+- [x] Select the greater count, retrieval on tie; choose the smallest coherent
   subset explained by one general defect and record rejected alternatives.
-- [ ] Freeze affected identities, baseline stage/count, exact production/test
+- [x] Freeze affected identities, baseline stage/count, exact production/test
   files, and gates: at least one label advances, chosen misses decrease, none
   move backward, affected coverage or executable anchors increase, and all
   compare/privacy/wire/legacy invariants stay green.
-- [ ] Commit only PLAN/findings. If no coherent defect exists, stop and present
+- [x] Commit only PLAN/findings. If no coherent defect exists, stop and present
   measured options before changing production.
 
 ### Task 6: Implement Exactly One Retriever or Linker Improvement

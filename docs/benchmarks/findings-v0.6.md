@@ -70,3 +70,53 @@ These counts are measurements, not a selected optimization. The Task 5
 Decision Log commit must exclude the zero `label_not_indexed` rows, compare the
 actionable retrieval and linking misses under the predeclared rule, freeze one
 coherent subset and numeric gates, and contain no production change.
+
+## Frozen improvement decision
+
+The predeclared selection rule chooses retrieval: there are 55 actionable
+`retrieval_missing` rows and zero `linking_unresolved` rows. The selected defect
+is narrower than all 55 rows. In `php-extractor-integration`, the normalized
+query contains the general lexical term `index`, while the path retriever is fed
+only explicit path-shaped terms. Consequently the indexed `Run` candidate in
+`internal/indexer/indexer.go` never appears in any raw retriever list.
+
+Freeze these 12 baseline rows, all currently `retrieval_missing`:
+
+- Case: `php-extractor-integration`.
+- Labels: required path `internal/indexer/indexer.go`; required symbol
+  `internal/indexer/indexer.go::Run`; expansion anchor
+  `internal/indexer/indexer.go::Run` with relation `callers`.
+- Profiles/budgets: `full-evidence-focused` at 1024, 2048, and 4096; and
+  `no-relations-evidence-focused` at 2048.
+- Excluded by design: `fts-evidence-focused`, because it does not execute the
+  path retriever.
+
+The one selected implementation is to let the existing bounded path retriever
+consume normalized lexical path hints in addition to explicit path tokens.
+Production/test scope is exactly `internal/search/retrieval.go` and
+`internal/search/retrieval_test.go`. The implementation must remain
+corpus-independent and must not change query parsing, FTS, retriever weights,
+fusion/ranking, relation resolution, packing, Evidence, labels, profiles,
+budgets, or attribution thresholds.
+
+Frozen numeric gates:
+
+- Selected retrieval misses decrease from 12 to at most 11, with at least one
+  selected label advancing beyond retrieval.
+- At least one of the four selected expansion-anchor rows becomes `packed`, so
+  at least one previously blocked expansion becomes executable.
+- No selected row becomes `label_not_indexed`, and no label in the 95-row
+  diagnostic moves to an earlier terminal stage.
+- Required-path/symbol recall or executable-anchor count increases for the
+  affected case; the v0.5 quality comparison remains compatible with zero
+  regressions.
+- Legacy fixtures, Evidence/wire/privacy invariants, deterministic output,
+  full tests, vet, diff check, and bounded run-count rules remain green.
+
+Rejected alternatives are intentionally not co-tuned: linker work has zero
+measured rows; the 35 packing drops are downstream and Evidence compaction is
+out of scope; raising FTS/fusion limits or changing ranking weights is broader
+and does not target this exact missing path signal; parser changes and
+corpus-specific aliases would violate the milestone constraints. The other
+retrieval-missing cases do not share the same directly observed lexical path
+hint and are not part of this hypothesis.
