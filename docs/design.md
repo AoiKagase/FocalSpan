@@ -494,6 +494,35 @@ The legacy packer remains a compatibility branch for the default positional
 CLI and legacy retrieval evaluations. It is no longer the canonical output
 path for `code_context`, `code_expand`, or `code_impact`.
 
+## Development-only real-repository evaluation
+
+The maintainer-only `focalspan-bench` command measures the current product
+pipeline against reviewed labels from local repository history:
+
+```text
+local Git repository
+  -> read-only git archive base snapshot
+  -> current FocalSpan index, query, and Evidence pipeline
+  -> human labels plus target-diff diagnostics
+  -> deterministic quality report
+  -> separate volatile timing report
+```
+
+This command is not part of the end-user CLI or MCP path. Its dependency
+direction is one-way from `cmd/focalspan-bench` through `internal/benchcli` and
+`internal/benchmark` into the existing product packages. Product packages do
+not import benchmark code, and the benchmark does not duplicate extraction,
+retrieval, relation resolution, ranking, packing, or Evidence compilation.
+
+Historical materialization uses separated-argument, read-only Git commands and
+safe tar extraction into disposable temporary directories. Target diffs are
+diagnostics for human review rather than automatic required labels. The
+benchmark never executes repository code, runs a package manager, changes the
+source checkout, or reads private repository mappings in public CI. The
+benchmark makes no network request. Reports retain logical repository IDs,
+relative paths, commit IDs, and metrics while excluding source text and
+absolute local paths.
+
 ## Roadmap (design only)
 
 1. SCIP semantic index importer.

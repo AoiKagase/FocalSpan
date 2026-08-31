@@ -7,7 +7,7 @@ Policy: [`../../../PLANS.md`](../../../PLANS.md)
 
 - [`2026-08-28-v0.1-bootstrap.md`](completed/2026-08-28-v0.1-bootstrap.md)
 - [`2026-08-30-v0.4-llm-evidence-contract.md`](completed/2026-08-30-v0.4-llm-evidence-contract.md)
-- [`2026-08-28-php-structural-extraction.md`](../2026-08-28-php-structural-extraction.md)
+- [`2026-08-28-php-structural-extraction.md`](2026-08-28-php-structural-extraction.md)
 
 ## Superseded
 
