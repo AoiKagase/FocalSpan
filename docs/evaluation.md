@@ -569,3 +569,26 @@ This closes the remote test, vet, Linux race, cross-build, and bounded smoke
 gates that remained unverified in the earlier v0.5 record. The six workflow
 warnings were Node.js action-runtime deprecation notices, not test or build
 failures.
+
+## Candidate attribution and coverage v0.6
+
+v0.6 added a development-only, source-free pre-packet attribution trace without
+changing normal CLI/MCP output or the `focalspan.context.v1` wire contract. One
+eight-case repeat-1 diagnostic classified 95 labels: 55 were absent from all
+retriever lists, 35 reached ranking but were omitted by packing, and 5 required
+paths were packed. No required symbol or expansion anchor was packed.
+
+The single frozen path-retrieval hypothesis moved four required-path rows from
+`retrieval_missing` to `packing_dropped`, but did not advance the required
+symbol, pack an expansion anchor, or improve packet recall. It therefore failed
+the precommitted acceptance gate and was removed in `584e6fb`; no second
+production subsystem was adjusted. The planned eight-case repeat-3 release run
+was intentionally skipped, with executed and retry counts both 0.
+
+After rollback, 294 targeted tests and 666 full tests passed, `go vet ./...`
+reported no issues, and CGO-free Windows amd64, Linux amd64, and Darwin arm64
+builds succeeded. A two-case/default/repeat-1 smoke returned 12 quality results,
+compared compatible with v0.5 with zero regressions, and restored all 25 labels
+to `retrieval_missing`. Privacy and residue checks passed and generated outputs
+were removed. These are local results; post-closure Linux race and other remote
+jobs remain unverified until an actual pushed Actions run completes.

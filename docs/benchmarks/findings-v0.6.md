@@ -159,7 +159,29 @@ second store/retriever-selection or ranking/packing change, which this milestone
 forbids.
 
 Therefore this is a valid negative hypothesis. No second production adjustment,
-eight-case rerun, repeat-3 full candidate run, result-v0.6 artifact, push, or new
-remote CI claim was made. The committed retriever change remains explicit
-experimental evidence, not an accepted v0.6 release candidate; disposition
-requires a new user-approved plan or successor milestone.
+eight-case rerun, repeat-3 full candidate run, result-v0.6 artifact, or new
+remote CI claim was made at this gate.
+
+## Final disposition
+
+Commit `584e6fb` removed the rejected lexical path behavior while retaining the
+source-free attribution infrastructure and this negative evidence. The rollback
+regression test first reproduced the experimental broad path hints, then passed
+with only explicit path terms sent to path search.
+
+Fresh closure verification passed 294 targeted legacy/Evidence/wire/privacy
+tests in 10 packages, 666 full tests in 46 packages, `go vet ./...`, and
+CGO-free Windows amd64, Linux amd64, and Darwin arm64 builds. A final bounded
+two-case/default/repeat-1 smoke returned 12 quality results and compared with
+v0.5 as compatible with zero regressions. Its 25 attribution labels were all
+`retrieval_missing`, restoring the starting attribution rather than claiming an
+improvement. Attribution output contained no source, absolute path, username,
+environment, secret, NaN, or Infinity. Temporary reports, workspaces, and build
+outputs were removed.
+
+Task 8 was intentionally skipped because its frozen prerequisite failed.
+Eight-case repeat-3 planned count was 1; executed count and retry count were 0.
+No `results-v0.6` artifact exists and v0.6 makes no release-quality improvement
+claim. The milestone closes locally with the attribution trace as its durable
+deliverable and the path-hint hypothesis as rejected evidence. Remote CI is not
+claimed until the closure commits are pushed and the actual jobs are inspected.

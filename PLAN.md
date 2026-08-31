@@ -144,9 +144,10 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   focused 2, search 21, regression eval 1, full 667 tests/46 packages passed.)
 - [x] Task 7 bounded verification completed; the frozen expansion-anchor gate
   failed, so the candidate was rejected and work stopped. (2026-08-31.)
-- [ ] Task 8 one final eight-case repeat-3 candidate comparison completed.
-- [ ] Task 9 final local/remote verification, documentation, and retrospective
-  completed.
+- [x] Task 8 intentionally skipped after the Task 7 frozen gate failed;
+  eight-case repeat-3 candidate run count is 0. (2026-08-31.)
+- [ ] Task 9 local verification completed and closure documentation prepared;
+  its commit and remote verification remain. (2026-08-31.)
 
 ---
 
@@ -195,6 +196,11 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   from retrieval missing to packing dropped, but all four `Run` symbols and all
   four expansion anchors remained retrieval missing. Selected misses improved
   12 to 8, yet packed anchors remained 0; the frozen gate failed.
+- 2026-08-31: Reverting the rejected lexical path hints restored the two-case
+  attribution baseline: all 25 smoke labels are again `retrieval_missing`.
+  The comparison remained compatible with zero regressions, confirming that
+  the retained v0.6 deliverable is attribution evidence rather than a retrieval
+  quality change.
 
 ---
 
@@ -245,6 +251,11 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   Do not adjust path-store result allocation, limits, fusion/ranking, or packing
   in v0.6; any disposition of the experimental commit or successor hypothesis
   requires a new approved plan.
+- 2026-08-31: Remove the rejected production behavior in commit `584e6fb` while
+  retaining its tests, measurements, and documentation as negative evidence.
+  Close Task 8 as intentionally skipped with repeat-3 run count 0; running a
+  release comparison for a candidate that failed its prerequisite gate would
+  misrepresent the plan's decision rule.
 - 2026-08-31: Freeze the improvement only after the eight-case repeat-1 trace.
   Choose the stage with the greatest number of actionable misses; a tie selects
   retrieval because it is earlier in the pipeline and requires fewer semantic
@@ -322,6 +333,29 @@ stayed zero and packet recall did not improve. Full tests passed 667 tests in 46
 packages, vet and diff check passed, and temporary artifacts were removed. The
 frozen gate failure ends v0.6 production work before Task 8; no full repeat-3
 candidate, push, or fresh remote CI was run.
+
+The rejected lexical path behavior was then removed in `584e6fb`. A rollback
+regression test first failed against the experimental implementation with
+`path hints=[[src/token.ts token module]]`, then passed after the retriever again
+sent only explicit path terms. Fresh closure verification passed 294 targeted
+tests in 10 packages, 666 full tests in 46 packages, `go vet ./...`, and three
+CGO-free builds for Windows amd64, Linux amd64, and Darwin arm64. The final
+two-case/default/repeat-1 smoke returned 12 quality results, compared compatible
+with zero regressions, and classified all 25 labels as `retrieval_missing`.
+Privacy scans found no source, absolute path, username, environment, secret,
+NaN, or Infinity in attribution output. All temporary reports, workspaces, and
+binaries were removed; the v0.5 archive remains blob
+`281211f6754bd3b1e45a7b321d8aaab1a1a27094`.
+
+v0.6 therefore closes locally as a negative production milestone with a useful
+measurement deliverable. The source-free attribution pipeline remains; the only
+production hypothesis did not improve packet recall or expansion executability
+and was reverted. Task 8 was intentionally skipped and the repeat-3 full run
+count is 0. A successor should use the retained trace to freeze one new bounded
+retriever hypothesis, likely exact identity selection within already matched
+paths, without changing ranking, packing, or the Evidence contract in the same
+milestone. Root `PLAN.md` remains the sole active plan until a successor is
+introduced and this file can be archived byte-for-byte.
 
 ---
 
@@ -564,27 +598,24 @@ lookup. Neither may touch rank, evidence, parsers, packer, labels, or v0.5 data.
 **Files:** create `docs/benchmarks/results-v0.6.{json,md}`; modify
 findings/evaluation/PLAN.
 
-- [ ] Report before running: final candidate reason, selected improvement,
-  eight cases, repeat 3, planned count 1.
-- [ ] Run the suite once with attribution; compare with v0.5 and require
-  compatible, zero regressions, and frozen improvement.
-- [ ] Record infrastructure retry cause/count before any retry; never retry a
-  valid unfavorable result.
-- [ ] Scan privacy/finite values/residue; record exact deltas without changing
-  labels/thresholds/baseline; commit result documents.
+- [x] Skip the final candidate run because Task 7 failed the frozen expansion
+  gate; report planned count 1, executed count 0, retry count 0.
+- [x] Do not create `results-v0.6` artifacts or claim a release candidate.
+- [x] Preserve the valid unfavorable result without changing labels,
+  thresholds, baseline, or another production subsystem.
 
 ### Task 9: Final Verification, Remote Evidence, and Retrospective
 
 **Files:** modify design/evaluation/benchmark README/findings/PLAN.
 
-- [ ] Run focused tests, `go test ./... -count=1`, `go vet ./...`, and diff check.
-- [ ] Build CGO-free Windows amd64, Linux amd64, Darwin arm64 into temp paths and
+- [x] Run focused tests, `go test ./... -count=1`, `go vet ./...`, and diff check.
+- [x] Build CGO-free Windows amd64, Linux amd64, Darwin arm64 into temp paths and
   remove all outputs.
-- [ ] Re-run every legacy fixture and Evidence comparison including wire,
+- [x] Re-run every legacy fixture and Evidence comparison including wire,
   fidelity, relation, known-handle, duplication, and normal-output privacy.
-- [ ] Verify two-case smoke and the single final full result without another
-  valid full run.
-- [ ] Scan all state for leaks/residue and confirm untouched `.focalspan.json`.
+- [x] Verify the two-case smoke; record that no final full result exists because
+  its prerequisite gate failed.
+- [x] Scan all state for leaks/residue and confirm untouched `.focalspan.json`.
 - [ ] Update docs and all living sections; commit explicit docs only.
 - [ ] When remote proof is necessary, push completed v0.6 commits, inspect the
   actual latest run, and record executed test/vet/Linux race/build/smoke jobs.
@@ -602,11 +633,13 @@ findings/evaluation/PLAN.
 - Exactly one post-freeze retriever/linker behavior changes; no co-tuning.
 - At least one frozen label advances, none regresses, and affected coverage or
   executable anchor count increases.
-- Final comparison has zero quality/invariant regressions; all legacy/Evidence
-  gates, full tests, vet, diff check, Linux race CI, and three builds pass with
-  actual evidence.
-- Run counts remain: repeated two-case smoke as needed, one eight-case repeat-1
-  diagnostic, one valid eight-case repeat-3 final candidate.
+- The rollback comparison has zero quality/invariant regressions; all
+  legacy/Evidence gates, full tests, vet, diff check, and three local builds pass
+  with actual evidence. Linux race remains a remote gate until the pushed
+  closure commit completes CI.
+- Run counts remain: bounded two-case smokes as needed, one eight-case repeat-1
+  diagnostic, and zero eight-case repeat-3 final candidates because the frozen
+  prerequisite gate failed.
 
 ---
 

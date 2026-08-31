@@ -24,8 +24,10 @@ Validate the eight human-reviewed historical cases before running them:
 
 Labels and their rationale are recorded in `testdata/benchmark/focalspan-history-labels.md`.
 
-The full eight-case repeat-3 run is the release measurement. It is intentionally
-manual because it materializes and indexes every historical snapshot:
+The full eight-case repeat-3 run is the release measurement for a candidate
+that has already passed its frozen bounded gate. It is intentionally manual
+because it materializes and indexes every historical snapshot. Do not run it
+for a rejected candidate merely to complete a checklist:
 
     go run ./cmd/focalspan-bench run --suite testdata/benchmark/focalspan-history.json --profile default --repeat 3 --json-out .focalspan-bench/candidate.json --markdown-out .focalspan-bench/candidate.md --force
     go run ./cmd/focalspan-bench compare --baseline docs/benchmarks/results-v0.5.json --candidate .focalspan-bench/candidate.json
@@ -35,6 +37,14 @@ the same IDs:
 
     go run ./cmd/focalspan-bench run --suite testdata/benchmark/focalspan-history.json --case php-extractor-integration --case cpp-extractor-registry --profile default --repeat 1 --json-out .focalspan-bench/smoke.json --markdown-out .focalspan-bench/smoke.md --force
     go run ./cmd/focalspan-bench compare --baseline docs/benchmarks/results-v0.5.json --candidate .focalspan-bench/smoke.json --case php-extractor-integration --case cpp-extractor-registry
+
+Development attribution is opt-in and must write both outputs together:
+
+    go run ./cmd/focalspan-bench run --suite testdata/benchmark/focalspan-history.json --case php-extractor-integration --case cpp-extractor-registry --profile default --repeat 1 --json-out .focalspan-bench/smoke.json --markdown-out .focalspan-bench/smoke.md --attribution-json-out .focalspan-bench/attribution.json --attribution-markdown-out .focalspan-bench/attribution.md --force
+
+These attribution files contain logical repository IDs, relative identities,
+sanitized stages/reasons, and positions only. They are development artifacts,
+not normal CLI/MCP or Evidence Packet output.
 
 Within a run, each historical case is indexed once and that index is shared by
 all profiles and budgets. Retrieval mode remains query-local. There is no
@@ -61,7 +71,8 @@ Choose one production area only after failure attribution shows whether evidence
 GitHub Actions configures Linux unit tests, vet, Linux race tests, CGO-free
 Windows/Linux/Darwin builds, and a two-case repeat-1 public benchmark comparison
 for pushes and pull requests. The full eight-case repeat-3 comparison is
-manual-dispatch only. The workflow
+manual-dispatch only and is conditional on the candidate passing its frozen
+bounded gate. The workflow
 has read-only repository permission, uses no private registry, uploads no
 snapshot or binary, and writes benchmark outputs only below the runner temporary
 directory. A configured workflow is not proof of a pass; remote Linux race and

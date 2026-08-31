@@ -523,6 +523,17 @@ benchmark makes no network request. Reports retain logical repository IDs,
 relative paths, commit IDs, and metrics while excluding source text and
 absolute local paths.
 
+For development attribution, an opt-in path extends the existing internal
+search trace with relative candidate identity, retriever position, sanitized
+relation state, and ranked position. `internal/benchmark` joins that trace to
+reviewed required labels and the final packet, classifying loss as not indexed,
+retrieval missing, linking unresolved, ranking dropped, packing dropped, or
+packed. The attribution schema contains no source field or floating-point
+metric and validates relative paths and reason codes before serialization.
+Only `internal/benchcli` can request its separate JSON and Markdown outputs;
+normal `focalspan` CLI/MCP responses and Evidence Packet serialization do not
+receive candidate, ranking, attribution, or token-saving diagnostics.
+
 ## Roadmap (design only)
 
 1. SCIP semantic index importer.
