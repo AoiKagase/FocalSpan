@@ -764,10 +764,14 @@ changes.
       testdata/repos/sample/indexer.go
 
   Assert:
-  - `index` ranks `internal/indexer/indexer.go` before docs/testdata;
+  - `index` returns both `docs/index.md` and
+    `internal/indexer/indexer.go`, with shorter `docs/index.md` first and the
+    internal path still inside the maximum 8-file scope;
   - `mcp` finds only `internal/mcpserver/server.go` before limit;
-  - exact full path wins;
-  - final-segment exact wins over a deep substring;
+  - exact full-path `internal/indexer/indexer.go` wins;
+  - `indexer.go` applies the shorter-path tie-break between candidates with
+    the same exact final segment;
+  - final-segment prefix wins over path-segment prefix;
   - output is deterministic;
   - duplicate hints do not duplicate paths;
   - backslash hints normalize;
@@ -1521,6 +1525,13 @@ Update with UTC timestamps while executing.
   by the plan, but `git check-ignore -v .focalspan-bench` returned exit 1 in
   the current checkout. Task 1 kept the four outputs temporary and removes
   them explicitly; `.gitignore` is outside this task's frozen file scope.
+- **2026-09-01:** Task 2's original `index` example contradicted the frozen
+  Store Query Semantics. Both `docs/index.md` and
+  `internal/indexer/indexer.go` are final-segment-prefix matches, so the next
+  specified tie-break selects the shorter docs path. The example was corrected
+  before writing production tests; no source-code priority, extension
+  priority, symbol-count priority, match-count priority, or other new ranking
+  rule was introduced.
 
 ---
 
@@ -1552,6 +1563,16 @@ Update with UTC timestamps while executing.
   remains ranked 10 and unpacked, and MCP `codeContext` plus PHP `Run` remain
   retrieval-missing.
   **Date/Author:** 2026-08-31 / Codex.
+
+- **Decision:** Correct Task 2's test expectation rather than production path
+  ordering.
+  **Rationale:** The frozen order is exact path, exact final segment, final
+  segment prefix, path-segment prefix, substring, shorter path, then lexical
+  path. For `index`, the two named fixtures tie at final-segment prefix and
+  `docs/index.md` wins by shorter path. `SearchFilePaths` only assembles a
+  bounded file scope; Task 3 owns symbol selection inside that scope. Changing
+  production semantics would confound the single milestone hypothesis.
+  **Date/Author:** 2026-09-01 / Codex and user clarification.
 
 - **Decision:** Separate file discovery from symbol retrieval.
   **Rationale:** v0.6 showed that exposing a correct file via generic path
