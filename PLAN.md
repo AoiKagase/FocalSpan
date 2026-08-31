@@ -298,7 +298,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - [x] Task 6 acceptance gaps corrected before freezing measurements. (2026-08-31T01:32:00Z; product token estimator, complete aggregate fields, checked-in golden byte comparison, sanitized timing Markdown, and query timing samples verified by 5 focused tests.)
 - [x] Task 8 acceptance gaps corrected before freezing measurements. (2026-08-31T01:38:32Z; expansion labels, private scaffold mapping, conflicting/non-Git/NUL mapping rejection, retained-workspace lifecycle, and forced atomic replacement verified by 7 focused tests.)
 - [x] Task 10 acceptance gaps corrected before freezing measurements. (2026-08-31T01:43:50Z; deterministic matrix ordering, exact compatibility, full quality regression rules, timing-only warnings, human/JSON output, and source-free miss diagnostics verified by 7 focused tests.)
-- [ ] Linux race CI and cross-platform build CI implemented.
+- [x] Linux race CI and cross-platform build CI implemented. (2026-08-31T03:37:29Z; least-privilege workflow static test passed locally; no push occurred, so remote jobs remain unrun.)
 - [x] Public benchmark results and evidence-based v0.6 recommendation committed. (2026-08-31T03:31:40Z; two 8-case/48-result runs produced identical quality hash `f914facbfbf55c450fd26769bdc7bd6a992112dc` and compare exit 0.)
 - [ ] Full verification completed and recorded.
 
@@ -314,6 +314,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - 2026-08-31 UTC: Task 10 comparison iterated a Go map, so multi-result regression order could vary, and it silently ignored intent, role, relation, wire growth, and performance warnings. The corrected comparator sorts the exact case/profile/budget matrix and keeps timing outside quality failure status.
 - 2026-08-31 UTC: The public suite exposed much poorer real-history coverage than fixture evaluation: required-symbol recall was 0 in all 40 Evidence results, required-path mean recall was 0.125, and larger budgets did not recover labels. All nine attempted expansion points failed before expansion because their exact anchors were absent from the initial packet.
 - 2026-08-31 UTC: A complete default public run took about 50 minutes on this Windows checkout because later history snapshots required up to 333 seconds per index build and each profile rebuilds the index. Query medians remained 12--66 ms; timing is recorded only as volatile context.
+- 2026-08-31 UTC: The public benchmark CI job needs `fetch-depth: 0`; the default shallow Actions checkout cannot materialize the historical base commits. Other jobs retain the normal shallow checkout.
 
 No implementation discoveries have been recorded at plan creation. Add concise observations with command output or test evidence as they arise. Do not delete earlier entries; correct them with a later entry.
 
@@ -327,6 +328,7 @@ No implementation discoveries have been recorded at plan creation. Add concise o
 - 2026-08-31: Use the same registry/`--repo` resolver for validate, run, and scaffold. Explicit mappings still override registry entries, while conflicting repeated explicit mappings fail instead of silently choosing the last path.
 - 2026-08-31: Treat a differing case/profile/budget matrix as schema-compatible data that is nevertheless comparison-incompatible (exit 3), not as a set of missing quality regressions (exit 2). This prevents comparing non-equivalent suites while retaining the existing report schema ID.
 - 2026-08-31: Select retriever/linker candidate coverage plus a development-only source-free attribution trace as the single primary v0.6 direction. Required evidence and expansion anchors are overwhelmingly absent from final packets, while budget increases have no effect; metadata compaction remains only a secondary candidate after coverage is restored.
+- 2026-08-31: Configure, but do not claim, Linux race and public benchmark success in v0.5. This checkout is not pushed during execution, so only workflow structure and local commands can be verified now; remote job status stays explicitly unrun.
 
 - **Decision:** Use one active root `PLAN.md`, a durable root `PLANS.md`, and immutable completed/superseded archives.
   **Rationale:** Overwriting a completed plan loses an easy-to-review history, while keeping many active-looking plans creates ambiguity for Codex. One active file preserves the simple workflow; archives preserve evidence.
@@ -363,8 +365,10 @@ forbidden-path, finite-value, privacy, and cleanup invariants held, but quality
 was poor: required-symbol recall was 0, required-path mean recall 0.125, and all
 nine expansion attempts lacked their exact initial anchor. The primary v0.6
 direction is retriever/linker candidate coverage with source-free attribution;
-Evidence metadata compaction is secondary. Task 12 CI and Task 13 regression,
-race, cross-build, privacy, and final retrospective evidence remain to be added.
+Evidence metadata compaction is secondary. Task 13 full regression, local race,
+cross-build, privacy, and final retrospective evidence remain to be added.
+Task 12 now configures read-only Linux test/vet/race, CGO-free build, and public
+benchmark jobs, but no remote GitHub Actions run has occurred.
 
 ---
 
@@ -1697,7 +1701,7 @@ Run:
 - Produces: automated unit/vet/race/cross-build and public benchmark regression checks
 - Consumes: the checked-in v0.5 quality report as a baseline
 
-- [ ] **Step 1: Add Linux test and race jobs**
+- [x] **Step 1: Add Linux test and race jobs**
 
 Create a workflow triggered by pull requests and pushes to `master`. Use the repository's declared supported Go version. Jobs:
 
@@ -1712,7 +1716,7 @@ Create a workflow triggered by pull requests and pushes to `master`. Use the rep
 
 Do not claim the Windows-local race limitation is resolved until the Linux job actually passes in GitHub Actions.
 
-- [ ] **Step 2: Add CGO-free build matrix**
+- [x] **Step 2: Add CGO-free build matrix**
 
 Matrix:
 
@@ -1726,7 +1730,7 @@ Run:
 
 with `CGO_ENABLED=0`, `GOOS`, and `GOARCH` set for the target. Write artifacts to the runner temporary directory; do not upload binaries in this milestone.
 
-- [ ] **Step 3: Add public benchmark smoke and comparison**
+- [x] **Step 3: Add public benchmark smoke and comparison**
 
 On Ubuntu:
 
@@ -1735,7 +1739,7 @@ On Ubuntu:
 
 Run the suite to a temporary candidate report and compare against `docs/benchmarks/results-v0.5.json`. Fail on quality regression exit code `2` or incompatibility `3`. Do not fail on timing warnings.
 
-- [ ] **Step 4: Add workflow safety tests or static review**
+- [x] **Step 4: Add workflow safety tests or static review**
 
 Verify the workflow:
 
@@ -1749,7 +1753,7 @@ Verify the workflow:
       permissions:
         contents: read
 
-- [ ] **Step 5: Document CI**
+- [x] **Step 5: Document CI**
 
 README's development section should name:
 
@@ -1761,7 +1765,7 @@ README's development section should name:
 
 State that `focalspan-bench` is a maintainer tool and not part of the end-user CLI contract.
 
-- [ ] **Step 6: Commit CI separately**
+- [x] **Step 6: Commit CI separately**
 
 Run local YAML review, then:
 

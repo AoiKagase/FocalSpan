@@ -24,6 +24,14 @@ Validate the eight human-reviewed historical cases before running them:
 
 Labels and their rationale are recorded in `testdata/benchmark/focalspan-history-labels.md`.
 
+Run and compare the deterministic quality report with:
+
+    go run ./cmd/focalspan-bench run --suite testdata/benchmark/focalspan-history.json --profile default --repeat 3 --json-out .focalspan-bench/candidate.json --markdown-out .focalspan-bench/candidate.md --force
+    go run ./cmd/focalspan-bench compare --baseline docs/benchmarks/results-v0.5.json --candidate .focalspan-bench/candidate.json
+
+The development command writes temporary snapshots and generated reports only;
+`.focalspan-bench/` is ignored and should be removed after local verification.
+
 ## Running private local suites
 
 Private repository paths belong in the ignored `.focalspan-bench.json` registry or explicit `--repo ID=PATH` arguments. Suite files retain only logical IDs.
@@ -35,3 +43,13 @@ Quality results are deterministic for identical inputs. Wall-clock snapshot, ind
 ## Choosing the next optimization milestone
 
 Choose one production area only after failure attribution shows whether evidence was never retrieved, ranked but not packed, expensive in metadata, or concentrated in one language or artifact type.
+
+## Continuous verification
+
+GitHub Actions configures Linux unit tests, vet, Linux race tests, CGO-free
+Windows/Linux/Darwin builds, and the public benchmark comparison. The workflow
+has read-only repository permission, uses no private registry, uploads no
+snapshot or binary, and writes benchmark outputs only below the runner temporary
+directory. A configured workflow is not proof of a pass; remote Linux race and
+benchmark status remain unverified until an actual GitHub Actions run reports
+success.

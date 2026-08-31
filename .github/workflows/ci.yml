@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test
+        run: go test ./...
+      - name: Vet
+        run: go vet ./...
+
+  race:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Race test
+        run: go test -race ./...
+
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            goos: windows
+            goarch: amd64
+            extension: .exe
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            extension: ""
+          - runner: macos-latest
+            goos: darwin
+            goarch: arm64
+            extension: ""
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build focalspan without CGO
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: go build -o "${{ runner.temp }}/focalspan${{ matrix.extension }}" ./cmd/focalspan
+
+  public-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Validate public history labels
+        run: go run ./cmd/focalspan-bench validate --suite testdata/benchmark/focalspan-history.json
+      - name: Measure public history quality
+        run: go run ./cmd/focalspan-bench run --suite testdata/benchmark/focalspan-history.json --profile default --repeat 3 --json-out "$RUNNER_TEMP/candidate.json" --markdown-out "$RUNNER_TEMP/candidate.md" --force
+      - name: Compare public history quality
+        run: go run ./cmd/focalspan-bench compare --baseline docs/benchmarks/results-v0.5.json --candidate "$RUNNER_TEMP/candidate.json"

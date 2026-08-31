@@ -188,7 +188,22 @@ commands.
 
 ## Development evaluation
 
-Evaluation is intentionally separated from the public binary:
+Maintainer verification starts with:
+
+```
+go test ./...
+go test -race ./...
+go vet ./...
+go run ./cmd/focalspan-bench validate --suite testdata/benchmark/focalspan-history.json
+go run ./cmd/focalspan-bench run --suite testdata/benchmark/focalspan-history.json --profile default --repeat 3 --json-out .focalspan-bench/candidate.json --markdown-out .focalspan-bench/candidate.md --force
+```
+
+`focalspan-bench` is a maintainer-only historical evaluation tool, not part of
+the end-user `focalspan` CLI or MCP contract. See
+[`docs/benchmarks/README.md`](docs/benchmarks/README.md) for its privacy model,
+labels, report comparison, and current public baseline.
+
+Fixture evaluation is also intentionally separated from the public binary:
 
 ```powershell
 go run ./cmd/focalspan-eval --root . --cases testdata/eval/cases.jsonl --ablation all --json
