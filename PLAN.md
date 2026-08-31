@@ -1,2495 +1,2021 @@
-# FocalSpan LLM Evidence Contract v0.4 Implementation Plan
+# FocalSpan Real-Repository Evaluation v0.5 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace FocalSpan's MCP-facing flat ranked bundle with a versioned, role-aware, source-faithful Evidence Packet that gives coding LLMs the smallest useful set of code evidence within the actual model-visible token budget.
+**Goal:** Establish a durable execution-plan lifecycle and add a reproducible, privacy-safe real-repository benchmark that measures whether FocalSpan retrieves the right evidence, at the right role and budget, before any further ranking, linker, parser, or Evidence Packet optimization is attempted.
 
-**Architecture:** Preserve the existing retrieval, ranking, legacy `model.ContextBundle`, CLI defaults, extractors, and SQLite schema. Add an `internal/evidence` presentation-and-packing layer that converts ranked candidates plus query intent and relation provenance into a compact transport contract with explicit roles, fidelity, source segments, local evidence relations, limitations, follow-up actions, and stateless delta suppression. MCP tools use the new contract; legacy CLI/evaluation remain available for regression and A/B comparison.
+**Architecture:** Keep `PLAN.md` as the one mutable active ExecPlan, move durable authoring and lifecycle rules to `PLANS.md`, and preserve completed plans as immutable snapshots under `docs/superpowers/plans/completed/`. Add a development-only benchmark executable that materializes historical Git snapshots into temporary directories, runs the existing FocalSpan index/query/evidence pipeline without executing repository code, evaluates manually labeled requirements across token budgets and retrieval profiles, and emits sanitized deterministic quality reports plus separately identified timing measurements.
 
-**Tech Stack:** Go 1.26+, `github.com/modelcontextprotocol/go-sdk/mcp` v1.7.0, standard `encoding/json`, existing SQLite/FTS5 store, existing deterministic token estimator, table-driven tests, process-level MCP JSON-RPC tests.
+**Tech Stack:** Go 1.26+, standard library `os/exec`, `archive/tar`, `encoding/json`, `time`, existing FocalSpan `internal/app`, `internal/eval`, `internal/evidence`, `internal/search`, `internal/gitx`, and `internal/repository` packages, SQLite/FTS5 through the existing store, Git CLI invoked without a shell, Markdown and JSON report artifacts.
 
-**Spec:** This root `PLAN.md` is the executable specification. Record the validated design decisions in `docs/design.md` before changing the public MCP result contract.
+**Spec:** This plan is self-contained and must be maintained according to the `PLANS.md` policy created by Task 0. Existing product architecture remains documented in `docs/design.md`; verified historical measurements remain in `docs/evaluation.md`.
+
+**Plan ID:** `v0.5-real-repository-evaluation`
+
+**Status:** Active after this file replaces the completed v0.4 plan.
+
+**Baseline:** `950a3b74b59ec65d372695c6a28489202c9bf1ee` (recorded from the checkout before Task 0 edits on 2026-08-31 UTC).
 
 ## Global Constraints
 
-- Treat the current checkout as the only source of truth. This plan was authored against public `master` at commit `ec6f86e`, but newer local or merged work takes precedence.
-- Inspect `AGENTS.md`, `PLAN.md`, `README.md`, `docs/design.md`, `docs/evaluation.md`, `docs/implementation-plan.md`, `git status`, and `git diff` before editing.
-- Never run `git reset`, `git restore`, `git checkout --`, `git clean`, or `git stash` against user work.
-- Preserve all current language extractors and in-progress polyglot work. This milestone does not redesign language parsing.
-- Preserve existing tool names: `code_context`, `code_expand`, `code_impact`, `code_restart`, and `code_status`.
-- Preserve the current SQLite schema. No database migration is part of this milestone.
-- Preserve current retrieval ranking and evaluation baselines unless relation provenance requires a narrowly scoped internal change.
-- Keep the legacy `model.ContextBundle` and existing default CLI output available during v0.4.
-- MCP `code_context`, `code_expand`, and `code_impact` switch to the versioned Evidence Packet. `code_status` and `code_restart` keep their existing output contracts.
-- The canonical source text must appear once in MCP structured output and must not be duplicated in text content.
-- Do not expose rank scores, BM25 values, RRF contributions, reason weights, token-savings baselines, or debug traces in the normal Evidence Packet.
-- Preserve `focalspan explain` as the place for retrieval and ranking diagnostics.
-- Build with `CGO_ENABLED=0` for Windows amd64, Linux amd64, and macOS arm64.
-- Do not add network access, external LLM calls, embeddings, a model-specific tokenizer, HTTP MCP transport, session storage, or compiler/runtime execution.
-- All output ordering, local evidence IDs, omission decisions, and follow-up actions must be deterministic.
-- All source text labeled `verbatim` or carried in a source segment must exactly match bytes from the indexed source span.
-- The model-visible payload—the compact serialized Evidence Packet plus its canonical short MCP text summary—must fit the requested token budget. JSON-RPC framing and CLI indentation are transport overhead outside this contract.
-- Use TDD. Every behavior starts with a failing test, then minimal implementation, then local and full verification.
-- Do not leave incomplete production branches, placeholder implementations, ignored test failures, or panic-based unimplemented paths.
+- Treat the current checkout as the only source of truth. Preserve every already-merged language extractor, project-metadata resolver, linker, query planner, Evidence Packet behavior, Codex MCP registration command, and test.
+- Do not use `git reset`, `git restore`, `git checkout --`, `git clean`, or `git stash`. Do not discard a dirty working tree.
+- Do not change production retrieval weights, parser heuristics, relation-resolution rules, Evidence Packet fields, public MCP tool names, or public CLI behavior in this milestone unless a correctness defect prevents the benchmark from observing existing behavior. A necessary defect fix must be isolated, tested, and recorded in the Decision Log.
+- Do not add network access, remote repository cloning, external LLM calls, embeddings, vector search, model-as-judge evaluation, compiler execution, package-manager execution, repository build/test execution, or runtime execution of benchmarked source.
+- The benchmark may invoke only the local Git executable and the FocalSpan Go code in-process. It must never invoke the benchmarked repository's scripts, hooks, build tools, tests, generators, or package managers.
+- Never mutate the benchmarked repository's branch, index, worktree, refs, configuration, hooks, submodules, or Git LFS state. Historical snapshots must be materialized with read-only Git commands into a temporary directory.
+- All archive extraction must reject absolute paths, drive-qualified paths, NUL bytes, and `..` traversal. Symlink entries must be skipped with a diagnostic rather than created.
+- Public benchmark suites and checked-in reports must contain repository-relative paths, logical repository IDs, commit IDs, and metrics only. They must not contain absolute local paths, usernames, environment-variable values, source text, secrets, or file contents.
+- Private repository mappings belong in `.focalspan-bench.json`, which must be ignored by Git. Benchmark reports default to redacting absolute paths.
+- Keep the public `focalspan` executable unchanged. New benchmark commands live in the development-only `cmd/focalspan-bench` executable.
+- Reuse the current application, evaluation, Evidence Packet, token measurement, query planning, search, ranking, packing, and relation code. Do not create a second search implementation for the benchmark.
+- Quality output must be deterministic for identical source, suite, profile, and FocalSpan revision. Wall-clock timings are explicitly volatile and must not participate in byte-for-byte determinism checks.
+- Every behavior begins with a failing test, then the minimum implementation, then a targeted test, then `go test ./...`.
+- Build artifacts, extracted snapshots, temporary indexes, and benchmark working directories must be removed after successful or failed runs.
+- Keep `CGO_ENABLED=0` builds working for Windows amd64, Linux amd64, and macOS arm64.
+- Do not weaken, remove, rename, or silently reinterpret existing evaluation cases or v0.3/v0.4 acceptance checks.
+- This milestone measures current behavior. It must finish with an evidence-based recommendation for the next milestone, not with speculative production tuning.
 
 ---
 
-## Product Contract
+## Purpose / Big Picture
 
-### Why this milestone exists
+FocalSpan now has dedicated extractors for the user's common languages, a conservative cross-file linker, a deterministic query planner and retrieval fusion pipeline, and the `focalspan.context.v1` Evidence Packet. The checked-in fixture suites demonstrate budget compliance, deterministic output, source fidelity, relation validity, and good hit-at-five results on small repositories.
 
-The current internal bundle is optimized for implementation and debugging. It contains flat `items`, floating-point scores, weighted reasons, per-item token estimates, savings data, and source text. Coding LLMs instead need a small packet that answers four questions without reinterpreting ranking internals:
+The remaining uncertainty is whether those results generalize to real repositories and realistic maintenance questions. Small fixtures can accidentally reward narrow ranking rules, contain few ambiguous symbol names, and omit the long files, generated code, project layouts, partial definitions, deep test trees, and cross-language naming collisions that dominate actual work.
 
-1. What is the primary target?
-2. What role does each additional span play?
-3. Which relations are exact, scoped, or lexical?
-4. What useful evidence was omitted, and how can it be expanded?
+After this milestone, a maintainer can select a historical change in a local Git repository, write a natural-language question that would have been asked before that change, label the source locations that were genuinely needed, and run:
 
-The output must present evidence rather than a natural-language conclusion. FocalSpan selects and organizes source; the consuming LLM draws the conclusion.
+    go run ./cmd/focalspan-bench run \
+      --suite testdata/benchmark/focalspan-history.json \
+      --profile default \
+      --json-out .focalspan-bench/results.json \
+      --markdown-out .focalspan-bench/results.md
 
-### Public schema identifier
+The command will materialize each base revision without changing the repository, index it with the current FocalSpan implementation, query it at multiple token budgets, optionally perform one relation expansion with `known_handles`, and report retrieval coverage, rank, role accuracy, relation validity, wire-token cost, duplicate-source cost, budget compliance, deterministic output, changed-path diagnostic recall, and local timing measurements.
 
-Use this exact schema identifier:
+The purpose is not to claim that files changed by a later commit are automatically the only correct context. Historical diffs are candidate evidence and diagnostics. Acceptance labels remain explicit and human-reviewed. A path that did not exist at the base revision cannot be required evidence.
 
-```text
-focalspan.context.v1
-```
+The next production plan must be selected from measured failure categories:
 
-### Public modes
+- candidate-generation or relation misses justify retriever/linker work;
+- correct candidates ranked too low justify ranking work;
+- correct ranked candidates omitted from the packet justify packing or semantic-zoom work;
+- excessive metadata cost justifies Evidence Packet compaction;
+- concentrated language-specific misses justify extractor hardening.
 
-```go
-type Mode string
+No one should tune all of those systems at once.
 
-const (
-    ModeOutline Mode = "outline"
-    ModeFocused Mode = "focused"
-    ModeSource  Mode = "source"
-)
-```
+---
 
-Semantics:
+## Execution-Plan Lifecycle Policy
 
-- `outline`: locations, symbols, signatures, roles, relations, and concise synthetic outlines; no full source bodies.
-- `focused`: the primary target may be verbatim when compact; large or supporting items use query-relevant source segments or signatures. This is the MCP default.
-- `source`: include complete selected source spans when they fit; degrade large spans to explicit excerpts, never to an opaque tail-truncated string.
+Task 0 codifies this policy in repository-root `PLANS.md`. The policy is included here so this plan remains executable before that file exists.
 
-### Public roles
+### Canonical files
 
-Use these exact serialized values:
+- `PLANS.md` is the durable policy. It defines what an ExecPlan must contain, how it is updated, and how plans transition.
+- `PLAN.md` is the only active ExecPlan. It is mutable while work is active and remains in the root after completion until the next plan transition.
+- `docs/superpowers/plans/completed/` stores immutable snapshots of completed plans.
+- `docs/superpowers/plans/superseded/` stores plans stopped before completion because their goal or architecture was replaced.
+- `docs/superpowers/specs/` stores durable design specifications when a milestone needs a separate approved design.
+- `docs/superpowers/plans/README.md` is a short index. It points to the active plan and lists archived plans; it does not duplicate their task content.
+- `docs/implementation-plan.md` becomes a short compatibility pointer to `PLAN.md`, `PLANS.md`, and the archive. It must no longer contain a second active or stale implementation checklist.
 
-```go
-type Role string
+### Transition rules
 
-const (
-    RoleTarget         Role = "target"
-    RoleDefinition     Role = "definition"
-    RoleDeclaration    Role = "declaration"
-    RoleImplementation Role = "implementation"
-    RoleCaller         Role = "caller"
-    RoleCallee         Role = "callee"
-    RoleTest           Role = "test"
-    RoleType           Role = "type"
-    RoleImport         Role = "import"
-    RoleExport         Role = "export"
-    RoleReference      Role = "reference"
-    RoleConfig         Role = "config"
-    RoleTemplate       Role = "template"
-    RoleDocumentation  Role = "documentation"
-    RoleChange         Role = "change"
-    RoleDependent      Role = "dependent"
-    RoleContext        Role = "context"
-)
-```
+1. There is at most one active root `PLAN.md`.
+2. A completed plan is not overwritten without first preserving its final checked state, Decision Log, discoveries, validation evidence, and retrospective in `docs/superpowers/plans/completed/`.
+3. A superseded plan is archived under `superseded/` with an explicit reason and the successor plan ID.
+4. The new root plan names its plan ID, purpose, baseline procedure, scope exclusions, concrete validation, and completion conditions.
+5. A plan transition is one reviewable commit containing the archive snapshot, the new root plan, index updates, and any policy update. Product code is not mixed into that transition commit.
+6. The active plan is a living document. Progress timestamps, discoveries, decisions, and outcomes are updated as work proceeds.
+7. Acceptance criteria cannot be silently weakened. A changed criterion requires a dated Decision Log entry explaining the evidence and consequence.
+8. Future ideas do not accumulate in the active plan. They stay in `docs/design.md` under Roadmap or in a later spec.
+9. Completed archives are immutable. A factual correction is a new clearly marked addendum commit, not a rewrite of historical progress.
+10. At the end of this plan, leave the fully completed v0.5 `PLAN.md` in the root. Archive it only when the next plan is introduced.
 
-### Fidelity values
+### Plan size and content rules
 
-```go
-type Fidelity string
+- One plan covers one measurable milestone.
+- The plan must be understandable from the current tree and the plan alone.
+- It names exact repository-relative files, interfaces, commands, and observable results.
+- `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` remain current.
+- Checkboxes record execution state; prose explains purpose and design.
+- The plan does not paste source files wholesale or duplicate `docs/design.md`.
+- The plan records actual command results rather than predicted pass counts.
+- A plan that only creates scaffolding without a working end-to-end behavior is not complete.
 
-const (
-    FidelityVerbatim  Fidelity = "verbatim"
-    FidelityExcerpt   Fidelity = "excerpt"
-    FidelitySignature Fidelity = "signature"
-    FidelitySynthetic Fidelity = "synthetic"
-)
-```
+---
 
-Rules:
+## Context and Orientation
 
-- `verbatim`: `source` is populated; `segments` and `outline` are empty.
-- `excerpt`: `segments` is populated; `source` and `outline` are empty.
-- `signature`: `signature` is populated; `source`, `segments`, and `outline` are empty.
-- `synthetic`: `outline` is populated; `source` and `segments` are empty.
-- An item must use exactly one content representation.
+The current repository is organized around these relevant boundaries:
 
-### Certainty values
+- `internal/app` owns the root-bound application service used by CLI and MCP.
+- `internal/query` normalizes a natural-language question and creates a deterministic query plan.
+- `internal/search` runs independent retrievers and retrieval modes.
+- `internal/rank` applies intent-aware ranking and stable ordering.
+- `internal/evidence` compiles ranked candidates into `focalspan.context.v1`, including roles, fidelity, source segments, relations, limitations, next actions, `known_handles`, and wire-token accounting.
+- `internal/eval` evaluates checked-in fixture cases. It already supports legacy and Evidence contracts.
+- `internal/evalcli` is the development evaluator adapter.
+- `internal/gitx` contains safe Git invocation and diff parsing used by product behavior.
+- `internal/repository` detects roots and enforces path containment.
+- `internal/store` persists symbols, chunks, relations, and FTS5 content.
+- `docs/evaluation.md` contains verified v0.2, v0.3, and v0.4 measurements.
+- `testdata/repos` and `testdata/eval` contain small, checked-in fixture repositories and cases.
 
-```go
-type Certainty string
+A **historical task** in this plan means a question evaluated against the parent or earlier base revision of a real Git change. The later target revision is used only to derive diagnostics and help humans label the case. FocalSpan always queries the base snapshot, because that is the source state a developer would have seen before implementing the change.
 
-const (
-    CertaintyExact   Certainty = "exact"
-    CertaintyScoped  Certainty = "scoped"
-    CertaintyLexical Certainty = "lexical"
-)
-```
+A **required path** is a file that a human reviewer judges necessary to answer or safely act on the question and that exists at the base revision. An **optional path** is useful but not essential. A **forbidden path** is known irrelevant evidence whose selection signals noise. A changed path from the target diff is not automatically any of those.
 
-### Required public types
+A **profile** is one fixed combination of retrieval mode, presentation contract, evidence mode, and budget policy. Profiles allow an ablation comparison without changing production code.
 
-Implement these public transport types in `internal/evidence/model.go`. Additional private fields are allowed, but the JSON contract below must remain compact.
+A **quality report** contains deterministic counts and ratios. A **performance report** contains durations and byte sizes that can vary across machines. They are serialized separately so timing noise cannot break deterministic comparison.
 
-```go
-package evidence
+---
 
-type Location struct {
-    Path  string `json:"path"`
-    Lines [2]int `json:"lines"`
-}
+## Public Benchmark Schema
 
-type Segment struct {
-    Kind  string `json:"kind"` // "source" or "omitted"
-    Lines [2]int `json:"lines"`
-    Text  string `json:"text,omitempty"`
-}
+Create `internal/benchmark/model.go` with these exact public-to-the-package concepts. Field order in Go structs is part of deterministic JSON output and should remain stable.
 
-type Item struct {
-    ID        string     `json:"id"`
-    Handle    string     `json:"handle"`
-    Role      Role       `json:"role"`
-    Location  Location   `json:"location"`
-    Language  string     `json:"language,omitempty"`
-    Kind      string     `json:"kind,omitempty"`
-    Symbol    string     `json:"symbol,omitempty"`
-    Signature string     `json:"signature,omitempty"`
-    Fidelity  Fidelity   `json:"fidelity"`
-    Why       []string   `json:"why,omitempty"`
-    Source    string     `json:"source,omitempty"`
-    Segments  []Segment  `json:"segments,omitempty"`
-    Outline   string     `json:"outline,omitempty"`
-}
+    package benchmark
 
-type Edge struct {
-    From      string    `json:"from"`
-    To        string    `json:"to"`
-    Kind      string    `json:"kind"`
-    Certainty Certainty `json:"certainty"`
-}
+    const SuiteSchemaV1 = "focalspan.benchmark.v1"
 
-type Budget struct {
-    Limit     int  `json:"limit"`
-    Used      int  `json:"used"`
-    Truncated bool `json:"truncated,omitempty"`
-    Omitted   int  `json:"omitted,omitempty"`
-}
+    type Suite struct {
+        Schema string `json:"schema"`
+        Name string `json:"name"`
+        Description string `json:"description,omitempty"`
+        Cases []Case `json:"cases"`
+    }
 
-type NextAction struct {
-    Handle   string `json:"handle"`
-    Relation string `json:"relation"`
-    Reason   string `json:"reason"`
-}
+    type Case struct {
+        ID string `json:"id"`
+        Repository string `json:"repository"`
+        BaseRef string `json:"base_ref"`
+        TargetRef string `json:"target_ref"`
+        Query string `json:"query"`
+        Budgets []int `json:"budgets"`
+        ExpectedIntent string `json:"expected_intent,omitempty"`
+        RequiredPaths []string `json:"required_paths,omitempty"`
+        OptionalPaths []string `json:"optional_paths,omitempty"`
+        ForbiddenPaths []string `json:"forbidden_paths,omitempty"`
+        RequiredSymbols []SymbolExpectation `json:"required_symbols,omitempty"`
+        Expand []ExpandExpectation `json:"expand,omitempty"`
+        Tags []string `json:"tags,omitempty"`
+    }
 
-type Packet struct {
-    Schema       string       `json:"schema"`
-    Revision     string       `json:"revision,omitempty"`
-    Intent       string       `json:"intent,omitempty"`
-    Mode         Mode         `json:"mode"`
-    Budget       Budget       `json:"budget"`
-    Evidence     []Item       `json:"evidence"`
-    Relations    []Edge       `json:"relations,omitempty"`
-    Limitations  []string     `json:"limitations,omitempty"`
-    Next         []NextAction `json:"next,omitempty"`
-    SkippedKnown int          `json:"skipped_known,omitempty"`
-}
-```
+    type SymbolExpectation struct {
+        Path string `json:"path"`
+        Name string `json:"name"`
+        Kind string `json:"kind,omitempty"`
+        Role string `json:"role,omitempty"`
+    }
 
-### Packet invariants
+    type ExpandExpectation struct {
+        Relation string `json:"relation"`
+        From SymbolExpectation `json:"from"`
+        Budget int `json:"budget"`
+        RequiredPaths []string `json:"required_paths,omitempty"`
+        RequiredSymbols []SymbolExpectation `json:"required_symbols,omitempty"`
+        ForbiddenPaths []string `json:"forbidden_paths,omitempty"`
+    }
 
-- `schema` is always `focalspan.context.v1`.
-- `evidence` is always present as a JSON array, including when empty.
-- Final local IDs are sequential `e1`, `e2`, ... in presentation order.
-- Every `location.path` is repository-relative and slash-normalized.
-- Every line pair is one-based and satisfies `1 <= start <= end`.
-- Every edge references IDs present in the same packet.
-- No self-edge is emitted unless the relation itself is explicitly `self`; normal packets omit `self` edges.
-- Duplicate edges are removed by `(from, to, kind, certainty)`.
-- `why` contains stable short codes, not prose and not numeric values; maximum four codes per item.
-- `limitations` contains stable codes; maximum eight entries.
-- `next` contains at most four deterministic actions.
-- `budget.used <= budget.limit` after measuring compact packet JSON plus the canonical short summary returned alongside structured content.
-- `budget.omitted` counts candidates excluded by budget, duplicate suppression, or known-handle suppression only when they otherwise qualified for presentation.
-- The original query is not repeated in the packet because it already exists in the MCP tool input.
-- Normal packets never serialize `score`, `retrieval_score`, `weight`, `detail`, `token_savings`, `baseline_tokens`, `saved_tokens`, or `savings_ratio`.
+    type RepositoryRegistry struct {
+        Schema string `json:"schema"`
+        Repositories map[string]string `json:"repositories"`
+    }
+
+`Repository == "self"` resolves to the Git root containing the benchmark executable's current working directory. Every other ID is resolved from a registry file or repeated `--repo ID=PATH` override. Suite files never store local absolute paths.
+
+Path labels use repository-relative forward-slash form. Symbol labels require exact name plus path; a kind or role further narrows the expectation but never broadens it.
+
+---
+
+## Default Profiles
+
+Create these named profiles in `internal/benchmark/profile.go`:
+
+    type Profile struct {
+        Name string
+        RetrievalMode search.RetrievalMode
+        Contract string
+        EvidenceMode evidence.Mode
+        Budgets []int
+        RunExpansion bool
+    }
+
+    var DefaultProfiles = []Profile{
+        {
+            Name: "full-evidence-focused",
+            RetrievalMode: search.RetrievalFull,
+            Contract: "evidence",
+            EvidenceMode: evidence.ModeFocused,
+            Budgets: []int{1024, 2048, 4096},
+            RunExpansion: true,
+        },
+        {
+            Name: "fts-evidence-focused",
+            RetrievalMode: search.RetrievalFTSOnly,
+            Contract: "evidence",
+            EvidenceMode: evidence.ModeFocused,
+            Budgets: []int{2048},
+            RunExpansion: false,
+        },
+        {
+            Name: "no-relations-evidence-focused",
+            RetrievalMode: search.RetrievalNoRelations,
+            Contract: "evidence",
+            EvidenceMode: evidence.ModeFocused,
+            Budgets: []int{2048},
+            RunExpansion: false,
+        },
+        {
+            Name: "full-legacy-source",
+            RetrievalMode: search.RetrievalFull,
+            Contract: "legacy",
+            EvidenceMode: evidence.ModeSource,
+            Budgets: []int{2048},
+            RunExpansion: false,
+        },
+    }
+
+If the current checkout uses different exported constants, add a narrow adapter in `internal/benchmark`; do not rename production types merely to match this plan.
 
 ---
 
 ## File Map
 
-Create or modify files according to this responsibility map. Follow current repository conventions when filenames have moved, but preserve these boundaries.
+Create or modify these files. Adjust a filename only when the current checkout already has an equivalent focused file; record the adjustment in the Decision Log.
 
-```text
-internal/evidence/
-    model.go              public Evidence Packet types and enum constants
-    validate.go           contract invariant validation
-    roles.go              role classification and intent presentation profiles
-    fidelity.go           fidelity selection and candidate content variants
-    segments.go           query-aware, source-faithful excerpt construction
-    compiler.go           candidate selection and packet assembly
-    wire.go               model-visible JSON/summary token accounting and final hard-cap loop
-    next.go               limitations and follow-up action generation
-
-internal/evidence/*_test.go
-
-internal/model/model.go    add relation provenance used only internally
-internal/store/store.go    return relation hits with provenance
-internal/store/store_test.go
-internal/search/retrieval.go
-internal/search/retrieval_test.go
-internal/app/service.go
-internal/app/service_test.go
-internal/render/evidence.go
-internal/render/evidence_test.go
-internal/cli/run.go
-internal/cli/run_test.go
-internal/mcpserver/server.go
-internal/mcpserver/mcp_test.go
-internal/eval/evidence.go
-internal/eval/evidence_test.go
-
-testdata/repos/evidencesample/
-testdata/eval/evidence-cases.jsonl
-
-docs/design.md
-docs/evaluation.md
-docs/implementation-plan.md
-README.md
-PLAN.md
-```
-
-Do not move current extractors, split the store schema, or replace the existing budget package in this milestone.
+- Create `PLANS.md`: durable ExecPlan policy.
+- Modify `AGENTS.md`: require reading `PLANS.md` and root `PLAN.md` for multi-package work.
+- Create `docs/superpowers/plans/README.md`: plan index.
+- Create `docs/superpowers/plans/completed/2026-08-30-v0.4-llm-evidence-contract.md`: immutable copy of the completed prior root plan.
+- Create `docs/superpowers/plans/completed/2026-08-28-v0.1-bootstrap.md`: archive of the old long-form `docs/implementation-plan.md`.
+- Replace `docs/implementation-plan.md`: short planning index and compatibility pointer.
+- Create `internal/benchmark/model.go`, `model_test.go`: suite schema and validation.
+- Create `internal/benchmark/profile.go`, `profile_test.go`: fixed benchmark profiles.
+- Create `internal/benchmark/git.go`, `git_test.go`: no-shell Git adapter and ref validation.
+- Create `internal/benchmark/snapshot.go`, `snapshot_test.go`: safe `git archive` materialization.
+- Create `internal/benchmark/diff.go`, `diff_test.go`: target-change diagnostics.
+- Create `internal/benchmark/engine.go`, `engine_test.go`: adapter to existing app/eval/evidence behavior.
+- Create `internal/benchmark/runner.go`, `runner_test.go`: case/profile/budget execution.
+- Create `internal/benchmark/metrics.go`, `metrics_test.go`: deterministic quality metrics.
+- Create `internal/benchmark/report.go`, `report_test.go`: JSON and Markdown reports.
+- Create `internal/benchmark/compare.go`, `compare_test.go`: baseline regression comparison.
+- Create `internal/benchmark/scaffold.go`, `scaffold_test.go`: human-reviewable case proposal.
+- Create `internal/benchcli/run.go`, `run_test.go`: development CLI.
+- Create `cmd/focalspan-bench/main.go`: development executable.
+- Create `testdata/benchmark/schema-valid.json`, `schema-invalid.json`: schema fixtures.
+- Create `testdata/benchmark/focalspan-history.json`: public self-history suite.
+- Create `testdata/benchmark/golden/`: deterministic report goldens.
+- Create `docs/benchmarks/README.md`: workflow, privacy, labeling guide.
+- Create `docs/benchmarks/results-v0.5.json`: checked-in deterministic public-suite quality report.
+- Create `docs/benchmarks/results-v0.5.md`: checked-in human summary without source text.
+- Create `docs/benchmarks/findings-v0.5.md`: failure distribution and next-milestone decision.
+- Modify `.gitignore`: ignore `.focalspan-bench.json` and `.focalspan-bench/`.
+- Modify `docs/design.md`, `docs/evaluation.md`, and `README.md`: document the benchmark and measured limits.
+- Create `.github/workflows/ci.yml`: Linux tests/race/public benchmark plus cross-platform builds.
 
 ---
 
-### Task 0: Protect the Current Baseline and Record the Contract Decision
+## Progress
+
+Update this section at every stopping point. Add UTC timestamps to completed entries and split partially completed work into completed and remaining statements.
+
+- [x] Plan transition and durable `PLANS.md` policy committed. (2026-08-31T00:25:50Z; archive hash and planning links verified.)
+- [ ] Existing v0.3/v0.4 tests and evaluation baselines recorded without production changes.
+- [ ] Benchmark schema, validation, and profile definitions implemented.
+- [ ] Safe historical snapshot and diff diagnostics implemented.
+- [ ] Benchmark engine and multi-budget runner implemented.
+- [ ] Deterministic quality metrics and separate performance measurements implemented.
+- [ ] Development CLI, private registry handling, and scaffold flow implemented.
+- [ ] Query-plus-expand delta evaluation implemented.
+- [ ] Public FocalSpan history corpus labeled and validated.
+- [ ] Failure attribution and report comparison implemented.
+- [ ] Linux race CI and cross-platform build CI implemented.
+- [ ] Public benchmark results and evidence-based v0.6 recommendation committed.
+- [ ] Full verification completed and recorded.
+
+---
+
+## Surprises & Discoveries
+
+- 2026-08-31 UTC: The checkout advanced from the proposed `b2139c5` baseline to `950a3b7` before Task 0 began. The previously observed Codex registration edits are now committed at that HEAD, so the current checkout remains the source of truth; only `.focalspan.json` remained as a pre-existing untracked file.
+
+No implementation discoveries have been recorded at plan creation. Add concise observations with command output or test evidence as they arise. Do not delete earlier entries; correct them with a later entry.
+
+---
+
+## Decision Log
+
+- 2026-08-31: Use `950a3b74b59ec65d372695c6a28489202c9bf1ee` as the actual v0.5 baseline because the checkout advanced before execution. This follows the current-checkout source-of-truth rule and preserves commit `950a3b7` as pre-existing history.
+
+- **Decision:** Use one active root `PLAN.md`, a durable root `PLANS.md`, and immutable completed/superseded archives.
+  **Rationale:** Overwriting a completed plan loses an easy-to-review history, while keeping many active-looking plans creates ambiguity for Codex. One active file preserves the simple workflow; archives preserve evidence.
+  **Date/Author:** 2026-08-30 / project planning.
+
+- **Decision:** Make v0.5 an evaluation milestone rather than another production optimization milestone.
+  **Rationale:** All checked-in fixture suites currently meet their core v0.3/v0.4 gates, but fixture success does not identify the dominant failure mode on real repositories. Tuning before measuring risks overfitting and makes attribution impossible.
+  **Date/Author:** 2026-08-30 / project planning.
+
+- **Decision:** Use local Git history and `git archive`, not clones or worktrees.
+  **Rationale:** `git archive` reads committed objects without changing the user's branch, index, worktree list, hooks, or configuration. It also permits a network-free benchmark.
+  **Date/Author:** 2026-08-30 / project planning.
+
+- **Decision:** Treat target diffs as diagnostics and label candidates, not automatic truth.
+  **Rationale:** A later patch may touch formatting, generated files, release notes, or an implementation chosen by one developer. The minimal context needed to reason about the task is a human judgment.
+  **Date/Author:** 2026-08-30 / project planning.
+
+- **Decision:** Keep the benchmark executable development-only.
+  **Rationale:** Public FocalSpan remains a small context compiler. Historical corpus generation, repeated measurement, and report comparison are maintainer workflows and should not expand the user-facing CLI contract.
+  **Date/Author:** 2026-08-30 / project planning.
+
+- **Decision:** Separate deterministic quality data from volatile timing data.
+  **Rationale:** Ranking and packet output must compare byte-for-byte; wall-clock measurements vary by operating system, filesystem cache, CPU, and antivirus activity.
+  **Date/Author:** 2026-08-30 / project planning.
+
+---
+
+## Outcomes & Retrospective
+
+This plan has not begun implementation. At completion, replace this paragraph with the measured public history results, the number and language distribution of valid cases, observed failure categories, CI status, remaining limitations, and the selected v0.6 direction. Do not describe retrieval quality as improved unless a later production change and a controlled comparison demonstrate it.
+
+---
+
+### Task 0: Transition Plans Without Losing History
 
 **Files:**
-- Modify: `docs/design.md`
+- Create: `PLANS.md`
+- Create: `docs/superpowers/plans/README.md`
+- Create: `docs/superpowers/plans/completed/2026-08-30-v0.4-llm-evidence-contract.md`
+- Create: `docs/superpowers/plans/completed/2026-08-28-v0.1-bootstrap.md`
 - Modify: `docs/implementation-plan.md`
-- Modify: `PLAN.md`
-- Create: `testdata/eval/baseline-v0.4.json` only if the repository does not already have an equivalent checked-in baseline artifact
-
-**Interfaces:**
-- Consumes: current `model.ContextBundle`, existing CLI/MCP behavior, current fixture evaluations
-- Produces: a documented baseline and a decision record that later tasks must preserve
-
-- [x] **Step 1: Record the exact starting state without modifying it**
-
-Run:
-
-```bash
-git status --short
-git diff --stat
-git rev-parse HEAD
-go version
-go env GOOS GOARCH CGO_ENABLED
-git log -8 --oneline
-```
-
-Copy the command results into a temporary work note outside tracked source or into the final implementation report. Do not mark a dirty checkout as clean.
-
-- [x] **Step 2: Run baseline unit and vet checks**
-
-Run:
-
-```bash
-go test ./...
-go vet ./...
-```
-
-Expected: both commands pass. If either already fails, preserve the exact failure before making changes and distinguish it from v0.4 regressions.
-
-- [x] **Step 3: Run every checked-in retrieval evaluation**
-
-Discover files first:
-
-```bash
-find testdata/eval -maxdepth 1 -type f -name '*cases.jsonl' -print
-```
-
-On Windows without a POSIX shell, list the same directory with PowerShell and run each file through the existing `focalspan eval` command using its matching fixture root. At minimum run all currently checked-in Go, PHP, C/C++, C#, JS/TS, and Smarty/template cases.
-
-Expected: save the exact hit, recall, forbidden-path, budget, reduction, relation, intent, and determinism metrics. Do not round stored baselines more aggressively than the current evaluator output.
-
-- [x] **Step 4: Add the v0.4 decision to `docs/design.md`**
-
-Add a decision section with these exact decisions:
-
-```text
-- Keep model.ContextBundle as an internal and legacy CLI representation.
-- Introduce internal/evidence as the LLM-facing presentation boundary.
-- Switch code_context, code_expand, and code_impact to focalspan.context.v1.
-- Keep code_status and code_restart unchanged.
-- Keep normal ranking diagnostics out of the Evidence Packet.
-- Budget the final serialized packet rather than source text alone.
-- Make MCP default mode focused.
-- Use stateless known_handles instead of server-side conversation state.
-- Preserve the SQLite schema and all extractors in this milestone.
-```
-
-- [x] **Step 5: Update `docs/implementation-plan.md` with milestone boundaries**
-
-Document that v0.4 covers transport modeling, role assignment, excerpt fidelity, wire budgeting, delta suppression, MCP integration, and evidence evaluation. Explicitly place learned reranking, embeddings, model tokenizers, semantic-provider work, repository linker redesign, and HTTP transport outside v0.4.
-
-- [x] **Step 6: Verify documentation-only changes**
-
-Run:
-
-```bash
-git diff --check
-go test ./...
-```
-
-Expected: no whitespace errors and no test regression.
-
-- [x] **Step 7: Commit the baseline and design decision**
-
-```bash
-git add docs/design.md docs/implementation-plan.md PLAN.md testdata/eval/baseline-v0.4.json
-git commit -m "docs: define LLM evidence contract v0.4"
-```
-
-If `baseline-v0.4.json` was not needed, omit it from `git add`. If the checkout was already dirty, stage only files changed by this task.
-
----
-
-### Task 1: Define and Validate the Versioned Evidence Packet
-
-**Files:**
-- Create: `internal/evidence/model.go`
-- Create: `internal/evidence/validate.go`
-- Create: `internal/evidence/model_test.go`
-- Create: `internal/evidence/validate_test.go`
-
-**Interfaces:**
-- Consumes: only standard library types
-- Produces: `evidence.Packet`, enums, `Validate(Packet) error`, and deterministic local-ID helpers used by every later task
-
-- [x] **Step 1: Write contract serialization tests**
-
-Add table-driven tests that marshal a minimal packet and assert:
-
-```go
-func TestPacketJSONContract(t *testing.T) {
-    packet := evidence.Packet{
-        Schema: evidence.SchemaContextV1,
-        Intent: "callers",
-        Mode:   evidence.ModeFocused,
-        Budget: evidence.Budget{Limit: 1200, Used: 380},
-        Evidence: []evidence.Item{
-            {
-                ID:       "e1",
-                Handle:   "sym_target",
-                Role:     evidence.RoleTarget,
-                Location: evidence.Location{Path: "auth/service.go", Lines: [2]int{44, 51}},
-                Language: "go",
-                Kind:     "method",
-                Symbol:   "Service.ValidateToken",
-                Fidelity: evidence.FidelitySignature,
-                Signature: "func (s *Service) ValidateToken(token string) error",
-                Why:      []string{"exact_symbol"},
-            },
-        },
-    }
-
-    data, err := json.Marshal(packet)
-    if err != nil {
-        t.Fatal(err)
-    }
-    text := string(data)
-    for _, required := range []string{`"schema":"focalspan.context.v1"`, `"role":"target"`, `"fidelity":"signature"`} {
-        if !strings.Contains(text, required) {
-            t.Fatalf("missing %s in %s", required, text)
-        }
-    }
-    for _, forbidden := range []string{`"score"`, `"weight"`, `"token_savings"`, `"query"`} {
-        if strings.Contains(text, forbidden) {
-            t.Fatalf("forbidden field %s in %s", forbidden, text)
-        }
-    }
-}
-```
-
-Expected before implementation: compilation fails because `internal/evidence` does not exist.
-
-- [x] **Step 2: Implement exact enums and public structs**
-
-Create `model.go` with the exact schema identifier, modes, roles, fidelity values, certainty values, and public structs defined in the Product Contract section. Use constants for segment kinds:
-
-```go
-const (
-    SegmentSource  = "source"
-    SegmentOmitted = "omitted"
-)
-```
-
-- [x] **Step 3: Write validation tests for every invariant**
-
-Cover at least:
-
-```text
-wrong schema
-unsupported mode
-empty evidence array is valid
-non-sequential local ID
-blank stable handle
-absolute path
-backslash path
-zero or reversed line range
-unknown role
-unknown fidelity
-verbatim with missing source
-verbatim with segments
-excerpt with no source segment
-excerpt with top-level source
-signature with source
-synthetic with no outline
-edge to missing local ID
-duplicate edge
-more than four why codes
-more than eight limitations
-more than four next actions
-used greater than limit
-negative skipped_known
-```
-
-Use exact error substrings so callers can diagnose malformed packet assembly.
-
-- [x] **Step 4: Implement `Validate`**
-
-Required signature:
-
-```go
-func Validate(packet Packet) error
-```
-
-Validation must be read-only, deterministic, and must not repair malformed packets silently. Use joined or wrapped errors only when the resulting message remains stable enough for tests.
-
-- [x] **Step 5: Add deterministic local-ID assignment**
-
-Required helper:
-
-```go
-func AssignLocalIDs(items []Item) map[string]string
-```
-
-Behavior:
-
-- assign `e1`, `e2`, ... in slice order;
-- return a stable-handle-to-local-ID map;
-- reject or surface duplicate non-empty handles through validation rather than silently mapping the last duplicate;
-- do not derive IDs from scores, line numbers, map iteration, or random values.
-
-- [x] **Step 6: Run focused tests**
-
-```bash
-go test ./internal/evidence -run 'TestPacket|TestValidate|TestAssignLocalIDs' -count=1
-```
-
-Expected: PASS.
-
-- [x] **Step 7: Run full tests and commit**
-
-```bash
-go test ./...
-git add internal/evidence
-git commit -m "feat: define versioned evidence packet contract"
-```
-
----
-
-### Task 2: Preserve Relation Provenance from Store to Ranked Candidates
-
-**Files:**
-- Modify: `internal/model/model.go`
-- Modify: `internal/store/store.go`
-- Modify: `internal/store/store_test.go`
-- Modify: `internal/search/retrieval.go`
-- Modify: `internal/search/retrieval_test.go`
-
-**Interfaces:**
-- Consumes: stored `relations` rows and existing `RelatedCandidates` behavior
-- Produces: provenance-rich relation hits and `RankedCandidate.RelationContext` without changing the database schema or legacy public JSON
-
-- [x] **Step 1: Add failing model and store tests**
-
-Define the expected internal types in tests:
-
-```go
-type RelationDirection string
-
-const (
-    RelationIncoming RelationDirection = "incoming"
-    RelationOutgoing RelationDirection = "outgoing"
-    RelationRelated  RelationDirection = "related"
-)
-
-type RelationContext struct {
-    AnchorHandle string
-    Kind         string
-    Direction    RelationDirection
-    Confidence   float64
-    Source       string
-    Resolved     bool
-}
-
-type RelationHit struct {
-    Candidate RankedCandidate
-    Context   RelationContext
-}
-```
-
-Store tests must create a small graph and assert exact provenance for:
-
-```text
-caller candidate -> anchor: incoming
-anchor -> callee candidate: outgoing
-parent -> child candidate: outgoing when anchor is parent
-parent candidate -> child anchor: incoming when requesting parent
-importer -> imported target: outgoing
-importer candidate -> imported anchor: incoming for reverse import/export lookup
-resolved ToHandle relation: Resolved=true
-UnresolvedTo lexical relation: Resolved=false
-confidence and source preserved from the relation row
-```
-
-Expected before implementation: the types and API are absent.
-
-- [x] **Step 2: Add internal relation types to `model.go`**
-
-Add the types above without JSON tags. Extend `RankedCandidate`:
-
-```go
-RelationContext *RelationContext
-```
-
-Keep the existing `Relation string` field for legacy ranking and output compatibility during v0.4.
-
-- [x] **Step 3: Add a provenance-rich store API**
-
-Required API:
-
-```go
-func (s *Store) RelatedCandidateHits(
-    ctx context.Context,
-    handles []string,
-    relation string,
-) ([]model.RelationHit, error)
-```
-
-Implementation requirements:
-
-- use parameter binding;
-- preserve current supported relation names;
-- return actual edge direction for each SQL branch;
-- return relation confidence and source;
-- mark exact `ToHandle` joins resolved;
-- mark simple-name or qualified-name fallback through `UnresolvedTo` unresolved;
-- avoid N+1 queries by joining candidate symbol/chunk data in bounded queries;
-- preserve deterministic ordering by relation class, confidence descending, path, start line, and handle;
-- deduplicate by candidate handle plus anchor, kind, direction, source, and resolved state.
-
-- [x] **Step 4: Keep the old store API as a compatibility wrapper**
-
-Keep:
-
-```go
-func (s *Store) RelatedCandidates(
-    ctx context.Context,
-    handles []string,
-    relation string,
-) ([]model.RankedCandidate, error)
-```
-
-Implement it by calling `RelatedCandidateHits`, copying `Context.Kind` into legacy `Candidate.Relation`, and deduplicating candidates exactly as the old caller expects. Existing tests must continue to pass.
-
-- [x] **Step 5: Update the search store interface and relation retriever**
-
-Make the search candidate-store interface consume `RelatedCandidateHits`. For each relation hit:
-
-```go
-candidate := hit.Candidate
-candidate.Relation = hit.Context.Kind
-contextCopy := hit.Context
-candidate.RelationContext = &contextCopy
-```
-
-Do not let a later duplicate with weaker lexical provenance replace an earlier resolved hit. Merge rules:
-
-```text
-resolved beats unresolved
-higher confidence beats lower confidence
-exact direction beats related
-stable lexical order breaks remaining ties
-```
-
-- [x] **Step 6: Test relation provenance through `SearchDetailed`**
-
-Add a search test for `what calls ValidateToken?` that verifies:
-
-```text
-candidate.Relation == "callers"
-candidate.RelationContext.AnchorHandle is the ValidateToken anchor
-candidate.RelationContext.Direction == incoming
-candidate.RelationContext.Resolved matches the fixture relation
-```
-
-Also test the unresolved lexical path.
-
-- [x] **Step 7: Run local and full verification**
-
-```bash
-go test ./internal/store ./internal/search -count=1
-go test ./...
-go vet ./...
-```
-
-Expected: all existing relation behavior remains compatible.
-
-- [x] **Step 8: Commit**
-
-```bash
-git add internal/model/model.go internal/store/store.go internal/store/store_test.go internal/search/retrieval.go internal/search/retrieval_test.go
-git commit -m "feat: preserve relation provenance for evidence output"
-```
-
----
-
-### Task 3: Classify Evidence Roles and Define Intent-Specific Presentation Order
-
-**Files:**
-- Create: `internal/evidence/roles.go`
-- Create: `internal/evidence/roles_test.go`
-
-**Interfaces:**
-- Consumes: `query.Plan`, ranked candidate kind/path/language, changed flag, relation provenance, original rank
-- Produces: `ClassifiedCandidate`, role, certainty, semantic reason codes, and deterministic presentation priority
-
-- [x] **Step 1: Write role-classification tests**
-
-Required internal type:
-
-```go
-type ClassifiedCandidate struct {
-    Candidate       model.RankedCandidate
-    OriginalRank    int
-    Role            Role
-    Certainty       Certainty
-    Why             []string
-    PresentationKey PresentationKey
-}
-```
-
-Test at least these mappings:
-
-```text
-first exact anchor -> target
-callers relation, incoming -> caller
-callees relation, outgoing -> callee
-tests relation -> test
-imports outgoing -> import
-imports incoming -> dependent
-references -> reference
-changed candidate under impact intent -> change
-non-changed reverse dependency under impact -> dependent
-kind test or test path -> test
-kind class/interface/struct/record/trait/type -> type
-kind template/block/template-function -> template
-config/project/manifest path -> config
-Markdown/documentation kind -> documentation
-ordinary function/method target -> implementation
-prototype/interface/ambient declaration -> declaration
-unclassified supporting span -> context
-```
-
-- [x] **Step 2: Implement stable reason-code mapping**
-
-Normal `why` codes may include only this bounded vocabulary in v1:
-
-```text
-exact_symbol
-qualified_symbol
-path_match
-lexical_match
-changed_span
-direct_caller
-direct_callee
-related_test
-imports_target
-imported_by
-references_target
-contains_target
-parent_context
-same_symbol
-same_file
-```
-
-Map current score/retriever reasons to these codes without copying weights or details. Remove duplicates and cap at four in this priority order:
-
-```text
-exact or qualified identity
-relation
-change
-lexical or path
-contextual fallback
-```
-
-- [x] **Step 3: Implement relation certainty mapping**
-
-Rules:
-
-```text
-Resolved=true and confidence >= 0.90 -> exact
-Resolved=true otherwise             -> scoped
-Resolved=false                      -> lexical
-No relation provenance              -> lexical only when an edge is not emitted
-```
-
-Do not emit an edge solely from a candidate role when there is no identifiable anchor.
-
-- [x] **Step 4: Define intent presentation profiles**
-
-Use exact role order tables:
-
-```text
-definition/default:
-  target, implementation, definition, declaration, type, caller, callee, test,
-  import, reference, config, template, change, dependent, context, documentation
-
-callers:
-  target, caller, implementation, test, type, import, reference, dependent,
-  context, documentation
-
-callees:
-  target, callee, type, import, implementation, test, reference, context,
-  documentation
-
-tests:
-  target, test, implementation, type, config, context, documentation
-
-imports:
-  target, import, export, dependent, implementation, type, config, context,
-  documentation
-
-references:
-  target, reference, type, implementation, dependent, test, context,
-  documentation
-
-impact:
-  change, target, dependent, caller, reference, test, implementation, type,
-  config, context, documentation
-
-template:
-  target, template, import, implementation, caller, test, config, context,
-  documentation
-```
-
-Within the same role, preserve original retrieval rank, then path, start line, and handle.
-
-- [x] **Step 5: Implement classifier and ordering API**
-
-Required signatures:
-
-```go
-func Classify(plan query.Plan, candidates []model.RankedCandidate) []ClassifiedCandidate
-func SortForPresentation(plan query.Plan, candidates []ClassifiedCandidate)
-```
-
-The input candidate slice must not be mutated.
-
-- [x] **Step 6: Test determinism across repeated runs and shuffled maps**
-
-Run classification 100 times with the same candidates and assert byte-identical JSON after converting only stable fields. Include equal-score and duplicate-reason cases.
-
-- [x] **Step 7: Verify and commit**
-
-```bash
-go test ./internal/evidence -run 'TestClassify|TestPresentation|TestWhy|TestCertainty' -count=1
-go test ./...
-git add internal/evidence/roles.go internal/evidence/roles_test.go
-git commit -m "feat: classify and order LLM evidence by intent"
-```
-
----
-
-### Task 4: Build Source-Faithful Focused Excerpts
-
-**Files:**
-- Create: `internal/evidence/fidelity.go`
-- Create: `internal/evidence/fidelity_test.go`
-- Create: `internal/evidence/segments.go`
-- Create: `internal/evidence/segments_test.go`
-- Create: `testdata/repos/evidencesample/auth/service.go`
-- Create: `testdata/repos/evidencesample/auth/service_test.go`
-- Create: `testdata/repos/evidencesample/http/middleware.go`
-- Create: `testdata/repos/evidencesample/config/auth.json`
-- Create: `testdata/repos/evidencesample/unrelated/report.go`
-
-**Interfaces:**
-- Consumes: classified candidate, query plan, selected mode, item token allowance
-- Produces: exactly one valid content representation with explicit source or omitted segments
-
-- [x] **Step 1: Add a late-hit fixture that exposes current tail truncation**
-
-Create `auth/service.go` with a `ValidateToken` function longer than 120 lines. Place routine normalization and logging near the beginning and the decisive branch near the end:
-
-```go
-if token.ExpiresAt.Before(now) {
-    return ErrExpiredToken
-}
-```
-
-The exact source line containing `ErrExpiredToken` must be expected evidence for the query:
-
-```text
-where is an expired authentication token rejected?
-```
-
-Add a caller, a test, a compact JSON config file, and a large unrelated Go file.
-
-- [x] **Step 2: Write fidelity invariant tests**
-
-Test `verbatim`, `excerpt`, `signature`, and `synthetic` item construction. For every source segment, assert:
-
-```go
-want := linesFromOriginal(candidate.Content, segment.Lines, candidate.StartLine)
-if segment.Text != want {
-    t.Fatalf("segment differs from indexed source")
-}
-```
-
-Also assert no generated line-number prefixes and no literal `[...]` marker is inserted into source text.
-
-- [x] **Step 3: Define internal content variants**
-
-Required private type:
-
-```go
-type ContentVariant struct {
-    Fidelity Fidelity
-    Source   string
-    Segments []Segment
-    Outline  string
-    Signature string
-    EvidenceTokens int
-}
-```
-
-Required API:
-
-```go
-func BuildVariants(
-    candidate ClassifiedCandidate,
-    plan query.Plan,
-    mode Mode,
-    estimator budget.TokenEstimator,
-) []ContentVariant
-```
-
-Return variants from richest to cheapest. Every candidate must have a signature fallback; when the original signature is blank, build a compact fallback from symbol, kind, and location without pretending it is source.
-
-- [x] **Step 4: Implement line indexing without rescanning per hit**
-
-Create a line table once per candidate content. Preserve line endings in source segments. Calculate absolute source lines as:
-
-```text
-candidate.StartLine + local zero-based line index
-```
-
-Do not split a UTF-8 code point or alter CRLF/LF bytes in verbatim text.
-
-- [x] **Step 5: Implement focused hit detection**
-
-Use `query.Plan` terms and anchors. Match:
-
-```text
-case-sensitive exact identifiers first
-ASCII case-insensitive identifiers second
-qualified terminal symbol names
-quoted phrases
-Unicode lexical terms of length >= 2
-relation anchor symbol terminal names when available
-```
-
-Do not treat every punctuation token as a hit.
-
-- [x] **Step 6: Implement deterministic source windows**
-
-For each hit line, start with:
-
-```text
-2 lines before
-4 lines after
-```
-
-Always attempt to include a declaration prefix from candidate line 1 through the first opening body delimiter or a maximum of six lines. Merge windows whose gap is two lines or fewer. Keep at most three source windows, selected in this order:
-
-```text
-declaration prefix
-window with the most distinct query terms
-remaining windows by distinct-term count descending, then source order
-```
-
-Represent every excluded gap between selected windows as:
-
-```go
-Segment{Kind: SegmentOmitted, Lines: [2]int{start, end}}
-```
-
-Omitted segments have no `text` field.
-
-- [x] **Step 7: Implement mode rules**
-
-Exact behavior:
-
-```text
-outline:
-  signature for source symbols;
-  synthetic outline for extractor-generated outline chunks.
-
-focused:
-  target/implementation under 40 lines -> verbatim;
-  large target or evidence with query hits -> excerpt;
-  direct caller/callee/test under 24 lines -> verbatim;
-  remaining supporting items -> signature or synthetic outline.
-
-source:
-  full verbatim candidate when it fits the item allowance;
-  otherwise focused excerpt;
-  otherwise signature.
-```
-
-Recognize synthetic outline chunks through existing kinds/signals rather than path-specific rules. Record the helper in one place so new languages can extend it.
-
-- [x] **Step 8: Test that the late decisive branch survives**
-
-At 512, 1200, and 4000 token allowances, `focused` must include the exact `ErrExpiredToken` branch or its containing source lines. It must not return only the beginning of the function.
-
-- [x] **Step 9: Test hard cases**
-
-Cover:
-
-```text
-single-line function
-content with no trailing newline
-CRLF
-Japanese comment before a hit
-UTF-8 identifier
-multiple distant hits
-more than three candidate windows
-hit on first line
-hit on last line
-no lexical hit
-synthetic outline
-blank signature
-source shorter than allowance
-source larger than allowance
-```
-
-- [x] **Step 10: Verify and commit**
-
-```bash
-go test ./internal/evidence -run 'TestBuildVariants|TestFocused|TestSegments|TestFidelity' -count=1
-go test ./...
-git add internal/evidence testdata/repos/evidencesample
-git commit -m "feat: add source-faithful focused evidence excerpts"
-```
-
----
-
-### Task 5: Compile Ranked Candidates into a Wire-Budgeted Packet
-
-**Files:**
-- Create: `internal/evidence/compiler.go`
-- Create: `internal/evidence/compiler_test.go`
-- Create: `internal/evidence/wire.go`
-- Create: `internal/evidence/wire_test.go`
-
-**Interfaces:**
-- Consumes: query plan, revision, mode, token budget, ranked candidates, known handles
-- Produces: `CompileResult` containing a valid `Packet`, canonical short summary measurement, and internal-only accounting statistics
-
-- [x] **Step 1: Define compiler input and internal statistics**
-
-Implement:
-
-```go
-type CompileRequest struct {
-    Plan             query.Plan
-    Revision         string
-    TokenBudget      int
-    Mode             Mode
-    Candidates       []model.RankedCandidate
-    KnownHandles     []string
-    ExpansionAnchors []string
-}
-
-type Stats struct {
-    WireTokens          int
-    EvidenceTokens      int
-    MetadataTokens      int
-    DuplicateSourceBytes int
-    Selected            int
-    Omitted             int
-    SkippedKnown        int
-}
-
-type CompileResult struct {
-    Packet Packet
-    Stats  Stats
-}
-
-type Compiler struct {
-    estimator budget.TokenEstimator
-}
-
-func NewCompiler(estimator budget.TokenEstimator) *Compiler
-func (c *Compiler) Compile(req CompileRequest) (CompileResult, error)
-```
-
-If estimator is nil, use `budget.NewEstimator()`.
-
-- [x] **Step 2: Write failing tests for model-visible budget compliance**
-
-For budgets 256, 512, 1200, 4000, and 64000, measure the same compact JSON plus canonical summary that the MCP handler will expose:
-
-```go
-used := evidence.MeasureModelVisible(result.Packet, estimator)
-if used > result.Packet.Budget.Limit {
-    t.Fatalf("wire packet uses %d > %d", used, result.Packet.Budget.Limit)
-}
-if used != result.Packet.Budget.Used {
-    t.Fatalf("reported %d, measured %d", result.Packet.Budget.Used, used)
-}
-```
-
-Also test clamping to existing `budget.MinBudget` and `budget.MaxBudget`.
-
-- [x] **Step 3: Implement candidate preprocessing**
-
-Before selection:
-
-```text
-remove candidates with blank handles only when no stable fallback can be generated
-remove exact duplicate handles, preserving strongest provenance
-remove duplicate content hashes, preserving the higher presentation priority
-remove identical path/start/end spans
-filter known handles and increment skipped_known
-classify roles
-build content variants
-```
-
-Do not count candidates rejected before ranking as omitted evidence.
-
-- [x] **Step 4: Implement marginal utility per wire cost**
-
-Use deterministic internal utility. Define named constants with these initial values:
-
-```go
-const (
-    rankBaseUtility       = 100.0
-    newRoleBonus          = 18.0
-    newPathBonus          = 10.0
-    directRelationBonus   = 16.0
-    resolvedRelationBonus = 8.0
-    exactIdentityBonus    = 14.0
-    changedSpanBonus      = 12.0
-    repeatedPathPenalty   = 7.0
-)
-```
-
-Base utility:
-
-```text
-rankBaseUtility / (1 + original rank)
-+ intent role weight
-+ bonuses
-- repeated path penalty
-```
-
-Use these role weights by intent:
-
-```text
-default target=45 implementation=34 definition=30 declaration=24 type=18
-callers target=40 caller=46 test=20 implementation=18
-callees target=40 callee=46 type=20 import=18
-tests target=36 test=50 implementation=18 config=12
-imports target=34 import=46 export=38 dependent=24 config=14
-references target=38 reference=44 type=30 dependent=20
-impact change=50 dependent=46 caller=30 test=28 target=26
-template target=42 template=44 import=28 implementation=22
-```
-
-Unlisted roles receive 8. Divide the resulting utility by the incremental serialized token cost of adding the selected content variant. Use original rank, path, start line, and handle as deterministic tie breakers.
-
-- [x] **Step 5: Guarantee a compact anchor before greedy selection**
-
-When candidates exist, include the highest-priority target/change item at least as a signature if the minimal valid packet can fit. For callers, callees, tests, imports, and references intents, preserve a compact target signature even when the richest relation candidate scores above it.
-
-Do not violate the wire budget to force an anchor. A 256-token packet may contain one signature item or an empty evidence array plus limitations.
-
-- [x] **Step 6: Add variants using incremental serialized cost**
-
-For each candidate, try richest-to-cheapest allowed variants. Measure each trial packet with `MeasureModelVisible`, including the canonical summary. Select the variant with the highest utility per incremental model-visible token that fits. Recompute role/path diversity after each selection.
-
-Do not estimate candidate source alone as the hard-cap decision.
-
-- [x] **Step 7: Assemble edges only after final item selection**
-
-Use relation provenance and stable-handle-to-local-ID mapping. Edge orientation:
-
-```text
-incoming candidate relation: candidate local ID -> anchor local ID
-outgoing candidate relation: anchor local ID -> candidate local ID
-related/ambiguous relation: omit edge; retain a lexical why code and limitation
-```
-
-Map certainty through Task 3. If the anchor was suppressed by `known_handles`, do not emit a dangling edge. The item may retain role and why; add `known_anchor_not_repeated` to limitations once per packet.
-
-- [x] **Step 8: Implement canonical summary and fixed-point model-visible token reporting**
-
-Add these functions in `wire.go`:
-
-```go
-func Summary(packet Packet) string
-func MeasureModelVisible(packet Packet, estimator budget.TokenEstimator) int
-```
-
-`Summary` must produce exactly the same short sentence later used by MCP and must contain no source, path, handle, query, score, or savings data. `MeasureModelVisible` estimates compact `json.Marshal(packet)` plus one newline plus `Summary(packet)`. Because changing `budget.used` can change both serialized length and summary digits, use at most four iterations:
-
-```go
-for i := 0; i < 4; i++ {
-    measured := MeasureModelVisible(packet, estimator)
-    if measured == packet.Budget.Used {
-        break
-    }
-    packet.Budget.Used = measured
-}
-```
-
-After the loop, remeasure. If the packet exceeds the limit, degrade or remove the lowest-utility non-anchor item and repeat. If only the anchor remains, degrade verbatim to excerpt to signature before removing it. Return an error only when even the empty valid packet cannot fit after budget clamping.
-
-- [x] **Step 9: Implement internal accounting**
-
-Definitions:
-
-```text
-WireTokens: estimator over compact final packet JSON plus the canonical short summary.
-EvidenceTokens: estimator over concatenated signature/source/segment text/outline values only.
-MetadataTokens: max(0, WireTokens - EvidenceTokens).
-DuplicateSourceBytes: bytes repeated by overlapping source line ranges on the same path plus identical verbatim text reused across items.
-```
-
-Do not serialize `Stats` into normal MCP output.
-
-- [x] **Step 10: Validate every compiled packet**
-
-Call `evidence.Validate` before returning success. Compiler tests must fail if a future change produces a dangling edge, mixed content representation, invalid line range, duplicate handle, or wrong `budget.used`.
-
-- [x] **Step 11: Test deterministic packing**
-
-Run the same request 100 times, including candidates with tied scores and tied utility. Assert byte-identical `json.Marshal(result.Packet)` output.
-
-- [x] **Step 12: Verify and commit**
-
-```bash
-go test ./internal/evidence -run 'TestCompiler|TestWire|TestBudget|TestUtility|TestDeterministic' -count=1
-go test ./...
-git add internal/evidence/compiler.go internal/evidence/compiler_test.go internal/evidence/wire.go internal/evidence/wire_test.go
-git commit -m "feat: compile evidence within serialized token budgets"
-```
-
----
-
-### Task 6: Generate Compact Limitations and Follow-Up Actions
-
-**Files:**
-- Create: `internal/evidence/next.go`
-- Create: `internal/evidence/next_test.go`
-- Modify: `internal/evidence/compiler.go`
-- Modify: `internal/evidence/compiler_test.go`
-
-**Interfaces:**
-- Consumes: query plan, selected/omitted classified candidates, selected variants, known handles, packet budget state
-- Produces: bounded stable `limitations` and `next` entries
-
-- [x] **Step 1: Define the v1 limitation vocabulary**
-
-Use these exact codes only:
-
-```text
-budget_limited
-source_reduced_to_excerpt
-source_reduced_to_signature
-additional_callers_omitted
-additional_callees_omitted
-additional_tests_omitted
-additional_imports_omitted
-additional_references_omitted
-dynamic_dispatch_unresolved
-lexical_relation_only
-known_anchor_not_repeated
-no_relevant_source_found
-syntax_only_impact
-```
-
-Remove duplicates and order by the list above.
-
-- [x] **Step 2: Define the v1 next-action reasons**
-
-Use these exact values:
-
-```text
-more_callers_omitted
-more_callees_omitted
-more_tests_omitted
-more_imports_omitted
-more_references_omitted
-source_body_omitted
-parent_context_available
-children_available
-```
-
-Supported next relations remain the current stable relation vocabulary.
-
-- [x] **Step 3: Write action-generation tests**
-
-Cover:
-
-```text
-callers omitted -> anchor/callers action
-callee source reduced to signature -> callee/self action
-related test omitted -> target/tests action
-parent context exists -> item/parent action
-no duplicate handle/relation action
-known target still usable as action anchor
-no more than four actions
-actions stable across candidate input ordering
-```
-
-- [x] **Step 4: Implement `BuildGuidance`**
-
-Required signature:
-
-```go
-func BuildGuidance(input GuidanceInput) (limitations []string, next []NextAction)
-```
-
-Define `GuidanceInput` with explicit selected, omitted, known, plan, and truncation fields. Do not let it inspect serialized JSON or global mutable state.
-
-- [x] **Step 5: Integrate guidance after final packet selection**
-
-Guidance must be part of wire budgeting. If adding all guidance exceeds budget:
-
-1. retain `budget_limited` when true;
-2. retain the most intent-relevant next action;
-3. remove lower-priority next actions;
-4. remove lower-priority limitations;
-5. never remove source evidence solely to preserve optional guidance.
-
-Re-run the fixed-point token loop afterward.
-
-- [x] **Step 6: Verify and commit**
-
-```bash
-go test ./internal/evidence -run 'TestGuidance|TestLimitations|TestNext' -count=1
-go test ./...
-git add internal/evidence/next.go internal/evidence/next_test.go internal/evidence/compiler.go internal/evidence/compiler_test.go
-git commit -m "feat: add compact evidence limitations and follow-ups"
-```
-
----
-
-### Task 7: Add Stateless `known_handles` Delta Suppression
-
-> Checkout adaptation: the public CLI had already retired `query`, `expand`,
-> and `impact`. Repeatable `--known-handle` is therefore exposed on the sole
-> positional Evidence query preview; retired commands are not resurrected.
-
-**Files:**
-- Modify: `internal/app/service.go`
-- Modify: `internal/app/service_test.go`
-- Modify: `internal/mcpserver/server.go`
-- Modify: `internal/mcpserver/mcp_test.go`
-- Modify: `internal/cli/run.go`
-- Modify: `internal/cli/run_test.go`
-- Modify: `internal/evidence/compiler_test.go`
-
-**Interfaces:**
-- Consumes: caller-supplied stable handles
-- Produces: no retransmission of known evidence while preserving those handles as relation anchors
-
-- [x] **Step 1: Add validation tests for known handles**
-
-Exact validation rules:
-
-```text
-maximum 512 input entries
-trim surrounding ASCII/Unicode whitespace
-ignore empty entries after trimming
-deduplicate while preserving first occurrence
-maximum 256 bytes per handle
-reject NUL
-reject control characters below U+0020 except no character is permitted after trimming
-```
-
-Do not require a specific prefix because existing handles vary by symbol/chunk type.
-
-- [x] **Step 2: Implement a shared validator**
-
-Place validation in `internal/evidence` or an existing shared request-validation package, not separately in CLI and MCP. Required signature:
-
-```go
-func NormalizeKnownHandles(values []string) ([]string, error)
-```
-
-- [x] **Step 3: Extend MCP tool inputs**
-
-Add:
-
-```go
-KnownHandles []string `json:"known_handles,omitempty" jsonschema:"stable handles already present in the model context and not to be retransmitted"`
-```
-
-To:
-
-```text
-CodeContextInput
-CodeExpandInput
-CodeImpactInput
-```
-
-Do not add server-side session IDs or hidden state.
-
-- [x] **Step 4: Add CLI flags for evidence-format testing**
-
-For `query`, `expand`, and `impact`, support repeatable:
-
-```text
---known-handle HANDLE
-```
-
-Use a small `flag.Value` implementation in the CLI package. Do not parse comma-separated values because handles may evolve to contain punctuation.
-
-- [x] **Step 5: Preserve known handles as expansion anchors**
-
-Filtering occurs only during packet compilation. Retrieval and relation expansion must still receive requested handles. Example:
-
-```text
-code_expand(handles=[A], relation=callers, known_handles=[A,B])
-```
-
-must expand from `A`, omit `A` and `B` from returned evidence, and return only new caller evidence.
-
-- [x] **Step 6: Test exact retransmission behavior**
-
-Run two calls:
-
-1. query returning handles A, B, C;
-2. expand with known A, B, C.
-
-Assert:
-
-```text
-none of A/B/C appears in packet.evidence
-packet.skipped_known equals the number of otherwise selected known items
-new relations do not reference missing local IDs
-known_anchor_not_repeated appears when relevant
-next actions may still name stable handle A
-```
-
-- [x] **Step 7: Test deterministic normalization and limits**
-
-Include duplicate handles, whitespace, Unicode, 256-byte boundary, 257-byte rejection, 512-entry boundary, 513-entry rejection, NUL, and cancellation through the enclosing request.
-
-- [x] **Step 8: Verify and commit**
-
-```bash
-go test ./internal/evidence ./internal/app ./internal/cli ./internal/mcpserver -run 'Known|Delta|Retransmit' -count=1
-go test ./...
-git add internal/evidence internal/app/service.go internal/app/service_test.go internal/mcpserver/server.go internal/mcpserver/mcp_test.go internal/cli/run.go internal/cli/run_test.go
-git commit -m "feat: suppress previously delivered evidence by handle"
-```
-
----
-
-### Task 8: Add Evidence APIs to the Application Service Without Breaking Legacy Bundles
-
-> Checkout adaptation: legacy `Expand` and `Impact` retain their current
-> positional service signatures rather than the older request-struct example.
-
-**Files:**
-- Modify: `internal/app/service.go`
-- Modify: `internal/app/service_test.go`
-- Create: `internal/app/evidence.go`
-- Create: `internal/app/evidence_test.go`
-
-**Interfaces:**
-- Consumes: existing query/expand/impact retrieval and new `evidence.Compiler`
-- Produces: `QueryEvidence`, `ExpandEvidence`, and `ImpactEvidence` while preserving existing `Query`, `Expand`, and `Impact`
-
-- [x] **Step 1: Refactor candidate retrieval behind private result types**
-
-Create private types:
-
-```go
-type candidateResult struct {
-    Plan       query.Plan
-    Revision   string
-    Candidates []model.RankedCandidate
-}
-```
-
-Create private methods that perform validation, optional index update, changed-range calculation, search, and revision lookup exactly once. Both legacy and evidence paths consume these methods.
-
-Do not make `QueryEvidence` call legacy `Query` and reconstruct candidates from a packed bundle; that would lose omitted candidates and provenance.
-
-- [x] **Step 2: Preserve public legacy methods**
-
-These signatures and defaults remain unchanged:
-
-```go
-func (s *Service) Query(ctx context.Context, req QueryRequest) (model.ContextBundle, error)
-func (s *Service) Expand(ctx context.Context, req ExpandRequest) (model.ContextBundle, error)
-func (s *Service) Impact(ctx context.Context, req ImpactRequest) (model.ContextBundle, error)
-```
-
-Existing CLI behavior and evaluator tests must pass byte-for-byte where they currently assert output.
-
-- [x] **Step 3: Add Evidence request types**
-
-```go
-type EvidenceQueryRequest struct {
-    Query         string
-    TokenBudget   int
-    Mode          evidence.Mode
-    ChangedOnly   bool
-    Paths         []string
-    NoUpdate      bool
-    RetrievalMode search.RetrievalMode
-    KnownHandles  []string
-}
-
-type EvidenceExpandRequest struct {
-    Handles      []string
-    Relation     string
-    TokenBudget  int
-    Mode         evidence.Mode
-    KnownHandles []string
-}
-
-type EvidenceImpactRequest struct {
-    BaseRef      string
-    HeadRef      string
-    TokenBudget  int
-    Mode         evidence.Mode
-    KnownHandles []string
-}
-```
-
-- [x] **Step 4: Add service Evidence methods**
-
-Required signatures:
-
-```go
-func (s *Service) QueryEvidence(ctx context.Context, req EvidenceQueryRequest) (evidence.CompileResult, error)
-func (s *Service) ExpandEvidence(ctx context.Context, req EvidenceExpandRequest) (evidence.CompileResult, error)
-func (s *Service) ImpactEvidence(ctx context.Context, req EvidenceImpactRequest) (evidence.CompileResult, error)
-```
-
-Defaults:
-
-```text
-TokenBudget: service configuration default
-Mode: focused
-Query auto-update: same rule as legacy Query
-Expand relation: self when blank, preserving current behavior
-Impact limitation: syntax_only_impact
-```
-
-- [x] **Step 5: Create deterministic plans for expand and impact**
-
-Do not synthesize plan intent through loose English query text. Implement explicit helpers:
-
-```go
-func planForRelation(relation string) query.Plan
-func planForImpact() query.Plan
-```
-
-Map relation to intent:
-
-```text
-callers -> callers
-callees -> callees
-tests -> tests
-imports/exports -> imports
-references -> references
-parent/children/neighbors/self -> definition/default
-```
-
-- [x] **Step 6: Construct the compiler once per service**
-
-Extend `Service`:
-
-```go
-evidenceCompiler *evidence.Compiler
-```
-
-Initialize it with the same deterministic estimator family used by the legacy packer. Do not create compiler state per MCP request.
-
-- [x] **Step 7: Test shared retrieval parity**
-
-For the same query:
-
-```text
-legacy and evidence paths receive the same ranked candidate handles before packing
-evidence result contains the expected target path/symbol
-legacy ContextBundle remains unchanged
-auto-update runs once, not once per output representation
-cancellation is propagated
-evidence mode default is focused
-```
-
-Add an internal test seam only if needed; do not expose ranked candidates publicly.
-
-- [x] **Step 8: Verify and commit**
-
-```bash
-go test ./internal/app -run 'Test.*Evidence|TestQueryLegacy|TestExpandLegacy|TestImpactLegacy' -count=1
-go test ./...
-git add internal/app/service.go internal/app/service_test.go internal/app/evidence.go internal/app/evidence_test.go
-git commit -m "feat: expose evidence compilation through application service"
-```
-
----
-
-### Task 9: Add a Human and JSON Evidence CLI Format
-
-> Checkout adaptation: `--format`, Evidence modes, JSON/human rendering, and
-> repeatable handles apply to the positional query surface. The retired
-> `query`, `expand`, `impact`, and `explain` commands remain unavailable.
-
-**Files:**
-- Create: `internal/render/evidence.go`
-- Create: `internal/render/evidence_test.go`
-- Modify: `internal/cli/run.go`
-- Modify: `internal/cli/run_test.go`
-- Modify: `README.md`
-
-**Interfaces:**
-- Consumes: `evidence.Packet`
-- Produces: compact human-readable evidence and exact JSON while keeping current CLI output as default
-
-- [x] **Step 1: Add CLI format flags**
-
-For `query`, `expand`, and `impact`, add:
-
-```text
---format legacy|evidence
-```
-
-Default remains `legacy` in v0.4.
-
-Mode behavior:
-
-```text
-legacy format: outline|source
-Evidence format: outline|focused|source
-Evidence default when --format evidence is selected: focused
-```
-
-Reject `--format legacy --mode focused` with a clear validation error.
-
-- [x] **Step 2: Implement JSON rendering**
-
-Required function:
-
-```go
-func EvidenceJSON(packet evidence.Packet) ([]byte, error)
-```
-
-Use indented JSON for CLI output. Validate the packet before marshaling. Do not add a CLI-only envelope that changes the contract.
-
-- [x] **Step 3: Implement compact human rendering**
-
-Required function:
-
-```go
-func EvidenceCompact(packet evidence.Packet) string
-```
-
-Expected structure:
-
-```text
-schema: focalspan.context.v1
-intent: callers
-mode: focused
-budget: 934/1200
-
-[e1 target] auth/service.go:44-87
-Service.ValidateToken
-------------------------------------------------
-<source or segment text>
-
-[e2 caller] http/middleware.go:21-38
-Authenticate
-why: direct_caller
-------------------------------------------------
-<source>
-
-relations:
-  e2 -calls/exact-> e1
-
-next:
-  callers sym_Q7K... (more_callers_omitted)
-```
-
-Rules:
-
-- no floating-point scores;
-- no per-line number prefix;
-- omitted segments render as `--- lines 53-113 omitted ---` outside code text;
-- source text remains unchanged;
-- no token-savings section;
-- no debug reasons/weights;
-- omit empty sections;
-- deterministic newline behavior.
-
-- [x] **Step 4: Keep debug ranking separate**
-
-`--debug-scores` remains valid only for legacy output or existing `explain`. Reject `--format evidence --debug-scores` and direct the user to `focalspan explain`.
-
-- [x] **Step 5: Wire CLI commands to the correct service method**
-
-Dispatch:
-
-```text
-legacy -> Query/Expand/Impact
-Evidence -> QueryEvidence/ExpandEvidence/ImpactEvidence
-```
-
-Pass repeatable `--known-handle` values only to Evidence methods. `--json` selects JSON versus human rendering, not the underlying contract.
-
-- [x] **Step 6: Add CLI tests**
-
-Cover:
-
-```text
-legacy output unchanged by default
-evidence JSON validates and has schema
-evidence human output includes roles
-evidence human output excludes score and savings
-focused accepted only for Evidence
-known handles passed through
-debug-scores rejected for Evidence
-invalid format rejected
-query shortcut still uses legacy default
-stdout/stderr separation
-```
-
-- [x] **Step 7: Document preview commands**
-
-Add to README:
-
-```bash
-focalspan query --format evidence --mode focused --query "ValidateToken の呼び出し元" --budget 1200
-focalspan query --format evidence --mode focused --query "ValidateToken の呼び出し元" --budget 1200 --json
-focalspan expand --format evidence --handle sym_... --relation callers --known-handle sym_...
-```
-
-State clearly that MCP always uses Evidence Packet v1 while CLI defaults to legacy during v0.4.
-
-- [x] **Step 8: Verify and commit**
-
-```bash
-go test ./internal/render ./internal/cli -count=1
-go test ./...
-git add internal/render/evidence.go internal/render/evidence_test.go internal/cli/run.go internal/cli/run_test.go README.md
-git commit -m "feat: add evidence packet CLI rendering"
-```
-
----
-
-### Task 10: Switch MCP Context Tools to Evidence Packet v1
-
-**Files:**
-- Modify: `internal/mcpserver/server.go`
-- Modify: `internal/mcpserver/mcp_test.go`
-- Modify: `README.md`
-- Modify: `docs/design.md`
-
-**Interfaces:**
-- Consumes: service Evidence APIs
-- Produces: versioned typed structured output for context, expand, and impact with source appearing once
-
-- [x] **Step 1: Write failing typed-output tests**
-
-For `code_context`, assert the typed handler returns `evidence.Packet` and that the SDK-generated output schema requires:
-
-```text
-schema
-mode
-budget
-evidence
-```
-
-Assert `schema` serializes as `focalspan.context.v1` and each evidence item schema includes `id`, `handle`, `role`, `location`, and `fidelity`.
-
-- [x] **Step 2: Change the three handler output types**
-
-Change only:
-
-```text
-code_context
-code_expand
-code_impact
-```
-
-To return `evidence.Packet` as structured output. Keep status and restart outputs unchanged.
-
-- [x] **Step 3: Make MCP mode default `focused`**
-
-Input accepts:
-
-```text
-outline
-focused
-source
-```
-
-Blank mode becomes `focused`. Invalid mode returns a typed tool validation error with no stack trace.
-
-- [x] **Step 4: Pass normalized known handles**
-
-Normalize and validate `known_handles` once in each handler before calling the service. Return a compact user-correctable error when invalid.
-
-- [x] **Step 5: Improve tool descriptions for model use**
-
-Use these descriptions or text with identical semantics:
-
-```text
-code_context:
-  Find and return a role-labeled packet of repository evidence for a code question.
-  Call this before broad file reads. Use handles and next actions for follow-up expansion.
-
-code_expand:
-  Return new evidence related to stable handles. Pass known_handles to avoid retransmitting
-  context already present in the conversation.
-
-code_impact:
-  Return syntax-based changed spans, dependents, and related tests for Git changes within
-  a token budget. Results may omit unresolved dynamic relationships.
-```
-
-Do not turn descriptions into a long tutorial.
-
-- [x] **Step 6: Keep text content to one short summary**
-
-Text content must be produced by `evidence.Summary(packet)` and have this exact format:
-
-```text
-FocalSpan evidence: <n> items, <used>/<limit> tokens, <omitted> omitted.
-```
-
-Maximum 160 Unicode code points. It must not contain query text, source code, signatures, paths, handles, score details, or savings values.
-
-- [x] **Step 7: Add in-memory MCP integration tests**
-
-Using the SDK client/session, verify:
-
-```text
-initialize succeeds
-tools/list still returns exactly the five existing tool names
-code_context returns structuredContent with schema v1
-code_expand accepts known_handles
-code_impact includes syntax_only_impact limitation
-invalid mode returns tool error
-invalid known handle returns tool error
-cancellation propagates
-code_status contract unchanged
-code_restart contract unchanged
-```
-
-- [x] **Step 8: Add raw stdio JSON-RPC duplication test**
-
-Start the actual `focalspan serve` subprocess against the evidence fixture. Send initialize, tools/list, and tools/call requests. Place a unique source marker in the fixture:
-
-```text
-FOCALSPAN_UNIQUE_EVIDENCE_MARKER_9F2A
-```
-
-Assert the raw tools/call response line contains that marker exactly once. Also assert:
-
-```text
-structuredContent contains the marker
-content[0].text does not contain the marker
-raw response has no "score" key
-raw response has no "weight" key
-raw response has no "token_savings" key
-stdout contains JSON-RPC only
-stderr may contain logs but no source marker
-```
-
-Count escaped JSON occurrences carefully by parsing first and use raw counting only for the unique marker.
-
-- [x] **Step 9: Bump the MCP implementation version**
-
-Change:
-
-```go
-mcp.Implementation{Name: "focalspan", Version: "0.1.0"}
-```
-
-To:
-
-```go
-mcp.Implementation{Name: "focalspan", Version: "0.4.0"}
-```
-
-Do not infer the executable release version from this field elsewhere.
-
-- [x] **Step 10: Document the intentional pre-1.0 output change**
-
-README and design docs must say:
-
-```text
-- Tool names and inputs remain compatible except for the additive known_handles and focused mode.
-- code_context/code_expand/code_impact structured outputs now use focalspan.context.v1.
-- Consumers must read structuredContent rather than parse the short text summary.
-- Numeric ranking diagnostics remain available through focalspan explain, not MCP context responses.
-```
-
-- [x] **Step 11: Verify and commit**
-
-```bash
-go test ./internal/mcpserver -count=1
-go test ./...
-go vet ./...
-git add internal/mcpserver/server.go internal/mcpserver/mcp_test.go README.md docs/design.md
-git commit -m "feat: return evidence packets from MCP context tools"
-```
-
----
-
-### Task 11: Add Evidence Contract Evaluation and Legacy A/B Comparison
-
-**Files:**
-- Create: `internal/eval/evidence.go`
-- Create: `internal/eval/evidence_test.go`
-- Modify: `internal/eval/eval.go`
-- Modify: `internal/cli/run.go`
-- Modify: `internal/cli/run_test.go`
-- Create: `testdata/eval/evidence-cases.jsonl`
-- Modify: `docs/evaluation.md`
-
-**Interfaces:**
-- Consumes: legacy and Evidence service methods, evidence fixture, token estimator
-- Produces: measurable wire/quality comparisons without weakening existing retrieval evaluation
-
-- [x] **Step 1: Define evidence evaluation cases**
-
-Implement:
-
-```go
-type EvidenceExpectation struct {
-    Path       string          `json:"path"`
-    Symbol     string          `json:"symbol,omitempty"`
-    Roles      []evidence.Role `json:"roles,omitempty"`
-    Contains   []string        `json:"contains,omitempty"`
-    Fidelity   []evidence.Fidelity `json:"fidelity,omitempty"`
-}
-
-type EvidenceCase struct {
-    Name             string                `json:"name"`
-    Query            string                `json:"query"`
-    TokenBudget      int                   `json:"token_budget"`
-    Mode             evidence.Mode         `json:"mode"`
-    Expected         []EvidenceExpectation `json:"expected"`
-    ForbiddenPaths   []string              `json:"forbidden_paths,omitempty"`
-    FollowUpRelation string                `json:"follow_up_relation,omitempty"`
-}
-```
-
-- [x] **Step 2: Create cross-language evidence cases**
-
-At minimum include:
-
-```text
-Go late expired-token branch
-Go caller relationship
-PHP method plus PHPUnit test
-C++ declaration plus implementation/caller
-C# method plus test
-TypeScript function plus importer/caller
-Smarty block plus embedded JavaScript
-```
-
-Use current checked-in fixtures where suitable and the dedicated `evidencesample` for late-hit and delta scenarios. Do not add production hard-coding for case names.
-
-- [x] **Step 3: Define evidence metrics**
-
-Implement per-case and aggregate metrics:
-
-```go
-type EvidenceCaseResult struct {
-    Name                  string  `json:"name"`
-    ExpectedCoverage      float64 `json:"expected_coverage"`
-    RoleAccuracy          float64 `json:"role_accuracy"`
-    FidelityValid         int     `json:"fidelity_valid"`
-    RelationValid         int     `json:"relation_valid"`
-    WireBudgetCompliant   int     `json:"wire_budget_compliant"`
-    WireTokens            int     `json:"wire_tokens"`
-    EvidenceTokens        int     `json:"evidence_tokens"`
-    MetadataOverheadRatio float64 `json:"metadata_overhead_ratio"`
-    DuplicateSourceRatio  float64 `json:"duplicate_source_ratio"`
-    KnownResendCount      int     `json:"known_resend_count"`
-    Deterministic         int     `json:"deterministic"`
-    LegacyWireTokens      int     `json:"legacy_wire_tokens"`
-    EvidenceVsLegacyRatio float64 `json:"evidence_vs_legacy_ratio"`
-}
-```
-
-Aggregate medians and compliance rates in an `EvidenceReport`.
-
-Definitions:
-
-```text
-ExpectedCoverage: expected path/symbol/content expectations found / total expectations.
-RoleAccuracy: matched expectations whose returned role is allowed / matched expectations.
-FidelityValid: all item fidelity invariants pass.
-RelationValid: all edges reference local IDs and expected direct relations are present.
-MetadataOverheadRatio: metadata tokens / wire tokens; zero when wire tokens are zero.
-DuplicateSourceRatio: duplicate source bytes / total returned source bytes; zero when no source.
-KnownResendCount: number of known stable handles incorrectly retransmitted.
-EvidenceVsLegacyRatio: Evidence Packet serialized tokens / legacy ContextBundle serialized tokens.
-```
-
-- [x] **Step 4: Add evaluator contract modes**
-
-Extend `focalspan eval` with:
-
-```text
---contract legacy|evidence|compare
-```
-
-Default remains `legacy`.
-
-Behavior:
-
-```text
-legacy: current evaluator and report unchanged
-Evidence: load EvidenceCase and emit EvidenceReport
-compare: run both output paths for compatible evidence cases and include A/B fields
-```
-
-Do not reinterpret old case files as Evidence cases without an explicit contract flag.
-
-- [x] **Step 5: Add a two-step delta evaluation**
-
-For cases with `follow_up_relation`:
-
-1. run `QueryEvidence`;
-2. collect all returned stable handles;
-3. expand the best target handle with those handles in `known_handles`;
-4. assert no known handle is retransmitted;
-5. compare cumulative wire tokens with and without `known_handles`.
-
-Add aggregate `delta_token_ratio`.
-
-- [x] **Step 6: Add A/B acceptance tests**
-
-The checked-in evidence suite must meet:
-
-```text
-wire budget compliance                 = 1.0
-fidelity validity                      = 1.0
-relation validity                      = 1.0
-deterministic output                   = 1.0
-forbidden path violations              = 0
-known resend count                     = 0
-expected evidence coverage             = 1.0
-role accuracy                          = 1.0
-focused late-hit preservation          = 1.0
-median duplicate source ratio          <= 0.05
-median metadata overhead ratio         <= 0.35 for budgets >= 1200
-median Evidence-vs-legacy wire ratio   <= 1.00 for focused cases
-median two-step delta token ratio      <= 0.70
-```
-
-Do not weaken current legacy hit@5, recall, forbidden-path, budget, reduction, relation, intent, or determinism thresholds.
-
-- [x] **Step 7: Test forbidden output fields**
-
-Every evaluated serialized packet must be recursively inspected and fail if any object key equals:
-
-```text
-score
-retrieval_score
-weight
-detail
-token_savings
-baseline_tokens
-saved_tokens
-savings_ratio
-```
-
-This must inspect keys, not naive substring matches inside source code.
-
-- [x] **Step 8: Document metric meaning and limitations**
-
-Update `docs/evaluation.md` with:
-
-```text
-wire budget versus evidence token count
-metadata overhead
-source duplication
-role and relation correctness
-focused late-hit preservation
-stateless delta savings
-legacy A/B comparison
-why one-response size is not enough without cumulative tool-result tokens
-```
-
-Record actual measured results after implementation; do not copy acceptance thresholds into the results section as if they were measurements.
-
-- [x] **Step 9: Verify and commit**
-
-```bash
-go test ./internal/eval ./internal/cli -count=1
-go test ./...
-go build -o ./focalspan-eval ./cmd/focalspan
-./focalspan-eval eval --root testdata/repos/evidencesample --cases testdata/eval/evidence-cases.jsonl --contract compare --json
-rm -f ./focalspan-eval ./focalspan-eval.exe
-git add internal/eval internal/cli/run.go internal/cli/run_test.go testdata/eval/evidence-cases.jsonl docs/evaluation.md
-git commit -m "test: evaluate LLM evidence packets and delta savings"
-```
-
-On Windows, use an output path under a temporary directory and remove the `.exe` afterward.
-
----
-
-### Task 12: Harden Edge Cases, Fuzz Invariants, and Compatibility
-
-> Checkout adaptation: the compatibility assertion for `focalspan explain`
-> verifies that the already-retired command remains unavailable rather than
-> reintroducing a public debug surface.
-
-**Files:**
-- Create: `internal/evidence/fuzz_test.go`
-- Modify: `internal/evidence/*_test.go`
-- Modify: `internal/mcpserver/mcp_test.go`
-- Modify: `internal/app/evidence_test.go`
-
-**Interfaces:**
-- Consumes: complete Evidence implementation
-- Produces: robust invariants for malformed source content, tiny budgets, repeated relations, and protocol output
-
-- [x] **Step 1: Add packet/compiler fuzz seeds**
-
-Seed with:
-
-```text
-empty candidate list
-single compact signature
-long Go function
-C++ raw string
-C# interpolated raw string
-JavaScript template literal and JSX
-PHP heredoc
-Smarty block with embedded script
-CRLF
-Japanese identifiers/comments
-invalid UTF-8 bytes already converted to indexed replacement text only where current scanner permits
-```
-
-- [x] **Step 2: Enforce fuzz invariants**
-
-For every successful compile:
-
-```text
-no panic
-Validate succeeds
-serialized packet fits budget
-budget.used matches remeasurement
-local IDs sequential
-all edges local and valid
-one content representation per item
-source/segment UTF-8 valid
-same request produces identical JSON
-known handles absent from evidence
-no forbidden debug key
-```
-
-Fuzz tests may discard impossible malformed model candidates, but must not hide panics.
-
-- [x] **Step 3: Add tiny-budget regression matrix**
-
-Test budgets before clamping and at exact boundaries:
-
-```text
-0
-1
-255
-256
-257
-511
-512
-1199
-1200
-63999
-64000
-64001
-```
-
-Expected: clamped budget is reported, packet remains valid, no over-budget output.
-
-- [x] **Step 4: Add relation ambiguity tests**
-
-Construct multiple `Validate` methods. Assert lexical unresolved provenance does not produce an `exact` edge. It may return multiple caller/reference items with `lexical_relation_only`, but must not invent a resolved target.
-
-- [x] **Step 5: Add mixed known-anchor relation tests**
-
-Cover:
-
-```text
-anchor known, candidate new
-anchor new, candidate known
-both known
-neither known
-multiple anchors with one known
-```
-
-No dangling edge is allowed.
-
-- [x] **Step 6: Add protocol compatibility tests**
-
-Assert:
-
-```text
-five MCP tool names unchanged
-project/user MCP registration still lists all five enabled tools
-code_status JSON unchanged
-code_restart behavior unchanged
-legacy CLI query output remains available
-focalspan explain remains source-free
-```
-
-- [x] **Step 7: Run bounded fuzzing locally**
-
-```bash
-go test ./internal/evidence -run '^$' -fuzz FuzzCompile -fuzztime 20s
-go test ./internal/evidence -run '^$' -fuzz FuzzValidate -fuzztime 20s
-```
-
-If the Go toolchain requires one fuzz target per command, run them separately exactly as above.
-
-- [x] **Step 8: Run full regression and commit**
-
-```bash
-go test ./...
-go vet ./...
-git add internal/evidence internal/mcpserver/mcp_test.go internal/app/evidence_test.go
-git commit -m "test: harden evidence packet invariants"
-```
-
----
-
-### Task 13: Complete Documentation, Full Verification, and Release Readiness
-
-**Files:**
-- Modify: `README.md`
-- Modify: `docs/design.md`
-- Modify: `docs/evaluation.md`
-- Modify: `docs/implementation-plan.md`
-- Modify: `AGENTS.md` only when a durable project rule is missing
+- Modify: `AGENTS.md`
 - Modify: `PLAN.md`
 
 **Interfaces:**
-- Consumes: all completed v0.4 behavior and measured results
-- Produces: truthful documentation and a reproducible verification report
+- Consumes: the current root plan, the old `docs/implementation-plan.md`, existing `docs/superpowers/plans/` and `docs/superpowers/specs/`
+- Produces: one unambiguous active plan, immutable prior-plan snapshots, and durable instructions that future Codex sessions can follow without conversation history
 
-- [x] **Step 1: Document the Evidence Packet contract**
+- [x] **Step 1: Record the exact starting state**
 
-README must include a compact valid example:
+Run from the repository root:
 
-```json
-{
-  "schema": "focalspan.context.v1",
-  "intent": "callers",
-  "mode": "focused",
-  "budget": {"limit": 1200, "used": 934, "truncated": true, "omitted": 2},
-  "evidence": [
+    git status --short
+    git diff --stat
+    git rev-parse HEAD
+    git log -8 --oneline
+    go version
+    go env GOOS GOARCH CGO_ENABLED
+
+Copy the output into the implementation session's final report and add the HEAD value to this plan's `Baseline` line. Do not alter pre-existing changes.
+
+- [x] **Step 2: Locate and archive the completed v0.4 plan**
+
+Run:
+
+    git log -G "^# FocalSpan LLM Evidence Contract v0\.4 Implementation Plan$" --format=%H -- PLAN.md
+
+Use the first commit whose `PLAN.md` contains the completed v0.4 title and checked tasks. Verify before writing:
+
+    git show <selected-commit>:PLAN.md
+
+The output must begin with:
+
+    # FocalSpan LLM Evidence Contract v0.4 Implementation Plan
+
+Write that exact blob, without formatting or checkbox changes, to:
+
+    docs/superpowers/plans/completed/2026-08-30-v0.4-llm-evidence-contract.md
+
+Verify byte identity by comparing the selected Git blob and archive with `git hash-object`. They must have the same object ID.
+
+- [x] **Step 3: Archive the original long bootstrap implementation plan**
+
+Read `docs/implementation-plan.md`. If it is still the completed bootstrap plan headed `# FocalSpan Implementation Plan`, copy its exact current bytes to:
+
+    docs/superpowers/plans/completed/2026-08-28-v0.1-bootstrap.md
+
+Then replace `docs/implementation-plan.md` with this concise content:
+
+    # FocalSpan Planning Index
+
+    The only active execution plan is [`../PLAN.md`](../PLAN.md).
+
+    Durable plan-authoring and lifecycle rules are in [`../PLANS.md`](../PLANS.md).
+    Completed and superseded plans are indexed in
+    [`superpowers/plans/README.md`](superpowers/plans/README.md).
+
+    Product architecture is documented in [`design.md`](design.md), and measured
+    results are documented in [`evaluation.md`](evaluation.md).
+
+If the file no longer matches the bootstrap description, record the discrepancy and archive its current content under a filename that includes its actual milestone name. Do not overwrite an existing archive.
+
+- [x] **Step 4: Create `PLANS.md`**
+
+Write the policy from this plan's `Execution-Plan Lifecycle Policy` section into `PLANS.md`, then add these required ExecPlan sections:
+
+    Purpose / Big Picture
+    Progress
+    Surprises & Discoveries
+    Decision Log
+    Outcomes & Retrospective
+    Context and Orientation
+    Plan of Work or task-oriented equivalent
+    Concrete Steps
+    Validation and Acceptance
+    Idempotence and Recovery
+    Interfaces and Dependencies
+
+State that progress timestamps use UTC, archives are immutable, acceptance changes require a Decision Log entry, and the root plan remains after completion until the next transition.
+
+- [x] **Step 5: Update `AGENTS.md` without bloating it**
+
+Add a short durable section:
+
+    # ExecPlans
+
+    For work spanning multiple packages, a public contract, or more than one
+    session, read `PLANS.md` and execute the repository-root `PLAN.md`.
+    `PLAN.md` is the sole active plan. Keep its Progress, discoveries, decisions,
+    and outcomes current; archive it only when introducing its successor.
+
+Do not paste task-specific benchmark rules into `AGENTS.md`.
+
+- [x] **Step 6: Create the plan archive index**
+
+Create `docs/superpowers/plans/README.md` with:
+
+    # FocalSpan Execution Plan Archive
+
+    Active plan: [`../../../PLAN.md`](../../../PLAN.md)
+    Policy: [`../../../PLANS.md`](../../../PLANS.md)
+
+    ## Completed
+
+    - `2026-08-28-v0.1-bootstrap.md`
+    - `2026-08-30-v0.4-llm-evidence-contract.md`
+    - `../2026-08-28-php-structural-extraction.md`
+
+    ## Superseded
+
+    No superseded plans are archived at this time.
+
+Explain in one paragraph that archived files are historical evidence and are not active instructions.
+
+- [x] **Step 7: Verify planning links and archive uniqueness**
+
+Run:
+
+    git grep -n "docs/implementation-plan.md"
+    git grep -n "PLAN.md"
+    git grep -n "PLANS.md"
+    git diff --check
+
+Verify:
+
+- every link resolves;
+- no document other than root `PLAN.md` calls itself the current active plan;
+- the archived v0.4 plan is not modified by later tasks;
+- `docs/superpowers/plans/superseded/` may be absent until the first superseded plan, but the policy names it.
+
+- [x] **Step 8: Commit the plan transition separately**
+
+Commit only plan governance and documentation transition files:
+
+    git add PLANS.md PLAN.md AGENTS.md docs/implementation-plan.md docs/superpowers/plans
+    git commit -m "docs: establish execution plan lifecycle"
+
+Do not include benchmark implementation code in this commit.
+
+---
+
+### Task 1: Capture the Untuned v0.5 Baseline
+
+**Files:**
+- Modify: `docs/evaluation.md`
+- Create: `docs/benchmarks/README.md`
+- Modify: `PLAN.md`
+
+**Interfaces:**
+- Consumes: all current tests, all checked-in fixture evaluations, Evidence comparison evaluation, current CLI/MCP smoke behavior
+- Produces: a truthful pre-benchmark record that later tasks must not misrepresent as an improvement
+
+- [ ] **Step 1: Run the current static and unit baseline**
+
+Run:
+
+    git diff --check
+    go test ./...
+    go vet ./...
+
+If one fails before benchmark code is added, record it under `Surprises & Discoveries` with the exact failing package and message. Do not attribute it to v0.5.
+
+- [ ] **Step 2: Run the current Evidence contract checks**
+
+Run the current checked-in Evidence comparison command documented by the repository. At minimum, execute the equivalent of:
+
+    go run ./cmd/focalspan-eval \
+      --root testdata/repos/evidencesample \
+      --cases testdata/eval/evidence-cases.jsonl \
+      --contract compare \
+      --json
+
+Adapt only the executable path if the current checkout names the development evaluator differently. Record expected coverage, role accuracy, fidelity validity, relation validity, wire-budget compliance, deterministic output, forbidden violations, known resends, duplicate-source ratio, metadata overhead, Evidence/legacy ratio, and two-step delta ratio.
+
+- [ ] **Step 3: Run every current language fixture evaluation**
+
+Discover case files from the current tree rather than a stale hard-coded list:
+
+    find testdata/eval -maxdepth 1 -type f -name "*cases.jsonl" -print
+
+On Windows PowerShell, use:
+
+    Get-ChildItem testdata/eval -Filter "*cases.jsonl"
+
+Run each case file against its documented fixture root with a freshly rebuilt index. Record which suites have a numeric historical baseline and which only have a current measurement. Do not call a current-only measurement an improvement.
+
+- [ ] **Step 4: Create the benchmark documentation shell**
+
+Create `docs/benchmarks/README.md` with these headings and prose:
+
+    # FocalSpan Real-Repository Benchmarks
+    ## What the benchmark measures
+    ## What it does not prove
+    ## Privacy model
+    ## Historical task labeling
+    ## Running the public self-history suite
+    ## Running private local suites
+    ## Interpreting quality and timing reports
+    ## Choosing the next optimization milestone
+
+State explicitly that no source text is written to reports and that a target diff is not automatic ground truth.
+
+- [ ] **Step 5: Record the v0.5 starting record**
+
+Append `## Real-Repository Evaluation v0.5 starting baseline` to `docs/evaluation.md`. Include:
+
+- date in UTC;
+- exact commit;
+- operating system and architecture;
+- Go version;
+- whether the worktree was initially dirty;
+- unit/vet result;
+- current Evidence metrics;
+- number of checked-in language suites;
+- unverified race coverage, if any.
+
+- [ ] **Step 6: Commit only baseline documentation**
+
+Run:
+
+    git add docs/evaluation.md docs/benchmarks/README.md PLAN.md
+    git commit -m "docs: record real-repository benchmark baseline"
+
+---
+
+### Task 2: Define and Validate the Benchmark Schema
+
+**Files:**
+- Create: `internal/benchmark/model.go`
+- Create: `internal/benchmark/model_test.go`
+- Create: `internal/benchmark/profile.go`
+- Create: `internal/benchmark/profile_test.go`
+- Create: `testdata/benchmark/schema-valid.json`
+- Create: `testdata/benchmark/schema-invalid.json`
+
+**Interfaces:**
+- Produces: `benchmark.LoadSuite`, `benchmark.ValidateSuite`, `benchmark.LoadRegistry`, `benchmark.ResolveProfiles`, and the schema types defined earlier
+- Consumes: existing `search.RetrievalMode` and `evidence.Mode` values without changing them
+
+- [ ] **Step 1: Write failing valid-suite load tests**
+
+Create `TestLoadSuiteValid` using a fixture equivalent to:
+
     {
-      "id": "e1",
-      "handle": "sym_target",
-      "role": "target",
-      "location": {"path": "auth/service.go", "lines": [44, 51]},
-      "language": "go",
-      "kind": "method",
-      "symbol": "Service.ValidateToken",
-      "signature": "func (s *Service) ValidateToken(token string) error",
-      "fidelity": "signature",
-      "why": ["exact_symbol"]
+      "schema": "focalspan.benchmark.v1",
+      "name": "valid",
+      "cases": [
+        {
+          "id": "callers",
+          "repository": "self",
+          "base_ref": "HEAD~1",
+          "target_ref": "HEAD",
+          "query": "what calls ValidateToken?",
+          "budgets": [1024, 2048],
+          "expected_intent": "callers",
+          "required_paths": ["internal/app/service.go"],
+          "required_symbols": [
+            {
+              "path": "internal/app/service.go",
+              "name": "ValidateToken",
+              "role": "target"
+            }
+          ],
+          "expand": [
+            {
+              "relation": "callers",
+              "from": {
+                "path": "internal/app/service.go",
+                "name": "ValidateToken"
+              },
+              "budget": 1200,
+              "required_paths": ["internal/mcpserver/server.go"]
+            }
+          ]
+        }
+      ]
     }
-  ]
-}
-```
 
-The example values must fit the schema and must not claim they are measured output.
+Assert exact field preservation and forward-slash paths.
 
-- [x] **Step 2: Document how LLM consumers should use it**
+- [ ] **Step 2: Write failing validation table tests**
 
-State:
+Cover these errors with stable message fragments:
 
-```text
-- Start with code_context in focused mode.
-- Treat evidence source and source segments as verbatim indexed code.
-- Treat synthetic outlines as generated navigation aids, not source code.
-- Use role and relations to distinguish target, caller, test, and dependency evidence.
-- Use next actions with code_expand.
-- Pass stable handles through known_handles to avoid repeated context.
-- Do not parse the short MCP text summary for source.
-```
+- unsupported or empty schema;
+- empty suite name;
+- no cases;
+- duplicate case IDs;
+- empty repository/base/target/query;
+- identical base and target refs;
+- no budgets;
+- budget below 256 or above 64000;
+- unsorted or duplicate budgets;
+- absolute path;
+- path containing `..`;
+- backslash path;
+- same path in required and forbidden lists;
+- symbol expectation missing path or name;
+- unsupported role;
+- unsupported relation;
+- expansion budget outside the accepted range;
+- duplicate expectation.
 
-- [x] **Step 3: Document compatibility and migration**
+Validation must return all case-specific errors in deterministic order rather than stopping after a random map iteration.
 
-Explain:
+- [ ] **Step 3: Implement exact schema types and normalization**
 
-```text
-CLI default remains legacy in v0.4.
-CLI Evidence preview uses --format evidence.
-MCP context tools return focalspan.context.v1.
-Tool names remain unchanged.
-code_status and code_restart outputs remain unchanged.
-Normal MCP packets no longer expose ranking scores and token-savings diagnostics.
-The already-retired focalspan explain command remains unavailable; use the
-positional Evidence preview for debugging without restoring a public command.
-```
+Implement:
 
-- [x] **Step 4: Document fidelity and omission semantics**
+    func LoadSuite(path string) (Suite, error)
+    func ValidateSuite(s Suite) error
+    func LoadRegistry(path string) (RepositoryRegistry, error)
+    func NormalizeSuite(s Suite) Suite
 
-Define `verbatim`, `excerpt`, `signature`, `synthetic`, source and omitted segments, line ranges, and the guarantee that omitted markers are metadata rather than injected code.
+`NormalizeSuite` may trim strings and sort/deduplicate tags, but it must not silently repair invalid paths, refs, budgets, or expectations.
 
-- [x] **Step 5: Update architecture diagrams**
+- [ ] **Step 4: Add profile tests**
 
-Use this pipeline:
+Assert that `ResolveProfiles("default")` yields the four profiles defined in this plan in stable order. Also support selecting one or more comma-separated exact profile names. Unknown profiles return an error listing valid names.
 
-```text
-repository -> extraction -> SQLite/FTS5 -> query plan -> retrievers -> RRF/ranking
-           -> ranked candidates + relation provenance
-           -> Evidence Compiler
-              -> role classifier
-              -> fidelity/segment builder
-              -> utility-per-wire-token selection
-              -> local relations and guidance
-              -> serialized hard-cap verification
-           -> CLI Evidence renderer or MCP structuredContent
-```
+- [ ] **Step 5: Add a schema round-trip determinism test**
 
-Keep the legacy packer shown as a compatibility branch, not the future canonical MCP path.
+Load `schema-valid.json`, marshal with `json.MarshalIndent`, unmarshal, normalize, marshal again, and assert byte equality. Timing fields do not exist in suite files.
 
-- [x] **Step 6: Update durable contributor rules only when needed**
+- [ ] **Step 6: Verify and commit**
 
-If `AGENTS.md` does not already cover them, add concise rules:
+Run:
 
-```text
-Evidence Packet source fidelity is a public contract.
-Normal MCP context responses must not expose ranking/debug fields.
-MCP source must occur once in structuredContent and never in text summaries.
-Every Evidence change requires wire-budget and invariant tests.
-```
-
-Do not paste task-specific checklists into `AGENTS.md`.
-
-- [x] **Step 7: Run formatting and static checks**
-
-```bash
-gofmt -w .
-git diff --check
-go test ./...
-go vet ./...
-```
-
-Expected: PASS.
-
-- [x] **Step 8: Run race tests where supported**
-
-```bash
-go test -race ./...
-```
-
-If the current Windows environment lacks a compatible C compiler/linker, report it as unverified rather than passed. Run it in Linux CI or another supported environment before a release claim when available.
-
-- [x] **Step 9: Run CGO-free native and cross-builds**
-
-```bash
-CGO_ENABLED=0 go build ./cmd/focalspan
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/focalspan
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/focalspan
-GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/focalspan
-```
-
-Direct artifacts to a temporary directory or remove generated binaries after verification.
-
-- [x] **Step 10: Run every legacy evaluation**
-
-Run all checked-in legacy case files using their matching fixture roots. Compare against Task 0 baseline. Requirements:
-
-```text
-no lower hit@5
-no lower symbol/path recall
-no new forbidden-path violation
-budget compliance remains 1.0
-no lower determinism
-no lower expected relation/intent/kind recall
-```
-
-- [x] **Step 11: Run Evidence comparison evaluation**
-
-```bash
-focalspan eval \
-  --root testdata/repos/evidencesample \
-  --cases testdata/eval/evidence-cases.jsonl \
-  --contract compare \
-  --json
-```
-
-Run any additional language-specific Evidence case roots documented by Task 11. Confirm all v0.4 acceptance thresholds from Task 11.
-
-- [x] **Step 12: Run manual MCP smoke tests**
-
-Against an indexed fixture or safe local repository:
-
-```text
-code_context(query="ValidateToken の呼び出し元", token_budget=1200)
-code_expand(handles=[target], relation="callers", known_handles=[all prior handles], token_budget=1200)
-code_impact(token_budget=1600)
-code_status()
-code_restart()
-```
-
-Inspect the actual payload and confirm:
-
-```text
-roles make sense
-source appears once
-late relevant lines survive focused mode
-known evidence is not resent
-relations reference valid local IDs
-no debug weights or savings fields appear
-```
-
-- [x] **Step 13: Self-review the full diff**
-
-Check every item:
-
-```text
-internal ContextBundle still works
-MCP output uses only Evidence Packet for three context tools
-focused is MCP default
-source/segments are faithful
-wire budget uses final JSON
-budget.used is truthful
-no dangling relation IDs
-known handles are stateless
-normal packet excludes numeric debug data
-text content is short and source-free
-legacy CLI/eval remain available
-no SQLite migration
-no extractor regression
-no fixture-specific production branch
-no incomplete production path
-README matches implementation
-```
-
-Fix discovered issues and rerun affected tests.
-
-- [x] **Step 14: Mark this plan with actual completion evidence**
-
-Check a box only after its command or assertion has been verified. Add a short final section to `docs/evaluation.md` containing actual command results, dates, platform, Go version, and any unverified race coverage.
-
-- [x] **Step 15: Commit final docs and verification updates**
-
-```bash
-git add README.md docs/design.md docs/evaluation.md docs/implementation-plan.md AGENTS.md PLAN.md
-git commit -m "docs: complete LLM evidence contract v0.4"
-```
-
-Stage `AGENTS.md` only if it changed.
+    go test ./internal/benchmark -run "TestLoadSuite|TestValidateSuite|TestProfiles" -count=1
+    go test ./...
+    git diff --check
+    git add internal/benchmark testdata/benchmark
+    git commit -m "feat: define real-repository benchmark schema"
 
 ---
 
-## Definition of Done
+### Task 3: Materialize Safe Read-Only Git Snapshots
 
-The milestone is complete only when all statements below are true:
+**Files:**
+- Create: `internal/benchmark/git.go`
+- Create: `internal/benchmark/git_test.go`
+- Create: `internal/benchmark/snapshot.go`
+- Create: `internal/benchmark/snapshot_test.go`
+- Create: `internal/benchmark/diff.go`
+- Create: `internal/benchmark/diff_test.go`
 
-```text
-focalspan.context.v1 exists as a validated typed contract.
-MCP code_context returns role-labeled Evidence Packet structured output.
-MCP code_expand returns delta-friendly Evidence Packet structured output.
-MCP code_impact returns Evidence Packet with syntax-only limitation.
-code_status and code_restart contracts are unchanged.
-MCP default output mode is focused.
-CLI legacy output remains the default during v0.4.
-CLI can preview Evidence format in human and JSON forms.
-Each item has a stable role and exactly one fidelity representation.
-Verbatim source and source segments match indexed source exactly.
-Large functions preserve query-relevant late branches.
-Omitted source ranges are metadata, not fake code lines.
-Relations use packet-local IDs and never dangle.
-Relation certainty distinguishes exact/scoped/lexical evidence.
-Normal packets omit floating-point ranking and savings diagnostics.
-Compact packet JSON plus the canonical short summary respects the token budget.
-Reported budget.used matches final serialized remeasurement.
-Known handles are not retransmitted but remain usable as expansion anchors.
-No conversation/session state is stored on the MCP server.
-Text content is a short source-free summary.
-Source appears exactly once in raw MCP tools/call output.
-Evidence evaluation measures wire cost, metadata, duplication, fidelity, roles, relations, and delta savings.
-All v0.4 Evidence acceptance thresholds pass.
-All existing retrieval and language evaluations meet or exceed the recorded baseline.
-All unit and integration tests pass.
-go vet passes.
-CGO-free native and required cross-builds pass.
-Race results are reported truthfully.
-Documentation matches the implemented contract.
-No database schema change or extractor redesign was introduced.
-No user changes were reset, restored, cleaned, or stashed.
-```
+**Interfaces:**
+- Produces:
+
+      type CommandResult struct {
+          Stdout []byte
+          Stderr []byte
+      }
+
+      type CommandRunner interface {
+          Run(ctx context.Context, dir string, name string, args ...string) (CommandResult, error)
+      }
+
+      type Snapshot struct {
+          RepositoryID string
+          Commit string
+          Root string
+          SkippedSymlinks []string
+          FileCount int
+      }
+
+      type Snapshotter interface {
+          Materialize(ctx context.Context, repositoryID, repositoryPath, ref, destination string) (Snapshot, error)
+      }
+
+      type ChangeSet struct {
+          BaseCommit string
+          TargetCommit string
+          Files []ChangedFile
+      }
+
+      type ChangedFile struct {
+          OldPath string
+          NewPath string
+          Status string
+          Binary bool
+          Ranges []LineRange
+      }
+
+- Consumes: local Git executable only; may reuse parsing helpers from `internal/gitx` when their semantics match
+
+- [ ] **Step 1: Write a no-shell command-runner test**
+
+Use a fake executable or argument-recording fake runner and assert arguments remain separate for:
+
+    git rev-parse --verify <ref>^{commit}
+    git archive --format=tar <commit>
+    git diff --unified=0 --no-ext-diff --find-renames <base> <target> --
+
+A ref containing spaces or shell metacharacters is passed as one argument and never executed by a shell.
+
+- [ ] **Step 2: Write temporary-repository snapshot tests**
+
+Create a temporary Git repository in the test, commit:
+
+    src/main.go
+    docs/readme.md
+    nested/data.txt
+
+Materialize `HEAD` and assert:
+
+- destination contains the three regular files with exact bytes;
+- `.git` is absent;
+- source repository status, HEAD, index checksum, branch, and worktree list are unchanged;
+- returned commit is the full verified commit ID;
+- running materialization twice into separate empty destinations produces identical file trees.
+
+- [ ] **Step 3: Write archive traversal rejection tests**
+
+Feed handcrafted tar entries to the extraction helper:
+
+    /absolute
+    C:/drive
+    ../escape
+    safe/../../escape
+    name-with-NUL
+    safe/link (symlink)
+    safe/file
+
+Assert unsafe entries fail the extraction, symlinks are skipped and reported, and `safe/file` is extracted only when no fatal traversal entry exists. No file may appear outside the destination.
+
+- [ ] **Step 4: Implement snapshot materialization**
+
+Implement:
+
+    func ResolveCommit(ctx context.Context, runner CommandRunner, repo, ref string) (string, error)
+    func ExtractGitArchive(r io.Reader, destination string) (fileCount int, skippedSymlinks []string, err error)
+    func NewGitSnapshotter(runner CommandRunner) Snapshotter
+
+Use `git archive --format=tar <full-commit>`. Stream stdout into `archive/tar`; do not buffer an unbounded archive in memory. If the existing runner only returns bytes, add a bounded streaming runner interface for archive use:
+
+    type StreamCommandRunner interface {
+        Stream(ctx context.Context, dir, name string, stdout io.Writer, args ...string) (stderr []byte, err error)
+    }
+
+Cap retained stderr diagnostics at 16 KiB.
+
+- [ ] **Step 5: Write diff-oracle tests**
+
+Create commits covering modified, added, deleted, renamed, and binary files. Assert `CollectChanges` returns stable slash-normalized paths and zero-context line ranges. Added files are marked `added`; they are not later accepted as required base evidence.
+
+- [ ] **Step 6: Implement read-only diff collection**
+
+Implement:
+
+    func CollectChanges(
+        ctx context.Context,
+        runner CommandRunner,
+        repositoryPath, baseRef, targetRef string,
+    ) (ChangeSet, error)
+
+Resolve both refs to commits first. Use existing `internal/gitx` parsing when possible. Add status parsing only where existing code does not expose rename/add/delete information needed by the benchmark.
+
+- [ ] **Step 7: Test cancellation and cleanup**
+
+Cancel during archive streaming. Assert the subprocess is terminated, partial destination is removed by the caller, the source repository is unchanged, and the error wraps `context.Canceled`.
+
+- [ ] **Step 8: Verify and commit**
+
+Run:
+
+    go test ./internal/benchmark -run "TestGit|TestSnapshot|TestArchive|TestCollectChanges" -count=1
+    go test ./internal/gitx ./internal/benchmark
+    go test ./...
+    git diff --check
+    git add internal/benchmark
+    git commit -m "feat: materialize safe historical snapshots"
 
 ---
 
-## Required Final Report from Codex
+### Task 4: Build the Benchmark Engine Adapter
 
-Report in this exact order:
+**Files:**
+- Create: `internal/benchmark/engine.go`
+- Create: `internal/benchmark/engine_test.go`
+- Modify: `internal/eval/eval.go` only if a small reusable pure metric helper is currently private
+- Modify: `internal/eval/eval_test.go` only for such a helper
 
-1. Starting commit and whether the working tree was dirty.
-2. Evidence Packet architecture and why the legacy bundle remains.
-3. Public `focalspan.context.v1` fields and compatibility impact.
-4. Role-classification and presentation-order behavior.
-5. Verbatim/excerpt/signature/synthetic fidelity behavior.
-6. Focused excerpt algorithm and late-hit proof.
-7. Relation provenance, local edge IDs, and certainty mapping.
-8. Serialized wire-budget algorithm and measured accuracy.
-9. `known_handles` behavior and cumulative token reduction.
-10. MCP text-versus-structured output and source-duplication result.
-11. CLI Evidence preview commands.
-12. New or modified major files.
-13. Unit/integration/fuzz commands and results.
-14. Legacy evaluation comparison against the recorded baseline.
-15. Evidence evaluation metrics and acceptance results.
-16. Native and cross-build results.
-17. Race-test result or exact reason it remains unverified.
-18. Git commits created.
-19. Known limitations that remain after v0.4.
-20. Confirmation that user changes were not reset, restored, cleaned, or stashed.
+**Interfaces:**
+- Produces:
 
-Do not claim completion when any required test, evaluation threshold, schema invariant, wire budget, or cross-build remains unsuccessful. State the exact failing command, observed result, likely impact, and remaining work instead.
+      type EngineFactory interface {
+          Open(root string, retrievalMode search.RetrievalMode) (Engine, error)
+      }
+
+      type Engine interface {
+          Build(ctx context.Context) (IndexMeasurement, error)
+          QueryLegacy(ctx context.Context, req app.QueryRequest) (model.ContextBundle, error)
+          QueryEvidence(ctx context.Context, req app.QueryRequest) (evidence.Packet, error)
+          ExpandEvidence(ctx context.Context, req app.ExpandRequest) (evidence.Packet, error)
+          Close() error
+      }
+
+      type IndexMeasurement struct {
+          Files int
+          Symbols int
+          Chunks int
+          Relations int
+          DatabaseBytes int64
+          Duration time.Duration
+      }
+
+- Consumes: the current root-bound `app.Service` and existing evaluation/evidence paths
+
+- [ ] **Step 1: Write a fake-engine contract test**
+
+Create a fake engine and assert the runner-facing interface can:
+
+- build once;
+- query legacy;
+- query Evidence;
+- expand Evidence;
+- close exactly once;
+- propagate context cancellation.
+
+- [ ] **Step 2: Write an app-adapter integration test**
+
+Materialize or copy the existing `authsample` fixture to a temporary root, open the real adapter, build the index, and query:
+
+    ValidateToken の呼び出し元はどこですか
+
+Assert:
+
+- Evidence schema is `focalspan.context.v1`;
+- the packet is budget compliant;
+- at least one path is repository-relative;
+- the adapter does not create files outside the temporary root except normal Go test temporary state;
+- close removes no source file.
+
+- [ ] **Step 3: Implement the adapter without duplicating search logic**
+
+Add `appEngineFactory` and `appEngine`. Use the current application service's existing methods. If the current service does not accept a retrieval mode directly, use the same internal option or constructor already used by `internal/eval` ablation. Do not add a public CLI flag.
+
+- [ ] **Step 4: Measure index state**
+
+After a successful build, read counts and database size through existing status/store APIs and `os.Stat` on the temporary index. Do not query private SQLite tables directly if a store method already exists.
+
+- [ ] **Step 5: Preserve current evaluation behavior**
+
+If a metric helper moves from `internal/eval`, keep its old behavior and tests byte-for-byte. Do not merge benchmark case types with existing fixture `eval.Case`; the historical schema has different semantics.
+
+- [ ] **Step 6: Verify and commit**
+
+Run:
+
+    go test ./internal/benchmark -run "TestEngine|TestAppEngine" -count=1
+    go test ./internal/app ./internal/eval ./internal/benchmark
+    go test ./...
+    git diff --check
+    git add internal/benchmark internal/eval
+    git commit -m "feat: adapt FocalSpan engine for historical benchmarks"
+
+Stage `internal/eval` only if it changed.
+
+---
+
+### Task 5: Execute Cases Across Profiles and Budgets
+
+**Files:**
+- Create: `internal/benchmark/runner.go`
+- Create: `internal/benchmark/runner_test.go`
+- Create: `internal/benchmark/match.go`
+- Create: `internal/benchmark/match_test.go`
+
+**Interfaces:**
+- Produces:
+
+      type RunRequest struct {
+          Suite Suite
+          Repositories map[string]string
+          Profiles []Profile
+          Repeat int
+          Workspace string
+      }
+
+      type Runner struct {
+          Snapshotter Snapshotter
+          EngineFactory EngineFactory
+          Clock Clock
+      }
+
+      func (r *Runner) Run(ctx context.Context, req RunRequest) (RunReport, error)
+
+- Consumes: validated suites, resolved repository paths, safe snapshots, existing FocalSpan engine
+
+- [ ] **Step 1: Write exact expectation-matching tests**
+
+Implement tests for:
+
+    func MatchRequiredPaths(packet evidence.Packet, expected []string) MatchResult
+    func MatchRequiredSymbols(packet evidence.Packet, expected []SymbolExpectation) MatchResult
+
+Rules:
+
+- paths match exact slash-normalized repository-relative strings;
+- symbol name and path must both match;
+- optional kind and role must also match when present;
+- case is preserved for symbol names;
+- duplicate packet items cannot satisfy one expectation twice;
+- a synthetic outline may satisfy a path expectation but only satisfies a symbol expectation when its symbol, path, kind, and role match;
+- invalid packet-local relation IDs do not count.
+
+- [ ] **Step 2: Write runner sequencing tests with fakes**
+
+For one case, two budgets, two profiles, and repeat count two, assert:
+
+- snapshot is materialized once per case/base commit, not once per budget;
+- index is built once per snapshot/profile only when retrieval mode requires a distinct service;
+- each quality query runs twice;
+- one warm-up query may run before timed repetitions but is excluded from quality counts;
+- engines close and workspace cleanup occurs after success and error;
+- case/profile/budget output order follows suite and profile order, never map order.
+
+- [ ] **Step 3: Implement workspace layout**
+
+Under the caller-provided temporary workspace, use:
+
+    snapshots/<repository-id>/<base-commit>/
+    runs/<case-id>/<profile-name>/
+    reports/
+
+Sanitize IDs for filenames with `[A-Za-z0-9._-]`; reject rather than silently rewrite an empty result. Never include the original absolute repository path in a generated filename.
+
+- [ ] **Step 4: Implement query execution**
+
+For Evidence profiles, create `app.QueryRequest` with the case query, selected budget, focused/source mode from the profile, and retrieval mode through the engine adapter. For legacy profile, call the existing legacy query path.
+
+Run each quality query twice and compare canonical serialized outputs after removing fields documented as volatile. Evidence packets should already contain no timestamps. Any nondeterminism is a case failure.
+
+- [ ] **Step 5: Collect query-plan intent**
+
+Compare the observed planned primary intent with `ExpectedIntent` when specified. Obtain it from the existing query planner or packet intent; do not infer it from selected paths.
+
+- [ ] **Step 6: Collect diff diagnostics without turning them into labels**
+
+Call `CollectChanges` once per case. Record:
+
+- paths changed by the target commit;
+- changed paths that existed at base;
+- changed paths selected in the packet;
+- changed-path recall as a diagnostic;
+- added paths as unavailable-at-base;
+- deleted/renamed status.
+
+Do not add changed paths to `RequiredPaths`.
+
+- [ ] **Step 7: Add invalid-label checks against the materialized base**
+
+Before querying, validate every required, optional, forbidden, and symbol path exists at base. A missing required or forbidden path makes the case invalid. A target-added path may appear only in diff diagnostics, never as required evidence.
+
+- [ ] **Step 8: Verify and commit**
+
+Run:
+
+    go test ./internal/benchmark -run "TestMatch|TestRunner" -count=1
+    go test ./internal/benchmark
+    go test ./...
+    git diff --check
+    git add internal/benchmark
+    git commit -m "feat: run historical tasks across retrieval profiles"
+
+---
+
+### Task 6: Compute Deterministic Quality and Separate Performance Metrics
+
+**Files:**
+- Create: `internal/benchmark/metrics.go`
+- Create: `internal/benchmark/metrics_test.go`
+- Create: `internal/benchmark/report.go`
+- Create: `internal/benchmark/report_test.go`
+- Create: `testdata/benchmark/golden/quality-report.json`
+- Create: `testdata/benchmark/golden/quality-report.md`
+
+**Interfaces:**
+- Produces:
+
+      type QualityResult struct {
+          CaseID string `json:"case_id"`
+          Profile string `json:"profile"`
+          Budget int `json:"budget"`
+          TargetRank int `json:"target_rank"`
+          ReciprocalRank float64 `json:"reciprocal_rank"`
+          RequiredPathRecall float64 `json:"required_path_recall"`
+          OptionalPathRecall float64 `json:"optional_path_recall"`
+          RequiredSymbolRecall float64 `json:"required_symbol_recall"`
+          IntentCorrect int `json:"intent_correct"`
+          RoleAccuracy float64 `json:"role_accuracy"`
+          RelationValid int `json:"relation_valid"`
+          BudgetCompliant int `json:"budget_compliant"`
+          Deterministic int `json:"deterministic"`
+          ForbiddenViolations int `json:"forbidden_violations"`
+          WireTokens int `json:"wire_tokens"`
+          EvidenceTokens int `json:"evidence_tokens"`
+          MetadataOverheadRatio float64 `json:"metadata_overhead_ratio"`
+          DuplicateSourceRatio float64 `json:"duplicate_source_ratio"`
+          ChangedPathRecall float64 `json:"changed_path_recall"`
+          FailureCodes []string `json:"failure_codes,omitempty"`
+      }
+
+      type PerformanceResult struct {
+          CaseID string `json:"case_id"`
+          Profile string `json:"profile"`
+          Budget int `json:"budget"`
+          SnapshotMS int64 `json:"snapshot_ms"`
+          IndexMS int64 `json:"index_ms"`
+          QueryMS []int64 `json:"query_ms"`
+          DatabaseBytes int64 `json:"database_bytes"`
+          Files int `json:"files"`
+          Symbols int `json:"symbols"`
+          Chunks int `json:"chunks"`
+          Relations int `json:"relations"`
+      }
+
+      type RunReport struct {
+          Schema string `json:"schema"`
+          Suite string `json:"suite"`
+          FocalSpanCommit string `json:"focalspan_commit"`
+          Quality []QualityResult `json:"quality"`
+          Aggregate AggregateQuality `json:"aggregate"`
+          Performance []PerformanceResult `json:"performance,omitempty"`
+      }
+
+- [ ] **Step 1: Write metric unit tests**
+
+Use hand-built packets to verify:
+
+- target rank `0` means absent and reciprocal rank `0`;
+- rank one yields reciprocal rank `1`;
+- path/symbol recall uses unique expectations;
+- no expected optional paths yields optional recall `1`;
+- forbidden duplicates count each selected evidence item once;
+- role accuracy considers only matched expectations with an expected role;
+- every relation endpoint must reference a packet-local evidence ID;
+- budget compliance uses measured model-visible wire cost;
+- metadata overhead is `(wire-evidence)/wire`, clamped to `[0,1]`;
+- duplicate-source ratio counts repeated verbatim/excerpt source bytes, not repeated signatures or metadata;
+- changed-path recall is diagnostic and does not affect required recall.
+
+- [ ] **Step 2: Add aggregate metrics**
+
+Aggregate by profile and budget. Include:
+
+- case count and invalid-case count;
+- hit-at-1, hit-at-3, hit-at-5;
+- mean reciprocal rank;
+- median required path recall;
+- median required symbol recall;
+- intent accuracy;
+- role accuracy;
+- budget compliance;
+- deterministic output;
+- total forbidden violations;
+- median wire tokens;
+- median metadata overhead;
+- median duplicate-source ratio;
+- median changed-path recall.
+
+Use stable integer/rational accumulation where possible, then format floats consistently.
+
+- [ ] **Step 3: Separate quality and timing serialization**
+
+`MarshalQuality` excludes the `performance` field and is byte-deterministic. `MarshalFullReport` includes timings. Golden determinism tests compare only `MarshalQuality`.
+
+- [ ] **Step 4: Implement sanitized Markdown rendering**
+
+The Markdown report includes repository IDs, case IDs, commit IDs, labels, ranks, ratios, failure codes, and timings. It must not include:
+
+- absolute repository or temporary paths;
+- source text;
+- query result source segments;
+- usernames;
+- environment values.
+
+Queries may be included because suite authors explicitly wrote them, but escape Markdown tables safely.
+
+- [ ] **Step 5: Add golden report tests**
+
+Generate the JSON and Markdown goldens from fixed fake results. Run twice and assert identical bytes and LF newlines.
+
+- [ ] **Step 6: Verify and commit**
+
+Run:
+
+    go test ./internal/benchmark -run "TestMetric|TestAggregate|TestReport|TestGolden" -count=1
+    go test ./internal/benchmark
+    go test ./...
+    git diff --check
+    git add internal/benchmark testdata/benchmark/golden
+    git commit -m "feat: report benchmark quality and performance"
+
+---
+
+### Task 7: Add Query-Plus-Expand Delta Measurement
+
+**Files:**
+- Modify: `internal/benchmark/runner.go`
+- Modify: `internal/benchmark/metrics.go`
+- Modify: `internal/benchmark/report.go`
+- Modify: `internal/benchmark/runner_test.go`
+- Modify: `internal/benchmark/metrics_test.go`
+
+**Interfaces:**
+- Extends `QualityResult` with:
+
+      ExpandRequiredPathRecall float64 `json:"expand_required_path_recall,omitempty"`
+      ExpandRequiredSymbolRecall float64 `json:"expand_required_symbol_recall,omitempty"`
+      ExpandForbiddenViolations int `json:"expand_forbidden_violations,omitempty"`
+      ExpandRelationValid int `json:"expand_relation_valid,omitempty"`
+      CumulativeWireTokens int `json:"cumulative_wire_tokens,omitempty"`
+      CumulativeWireTokensWithoutKnown int `json:"cumulative_wire_tokens_without_known,omitempty"`
+      DeltaTokenRatio float64 `json:"delta_token_ratio,omitempty"`
+      KnownResendCount int `json:"known_resend_count,omitempty"`
+
+- [ ] **Step 1: Write anchor-selection tests**
+
+The expansion anchor must be selected only by exact `From.Path` plus `From.Name`, optionally narrowed by kind. Never choose the first evidence item when the exact anchor is absent.
+
+Expected failures:
+
+    anchor_missing
+    anchor_ambiguous
+    unsupported_relation
+
+- [ ] **Step 2: Write a known-handle delta test**
+
+Create an initial packet containing target, caller, and test. Expand `callers` twice:
+
+1. with all initial handles passed as `known_handles`;
+2. without known handles.
+
+Assert:
+
+- known version resends none of the initial handles;
+- packet-local relations do not dangle;
+- cumulative wire tokens are query wire plus expand wire;
+- `DeltaTokenRatio = withKnown / withoutKnown`;
+- no divide-by-zero yields NaN or infinity.
+
+- [ ] **Step 3: Implement expansion execution**
+
+For every `ExpandExpectation` and Evidence profile with `RunExpansion`, locate the exact anchor, call existing `ExpandEvidence`, and pass all handles already visible in the initial packet. Run the control expansion without known handles only for measurement; do not expose it to users.
+
+- [ ] **Step 4: Match expansion expectations**
+
+Use the same exact path/symbol rules as initial queries. Required expansion labels are independent of initial labels. A path already returned initially may still be required context, but it must not be retransmitted when known handles are used; count it as already satisfied only when the suite expectation explicitly targets the initial packet.
+
+- [ ] **Step 5: Add aggregate delta metrics**
+
+Report median delta-token ratio and total known resend count. Preserve the v0.4 invariant that known resend count is zero.
+
+- [ ] **Step 6: Verify and commit**
+
+Run:
+
+    go test ./internal/benchmark -run "TestExpand|TestKnown|TestDelta" -count=1
+    go test ./internal/evidence ./internal/app ./internal/benchmark
+    go test ./...
+    git diff --check
+    git add internal/benchmark
+    git commit -m "feat: benchmark multi-step evidence expansion"
+
+---
+
+### Task 8: Add Case Scaffolding and Private Repository Mapping
+
+**Files:**
+- Create: `internal/benchmark/scaffold.go`
+- Create: `internal/benchmark/scaffold_test.go`
+- Create: `internal/benchcli/run.go`
+- Create: `internal/benchcli/run_test.go`
+- Create: `cmd/focalspan-bench/main.go`
+- Modify: `.gitignore`
+
+**Interfaces:**
+- Produces development commands:
+
+      focalspan-bench validate
+      focalspan-bench scaffold
+      focalspan-bench run
+      focalspan-bench compare
+
+- [ ] **Step 1: Ignore private benchmark state**
+
+Add exactly:
+
+    .focalspan-bench.json
+    .focalspan-bench/
+
+Do not ignore checked-in `testdata/benchmark/` or `docs/benchmarks/`.
+
+- [ ] **Step 2: Write repository-resolution tests**
+
+Resolution precedence:
+
+1. repeated `--repo ID=PATH`;
+2. registry file passed with `--registry`;
+3. `.focalspan-bench.json` in the FocalSpan repository root;
+4. `self`, resolved to the current Git root.
+
+Reject duplicate IDs with differing paths, missing IDs, non-directories, non-Git repositories, and NUL values. JSON output never includes resolved absolute paths.
+
+- [ ] **Step 3: Write scaffold tests**
+
+Command shape:
+
+    focalspan-bench scaffold \
+      --repository self \
+      --base <base-ref> \
+      --target <target-ref> \
+      --query "where is MCP evidence output assembled?"
+
+The output is one valid case proposal containing:
+
+- resolved full commit IDs;
+- query;
+- default budgets `[1024,2048,4096]`;
+- changed existing files in `candidate_paths`;
+- added files in `unavailable_at_base`;
+- empty required/optional/forbidden labels;
+- no source text.
+
+Because `candidate_paths` is scaffold-only metadata and not part of the final Suite `Case`, define:
+
+    type CaseProposal struct {
+        Case Case `json:"case"`
+        CandidatePaths []string `json:"candidate_paths"`
+        UnavailableAtBase []string `json:"unavailable_at_base"`
+    }
+
+The user must review and move selected paths into explicit labels.
+
+- [ ] **Step 4: Implement `validate`**
+
+Command:
+
+    focalspan-bench validate --suite <path> [--registry <path>] [--repo ID=PATH]
+
+It validates schema, resolves refs, materializes each base snapshot, verifies every label exists at base, and prints one line per case plus a summary. `--json` emits a stable report without absolute paths.
+
+- [ ] **Step 5: Implement `run`**
+
+Command:
+
+    focalspan-bench run \
+      --suite <path> \
+      --profile default \
+      --repeat 3 \
+      --json-out <path> \
+      --markdown-out <path> \
+      [--registry <path>] \
+      [--repo ID=PATH] \
+      [--keep-workspace]
+
+Default behavior:
+
+- use a newly created temporary workspace;
+- redact absolute paths;
+- remove workspace on success and failure;
+- repeat quality output twice and timing measurement three times;
+- write JSON and Markdown atomically;
+- refuse to overwrite output unless `--force`;
+- `--keep-workspace` is an explicit debugging option and prints the retained path to stderr, never into checked-in report content.
+
+- [ ] **Step 6: Implement `compare`**
+
+Initial command shape:
+
+    focalspan-bench compare \
+      --baseline <quality-report.json> \
+      --candidate <quality-report.json> \
+      [--json]
+
+Task 10 defines comparison semantics. Wire the command now with a fake comparator test, then complete semantics there.
+
+- [ ] **Step 7: Keep stdout/stderr disciplined**
+
+- normal command output and JSON go to stdout;
+- errors and retained workspace diagnostics go to stderr;
+- no source text is logged;
+- command errors return nonzero;
+- validation error output identifies case ID and field.
+
+- [ ] **Step 8: Verify and commit**
+
+Run:
+
+    go test ./internal/benchcli ./internal/benchmark -count=1
+    go run ./cmd/focalspan-bench validate --suite testdata/benchmark/schema-valid.json
+    go test ./...
+    git diff --check
+    git add .gitignore cmd/focalspan-bench internal/benchcli internal/benchmark
+    git commit -m "feat: add development benchmark command"
+
+---
+
+### Task 9: Create a Public Self-History Corpus
+
+**Files:**
+- Create: `testdata/benchmark/focalspan-history.json`
+- Create: `testdata/benchmark/focalspan-history-labels.md`
+- Modify: `docs/benchmarks/README.md`
+
+**Interfaces:**
+- Consumes: FocalSpan's own Git history
+- Produces: a source-free, reproducible real-history suite that exercises integration points across extraction, retrieval, linking, MCP, and Evidence compilation
+
+- [ ] **Step 1: Identify candidate target commits by feature, not by recency alone**
+
+Use `git log --all --oneline --decorate` and `git show --stat` to find commits that introduced or completed these eight themes:
+
+1. PHP/`.inc` structural extraction integration.
+2. C/C++ first-class extractor integration.
+3. JavaScript/TypeScript first-class extraction or module relations.
+4. Rust first-class extraction.
+5. .NET WinForms/WPF/XAML/RESX integration.
+6. Japanese query planning and relation retrieval.
+7. Static project metadata plus conservative linker integration.
+8. LLM Evidence Packet or `known_handles` integration.
+
+For each theme, select a target commit and an ancestor base immediately before the relevant implementation. A merge commit may use its first parent only when that parent is the actual pre-feature tree.
+
+- [ ] **Step 2: Enforce label feasibility**
+
+For each case:
+
+- every required, optional, and forbidden path must exist at base;
+- new files introduced by target cannot be required;
+- required symbols must exist in the base index;
+- the query must describe a maintainer question that could reasonably be asked before the target change;
+- at least one required path must be an existing integration point changed by the target;
+- forbidden paths must be plausibly confusable, not arbitrary junk.
+
+Use `focalspan-bench scaffold` to inspect candidates, then manually label.
+
+- [ ] **Step 3: Write English and Japanese queries**
+
+At least three of the eight cases use Japanese mixed with an exact code identifier, for example:
+
+    PHPの.inc判定はどこで決まりますか
+    code_contextのEvidence Packetはどこで組み立てられますか
+    Rust extractorをregistryへ追加する場所はどこですか
+
+Do not use target-only symbol names that did not exist at base. The remaining cases may use English.
+
+- [ ] **Step 4: Add at least three expansion expectations**
+
+Cover three different relations from:
+
+    callers
+    callees
+    imports
+    references
+    tests
+    children
+
+Each anchor must exist at base and be uniquely labeled by path and symbol.
+
+- [ ] **Step 5: Document human labeling rationale**
+
+In `testdata/benchmark/focalspan-history-labels.md`, for each case record:
+
+- why the question is realistic;
+- why each required path is necessary;
+- why optional paths are not required;
+- why forbidden paths are irrelevant;
+- which target-diff paths were deliberately not labeled;
+- confirmation that all labels exist at base.
+
+Do not include source code or absolute paths.
+
+- [ ] **Step 6: Validate the suite**
+
+Run:
+
+    go run ./cmd/focalspan-bench validate \
+      --suite testdata/benchmark/focalspan-history.json
+
+Expected:
+
+    cases: 8
+    invalid: 0
+
+The exact human formatting may differ, but both values must be present.
+
+- [ ] **Step 7: Add anti-overfitting review**
+
+Search production code for every case ID and distinctive query phrase:
+
+    git grep -n "<case-id>"
+    git grep -n "<distinctive-query-fragment>"
+
+Matches are allowed only in benchmark data, tests directly loading that data, or documentation. No production ranking, parser, query, linker, or Evidence code may contain them.
+
+- [ ] **Step 8: Commit corpus separately**
+
+Run:
+
+    git add testdata/benchmark/focalspan-history.json \
+      testdata/benchmark/focalspan-history-labels.md \
+      docs/benchmarks/README.md
+    git commit -m "test: add FocalSpan historical task corpus"
+
+---
+
+### Task 10: Attribute Failures and Compare Reports
+
+**Files:**
+- Create: `internal/benchmark/failure.go`
+- Create: `internal/benchmark/failure_test.go`
+- Create: `internal/benchmark/compare.go`
+- Create: `internal/benchmark/compare_test.go`
+- Modify: `internal/benchmark/report.go`
+- Modify: `internal/benchcli/run.go`
+- Modify: `internal/benchcli/run_test.go`
+
+**Interfaces:**
+- Produces stable failure codes:
+
+      label_invalid
+      intent_mismatch
+      target_not_selected
+      target_below_5
+      required_path_missing
+      required_symbol_missing
+      forbidden_selected
+      relation_invalid
+      role_mismatch
+      ranked_candidate_not_packed
+      budget_exceeded
+      nondeterministic_output
+      expansion_anchor_missing
+      expansion_anchor_ambiguous
+      expansion_required_missing
+      known_handle_resent
+
+- Produces:
+
+      type Comparison struct {
+          Compatible bool `json:"compatible"`
+          Regressions []Regression `json:"regressions,omitempty"`
+          Improvements []Regression `json:"improvements,omitempty"`
+          Warnings []string `json:"warnings,omitempty"`
+      }
+
+- [ ] **Step 1: Write failure-code tests**
+
+Given controlled case and packet outcomes, assert exact codes and deterministic ordering. A single case may have multiple codes. Do not attempt to infer compiler-level root cause.
+
+- [ ] **Step 2: Distinguish ranking from packing where current internals permit it**
+
+Use the current app/search trace only through an internal benchmark adapter. If the required candidate appears in the ranked pre-packet candidate list but not the Evidence Packet, emit `ranked_candidate_not_packed`. If the current checkout has no safe internal trace, do not add a public debug command; record only `required_*_missing` and document the attribution limit.
+
+Any adapter added to `internal/app` must be unexported outside internal packages or explicitly named as development-only.
+
+- [ ] **Step 3: Implement quality comparison**
+
+Reports are compatible only when these match:
+
+- suite name;
+- case IDs;
+- profile names;
+- budgets;
+- schema major version.
+
+A candidate regression is:
+
+- budget compliance falls;
+- deterministic output falls;
+- forbidden violations increase;
+- required path or symbol recall falls;
+- intent or role accuracy falls;
+- relation validity falls;
+- known resend count increases;
+- median wire tokens increase by more than 10% without any required-recall improvement.
+
+Performance changes are warnings only by default. A query or index median slowdown greater than 20% is a warning, not exit-code failure.
+
+- [ ] **Step 4: Define compare exit codes**
+
+- `0`: compatible and no quality regression;
+- `2`: compatible with one or more quality regressions;
+- `3`: incompatible schemas/suites or invalid report;
+- `1`: I/O or command failure.
+
+Human output lists exact case/profile/budget regressions. JSON output contains no ANSI escapes.
+
+- [ ] **Step 5: Add source-free diagnostic detail**
+
+For misses, report expected path/symbol, selected path/symbol/role list, and failure code. Never include source content, source segments, absolute paths, or full private registry data.
+
+- [ ] **Step 6: Verify and commit**
+
+Run:
+
+    go test ./internal/benchmark ./internal/benchcli -run "TestFailure|TestCompare" -count=1
+    go test ./...
+    git diff --check
+    git add internal/benchmark internal/benchcli
+    git commit -m "feat: compare benchmark quality and classify misses"
+
+---
+
+### Task 11: Run the Public Benchmark and Freeze v0.5 Measurements
+
+**Files:**
+- Create: `docs/benchmarks/results-v0.5.json`
+- Create: `docs/benchmarks/results-v0.5.md`
+- Create: `docs/benchmarks/findings-v0.5.md`
+- Modify: `docs/evaluation.md`
+- Modify: `PLAN.md`
+
+**Interfaces:**
+- Consumes: public history suite and completed benchmark executable
+- Produces: truthful, source-free, reproducible current-behavior measurements and a data-driven recommendation
+
+- [ ] **Step 1: Run the public suite from a clean benchmark workspace**
+
+Build the development binary into a temporary path and run:
+
+    go build -o .focalspan-bench/focalspan-bench ./cmd/focalspan-bench
+
+On Windows use `.focalspan-bench/focalspan-bench.exe`.
+
+Then run:
+
+    .focalspan-bench/focalspan-bench run \
+      --suite testdata/benchmark/focalspan-history.json \
+      --profile default \
+      --repeat 3 \
+      --json-out docs/benchmarks/results-v0.5.json \
+      --markdown-out docs/benchmarks/results-v0.5.md \
+      --force
+
+Remove the binary after the run. The command may use its own temporary snapshot workspace, but no snapshot is checked in.
+
+- [ ] **Step 2: Verify deterministic quality output**
+
+Run the same suite again to a second temporary JSON file. Compare deterministic quality sections with `focalspan-bench compare`. The comparison must return exit code zero. Timing differences are allowed.
+
+- [ ] **Step 3: Verify hard invariants**
+
+The public suite must have:
+
+    invalid cases = 0
+    budget compliance = 1.0
+    deterministic output = 1.0
+    relation validity = 1.0 for packets that contain relations
+    forbidden violations = 0
+    known resend count = 0
+    NaN or infinite metrics = 0
+    absolute paths in checked-in reports = 0
+    source text in checked-in reports = 0
+
+Do not invent a minimum required-path recall after seeing the result. Record the measured value honestly.
+
+- [ ] **Step 4: Analyze failure distribution**
+
+Write `docs/benchmarks/findings-v0.5.md` with:
+
+- suite and profile summary;
+- recall by budget;
+- English versus Japanese query comparison;
+- per-theme misses;
+- failure-code counts;
+- changed-path diagnostic versus human-required recall;
+- delta-token behavior;
+- metadata and duplicate-source cost;
+- index/query timing context;
+- limitations of using one repository's history.
+
+- [ ] **Step 5: Select the next milestone using measured evidence**
+
+Use this decision order:
+
+1. If most missing required evidence never reaches the selected/ranked candidate set, recommend retriever or linker improvements.
+2. If required evidence is ranked but excluded from the packet, recommend query-aware semantic zoom or utility-per-token packing.
+3. If evidence coverage is good but metadata overhead is consistently high, recommend Evidence Packet compaction.
+4. If misses cluster in one language or artifact type, recommend that extractor or project-metadata resolver.
+5. If no category dominates, recommend expanding the private/local corpus before production tuning.
+
+Name exactly one primary v0.6 direction and at most one secondary candidate. Do not start implementing either in this plan.
+
+- [ ] **Step 6: Append verified results to `docs/evaluation.md`**
+
+Add `## Real-Repository Evaluation v0.5` with:
+
+- exact FocalSpan commit;
+- suite case count;
+- profile/budget matrix;
+- hard invariant results;
+- aggregate quality;
+- delta metrics;
+- timing caveat;
+- link to findings;
+- statement that no production retrieval tuning occurred in v0.5.
+
+- [ ] **Step 7: Commit measurement artifacts**
+
+Run:
+
+    git add docs/benchmarks docs/evaluation.md PLAN.md
+    git commit -m "docs: record real-repository benchmark results"
+
+---
+
+### Task 12: Add Continuous Verification and Linux Race Coverage
+
+**Files:**
+- Create: `.github/workflows/ci.yml`
+- Modify: `README.md`
+- Modify: `docs/benchmarks/README.md`
+- Modify: `PLAN.md`
+
+**Interfaces:**
+- Produces: automated unit/vet/race/cross-build and public benchmark regression checks
+- Consumes: the checked-in v0.5 quality report as a baseline
+
+- [ ] **Step 1: Add Linux test and race jobs**
+
+Create a workflow triggered by pull requests and pushes to `master`. Use the repository's declared supported Go version. Jobs:
+
+    test:
+      ubuntu-latest
+      go test ./...
+      go vet ./...
+
+    race:
+      ubuntu-latest
+      go test -race ./...
+
+Do not claim the Windows-local race limitation is resolved until the Linux job actually passes in GitHub Actions.
+
+- [ ] **Step 2: Add CGO-free build matrix**
+
+Matrix:
+
+    windows-latest / windows amd64
+    ubuntu-latest / linux amd64
+    macos-latest / darwin arm64
+
+Run:
+
+    go build ./cmd/focalspan
+
+with `CGO_ENABLED=0`, `GOOS`, and `GOARCH` set for the target. Write artifacts to the runner temporary directory; do not upload binaries in this milestone.
+
+- [ ] **Step 3: Add public benchmark smoke and comparison**
+
+On Ubuntu:
+
+    go run ./cmd/focalspan-bench validate \
+      --suite testdata/benchmark/focalspan-history.json
+
+Run the suite to a temporary candidate report and compare against `docs/benchmarks/results-v0.5.json`. Fail on quality regression exit code `2` or incompatibility `3`. Do not fail on timing warnings.
+
+- [ ] **Step 4: Add workflow safety tests or static review**
+
+Verify the workflow:
+
+- never accesses private registry files;
+- never needs network after normal Go dependency checkout/download;
+- never runs benchmarked repository code;
+- does not persist extracted snapshots;
+- does not print source text;
+- uses least required permissions:
+
+      permissions:
+        contents: read
+
+- [ ] **Step 5: Document CI**
+
+README's development section should name:
+
+    go test ./...
+    go test -race ./...
+    go vet ./...
+    go run ./cmd/focalspan-bench validate ...
+    go run ./cmd/focalspan-bench run ...
+
+State that `focalspan-bench` is a maintainer tool and not part of the end-user CLI contract.
+
+- [ ] **Step 6: Commit CI separately**
+
+Run local YAML review, then:
+
+    git diff --check
+    git add .github/workflows/ci.yml README.md docs/benchmarks/README.md PLAN.md
+    git commit -m "ci: verify race builds and historical benchmark"
+
+---
+
+### Task 13: Final Verification, Documentation, and Plan Retrospective
+
+**Files:**
+- Modify: `README.md`
+- Modify: `docs/design.md`
+- Modify: `docs/evaluation.md`
+- Modify: `docs/benchmarks/README.md`
+- Modify: `docs/benchmarks/findings-v0.5.md`
+- Modify: `docs/superpowers/plans/README.md`
+- Modify: `PLAN.md`
+- Modify: `AGENTS.md` only if the durable plan rule is still incomplete
+
+**Interfaces:**
+- Consumes: all v0.5 code, reports, CI configuration, existing product behavior
+- Produces: a complete, reproducible milestone with a truthful next-step decision
+
+- [ ] **Step 1: Update architecture documentation**
+
+In `docs/design.md`, add a development evaluation section:
+
+    local Git repository
+      -> git archive base snapshot
+      -> current FocalSpan index/query/evidence
+      -> human labels plus target-diff diagnostics
+      -> deterministic quality report
+      -> separate timing report
+
+State that the benchmark is not part of the product path and does not permit network or repository code execution.
+
+- [ ] **Step 2: Update README without turning it into benchmark internals**
+
+Add a short maintainer section linking to `docs/benchmarks/README.md`. Keep user quick-start material focused on `focalspan`.
+
+- [ ] **Step 3: Verify plan-policy consistency**
+
+Check:
+
+- `PLANS.md` exists and describes the actual lifecycle;
+- root `PLAN.md` is the only active plan;
+- v0.4 archive is byte-identical to its Git blob;
+- `docs/implementation-plan.md` is only a pointer;
+- completed archives are not edited after Task 0;
+- plan archive index links resolve.
+
+- [ ] **Step 4: Run formatting, static checks, and all tests**
+
+Run:
+
+    gofmt -w .
+    git diff --check
+    go test ./...
+    go vet ./...
+
+Expected: all pass. Record actual package/test counts rather than copying old counts.
+
+- [ ] **Step 5: Run race tests where supported**
+
+Run:
+
+    go test -race ./...
+
+If the local Windows toolchain still cannot build race support, record it as unverified locally. Confirm the Linux CI result separately once available; do not call a configured but unrun workflow a pass.
+
+- [ ] **Step 6: Run CGO-free native and cross-builds**
+
+Direct all outputs to `.focalspan-bench/builds/` and remove them afterward:
+
+    CGO_ENABLED=0 go build ./cmd/focalspan
+    GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/focalspan
+    GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/focalspan
+    GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/focalspan
+    CGO_ENABLED=0 go build ./cmd/focalspan-bench
+
+Use the shell-appropriate environment syntax. Verify no binary remains in the repository root.
+
+- [ ] **Step 7: Re-run every legacy language and Evidence evaluation**
+
+Run all checked-in `testdata/eval/*cases.jsonl` against their documented fixture roots. Requirements:
+
+    no lower hit@5 than the recorded current baseline
+    no lower symbol/path recall
+    no new forbidden violation
+    budget compliance remains 1.0
+    deterministic output remains 1.0
+    Evidence source fidelity and relation validity remain 1.0
+    known resend count remains 0
+
+A benchmark-only milestone should not change these metrics. Investigate any change.
+
+- [ ] **Step 8: Re-run the public history suite and compare**
+
+Run to a temporary candidate report, then:
+
+    go run ./cmd/focalspan-bench compare \
+      --baseline docs/benchmarks/results-v0.5.json \
+      --candidate <temporary-report>
+
+Expected exit code: `0`.
+
+- [ ] **Step 9: Check privacy and cleanup**
+
+Run searches that would expose accidental local data:
+
+    git grep -nE "([A-Za-z]:\\\\|/home/|/Users/|H:/|C:/Users/)" -- \
+      docs/benchmarks testdata/benchmark
+
+Review every match; expected matches are none unless a clearly synthetic example is documented. Also verify:
+
+    git status --short
+
+contains no extracted snapshot, private registry, database, generated binary, tar archive, or temporary report.
+
+- [ ] **Step 10: Complete living-plan sections**
+
+Update:
+
+- `Progress` with UTC completion timestamps;
+- `Surprises & Discoveries` with evidence;
+- `Decision Log` for every changed acceptance or architecture choice;
+- `Outcomes & Retrospective` with measured results and the chosen v0.6 direction.
+
+Do not erase the initial decisions.
+
+- [ ] **Step 11: Final self-review**
+
+Review the final diff for:
+
+- benchmark code accidentally entering public CLI/MCP;
+- shell invocation;
+- source-repository mutation;
+- unsafe tar extraction;
+- absolute-path leaks;
+- source-text leaks;
+- diff paths treated as automatic required labels;
+- timing fields used in deterministic comparison;
+- map-order nondeterminism;
+- production ranking changes;
+- weakened old evaluations;
+- stale active-plan references;
+- unchecked boxes marked without evidence.
+
+Fix issues and rerun affected commands.
+
+- [ ] **Step 12: Commit final documentation and verification record**
+
+Run:
+
+    git add README.md docs PLANS.md PLAN.md AGENTS.md
+    git commit -m "docs: complete real-repository evaluation v0.5"
+
+Stage `AGENTS.md` only if it changed after Task 0. Leave the completed root `PLAN.md` in place. Do not archive v0.5 until a successor plan is introduced.
+
+---
+
+## Concrete End-to-End Acceptance
+
+From the FocalSpan repository root, a maintainer must be able to run:
+
+    go run ./cmd/focalspan-bench validate \
+      --suite testdata/benchmark/focalspan-history.json
+
+and observe eight valid cases and zero invalid cases.
+
+Then:
+
+    go run ./cmd/focalspan-bench run \
+      --suite testdata/benchmark/focalspan-history.json \
+      --profile default \
+      --repeat 3 \
+      --json-out .focalspan-bench/candidate.json \
+      --markdown-out .focalspan-bench/candidate.md \
+      --force
+
+must:
+
+- leave the checked-out source repository unchanged;
+- create no Git worktree or branch;
+- execute no repository code;
+- perform no network request;
+- remove extracted snapshots unless `--keep-workspace` was explicitly provided;
+- produce a source-free, absolute-path-free report;
+- include every case/profile/budget in deterministic order;
+- keep every Evidence result within its token budget;
+- identify invalid labels before query execution;
+- measure query-plus-expand delta behavior where specified.
+
+Finally:
+
+    go run ./cmd/focalspan-bench compare \
+      --baseline docs/benchmarks/results-v0.5.json \
+      --candidate .focalspan-bench/candidate.json
+
+must return zero when the deterministic quality metrics match or improve and must ignore normal timing variance.
+
+---
+
+## Validation and Acceptance
+
+The milestone is complete only when all statements are true:
+
+- `PLANS.md` defines the durable lifecycle and root `PLAN.md` is the sole active plan.
+- The completed v0.4 root plan and original bootstrap plan are preserved in the archive.
+- The old `docs/implementation-plan.md` no longer competes with the active plan.
+- The benchmark schema rejects ambiguous, unsafe, duplicate, or unavailable labels.
+- Local repository paths are resolved outside suite files and are redacted from reports.
+- Historical source is materialized with read-only Git commands into safe temporary directories.
+- The benchmark never changes branches, refs, index, working files, hooks, submodules, or configuration.
+- Tar traversal and symlink cases are tested.
+- Existing FocalSpan product code performs indexing, retrieval, ranking, Evidence compilation, and expansion; the benchmark does not duplicate them.
+- Default profiles compare full Evidence at three budgets, FTS-only, no-relations, and legacy presentation.
+- Quality output is deterministic; timing output is separate.
+- Initial and expansion expectations use exact path/symbol matching.
+- Target diffs remain diagnostics rather than automatic ground truth.
+- The public history suite contains eight valid human-reviewed cases and at least three expansions.
+- At least three cases use Japanese mixed with code identifiers.
+- Reports contain no source text or absolute local paths.
+- Budget compliance, deterministic output, relation validity, forbidden-path safety, and known-handle no-resend hard invariants pass.
+- The current measured recall is recorded without post-hoc threshold manipulation.
+- The final findings select one primary v0.6 direction from measured failure categories.
+- Linux CI runs `go test -race ./...`; CGO-free cross-platform builds remain configured.
+- Existing language/evidence evaluations do not regress.
+- No incomplete production path or panic-based stub remains.
+- The completed plan's outcomes and actual command evidence are recorded.
+
+---
+
+## Idempotence and Recovery
+
+- `validate` and `run` are safe to repeat. They materialize fresh temporary snapshots and never alter source repositories.
+- Atomic output writes use a temporary sibling file followed by rename. A failed run leaves the previous report untouched unless `--force` was used and replacement completed.
+- Workspace cleanup runs through `defer` after creation. Cancellation and errors remove partial snapshots unless `--keep-workspace` was explicit.
+- If `git archive` fails, report repository ID, sanitized ref, and capped Git stderr; do not fall back to a worktree or clone.
+- If a base label is invalid, stop that case before indexing and mark the suite invalid. Do not silently remove the label.
+- If a target ref disappears after history rewriting, validation fails clearly. Update the suite through a reviewed data commit rather than resolving to a nearby commit.
+- If checked-in quality reports become schema-incompatible, `compare` returns exit code `3`; create an explicitly versioned migration or new baseline rather than coercing fields.
+- If Task 0 runs after the new `PLAN.md` has already been committed, locate the v0.4 plan through Git history by its exact title and archive that blob. Do not archive the new plan under the old filename.
+- If the local environment cannot run race tests, preserve the local unverified status and use the Linux CI result. Do not weaken the requirement.
+- If real-history recall is poor, complete the measurement milestone and document it. Do not change production weights inside v0.5 merely to make the report green.
+
+---
+
+## Interfaces and Dependencies
+
+No new third-party Go dependency is expected. Use the standard library and current FocalSpan packages.
+
+The benchmark package depends inward on product packages; product packages must not import `internal/benchmark` or `internal/benchcli`.
+
+Allowed direction:
+
+    cmd/focalspan-bench
+      -> internal/benchcli
+      -> internal/benchmark
+      -> internal/app, internal/eval, internal/evidence,
+         internal/search, internal/gitx, internal/repository
+
+Forbidden direction:
+
+    cmd/focalspan
+      -> internal/benchmark
+
+    internal/app or internal/evidence
+      -> internal/benchmark
+
+`CommandRunner` must use `exec.CommandContext` with separate arguments. No `cmd /c`, `sh -c`, PowerShell command string, or shell quoting parser is allowed.
+
+The suite and report schemas are versioned independently:
+
+    focalspan.benchmark.v1
+    focalspan.benchmark-report.v1
+
+A backward-incompatible schema change requires a new major schema identifier and a comparison incompatibility result; it must not silently reinterpret checked-in data.

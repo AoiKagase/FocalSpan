@@ -13,3 +13,10 @@
 - Write the failing test before each behavior change and keep tests deterministic.
 - No network, external LLM, repository-code execution, build/package restore, or CRG code copying.
 - Fixture and end-to-end acceptance tests live under `testdata/` and package integration tests.
+
+# ExecPlans
+
+For work spanning multiple packages, a public contract, or more than one
+session, read `PLANS.md` and execute the repository-root `PLAN.md`.
+`PLAN.md` is the sole active plan. Keep its Progress, discoveries, decisions,
+and outcomes current; archive it only when introducing its successor.
