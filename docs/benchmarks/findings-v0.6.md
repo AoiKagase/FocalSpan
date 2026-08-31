@@ -185,3 +185,11 @@ No `results-v0.6` artifact exists and v0.6 makes no release-quality improvement
 claim. The milestone closes locally with the attribution trace as its durable
 deliverable and the path-hint hypothesis as rejected evidence. Remote CI is not
 claimed until the closure commits are pushed and the actual jobs are inspected.
+
+The closure was then pushed. GitHub Actions run
+[`33386748423`](https://github.com/AoiKagase/FocalSpan/actions/runs/33386748423)
+completed successfully at commit `546ae02bb16df574d52a22670a181296666ed365`.
+Its Linux test/vet and race jobs passed, as did CGO-free Windows amd64, Linux
+amd64, and Darwin arm64 builds. The public smoke validated both cases, produced
+12 quality results, and compared `compatible: true` with zero regressions. The
+manual full job was skipped, so the final repeat-3 executed count remains 0.

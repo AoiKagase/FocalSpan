@@ -146,8 +146,8 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   failed, so the candidate was rejected and work stopped. (2026-08-31.)
 - [x] Task 8 intentionally skipped after the Task 7 frozen gate failed;
   eight-case repeat-3 candidate run count is 0. (2026-08-31.)
-- [ ] Task 9 local verification completed and closure documentation prepared;
-  its commit and remote verification remain. (2026-08-31.)
+- [x] Task 9 final local/remote verification, documentation, and retrospective
+  completed. (2026-08-31; Actions run `33386748423`.)
 
 ---
 
@@ -201,6 +201,9 @@ legacy, wire, privacy, and deterministic contracts remain intact.
   The comparison remained compatible with zero regressions, confirming that
   the retained v0.6 deliverable is attribution evidence rather than a retrieval
   quality change.
+- 2026-08-31: GitHub Actions run `33386748423` at closure commit `546ae02`
+  completed successfully. Linux test/vet/race, all three CGO-free builds, and
+  the two-case smoke/compare passed; the manual full job was skipped.
 
 ---
 
@@ -356,6 +359,15 @@ retriever hypothesis, likely exact identity selection within already matched
 paths, without changing ranking, packing, or the Evidence contract in the same
 milestone. Root `PLAN.md` remains the sole active plan until a successor is
 introduced and this file can be archived byte-for-byte.
+
+The completed closure was pushed and GitHub Actions run `33386748423` verified
+commit `546ae02`. The Linux test job ran `go test ./...` and `go vet ./...`, the
+race job ran `go test -race ./...`, and Windows amd64, Linux amd64, and Darwin
+arm64 CGO-free build jobs all succeeded. The public smoke validated both cases,
+produced 12 quality results, and compared `compatible: true` with zero
+regressions. The manual eight-case repeat-3 job was skipped as designed. These
+remote results close the remaining Task 9 gates without adding a full-suite
+measurement or changing the negative v0.6 conclusion.
 
 ---
 
@@ -616,8 +628,8 @@ findings/evaluation/PLAN.
 - [x] Verify the two-case smoke; record that no final full result exists because
   its prerequisite gate failed.
 - [x] Scan all state for leaks/residue and confirm untouched `.focalspan.json`.
-- [ ] Update docs and all living sections; commit explicit docs only.
-- [ ] When remote proof is necessary, push completed v0.6 commits, inspect the
+- [x] Update docs and all living sections; commit explicit docs only.
+- [x] When remote proof is necessary, push completed v0.6 commits, inspect the
   actual latest run, and record executed test/vet/Linux race/build/smoke jobs.
   Do not remotely rerun the manual full suite without a recorded need.
 
@@ -634,9 +646,8 @@ findings/evaluation/PLAN.
 - At least one frozen label advances, none regresses, and affected coverage or
   executable anchor count increases.
 - The rollback comparison has zero quality/invariant regressions; all
-  legacy/Evidence gates, full tests, vet, diff check, and three local builds pass
-  with actual evidence. Linux race remains a remote gate until the pushed
-  closure commit completes CI.
+  legacy/Evidence gates, full tests, vet, diff check, three builds, and Linux
+  race CI pass with actual evidence.
 - Run counts remain: bounded two-case smokes as needed, one eight-case repeat-1
   diagnostic, and zero eight-case repeat-3 final candidates because the frozen
   prerequisite gate failed.

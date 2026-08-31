@@ -592,3 +592,13 @@ compared compatible with v0.5 with zero regressions, and restored all 25 labels
 to `retrieval_missing`. Privacy and residue checks passed and generated outputs
 were removed. These are local results; post-closure Linux race and other remote
 jobs remain unverified until an actual pushed Actions run completes.
+
+GitHub Actions run
+[`33386748423`](https://github.com/AoiKagase/FocalSpan/actions/runs/33386748423)
+then completed successfully at closure commit
+`546ae02bb16df574d52a22670a181296666ed365`. Actual job results verified Linux
+`go test ./...`, `go vet ./...`, and `go test -race ./...`; CGO-free Windows
+amd64, Linux amd64, and Darwin arm64 builds; and the public two-case repeat-1
+smoke. The smoke validated 2 cases with 0 invalid, produced 12 quality results,
+and compared as compatible with zero regressions. The manual eight-case
+repeat-3 job was skipped, preserving the recorded executed count of 0.
