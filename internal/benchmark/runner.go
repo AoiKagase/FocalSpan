@@ -228,6 +228,14 @@ func validateLabelsAtBase(root string, benchmarkCase Case) error {
 	for _, symbol := range benchmarkCase.RequiredSymbols {
 		paths = append(paths, symbol.Path)
 	}
+	for _, expansion := range benchmarkCase.Expand {
+		paths = append(paths, expansion.From.Path)
+		paths = append(paths, expansion.RequiredPaths...)
+		paths = append(paths, expansion.ForbiddenPaths...)
+		for _, symbol := range expansion.RequiredSymbols {
+			paths = append(paths, symbol.Path)
+		}
+	}
 	for _, path := range paths {
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(path))); err != nil {
 			return fmt.Errorf("label path %q is unavailable at base", path)

@@ -3,6 +3,7 @@ package benchmark
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/focalspan/focalspan/internal/app"
@@ -14,6 +15,21 @@ import (
 type fakeSnapshotter struct {
 	calls int
 	root  string
+}
+
+func TestValidateLabelsAtBaseIncludesExpansionLabels(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(root+"/anchor.go", []byte("package fixture"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := ValidateLabelsAtBase(root, Case{Expand: []ExpandExpectation{{
+		From:            SymbolExpectation{Path: "anchor.go", Name: "Anchor"},
+		RequiredPaths:   []string{"missing-related.go"},
+		RequiredSymbols: []SymbolExpectation{{Path: "missing-symbol.go", Name: "Related"}},
+	}}})
+	if err == nil || !strings.Contains(err.Error(), "missing-related.go") {
+		t.Fatalf("error=%v", err)
+	}
 }
 
 func (f *fakeSnapshotter) Materialize(context.Context, string, string, string, string) (Snapshot, error) {

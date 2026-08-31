@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/focalspan/focalspan/internal/benchmark"
@@ -128,6 +129,7 @@ func runBenchmark(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	jsonOut := fs.String("json-out", "", "JSON output")
 	markdownOut := fs.String("markdown-out", "", "Markdown output")
 	force := fs.Bool("force", false, "overwrite")
+	keepWorkspace := fs.Bool("keep-workspace", false, "retain temporary benchmark workspace")
 	registryPath := fs.String("registry", "", "repository registry")
 	var repoFlags stringList
 	fs.Var(&repoFlags, "repo", "ID=PATH repository mapping")
@@ -153,7 +155,11 @@ func runBenchmark(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(workspace)
+	if *keepWorkspace {
+		fmt.Fprintf(stderr, "workspace retained: %s\n", workspace)
+	} else {
+		defer os.RemoveAll(workspace)
+	}
 	repositories, err := repositoryMap(root, *registryPath, repoFlags)
 	if err != nil {
 		return err
@@ -188,20 +194,28 @@ func runScaffold(ctx context.Context, args []string, stdout, stderr io.Writer) e
 	base := fs.String("base", "", "base")
 	target := fs.String("target", "", "target")
 	query := fs.String("query", "", "query")
+	registryPath := fs.String("registry", "", "repository registry")
+	var repoFlags stringList
+	fs.Var(&repoFlags, "repo", "ID=PATH repository mapping")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *base == "" || *target == "" || *query == "" {
 		return fmt.Errorf("--base, --target, and --query are required")
 	}
-	if *repoID != "self" {
-		return fmt.Errorf("repository %q requires mapping", *repoID)
-	}
 	root, err := currentRoot(ctx)
 	if err != nil {
 		return err
 	}
-	changes, err := benchmark.CollectChanges(ctx, benchmark.ExecCommandRunner{}, root, *base, *target)
+	repositories, err := repositoryMap(root, *registryPath, repoFlags)
+	if err != nil {
+		return err
+	}
+	repositoryPath, ok := repositories[*repoID]
+	if !ok {
+		return fmt.Errorf("repository %q requires mapping", *repoID)
+	}
+	changes, err := benchmark.CollectChanges(ctx, benchmark.ExecCommandRunner{}, repositoryPath, *base, *target)
 	if err != nil {
 		return err
 	}
@@ -291,19 +305,46 @@ func repositoryMap(root, registryPath string, values []string) (map[string]strin
 			return nil, err
 		}
 		for id, path := range registry.Repositories {
+			if strings.TrimSpace(id) == "" || strings.TrimSpace(path) == "" {
+				return nil, fmt.Errorf("repository registry contains an empty ID or path")
+			}
 			result[id] = filepath.Clean(path)
 		}
 	}
+	explicit := map[string]string{}
 	for _, value := range values {
+		if strings.ContainsRune(value, '\x00') {
+			return nil, fmt.Errorf("repository mapping contains NUL")
+		}
 		parts := strings.SplitN(value, "=", 2)
 		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 			return nil, fmt.Errorf("invalid --repo %q", value)
 		}
-		info, err := os.Stat(parts[1])
-		if err != nil || !info.IsDir() {
-			return nil, fmt.Errorf("repository path for %q is not a directory", parts[0])
+		cleaned := filepath.Clean(parts[1])
+		if previous, exists := explicit[parts[0]]; exists && previous != cleaned {
+			return nil, fmt.Errorf("conflicting --repo mappings for %q", parts[0])
 		}
-		result[parts[0]] = filepath.Clean(parts[1])
+		explicit[parts[0]] = cleaned
+		result[parts[0]] = cleaned
+	}
+	ids := make([]string, 0, len(result))
+	for id := range result {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		path := result[id]
+		if id == "" || strings.ContainsRune(id, '\x00') || strings.ContainsRune(path, '\x00') {
+			return nil, fmt.Errorf("repository mapping contains NUL or empty ID")
+		}
+		info, err := os.Stat(path)
+		if err != nil || !info.IsDir() {
+			return nil, fmt.Errorf("repository path for %q is not a directory", id)
+		}
+		gitResult, gitErr := (benchmark.ExecCommandRunner{}).Run(context.Background(), path, "git", "rev-parse", "--is-inside-work-tree")
+		if gitErr != nil || strings.TrimSpace(string(gitResult.Stdout)) != "true" {
+			return nil, fmt.Errorf("repository path for %q is not a Git repository", id)
+		}
 	}
 	return result, nil
 }

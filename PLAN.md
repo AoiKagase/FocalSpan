@@ -296,6 +296,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - [x] Public FocalSpan history corpus labeled and validated. (2026-08-31 UTC; 8 cases, 3 Japanese queries, 3 expansions, 0 invalid.)
 - [x] Failure attribution and report comparison implemented. (2026-08-31 UTC; stable codes, quality-only comparison, exit 2/3 semantics verified.)
 - [x] Task 6 acceptance gaps corrected before freezing measurements. (2026-08-31T01:32:00Z; product token estimator, complete aggregate fields, checked-in golden byte comparison, sanitized timing Markdown, and query timing samples verified by 5 focused tests.)
+- [x] Task 8 acceptance gaps corrected before freezing measurements. (2026-08-31T01:38:32Z; expansion labels, private scaffold mapping, conflicting/non-Git/NUL mapping rejection, retained-workspace lifecycle, and forced atomic replacement verified by 7 focused tests.)
 - [ ] Linux race CI and cross-platform build CI implemented.
 - [ ] Public benchmark results and evidence-based v0.6 recommendation committed.
 - [ ] Full verification completed and recorded.
@@ -308,6 +309,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - 2026-08-31 UTC: The untuned Lua baseline differs from the v0.4 release-readiness prose: `lua-token-tests` missed its expected symbol and path, producing aggregate hit@5/symbol/path recall 0.8. The other 17 legacy suites retained 1.0 for those metrics. This milestone records the discrepancy and does not tune production retrieval to hide it.
 - 2026-08-31 UTC: The first real `git archive` integration test timed out because `tar.Reader` stopped at the end marker while the subprocess still wrote record padding into `io.Pipe`. Draining the remaining pipe bytes before waiting removed the deadlock; the regression test now completes and proves repository HEAD/status remain unchanged.
 - 2026-08-31 UTC: Pre-Task-11 self-review found that Task 6's checked boxes overstated the implementation: goldens existed but tests never read them, aggregate fields were incomplete, evidence tokens used a byte heuristic, and timing fields were not populated or rendered. New RED tests exposed each gap before the measurement baseline was frozen.
+- 2026-08-31 UTC: The same review found Task 8's scaffold accepted only `self`, expansion labels escaped base-snapshot validation, and `--keep-workspace` was documented but absent. Repository mapping now resolves the final precedence result first and then validates every logical ID deterministically as an existing Git worktree.
 
 No implementation discoveries have been recorded at plan creation. Add concise observations with command output or test evidence as they arise. Do not delete earlier entries; correct them with a later entry.
 
@@ -318,6 +320,7 @@ No implementation discoveries have been recorded at plan creation. Add concise o
 - 2026-08-31: Use `950a3b74b59ec65d372695c6a28489202c9bf1ee` as the actual v0.5 baseline because the checkout advanced before execution. This follows the current-checkout source-of-truth rule and preserves commit `950a3b7` as pre-existing history.
 - 2026-08-31: Do not add a new public or production ranking trace for benchmark attribution. The benchmark emits observable required-evidence failures and preserves `ranked_candidate_not_packed` only when a future safe internal adapter supplies that fact; current results document the attribution limit.
 - 2026-08-31: Benchmark evidence-token accounting reuses `budget.NewEstimator()` rather than a benchmark-only byte heuristic. This measures the same token model used by the existing product without changing packer behavior or the Evidence Packet contract.
+- 2026-08-31: Use the same registry/`--repo` resolver for validate, run, and scaffold. Explicit mappings still override registry entries, while conflicting repeated explicit mappings fail instead of silently choosing the last path.
 
 - **Decision:** Use one active root `PLAN.md`, a durable root `PLANS.md`, and immutable completed/superseded archives.
   **Rationale:** Overwriting a completed plan loses an easy-to-review history, while keeping many active-looking plans creates ambiguity for Codex. One active file preserves the simple workflow; archives preserve evidence.
