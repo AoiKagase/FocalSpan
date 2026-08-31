@@ -438,3 +438,38 @@ Recorded on 2026-08-31 UTC from commit
   is a starting-baseline discrepancy, not a v0.5 regression or an improvement.
 - Local and Linux race coverage were not run during baseline capture and remain
   unverified here.
+
+## Real-Repository Evaluation v0.5
+
+Measured on 2026-08-31 UTC at FocalSpan commit
+`be153f5ae5c40fb04f3daf5608211482dced7d25` using the eight-case public
+`focalspan-history-v0.5` suite. The default matrix produced 48 quality results:
+full Evidence at 1024, 2048, and 4096 tokens, plus FTS-only Evidence,
+no-relations Evidence, and legacy presentation at 2048 tokens.
+
+- Two complete `--repeat 3` runs returned exit 0. Their deterministic quality
+  JSON had identical Git object hash `f914facbfbf55c450fd26769bdc7bd6a992112dc`,
+  and `focalspan-bench compare` returned compatible with zero regressions.
+- All eight cases were valid. Budget compliance and deterministic output were
+  1.0 in every aggregate group. Forbidden violations, invalid relation results,
+  finite-value failures, absolute-path leaks, and source-field leaks were zero.
+- Full Evidence at every budget measured required-path mean recall 0.125 and
+  median 0, required-symbol mean and median recall 0, hit@5 0.125, MRR 0.125,
+  intent accuracy 0.875, and median wire tokens 259. FTS-only and no-relations
+  Evidence at 2048 had the same coverage and rank aggregates.
+- Failure counts across 40 Evidence results were 40 required-symbol misses, 35
+  required-path misses, 35 missing targets, nine missing expansion anchors,
+  and five intent mismatches. All labeled expansions missed their selected
+  anchor, so delta-token ratios were not measured; no executed expansion packet
+  resent a known handle.
+- Median metadata overhead was 0.9242 and median duplicate-source ratio was 0.
+  Full-Evidence index times ranged from about 6.7 to 333.4 seconds and query
+  medians from 12 to 66 ms on this Windows run. Timing is volatile and excluded
+  from quality comparison.
+
+The evidence-based primary v0.6 direction is retriever/linker candidate
+coverage plus a development-only source-free attribution trace. Evidence Packet
+compaction is only a secondary candidate after coverage is restored. See
+[`docs/benchmarks/findings-v0.5.md`](benchmarks/findings-v0.5.md) for the
+per-theme distribution, language comparison, limitations, and decision logic.
+No production retrieval or Evidence Packet tuning occurred during v0.5.

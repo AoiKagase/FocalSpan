@@ -299,7 +299,7 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - [x] Task 8 acceptance gaps corrected before freezing measurements. (2026-08-31T01:38:32Z; expansion labels, private scaffold mapping, conflicting/non-Git/NUL mapping rejection, retained-workspace lifecycle, and forced atomic replacement verified by 7 focused tests.)
 - [x] Task 10 acceptance gaps corrected before freezing measurements. (2026-08-31T01:43:50Z; deterministic matrix ordering, exact compatibility, full quality regression rules, timing-only warnings, human/JSON output, and source-free miss diagnostics verified by 7 focused tests.)
 - [ ] Linux race CI and cross-platform build CI implemented.
-- [ ] Public benchmark results and evidence-based v0.6 recommendation committed.
+- [x] Public benchmark results and evidence-based v0.6 recommendation committed. (2026-08-31T03:31:40Z; two 8-case/48-result runs produced identical quality hash `f914facbfbf55c450fd26769bdc7bd6a992112dc` and compare exit 0.)
 - [ ] Full verification completed and recorded.
 
 ---
@@ -312,6 +312,8 @@ Update this section at every stopping point. Add UTC timestamps to completed ent
 - 2026-08-31 UTC: Pre-Task-11 self-review found that Task 6's checked boxes overstated the implementation: goldens existed but tests never read them, aggregate fields were incomplete, evidence tokens used a byte heuristic, and timing fields were not populated or rendered. New RED tests exposed each gap before the measurement baseline was frozen.
 - 2026-08-31 UTC: The same review found Task 8's scaffold accepted only `self`, expansion labels escaped base-snapshot validation, and `--keep-workspace` was documented but absent. Repository mapping now resolves the final precedence result first and then validates every logical ID deterministically as an existing Git worktree.
 - 2026-08-31 UTC: Task 10 comparison iterated a Go map, so multi-result regression order could vary, and it silently ignored intent, role, relation, wire growth, and performance warnings. The corrected comparator sorts the exact case/profile/budget matrix and keeps timing outside quality failure status.
+- 2026-08-31 UTC: The public suite exposed much poorer real-history coverage than fixture evaluation: required-symbol recall was 0 in all 40 Evidence results, required-path mean recall was 0.125, and larger budgets did not recover labels. All nine attempted expansion points failed before expansion because their exact anchors were absent from the initial packet.
+- 2026-08-31 UTC: A complete default public run took about 50 minutes on this Windows checkout because later history snapshots required up to 333 seconds per index build and each profile rebuilds the index. Query medians remained 12--66 ms; timing is recorded only as volatile context.
 
 No implementation discoveries have been recorded at plan creation. Add concise observations with command output or test evidence as they arise. Do not delete earlier entries; correct them with a later entry.
 
@@ -324,6 +326,7 @@ No implementation discoveries have been recorded at plan creation. Add concise o
 - 2026-08-31: Benchmark evidence-token accounting reuses `budget.NewEstimator()` rather than a benchmark-only byte heuristic. This measures the same token model used by the existing product without changing packer behavior or the Evidence Packet contract.
 - 2026-08-31: Use the same registry/`--repo` resolver for validate, run, and scaffold. Explicit mappings still override registry entries, while conflicting repeated explicit mappings fail instead of silently choosing the last path.
 - 2026-08-31: Treat a differing case/profile/budget matrix as schema-compatible data that is nevertheless comparison-incompatible (exit 3), not as a set of missing quality regressions (exit 2). This prevents comparing non-equivalent suites while retaining the existing report schema ID.
+- 2026-08-31: Select retriever/linker candidate coverage plus a development-only source-free attribution trace as the single primary v0.6 direction. Required evidence and expansion anchors are overwhelmingly absent from final packets, while budget increases have no effect; metadata compaction remains only a secondary candidate after coverage is restored.
 
 - **Decision:** Use one active root `PLAN.md`, a durable root `PLANS.md`, and immutable completed/superseded archives.
   **Rationale:** Overwriting a completed plan loses an easy-to-review history, while keeping many active-looking plans creates ambiguity for Codex. One active file preserves the simple workflow; archives preserve evidence.
@@ -353,7 +356,15 @@ No implementation discoveries have been recorded at plan creation. Add concise o
 
 ## Outcomes & Retrospective
 
-This plan has not begun implementation. At completion, replace this paragraph with the measured public history results, the number and language distribution of valid cases, observed failure categories, CI status, remaining limitations, and the selected v0.6 direction. Do not describe retrieval quality as improved unless a later production change and a controlled comparison demonstrate it.
+Task 11 measured eight valid public-history cases, split evenly between English
+and Japanese-mixed queries, across 48 quality results. Two full runs produced
+identical deterministic JSON and compare exit 0. Hard budget, determinism,
+forbidden-path, finite-value, privacy, and cleanup invariants held, but quality
+was poor: required-symbol recall was 0, required-path mean recall 0.125, and all
+nine expansion attempts lacked their exact initial anchor. The primary v0.6
+direction is retriever/linker candidate coverage with source-free attribution;
+Evidence metadata compaction is secondary. Task 12 CI and Task 13 regression,
+race, cross-build, privacy, and final retrospective evidence remain to be added.
 
 ---
 
@@ -1584,7 +1595,7 @@ Run:
 - Consumes: public history suite and completed benchmark executable
 - Produces: truthful, source-free, reproducible current-behavior measurements and a data-driven recommendation
 
-- [ ] **Step 1: Run the public suite from a clean benchmark workspace**
+- [x] **Step 1: Run the public suite from a clean benchmark workspace**
 
 Build the development binary into a temporary path and run:
 
@@ -1604,11 +1615,11 @@ Then run:
 
 Remove the binary after the run. The command may use its own temporary snapshot workspace, but no snapshot is checked in.
 
-- [ ] **Step 2: Verify deterministic quality output**
+- [x] **Step 2: Verify deterministic quality output**
 
 Run the same suite again to a second temporary JSON file. Compare deterministic quality sections with `focalspan-bench compare`. The comparison must return exit code zero. Timing differences are allowed.
 
-- [ ] **Step 3: Verify hard invariants**
+- [x] **Step 3: Verify hard invariants**
 
 The public suite must have:
 
@@ -1624,7 +1635,7 @@ The public suite must have:
 
 Do not invent a minimum required-path recall after seeing the result. Record the measured value honestly.
 
-- [ ] **Step 4: Analyze failure distribution**
+- [x] **Step 4: Analyze failure distribution**
 
 Write `docs/benchmarks/findings-v0.5.md` with:
 
@@ -1639,7 +1650,7 @@ Write `docs/benchmarks/findings-v0.5.md` with:
 - index/query timing context;
 - limitations of using one repository's history.
 
-- [ ] **Step 5: Select the next milestone using measured evidence**
+- [x] **Step 5: Select the next milestone using measured evidence**
 
 Use this decision order:
 
@@ -1651,7 +1662,7 @@ Use this decision order:
 
 Name exactly one primary v0.6 direction and at most one secondary candidate. Do not start implementing either in this plan.
 
-- [ ] **Step 6: Append verified results to `docs/evaluation.md`**
+- [x] **Step 6: Append verified results to `docs/evaluation.md`**
 
 Add `## Real-Repository Evaluation v0.5` with:
 
@@ -1665,7 +1676,7 @@ Add `## Real-Repository Evaluation v0.5` with:
 - link to findings;
 - statement that no production retrieval tuning occurred in v0.5.
 
-- [ ] **Step 7: Commit measurement artifacts**
+- [x] **Step 7: Commit measurement artifacts**
 
 Run:
 
