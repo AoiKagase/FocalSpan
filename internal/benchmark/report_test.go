@@ -20,6 +20,30 @@ func TestMarshalQualityExcludesPerformanceAndIsDeterministic(t *testing.T) {
 	}
 }
 
+func TestDevelopmentEfficiencyIsExcludedFromQualityJSONAndShownInMarkdown(t *testing.T) {
+	report := RunReport{
+		Schema: ReportSchemaV1, Suite: "suite", FocalSpanCommit: "abc123",
+		Quality:    []QualityResult{{CaseID: "case", Profile: "p", Budget: 100}},
+		Efficiency: &EvidenceEfficiency{UsefulEvidence: 3, EstimatedTokens: 120, Per1000Tokens: 25},
+	}
+	encoded, err := MarshalQuality(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "useful_evidence") || strings.Contains(string(encoded), "per_1000_tokens") {
+		t.Fatalf("development efficiency leaked into quality JSON: %s", encoded)
+	}
+	markdown, err := RenderMarkdown(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Useful evidence", "Estimated wire tokens", "25.0000"} {
+		if !strings.Contains(markdown, want) {
+			t.Fatalf("markdown missing %q: %s", want, markdown)
+		}
+	}
+}
+
 func TestRenderMarkdownRejectsSourceAndAbsolutePaths(t *testing.T) {
 	text, err := RenderMarkdown(RunReport{Schema: ReportSchemaV1, Suite: "suite", FocalSpanCommit: "abc123", Quality: []QualityResult{{CaseID: "case", Profile: "p", Budget: 100, RequiredPathRecall: 1, FailureCodes: []string{"required_symbol_missing"}}}, Performance: []PerformanceResult{{CaseID: "case", Profile: "p", Budget: 100, SnapshotMS: 7, IndexMS: 11, QueryMS: []int64{2, 3, 4}}}})
 	if err != nil {

@@ -48,6 +48,7 @@ type RunReport struct {
 	FocalSpanCommit string              `json:"focalspan_commit"`
 	Quality         []QualityResult     `json:"quality"`
 	Aggregate       AggregateQuality    `json:"aggregate"`
+	Efficiency      *EvidenceEfficiency `json:"efficiency,omitempty"`
 	Performance     []PerformanceResult `json:"performance,omitempty"`
 	Attributions    []AttributionResult `json:"-"`
 	Diagnoses       []DiagnosisResult   `json:"-"`
@@ -265,6 +266,8 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 		}
 	}
 	report.Aggregate = AggregateResults(report.Quality)
+	efficiency := AggregateEvidenceEfficiency(request.Suite.Cases, report.Quality)
+	report.Efficiency = &efficiency
 	return report, nil
 }
 

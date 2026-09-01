@@ -30,6 +30,10 @@ func RenderMarkdown(report RunReport) (string, error) {
 			fmt.Fprintf(&b, "| %s | %s | %d | %d | %d | %d | %d | %d | %d | %d |\n", escapeTable(r.CaseID), escapeTable(r.Profile), r.Budget, r.SnapshotMS, r.IndexMS, medianInt64(r.QueryMS), r.Files, r.Symbols, r.Chunks, r.Relations)
 		}
 	}
+	if report.Efficiency != nil {
+		b.WriteString("\n## Development efficiency\n\n| Useful evidence | Estimated wire tokens | Per 1,000 tokens |\n|---:|---:|---:|\n")
+		fmt.Fprintf(&b, "| %d | %d | %.4f |\n", report.Efficiency.UsefulEvidence, report.Efficiency.EstimatedTokens, report.Efficiency.Per1000Tokens)
+	}
 	return b.String(), nil
 }
 
