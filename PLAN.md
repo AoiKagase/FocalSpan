@@ -1180,7 +1180,7 @@ changes.
 
 **Produces:** pass/fail decision before any full run or second change.
 
-- [ ] Before running, record:
+- [x] Before running, record:
   - candidate commit;
   - exact diff from the baseline;
   - new retriever weight;
@@ -1188,7 +1188,16 @@ changes.
   - focused test results;
   - full test/vet/diff-check results.
 
-- [ ] Run the selected four-case candidate exactly once:
+  Recorded at `2026-09-01T00:16:29Z`: candidate commit `605ad7d`, baseline
+  commit `e9d6ec5`; `git diff --stat e9d6ec5..605ad7d` reports 14 modified
+  files, 1,369 insertions, and 82 deletions. The fixed retriever weight is
+  `1.35`; path hints/file scopes/symbol hints/per-file candidates/total scoped
+  candidates remain capped at 8/8/16/8/40. Task 6 focused attribution/privacy
+  passed 2 tests, the contract regression set passed 221 tests in 5 packages,
+  and full verification passed 691 tests in 46 packages plus `go vet ./...`
+  and `git diff --check`.
+
+- [x] Run the selected four-case candidate exactly once:
 
       go run ./cmd/focalspan-bench run \
         --suite testdata/benchmark/focalspan-history.json \
@@ -1204,7 +1213,7 @@ changes.
         --attribution-markdown-out .focalspan-bench/v0.7-candidate-attribution.md \
         --force
 
-- [ ] Compare selected quality:
+- [x] Compare selected quality:
 
       go run ./cmd/focalspan-bench compare \
         --baseline docs/benchmarks/results-v0.5.json \
@@ -1214,7 +1223,7 @@ changes.
         --case jsts-search-integration \
         --case mcp-evidence-output
 
-- [ ] Evaluate every frozen gate mechanically and write a table with:
+- [x] Evaluate every frozen gate mechanically and write a table with:
   - baseline stage/position;
   - candidate stage/position;
   - retriever hits;
@@ -1222,10 +1231,10 @@ changes.
   - expansion execution;
   - pass/fail reason.
 
-- [ ] Run the privacy/finite-value scan and verify no temporary workspace,
+- [x] Run the privacy/finite-value scan and verify no temporary workspace,
   index, binary, or report escapes `.focalspan-bench`.
 
-- [ ] Make exactly one decision:
+- [x] Make exactly one decision:
 
   **PASS:** every hard invariant and symbol-identity gate passes. Continue to
   Task 8.
@@ -1233,9 +1242,9 @@ changes.
   **FAIL:** one or more gates fail. Continue to Task 9 negative branch. Do not
   alter weight, limits, SQL order, hint rules, rank, or packer.
 
-- [ ] Record the decision in the Decision Log before any subsequent commit.
+- [x] Record the decision in the Decision Log before any subsequent commit.
 
-- [ ] Commit findings only:
+- [x] Commit findings only:
 
       git add PLAN.md docs/benchmarks/findings-v0.7.md
       git commit -m "docs: record path-scoped candidate gate"
@@ -1527,14 +1536,21 @@ Update with UTC timestamps while executing.
   passed 691 tests in 46 packages. Japanese auth and JSTS full-mode relation
   recall were exactly `1.0`, with FTS-only and no-relations both `0.0`.
   `go vet ./...` and `git diff --check` passed. The task commit is `a082ef4`.
+- [x] `2026-09-01T00:32:32Z` Task 7 ran the frozen four-case candidate exactly
+  once with zero retries: 4 cases, 24 quality results, v0.5 compatible, and
+  zero reported regressions. The selected 44 stages remained 20 retrieval
+  misses, 20 packing drops, and 4 packed. All seven symbol-identity conditions
+  failed: 0/16 PHP/MCP rows advanced, no new required symbol was packed, and no
+  real expansion executed. The frozen decision is FAIL; Task 8 is skipped and
+  Task 9 must revert the five production/test commits without tuning.
 - [x] Four-case current baseline measured and frozen.
 - [x] Store file discovery implemented and verified.
 - [x] Store scoped-symbol retrieval implemented and verified.
 - [x] Path-scope and naming-variant planning implemented.
 - [x] `path-scoped-symbol` integrated into full/no-relations retrieval.
 - [x] Attribution accepts and safely reports the new retriever.
-- [ ] Frozen four-case candidate run executed once.
-- [ ] Frozen gate decision recorded.
+- [x] Frozen four-case candidate run executed once.
+- [x] Frozen gate decision recorded.
 - [ ] Positive full acceptance completed, or negative revert completed.
 - [ ] Local full verification completed.
 - [ ] Actual remote CI inspected.
@@ -1583,6 +1599,12 @@ Update with UTC timestamps while executing.
   output contains neither retriever IDs nor internal scope lists. Repository
   roots and source/username/environment sentinels remained absent from both
   development attribution and MCP output.
+- **2026-09-01:** The scoped retriever reached JSTS `Search` at raw position 1,
+  but fusion/ranking remained position 10 and packing still omitted it. It did
+  not reach PHP `Run` or MCP `codeContext`; project metadata `Run` remained an
+  FTS-only hit and moved from ranked position 20 to 28. This is measured
+  negative evidence for the single production hypothesis, not grounds for
+  changing weights, limits, ranking, or packing in v0.7.
 
 ---
 
@@ -1667,6 +1689,17 @@ Update with UTC timestamps while executing.
   structured output free of trace, retriever, and scope-list fields. Japanese
   auth and JSTS full-mode relation recall both remained exactly `1.0`; their
   FTS-only and no-relations values remained `0.0`.
+  **Date/Author:** 2026-09-01 / Codex.
+
+- **Decision:** Reject the v0.7 production candidate and follow Task 9.
+  **Rationale:** The one valid candidate run at `605ad7d` returned 4 cases and
+  24 quality results with v0.5 compatibility and zero reported regressions,
+  but 0 of the required 16 PHP/MCP symbol-or-anchor rows advanced. Neither
+  deficient case advanced; `codeContext` and PHP `Run` remained
+  `retrieval_missing`; project `Run` remained `packing_dropped`, worsened from
+  rank 20 to 28, and was not packed; no real expansion executed; and no 2048
+  selected case improved required-symbol recall. The frozen symbol-identity
+  gate therefore fails. Do not run Task 8 or tune another subsystem.
   **Date/Author:** 2026-09-01 / Codex.
 
 - **Decision:** Separate file discovery from symbol retrieval.

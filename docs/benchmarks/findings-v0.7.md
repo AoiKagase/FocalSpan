@@ -131,3 +131,80 @@ quality/Markdown/attribution Git blob-equivalent hashes were, respectively:
 - `354cc2f938b26142a8e198ef585ad5cd375c2d5d`
 
 All four temporary files were removed after hashing and scanning.
+
+- `2026-09-01T00:16:29Z` — Frozen candidate pre-run state: candidate commit
+  `605ad7d`; baseline commit `e9d6ec5`. The exact
+  `git diff --name-status e9d6ec5..605ad7d` contains 14 modified paths:
+  `PLAN.md`, `internal/benchmark/{attribution.go,attribution_test.go}`,
+  `internal/eval/eval_test.go`, `internal/mcpserver/mcp_test.go`,
+  `internal/search/{fusion.go,fusion_test.go,retrieval.go,retrieval_test.go,search.go,search_test.go,trace.go}`,
+  and `internal/store/{store.go,store_test.go}`. The diff stat is 1,369
+  insertions and 82 deletions. The new retriever weight is frozen at `1.35`;
+  path hints, file scopes, symbol hints, per-file candidates, and total scoped
+  candidates are capped at 8, 8, 16, 8, and 40. Task 6 passed 2 focused
+  attribution/privacy tests, 221 contract regression tests in 5 packages, and
+  691 full-suite tests in 46 packages; `go vet ./...` and
+  `git diff --check` passed. No candidate benchmark had run at this point.
+
+- `2026-09-01` — The candidate command ran exactly once with repeat 1 and zero
+  retries. It produced 4 cases, 24 quality results, and a valid 20-result / 55
+  label attribution report. The selected non-FTS 44 rows remained exactly 20
+  `retrieval_missing`, 20 `packing_dropped`, and 4 `packed`. Comparison with
+  v0.5 returned `compatible: true` and `regressions: 0`.
+
+### Candidate gate: hard invariants
+
+| Invariant | Measured result | Verdict |
+| --- | --- | --- |
+| v0.5 compatibility / regressions | `true` / `0` | PASS |
+| Budget compliance | `1.0` in every quality row | PASS |
+| Deterministic output | `1.0` in every quality row | PASS |
+| Relation validity | `1.0` in every quality row | PASS |
+| Forbidden violations | `0` in every quality row | PASS |
+| Known-handle resend | Contract test passed; candidate executed no real expansion, so no candidate resend measurement exists | NOT EXERCISED |
+| Earlier terminal-stage movement | `0` selected rows | PASS |
+| `label_not_indexed` | `0` selected rows | PASS |
+| FTS-only behavior | Focused call/output guards passed; candidate FTS rows remained separate | PASS |
+| Japanese relation recall | auth full `1.0`; JSTS full `1.0` | PASS |
+| Privacy / finite values | Both JSON files parsed; forbidden scan matches `0` | PASS |
+
+### Candidate gate: symbol identity
+
+| Frozen condition | Baseline stage / position | Candidate stage / position and hits | Packet | Expansion | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| At least 8 of 16 PHP/MCP missing symbol/anchor rows advance | 16 `retrieval_missing` | 16 `retrieval_missing`; advanced `0` | 0 | 0 | FAIL |
+| Both deficient cases advance at least one row | PHP 0; MCP 0 | PHP 0; MCP 0 | 0 | 0 | FAIL |
+| MCP `codeContext`, full/2048 | `retrieval_missing` | `retrieval_missing`; no hits | No | No | FAIL |
+| Project metadata `Run`, full/2048 | `packing_dropped`, rank 20, FTS 50 | `packing_dropped`, rank 28, FTS 50; no scoped hit | No | n/a | FAIL |
+| PHP `Run`, full/2048 | `retrieval_missing` | `retrieval_missing`; no hits | No | No | FAIL |
+| Previously blocked expansion executes | blocked | all selected anchors remain unpacked | No anchor packet | 0 successful | FAIL |
+| 2048 required-symbol recall improves in at least two cases | 0 improved cases | 0 improved cases | No new symbol packet | 0 | FAIL |
+
+JSTS `Search` did receive `path-scoped-symbol:1` in addition to `fts:6`, but
+remained `packing_dropped` at ranked position 10 for every selected profile and
+budget. This did not satisfy any frozen symbol-identity condition.
+
+### Candidate gate: boundedness and residue
+
+| Boundary | Evidence | Verdict |
+| --- | --- | --- |
+| At most 40 scoped candidates | fixed cap and focused boundary tests | PASS |
+| At most 8 candidates per path | fixed cap and fairness tests | PASS |
+| At most 8 scoped paths | fixed cap and scope-order tests | PASS |
+| Symbol-owned candidates only | store query guard and tests require non-empty symbol handle | PASS |
+| File probe is not a retriever/generic chunk list | retriever call/list tests | PASS |
+| Deterministic normal search | deterministic unit guard and report value `1.0` | PASS |
+| No corpus-specific production string | production-only search matches `0`; named values occur only in tests | PASS |
+
+The four candidate files remained under `.focalspan-bench` and had Git
+blob-equivalent hashes `3fe4de690c3050e0e391798687c129d5f0ed3587`,
+`cf82d1b00523c7b050b9abdc6d3628c623dbffd4`,
+`51dc68ce0485e4dd6452e7fce15b8da3976c7561`, and
+`fb1830010a337d331e9c29191d2425ac15f82674`. No temporary workspace, index,
+binary, or report appeared outside `.focalspan-bench`; the two pre-existing
+untracked files remained `.focalspan.json` and `PLAN_v0.7.md`.
+
+**Frozen decision: FAIL.** The production hypothesis is rejected because every
+symbol-identity improvement condition failed. No weight, limit, SQL order,
+hint, ranking, or packing adjustment will be attempted. Task 8 is skipped and
+Task 9 reverts the v0.7 production/test commits.
