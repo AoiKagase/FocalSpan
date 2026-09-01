@@ -1115,15 +1115,15 @@ changes.
 
 **Produces:** sanitized attribution and regression evidence.
 
-- [ ] Add a failing attribution validation test for:
+- [x] Add a failing attribution validation test for:
 
       retriever = "path-scoped-symbol"
 
   Confirm RED because `validRetriever` rejects it.
 
-- [ ] Accept the new retriever ID and keep every other unknown value rejected.
+- [x] Accept the new retriever ID and keep every other unknown value rejected.
 
-- [ ] Add privacy tests whose scoped candidates contain:
+- [x] Add privacy tests whose scoped candidates contain:
   - source sentinel;
   - absolute path sentinel;
   - username sentinel;
@@ -1132,7 +1132,7 @@ changes.
   Assert attribution output contains only relative path, symbol, kind,
   retriever, position, and relation state.
 
-- [ ] Add an end-to-end historical-snapshot test for one small base commit that
+- [x] Add an end-to-end historical-snapshot test for one small base commit that
   verifies:
   - normal Evidence JSON has no trace field;
   - MCP structured output has no scoped paths or retriever IDs;
@@ -1140,10 +1140,10 @@ changes.
   - normal packet bytes are identical with tracing off and on before trace is
     removed from the return wrapper.
 
-- [ ] Run all Japanese relation tests and record exact values. Full-mode
+- [x] Run all Japanese relation tests and record exact values. Full-mode
   relation-bearing recall must remain `1.0`.
 
-- [ ] Run all existing Evidence contract tests, including:
+- [x] Run all existing Evidence contract tests, including:
   - fidelity validity;
   - relation validity;
   - wire budget;
@@ -1151,7 +1151,7 @@ changes.
   - known-handle no-resend;
   - source-free MCP summary.
 
-- [ ] Run:
+- [x] Run:
 
       go test ./internal/benchmark -run "TestAttribution|TestPrivacy" -count=1
       go test ./internal/app ./internal/eval ./internal/evidence ./internal/mcpserver ./internal/search -count=1
@@ -1159,7 +1159,7 @@ changes.
       go vet ./...
       git diff --check
 
-- [ ] Commit only attribution and regression guards:
+- [x] Commit only attribution and regression guards:
 
       git add internal/benchmark internal/app internal/eval internal/evidence internal/mcpserver internal/search
       git commit -m "test: trace path-scoped symbol retrieval safely"
@@ -1520,12 +1520,19 @@ Update with UTC timestamps while executing.
   passed 13 tests, search/store passed 67 tests, and the full repository passed
   689 tests in 46 packages. `go vet ./...` and `git diff --check` passed; no
   store adapter change remained. The production/test commit is `ebd1670`.
-- [ ] Four-case current baseline measured and frozen.
+- [x] `2026-09-01T00:14:41Z` Task 6 attribution and regression guards completed.
+  The expected RED was `invalid sanitized hit` for `path-scoped-symbol`.
+  Attribution/privacy focused tests passed 2 tests; the app/eval/evidence/MCP/
+  search regression set passed 221 tests in 5 packages; the full repository
+  passed 691 tests in 46 packages. Japanese auth and JSTS full-mode relation
+  recall were exactly `1.0`, with FTS-only and no-relations both `0.0`.
+  `go vet ./...` and `git diff --check` passed. The task commit is `a082ef4`.
+- [x] Four-case current baseline measured and frozen.
 - [x] Store file discovery implemented and verified.
 - [x] Store scoped-symbol retrieval implemented and verified.
 - [x] Path-scope and naming-variant planning implemented.
 - [x] `path-scoped-symbol` integrated into full/no-relations retrieval.
-- [ ] Attribution accepts and safely reports the new retriever.
+- [x] Attribution accepts and safely reports the new retriever.
 - [ ] Frozen four-case candidate run executed once.
 - [ ] Frozen gate decision recorded.
 - [ ] Positive full acceptance completed, or negative revert completed.
@@ -1570,6 +1577,12 @@ Update with UTC timestamps while executing.
   does not create a `RankedList`. An empty scoped result likewise adds no list,
   preserving existing trace/list counts while still exercising explicit store
   methods and preventing fallback behavior from hiding an incomplete adapter.
+- **2026-09-01:** The Task 6 historical-snapshot guard showed the intended
+  boundary directly: sanitized attribution names `path-scoped-symbol`, while
+  normal Evidence bytes remain identical with tracing off/on and MCP structured
+  output contains neither retriever IDs nor internal scope lists. Repository
+  roots and source/username/environment sentinels remained absent from both
+  development attribution and MCP output.
 
 ---
 
@@ -1644,6 +1657,16 @@ Update with UTC timestamps while executing.
   probing but may use explicit/FTS scopes before unchanged relation lookup.
   FTS-only returns before both new store calls. The new fixed 1.35 weight sits
   below exact/relation and above prefix/FTS/path, with no other weight changed.
+  **Date/Author:** 2026-09-01 / Codex.
+
+- **Decision:** Extend only the sanitized attribution retriever allowlist and
+  guard public output at a committed historical snapshot.
+  **Rationale:** `path-scoped-symbol` is now accepted while an arbitrary unknown
+  retriever remains rejected. A one-file base commit proved normal and traced
+  packet bytes identical, attribution source-free and path-relative, and MCP
+  structured output free of trace, retriever, and scope-list fields. Japanese
+  auth and JSTS full-mode relation recall both remained exactly `1.0`; their
+  FTS-only and no-relations values remained `0.0`.
   **Date/Author:** 2026-09-01 / Codex.
 
 - **Decision:** Separate file discovery from symbol retrieval.
