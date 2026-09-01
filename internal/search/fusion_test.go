@@ -57,24 +57,3 @@ func TestFuseRankedListsIsStableAndCappedAfterFusion(t *testing.T) {
 		t.Fatalf("tie order=%+v", first)
 	}
 }
-
-func TestFusionOrdersPathScopedSignalBetweenAuthoritativeAndLexicalLists(t *testing.T) {
-	lists := []RankedList{
-		{Retriever: RetrieverPath, Items: []model.RankedCandidate{{Handle: "path", Path: "e.go"}}},
-		{Retriever: RetrieverFTS, Items: []model.RankedCandidate{{Handle: "fts", Path: "d.go"}}},
-		{Retriever: RetrieverPathScopedSymbol, Items: []model.RankedCandidate{{Handle: "scoped-b", Path: "c.go"}}},
-		{Retriever: RetrieverPathScopedSymbol, Items: []model.RankedCandidate{{Handle: "scoped-a", Path: "b.go"}}},
-		{Retriever: RetrieverRelation, Items: []model.RankedCandidate{{Handle: "relation", Path: "a.go"}}},
-		{Retriever: RetrieverSymbol, Items: []model.RankedCandidate{{Handle: "exact", Path: "z.go"}}},
-	}
-	got, _ := fuseRankedLists(lists, 10)
-	want := []string{"exact", "relation", "scoped-a", "scoped-b", "fts", "path"}
-	if len(got) != len(want) {
-		t.Fatalf("fused=%+v", got)
-	}
-	for index, handle := range want {
-		if got[index].Handle != handle {
-			t.Fatalf("fused order=%+v, want %v", got, want)
-		}
-	}
-}

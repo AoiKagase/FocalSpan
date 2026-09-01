@@ -15,21 +15,12 @@ import (
 
 type retrievalRecordingStore struct {
 	called      []RetrieverID
-	operations  []string
 	fts         []model.RankedCandidate
 	qualified   []model.RankedCandidate
 	exact       []model.RankedCandidate
 	prefix      []model.RankedCandidate
 	paths       []model.RankedCandidate
 	pathHints   [][]string
-	filePaths   []string
-	fileHints   [][]string
-	scoped      []model.RankedCandidate
-	scopedPaths [][]string
-	symbolHints [][]string
-	ftsQueries  []string
-	perPathCaps []int
-	totalCaps   []int
 	related     []model.RankedCandidate
 	relatedHits []model.RelationHit
 	errFor      RetrieverID
@@ -37,7 +28,6 @@ type retrievalRecordingStore struct {
 
 func (s *retrievalRecordingStore) record(id RetrieverID) error {
 	s.called = append(s.called, id)
-	s.operations = append(s.operations, string(id))
 	if s.errFor == id {
 		return errors.New("store failure")
 	}
@@ -75,22 +65,6 @@ func (s *retrievalRecordingStore) SearchPaths(_ context.Context, hints []string,
 	s.pathHints = append(s.pathHints, append([]string(nil), hints...))
 	return append([]model.RankedCandidate(nil), s.paths...), nil
 }
-func (s *retrievalRecordingStore) SearchFilePaths(_ context.Context, hints []string, _ int) ([]string, error) {
-	s.operations = append(s.operations, "file-probe")
-	s.fileHints = append(s.fileHints, append([]string(nil), hints...))
-	return append([]string(nil), s.filePaths...), nil
-}
-func (s *retrievalRecordingStore) SearchSymbolsInPaths(_ context.Context, paths []string, hints []string, ftsQuery string, perPathLimit, limit int) ([]model.RankedCandidate, error) {
-	if err := s.record(RetrieverPathScopedSymbol); err != nil {
-		return nil, err
-	}
-	s.scopedPaths = append(s.scopedPaths, append([]string(nil), paths...))
-	s.symbolHints = append(s.symbolHints, append([]string(nil), hints...))
-	s.ftsQueries = append(s.ftsQueries, ftsQuery)
-	s.perPathCaps = append(s.perPathCaps, perPathLimit)
-	s.totalCaps = append(s.totalCaps, limit)
-	return append([]model.RankedCandidate(nil), s.scoped...), nil
-}
 func (s *retrievalRecordingStore) RelatedCandidates(_ context.Context, handles []string, relation string) ([]model.RankedCandidate, error) {
 	if err := s.record(RetrieverRelation); err != nil {
 		return nil, err
@@ -121,13 +95,11 @@ func TestRetrieverSetSelectsBaseRetrieversByMode(t *testing.T) {
 		plan     query.Plan
 		mode     RetrievalMode
 		wantCall []RetrieverID
-		wantOps  []string
-		wantList int
 	}{
-		{name: "definition", plan: query.Plan{Terms: query.Terms{Identifiers: []string{"ValidateToken"}}, PrimaryIntent: query.IntentDefinition}, mode: RetrievalFull, wantCall: []RetrieverID{RetrieverQualified, RetrieverSymbol, RetrieverPrefix, RetrieverFTS, RetrieverPath, RetrieverPathScopedSymbol}, wantOps: []string{"qualified-symbol", "symbol-exact", "symbol-prefix", "fts", "path", "file-probe", "path-scoped-symbol"}, wantList: 5},
-		{name: "callers", plan: query.Plan{Terms: query.Terms{Identifiers: []string{"ValidateToken"}}, PrimaryIntent: query.IntentCallers, Intents: []query.Intent{query.IntentCallers}, Anchors: []string{"ValidateToken"}, Relations: []string{"callers"}}, mode: RetrievalFull, wantCall: []RetrieverID{RetrieverQualified, RetrieverSymbol, RetrieverPrefix, RetrieverFTS, RetrieverPath, RetrieverPathScopedSymbol, RetrieverRelation}, wantOps: []string{"qualified-symbol", "symbol-exact", "symbol-prefix", "fts", "path", "path-scoped-symbol", "relation"}, wantList: 6},
-		{name: "fts-only", plan: query.Plan{PrimaryIntent: query.IntentCallers, Relations: []string{"callers"}}, mode: RetrievalFTSOnly, wantCall: []RetrieverID{RetrieverFTS}, wantOps: []string{"fts"}, wantList: 1},
-		{name: "no-relations", plan: query.Plan{PrimaryIntent: query.IntentDefinition}, mode: RetrievalNoRelations, wantCall: []RetrieverID{RetrieverQualified, RetrieverSymbol, RetrieverPrefix, RetrieverFTS, RetrieverPath, RetrieverPathScopedSymbol}, wantOps: []string{"qualified-symbol", "symbol-exact", "symbol-prefix", "fts", "path", "file-probe", "path-scoped-symbol"}, wantList: 5},
+		{name: "definition", plan: query.Plan{Terms: query.Terms{Identifiers: []string{"ValidateToken"}}, PrimaryIntent: query.IntentDefinition}, mode: RetrievalFull, wantCall: []RetrieverID{RetrieverQualified, RetrieverSymbol, RetrieverPrefix, RetrieverFTS, RetrieverPath}},
+		{name: "callers", plan: query.Plan{Terms: query.Terms{Identifiers: []string{"ValidateToken"}}, PrimaryIntent: query.IntentCallers, Intents: []query.Intent{query.IntentCallers}, Anchors: []string{"ValidateToken"}, Relations: []string{"callers"}}, mode: RetrievalFull, wantCall: []RetrieverID{RetrieverQualified, RetrieverSymbol, RetrieverPrefix, RetrieverFTS, RetrieverPath, RetrieverRelation}},
+		{name: "fts-only", plan: query.Plan{PrimaryIntent: query.IntentCallers, Relations: []string{"callers"}}, mode: RetrievalFTSOnly, wantCall: []RetrieverID{RetrieverFTS}},
+		{name: "no-relations", plan: query.Plan{PrimaryIntent: query.IntentCallers, Relations: []string{"callers"}}, mode: RetrievalNoRelations, wantCall: []RetrieverID{RetrieverQualified, RetrieverSymbol, RetrieverPrefix, RetrieverFTS, RetrieverPath}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -139,11 +111,8 @@ func TestRetrieverSetSelectsBaseRetrieversByMode(t *testing.T) {
 			if !reflect.DeepEqual(store.called, test.wantCall) {
 				t.Fatalf("called=%v, want %v", store.called, test.wantCall)
 			}
-			if !reflect.DeepEqual(store.operations, test.wantOps) {
-				t.Fatalf("operations=%v, want %v", store.operations, test.wantOps)
-			}
-			if len(lists) != test.wantList {
-				t.Fatalf("lists=%v, want count %d", lists, test.wantList)
+			if len(lists) != len(test.wantCall) {
+				t.Fatalf("lists=%v, want %v", lists, test.wantCall)
 			}
 		})
 	}
@@ -161,71 +130,6 @@ func TestRetrieverSetPassesOnlyExplicitPathTermsToPathSearch(t *testing.T) {
 	}
 	if !reflect.DeepEqual(store.pathHints, [][]string{{"src/token.ts"}}) {
 		t.Fatalf("path hints=%v", store.pathHints)
-	}
-}
-
-func TestPathScopedRetrieverFindsPHPRunFromLexicalFileProbe(t *testing.T) {
-	store := &retrievalRecordingStore{
-		filePaths: []string{"internal/indexer/indexer.go"},
-		scoped:    []model.RankedCandidate{{Handle: "run", Path: "internal/indexer/indexer.go", Symbol: "Run"}},
-	}
-	plan := query.PlanQuery("PHPの.inc抽出結果をindexへ保存する流れはどこですか")
-	lists, err := NewRetrieverSet(store).Retrieve(context.Background(), plan, SearchRequest{Query: plan.RawQuery, Mode: RetrievalFull})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(store.fileHints) != 1 || !containsFold(store.fileHints[0], "index") {
-		t.Fatalf("file probe hints=%v", store.fileHints)
-	}
-	if len(store.scopedPaths) != 1 || !slices.Equal(store.scopedPaths[0], []string{"internal/indexer/indexer.go"}) || store.perPathCaps[0] != 8 || store.totalCaps[0] != 40 {
-		t.Fatalf("scoped call paths=%v perPath=%v total=%v", store.scopedPaths, store.perPathCaps, store.totalCaps)
-	}
-	if !listContainsSymbol(lists, RetrieverPathScopedSymbol, "Run") {
-		t.Fatalf("lists=%+v", lists)
-	}
-}
-
-func TestPathScopedRetrieverGeneratesMCPNamingVariant(t *testing.T) {
-	store := &retrievalRecordingStore{
-		fts:    []model.RankedCandidate{{Handle: "other", Path: "internal/mcpserver/server.go", Symbol: "Serve"}},
-		scoped: []model.RankedCandidate{{Handle: "code-context", Path: "internal/mcpserver/server.go", Symbol: "codeContext"}},
-	}
-	plan := query.PlanQuery("code_contextの応答を組み立てるhandlerはどこですか")
-	lists, err := NewRetrieverSet(store).Retrieve(context.Background(), plan, SearchRequest{Query: plan.RawQuery, Mode: RetrievalFull})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(store.symbolHints) != 1 || !slices.Contains(store.symbolHints[0], "codeContext") {
-		t.Fatalf("symbol hints=%v", store.symbolHints)
-	}
-	if !listContainsSymbol(lists, RetrieverPathScopedSymbol, "codeContext") {
-		t.Fatalf("lists=%+v", lists)
-	}
-}
-
-func TestRelationRetrievalUsesScopedAnchorWithoutLexicalProbe(t *testing.T) {
-	store := &retrievalRecordingStore{
-		fts:       []model.RankedCandidate{{Handle: "fts-seed", Path: "auth/service.go", Symbol: "Other"}},
-		filePaths: []string{"noise/generated.go"},
-		scoped: []model.RankedCandidate{
-			{Handle: "noise", Path: "auth/service.go", Symbol: "Other"},
-			{Handle: "target", Path: "auth/service.go", Symbol: "ValidateToken"},
-		},
-		related: []model.RankedCandidate{{Handle: "caller", Path: "http.go", Symbol: "Authenticate"}},
-	}
-	plan := query.PlanQuery("what calls ValidateToken?")
-	lists, err := NewRetrieverSet(store).Retrieve(context.Background(), plan, SearchRequest{Query: plan.RawQuery, Mode: RetrievalFull})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(store.fileHints) != 0 || slices.Contains(store.operations, "file-probe") {
-		t.Fatalf("relation query launched lexical probe: hints=%v operations=%v", store.fileHints, store.operations)
-	}
-	if len(store.scopedPaths) != 1 || !slices.Equal(store.scopedPaths[0], []string{"auth/service.go"}) {
-		t.Fatalf("relation scopes=%v", store.scopedPaths)
-	}
-	if !listContainsSymbol(lists, RetrieverRelation, "Authenticate") {
-		t.Fatalf("relation lists=%+v", lists)
 	}
 }
 
@@ -414,13 +318,4 @@ func containsRetriever(values []RetrieverID, want RetrieverID) bool {
 
 func containsFold(values []string, want string) bool {
 	return slices.ContainsFunc(values, func(value string) bool { return strings.EqualFold(value, want) })
-}
-
-func listContainsSymbol(lists []RankedList, retriever RetrieverID, symbol string) bool {
-	for _, list := range lists {
-		if list.Retriever == retriever && slices.ContainsFunc(list.Items, func(candidate model.RankedCandidate) bool { return candidate.Symbol == symbol }) {
-			return true
-		}
-	}
-	return false
 }

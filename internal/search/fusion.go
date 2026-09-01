@@ -10,13 +10,12 @@ import (
 const rrfK = 60.0
 
 var retrieverWeights = map[RetrieverID]float64{
-	RetrieverQualified:        2.00,
-	RetrieverSymbol:           1.80,
-	RetrieverRelation:         1.60,
-	RetrieverPathScopedSymbol: 1.35,
-	RetrieverPrefix:           1.20,
-	RetrieverFTS:              1.00,
-	RetrieverPath:             0.90,
+	RetrieverQualified: 2.00,
+	RetrieverSymbol:    1.80,
+	RetrieverRelation:  1.60,
+	RetrieverPrefix:    1.20,
+	RetrieverFTS:       1.00,
+	RetrieverPath:      0.90,
 }
 
 type fusedCandidate struct {
