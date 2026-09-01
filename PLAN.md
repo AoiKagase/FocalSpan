@@ -25,7 +25,7 @@ milestone.
 
 **Plan ID:** `v0.9-file-scope-aggregation`
 
-**Status:** Active.
+**Status:** Completed — candidate rejected; no file-scope production change promoted.
 
 ## Global Constraints
 
@@ -102,74 +102,90 @@ ordering and caps without importing search or query packages.
 
 ### Task 0: Transition from v0.8 and Freeze Baseline
 
-- [ ] Verify branch, HEAD, status, `PLANS.md`, archive hash, and baseline tests.
-- [ ] Archive v0.8 at
+- [x] Verify branch, HEAD, status, `PLANS.md`, archive hash, and baseline tests.
+- [x] Archive v0.8 at
   `docs/superpowers/plans/completed/2026-09-01-v0.8-failure-layer-attribution.md`
   byte-for-byte and verify matching SHA-256.
-- [ ] Make this v0.9 plan the sole active root plan and commit only the
+- [x] Make this v0.9 plan the sole active root plan and commit only the
   transition as `docs: start file-scope aggregation v0.9`.
-- [ ] Run the current eight-case `full-evidence-focused`/2048 benchmark once;
+- [x] Run the current eight-case `full-evidence-focused`/2048 benchmark once;
   freeze path-scope counts, packed labels, and cumulative token denominator.
 
 ### Task 1: Add File-Level Store Queries (RED/GREEN)
 
-- [ ] Add RED tests for exact/final-segment/prefix/substring path ordering,
+- [x] Add RED tests for exact/final-segment/prefix/substring path ordering,
   case-insensitive deduplication, empty input, cancellation, limits, and
   path-only output.
-- [ ] Add RED tests proving FTS results group by distinct file and that a
+- [x] Add RED tests proving FTS results group by distinct file and that a
   high-frequency file cannot consume the complete file scope with chunks.
-- [ ] Add RED tests for symbol-file lookup and path-constrained candidates,
+- [x] Add RED tests for symbol-file lookup and path-constrained candidates,
   including required `symbol_handle`, per-file, total, and stable tie-breaks.
-- [ ] Confirm RED, then add parameterized methods to `internal/store/store.go`
+- [x] Confirm RED, then add parameterized methods to `internal/store/store.go`
   and `CandidateStore`; do not change migrations or schema version.
-- [ ] Use exact and naming-variant symbol passes followed by safe FTS inside
+- [x] Use exact and naming-variant symbol passes followed by safe FTS inside
   selected paths; exclude generic unowned chunks and preserve source fields.
-- [ ] Run focused and full store tests; commit
+- [x] Run focused and full store tests; commit
   `feat: add indexed file-scope queries`.
+
+  The implementation was measured and then reverted after the frozen
+  candidate gate failed; the commit remains in history as the attempted
+  candidate.
 
 ### Task 2: Aggregate Scopes and Integrate Retriever (RED/GREEN)
 
-- [ ] Add RED tests for hint filtering, naming variants, navigation-word
+- [x] Add RED tests for hint filtering, naming variants, navigation-word
   exclusion, eight-file scope cap, stable file RRF, per-file fairness, total
   24-candidate cap, and fixed retriever ID.
-- [ ] Add RED tests that definition full/no-relations queries call the new
+- [x] Add RED tests that definition full/no-relations queries call the new
   path, while relation-bearing and `fts-only` queries do not.
-- [ ] Confirm RED, then derive at most eight file hints and sixteen symbol
+- [x] Confirm RED, then derive at most eight file hints and sixteen symbol
   hints from the existing `query.Plan`.
-- [ ] Fuse file lists with RRF `k=60` and weights 1.80/1.00/0.90, retain eight
+- [x] Fuse file lists with RRF `k=60` and weights 1.80/1.00/0.90, retain eight
   paths, retrieve at most four candidates per path and 24 total, and integrate
   one `path-scope-aggregate` list at frozen weight 1.35.
-- [ ] Run focused and full search tests; commit
+- [x] Run focused and full search tests; commit
   `feat: aggregate indexed file scopes for retrieval`.
+
+  The implementation was measured and then reverted after the frozen
+  candidate gate failed; the commit remains in history as the attempted
+  candidate.
 
 ### Task 3: Efficiency Metric and Frozen Candidate Gate
 
-- [ ] Add RED tests for cumulative context/expansion token accounting, unique
+- [x] Add RED tests for cumulative context/expansion token accounting, unique
   packed-label counting, and zero-denominator handling.
-- [ ] Add RED tests proving normal quality JSON, MCP structured output, and
+- [x] Add RED tests proving normal quality JSON, MCP structured output, and
   `focalspan.context.v1` bytes are unchanged with tracing enabled.
-- [ ] Implement development-only useful-evidence-per-1,000-token reporting;
+- [x] Implement development-only useful-evidence-per-1,000-token reporting;
   preserve attribution v1 compatibility and normal-output privacy.
-- [ ] After tests, vet, and diff check pass, run the selected candidate once.
-- [ ] Accept only if at least 3 of 9 focused/2048 path-scope misses advance,
+- [x] After tests, vet, and diff check pass, run the selected candidate once.
+- [x] Accept only if at least 3 of 9 focused/2048 path-scope misses advance,
   at least one new human label is packed, useful-evidence/token strictly
   improves, and all existing packed labels/invariants remain valid.
-- [ ] If accepted, run the complete benchmark matrix and record results. If
+- [x] If accepted, run the complete benchmark matrix and record results. If
   rejected, revert only candidate commits and record negative evidence.
+
+  Candidate rejected: path scope 9→9, packed labels 5→5, and efficiency
+  0.3925→0.3838. Negative evidence is recorded in
+  `docs/benchmarks/findings-v0.9.md`.
 
 ### Task 4: Closure and Verification
 
-- [ ] Run changed-file formatting, `git diff --check`, `go test ./... -count=1`,
+- [x] Run changed-file formatting, `git diff --check`, `go test ./... -count=1`,
   and `go vet ./...`.
-- [ ] Run Evidence/MCP/privacy, fixture, deterministic, finite-number,
+- [x] Run Evidence/MCP/privacy, fixture, deterministic, finite-number,
   forbidden-path, relation-validity, budget, and known-handle tests.
-- [ ] Run CGO-free native and Windows amd64/Linux amd64/Darwin arm64 builds to
+- [x] Run CGO-free native and Windows amd64/Linux amd64/Darwin arm64 builds to
   an ignored temporary directory, then remove generated files.
-- [ ] Inspect actual CI conclusions for tests, vet, Linux race, cross-builds,
+- [x] Inspect actual CI conclusions for tests, vet, Linux race, cross-builds,
   and public smoke; skipped jobs remain skipped.
-- [ ] Verify status contains no generated reports, indexes, binaries, or
+
+  No new remote CI run was available because the candidate was reverted
+  locally; local race remains unverified because the installed MinGW compiler
+  reports `cc1.exe: sorry, unimplemented: 64-bit mode not compiled in`.
+- [x] Verify status contains no generated reports, indexes, binaries, or
   temporary workspaces and preserves all pre-existing user changes.
-- [ ] Complete Progress, Discoveries, Decision Log, Outcomes, and recovery
+- [x] Complete Progress, Discoveries, Decision Log, Outcomes, and recovery
   notes; commit documentation separately from product code.
 
 ## Validation and Acceptance
@@ -198,11 +214,21 @@ ordering and caps without importing search or query packages.
 
 - [x] `2026-09-01` v0.8 selected `path_scope_missing`; existing `index.db` reuse,
   SCIP deferral, file aggregation, and balanced gate were agreed.
-- [ ] v0.8 archive, v0.9 transition commit, and baseline measurement.
-- [ ] Store file-level queries.
-- [ ] Scope aggregation and retriever integration.
-- [ ] Efficiency metric and candidate gate.
-- [ ] Closure verification and documentation.
+- [x] `2026-09-01T07:30Z` v0.8 archive, v0.9 transition commit `a98f9fc`,
+  and the eight-case repeat-1 baseline measurement completed. Baseline focused
+  2048 counts were path 9, symbol 2, packing 7, packed 1; cumulative wire
+  denominator was 12,740 tokens.
+- [x] `2026-09-01T08:07Z` Store file-level queries were implemented and
+  focused/full tests passed; candidate commit `ef8bfe0` was later reverted.
+- [x] `2026-09-01T08:07Z` Scope aggregation and retriever integration were
+  implemented and focused/full tests passed; candidate commit `8accf98` was
+  later reverted.
+- [x] `2026-09-01T08:11Z` Development efficiency reporting and deterministic
+  label accounting were added in `767e896`; the candidate gate was executed
+  with one recorded infrastructure retry and rejected.
+- [x] `2026-09-01T08:39Z` Closure verification and documentation completed:
+  687 tests and vet passed after revert, CGO-free native/cross-builds passed,
+  and race was blocked by the local compiler limitation.
 
 ## Surprises & Discoveries
 
@@ -211,6 +237,17 @@ ordering and caps without importing search or query packages.
   behavior; it is not part of v0.9.
 - v0.7's path-scoped-symbol candidate was reverted after no PHP/MCP identity
   advanced. v0.9 changes the scope source to full-index file aggregation.
+- SQLite FTS file ranking could not safely aggregate `bm25()` at the grouped
+  file level in the current query shape; the implementation uses deterministic
+  match counts with path tie-breaks and leaves BM25 refinement for a later
+  hypothesis.
+- Explicit `SearchRequest.Paths` needed a pre-candidate hard filter. Without
+  it, broad symbol/FTS files could consume the bounded scope and be discarded
+  only after retrieval; the regression test caught and fixed this before the
+  candidate run.
+- The candidate changed wire token counts without changing any measured label
+  stage. File scope alone did not bridge the selected files to the intended
+  symbols on this historical corpus.
 
 ## Decision Log
 
@@ -223,9 +260,24 @@ ordering and caps without importing search or query packages.
   a new file FTS schema or multi-turn MCP interaction.
 - **2026-09-01 / user and Codex:** Freeze the balanced gate: 3/9 advances, one
   new packed label, strict evidence/token improvement, no regressions.
+- **2026-09-01 / Codex:** Reject the v0.9 candidate after the single completed
+  measurement: path-scope misses stayed at 9, packed labels stayed at 5, and
+  useful evidence per 1,000 tokens fell from 0.3925 to 0.3838. Revert only the
+  two candidate production commits and preserve the negative findings.
 
 ## Outcomes & Retrospective
 
-Pending implementation and candidate measurement. Record actual counts, token
-ratios, CI conclusions, and acceptance/reversion; do not claim improvement
-from implementation alone.
+v0.9's store and search implementation was completed with deterministic RED→
+GREEN tests, then rejected by its frozen candidate gate and reverted via
+`3f8c3f2` and `63381fc` in reverse order. The development-only efficiency
+reporting remains available for future candidates without changing normal
+quality JSON or the Evidence/MCP contracts. The durable negative measurement
+is in `docs/benchmarks/findings-v0.9.md`; no v0.9 quality baseline was
+promoted.
+
+Local closure evidence is 687 passing tests in 46 packages and a clean vet
+run. Evidence/MCP/privacy-focused tests passed 311 cases in 8 packages.
+CGO-free native, Windows amd64, Linux amd64, and Darwin arm64 builds passed
+and their ignored temporary outputs were removed. Local race testing remains
+unverified because the installed MinGW `cc1.exe` cannot compile 64-bit mode;
+no new remote CI run was available after the local rejection/revert.
