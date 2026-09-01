@@ -133,6 +133,9 @@ known local MinGW 64-bit compiler limitation.
 - [x] Task 2 bridge implementation.
 - [x] Task 3 static verification and benchmark execution attempt.
 - [x] Task 4 closure documentation; promotion gate remains unmeasured.
+- [x] 2026-09-01T23:49Z: implementation committed as `5231e89` and
+  plan/findings committed as `753cf8d`; user-owned dirty/untracked files remain
+  unstaged.
 
 ## Surprises & Discoveries
 
