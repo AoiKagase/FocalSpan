@@ -82,6 +82,21 @@ The reports are measurement intermediates, not a new baseline, and were
 removed after these hashes and counts were recorded. No `results-v0.8` file is
 created.
 
+## Local closure verification
+
+Fresh closure verification passed 683 tests in 46 packages and `go vet ./...`;
+`git diff --check` reported no issues. The focused diagnosis/attribution/privacy
+selection passed 16 tests, and the app/eval/Evidence/MCP/search contract suite
+passed 205 tests in 5 packages.
+
+With `CGO_ENABLED=0`, native `focalspan` and `focalspan-bench` builds succeeded,
+as did `focalspan` builds for Windows amd64, Linux amd64, and Darwin arm64.
+The ignored build directory and all five binaries were removed afterward.
+Diff inspection from `77f42cf` found no changes to attribution v1, search,
+rank, or budget production code. Changes under app, Evidence, and MCP were
+tests only. Final status contained only the pre-existing `AGENTS.md` change and
+user-owned untracked `.focalspan.json` and `TASKS.md`.
+
 ## Limitations
 
 This milestone identifies the earliest measured failure boundary; it does not

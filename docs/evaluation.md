@@ -676,3 +676,10 @@ one next primary layer. The six temporary outputs passed privacy and finite-
 value scans and were removed after their hashes were recorded in
 `docs/benchmarks/findings-v0.8.md`. No `results-v0.8` baseline or production
 improvement claim is introduced.
+
+Fresh local closure verification passed 683 tests in 46 packages, 16 focused
+diagnosis/attribution/privacy tests, 205 app/eval/Evidence/MCP/search contract
+tests, `go vet ./...`, and `git diff --check`. CGO-free native focalspan and
+benchmark builds and Windows amd64, Linux amd64, and Darwin arm64 focalspan
+builds succeeded; their temporary binaries were removed. Attribution v1 and
+production search/rank/budget code remained unchanged.

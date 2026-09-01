@@ -206,7 +206,7 @@ the expected path. They never copy identities from unmatched candidates.
   normal structured output byte-identical and diagnosis identifiers absent.
 - [x] Run `go test ./internal/benchmark ./internal/benchcli ./internal/app
   ./internal/evidence ./internal/mcpserver -count=1`.
-- [ ] Commit `feat: emit opt-in benchmark diagnosis`.
+- [x] Commit `feat: emit opt-in benchmark diagnosis`.
 
 ### Task 3: Run the Frozen Historical Measurement
 
@@ -229,20 +229,20 @@ the expected path. They never copy identities from unmatched candidates.
 - [x] Record commands, hashes, counts, selected next layer, and limitations in
   `docs/benchmarks/findings-v0.8.md`, `docs/evaluation.md`, and this plan.
 - [x] Remove temporary benchmark outputs after recording verified hashes.
-- [ ] Commit `docs: record failure-layer diagnosis v0.8`.
+- [x] Commit `docs: record failure-layer diagnosis v0.8`.
 
 ### Task 4: Final Verification and Closure
 
-- [ ] Run formatting only on changed Go files.
-- [ ] Run `git diff --check`, `go test ./... -count=1`, and `go vet ./...`.
-- [ ] Run CGO-free native focalspan/focalspan-bench builds and Windows amd64,
+- [x] Run formatting only on changed Go files.
+- [x] Run `git diff --check`, `go test ./... -count=1`, and `go vet ./...`.
+- [x] Run CGO-free native focalspan/focalspan-bench builds and Windows amd64,
   Linux amd64, and Darwin arm64 focalspan cross-builds to an ignored temporary
   directory, then remove it.
-- [ ] Run existing fixture/Evidence contract tests and focused normal-output
+- [x] Run existing fixture/Evidence contract tests and focused normal-output
   privacy tests.
-- [ ] Verify `focalspan.benchmark-attribution.v1`, production search/rank/pack,
+- [x] Verify `focalspan.benchmark-attribution.v1`, production search/rank/pack,
   MCP tool definitions, and `focalspan.context.v1` remain unchanged.
-- [ ] Verify status contains no generated reports, indexes, binaries, or
+- [x] Verify status contains no generated reports, indexes, binaries, or
   temporary workspaces and preserves user-owned untracked files.
 - [ ] Push only after local verification, inspect the actual CI run, and record
   test, vet, Linux race, three cross-builds, and smoke conclusions. Do not call
@@ -282,7 +282,10 @@ the expected path. They never copy identities from unmatched candidates.
 - [x] `2026-09-01` The 55 v1 retrieval misses split into 45 path-scope and 10
   symbol-match misses. Focused 2048 counts were 9/2/0/7, selecting
   `path_scope_missing` as the next primary layer.
-- [ ] Local closure verification completed.
+- [x] `2026-09-01` Local closure passed 683 tests in 46 packages, 16 focused
+  diagnosis/attribution/privacy tests, 205 contract tests in 5 packages, vet,
+  diff check, two native builds, and three cross-builds; temporary outputs were
+  removed and user-owned inputs preserved.
 - [ ] Actual remote CI inspected.
 
 ---
@@ -325,10 +328,13 @@ the expected path. They never copy identities from unmatched candidates.
 
 ## Outcomes & Retrospective
 
-Implementation and measurement are in progress. At closure record the final
-commit, exact layer counts, selected next layer, v0.5 comparison, privacy and
-determinism results, local/remote verification, and limitations. Do not claim
-token reduction or retrieval improvement from this diagnostic milestone.
+Implementation and the frozen local measurement are complete. The diagnosis
+split 55 retrieval misses into 45 path-scope and 10 symbol-match misses; the
+focused 2048 rule selected `path_scope_missing` from counts 9/2/0/7. Quality
+remained v0.5-compatible with zero regressions, privacy/finite scans were clean,
+and local verification passed. This milestone diagnoses a boundary only; it
+does not claim token reduction or retrieval improvement. Remote CI remains to
+be pushed and inspected before closure is complete.
 
 ---
 
