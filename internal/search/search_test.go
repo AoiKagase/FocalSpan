@@ -70,22 +70,6 @@ func (f fakeStore) SearchPaths(context.Context, []string, int) ([]model.RankedCa
 	return append([]model.RankedCandidate(nil), f.results...), nil
 }
 
-func (f fakeStore) SearchSymbolFiles(context.Context, []string, int) ([]string, error) {
-	return []string{}, nil
-}
-
-func (f fakeStore) SearchFTSFiles(context.Context, string, int) ([]string, error) {
-	return []string{}, nil
-}
-
-func (f fakeStore) SearchPathFiles(context.Context, []string, int) ([]string, error) {
-	return []string{}, nil
-}
-
-func (f fakeStore) SearchCandidatesInFiles(context.Context, []string, []string, string, int, int) ([]model.RankedCandidate, error) {
-	return []model.RankedCandidate{}, nil
-}
-
 func (f fakeStore) RelatedCandidates(context.Context, []string, string) ([]model.RankedCandidate, error) {
 	return nil, nil
 }

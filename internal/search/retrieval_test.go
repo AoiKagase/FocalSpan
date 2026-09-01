@@ -12,22 +12,16 @@ import (
 )
 
 type retrievalRecordingStore struct {
-	called          []RetrieverID
-	fts             []model.RankedCandidate
-	qualified       []model.RankedCandidate
-	exact           []model.RankedCandidate
-	prefix          []model.RankedCandidate
-	paths           []model.RankedCandidate
-	pathHints       [][]string
-	related         []model.RankedCandidate
-	relatedHits     []model.RelationHit
-	fileSymbolPaths []string
-	fileFTSPaths    []string
-	filePathPaths   []string
-	scoped          []model.RankedCandidate
-	scopeCalled     []string
-	scopePaths      [][]string
-	errFor          RetrieverID
+	called      []RetrieverID
+	fts         []model.RankedCandidate
+	qualified   []model.RankedCandidate
+	exact       []model.RankedCandidate
+	prefix      []model.RankedCandidate
+	paths       []model.RankedCandidate
+	pathHints   [][]string
+	related     []model.RankedCandidate
+	relatedHits []model.RelationHit
+	errFor      RetrieverID
 }
 
 func (s *retrievalRecordingStore) record(id RetrieverID) error {
@@ -68,26 +62,6 @@ func (s *retrievalRecordingStore) SearchPaths(_ context.Context, hints []string,
 	}
 	s.pathHints = append(s.pathHints, append([]string(nil), hints...))
 	return append([]model.RankedCandidate(nil), s.paths...), nil
-}
-func (s *retrievalRecordingStore) SearchSymbolFiles(_ context.Context, _ []string, _ int) ([]string, error) {
-	s.scopeCalled = append(s.scopeCalled, "symbol-files")
-	return append([]string(nil), s.fileSymbolPaths...), nil
-}
-func (s *retrievalRecordingStore) SearchFTSFiles(_ context.Context, _ string, _ int) ([]string, error) {
-	s.scopeCalled = append(s.scopeCalled, "fts-files")
-	return append([]string(nil), s.fileFTSPaths...), nil
-}
-func (s *retrievalRecordingStore) SearchPathFiles(_ context.Context, _ []string, _ int) ([]string, error) {
-	s.scopeCalled = append(s.scopeCalled, "path-files")
-	return append([]string(nil), s.filePathPaths...), nil
-}
-func (s *retrievalRecordingStore) SearchCandidatesInFiles(_ context.Context, paths, _ []string, _ string, _, _ int) ([]model.RankedCandidate, error) {
-	s.scopeCalled = append(s.scopeCalled, "scoped-candidates")
-	s.scopePaths = append(s.scopePaths, append([]string(nil), paths...))
-	if len(paths) == 0 {
-		return nil, errors.New("expected scoped paths")
-	}
-	return append([]model.RankedCandidate(nil), s.scoped...), nil
 }
 func (s *retrievalRecordingStore) RelatedCandidates(_ context.Context, handles []string, relation string) ([]model.RankedCandidate, error) {
 	if err := s.record(RetrieverRelation); err != nil {
@@ -197,64 +171,6 @@ func TestFTSOnlyNeverCallsRelationStore(t *testing.T) {
 	}
 	if containsRetriever(store.called, RetrieverRelation) {
 		t.Fatalf("relation called in fts-only mode: %v", store.called)
-	}
-}
-
-func TestRetrieverSetAggregatesFileScopeForDefinitionQueries(t *testing.T) {
-	store := &retrievalRecordingStore{
-		fileSymbolPaths: []string{"internal/indexer/indexer.go"},
-		fileFTSPaths:    []string{"internal/indexer/indexer.go"},
-		filePathPaths:   []string{},
-		scoped:          []model.RankedCandidate{{Handle: "scoped", Path: "internal/indexer/indexer.go", Symbol: "Run"}},
-	}
-	plan := query.Plan{Terms: query.Terms{Words: []string{"indexer", "flow"}, Identifiers: []string{"Run"}}, PrimaryIntent: query.IntentDefinition}
-	lists, err := NewRetrieverSet(store).Retrieve(context.Background(), plan, SearchRequest{Query: "where is Run in the indexer flow", Mode: RetrievalFull})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(store.scopeCalled, []string{"symbol-files", "fts-files", "path-files", "scoped-candidates"}) {
-		t.Fatalf("scope calls=%v", store.scopeCalled)
-	}
-	var found bool
-	for _, list := range lists {
-		if list.Retriever == RetrieverPathScopedAggregate {
-			found = true
-			if len(list.Items) != 1 || list.Items[0].Handle != "scoped" {
-				t.Fatalf("scoped list=%+v", list.Items)
-			}
-		}
-	}
-	if !found {
-		t.Fatalf("lists=%v, want path-scope-aggregate", lists)
-	}
-}
-
-func TestRetrieverSetFiltersAggregatedScopeToExplicitPaths(t *testing.T) {
-	store := &retrievalRecordingStore{
-		fileSymbolPaths: []string{"other.go", "src/allowed.go"},
-		fileFTSPaths:    []string{"other.go"},
-		filePathPaths:   []string{"src/allowed.go"},
-		scoped:          []model.RankedCandidate{{Handle: "allowed", Path: "src/allowed.go", Symbol: "Run"}},
-	}
-	plan := query.Plan{Terms: query.Terms{Identifiers: []string{"Run"}}, PrimaryIntent: query.IntentDefinition}
-	if _, err := NewRetrieverSet(store).Retrieve(context.Background(), plan, SearchRequest{Query: "Run", Paths: []string{"src/allowed.go"}, Mode: RetrievalFull}); err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(store.scopePaths, [][]string{{"src/allowed.go"}}) {
-		t.Fatalf("scope paths=%v, want explicit path only", store.scopePaths)
-	}
-}
-
-func TestRetrieverSetSkipsFileScopeForRelationsAndFTSOnly(t *testing.T) {
-	for _, mode := range []RetrievalMode{RetrievalFTSOnly, RetrievalNoRelations} {
-		store := &retrievalRecordingStore{}
-		plan := query.Plan{Terms: query.Terms{Identifiers: []string{"Run"}}, PrimaryIntent: query.IntentCallers, Relations: []string{"callers"}}
-		if _, err := NewRetrieverSet(store).Retrieve(context.Background(), plan, SearchRequest{Query: "what calls Run", Mode: mode}); err != nil {
-			t.Fatal(err)
-		}
-		if len(store.scopeCalled) != 0 {
-			t.Fatalf("mode=%s scope calls=%v", mode, store.scopeCalled)
-		}
 	}
 }
 
