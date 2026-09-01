@@ -101,6 +101,45 @@ func TestSearchMethodsClampLimits(t *testing.T) {
 	}
 }
 
+func TestStructuralBridgeResolvesPackageToSymbolBearingChunks(t *testing.T) {
+	s := openTestStore(t)
+	if err := s.ReplaceFile(context.Background(), model.SourceFile{Path: "internal/auth/token.go", Language: "go", SHA256: "auth"}, model.Extraction{
+		Symbols: []model.Symbol{
+			{Handle: "pkg", FilePath: "internal/auth/token.go", Language: "go", Kind: "package", Name: "auth", QualifiedName: "auth", StartLine: 1, EndLine: 1, Confidence: 1},
+			{Handle: "target", FilePath: "internal/auth/token.go", Language: "go", Kind: "function", Name: "ValidateToken", QualifiedName: "ValidateToken", StartLine: 3, EndLine: 5, Confidence: .95},
+		},
+		Chunks: []model.Chunk{{Handle: "target-chunk", FilePath: "internal/auth/token.go", Language: "go", Kind: "function", SymbolHandle: "target", SymbolName: "ValidateToken", Signature: "func ValidateToken()", StartLine: 3, EndLine: 5, Content: "func ValidateToken() {}", ContentHash: "target"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReplaceFile(context.Background(), model.SourceFile{Path: "docs/auth.md", Language: "markdown", SHA256: "docs"}, model.Extraction{
+		Symbols: []model.Symbol{{Handle: "doc", FilePath: "docs/auth.md", Language: "markdown", Kind: "heading", Name: "auth", QualifiedName: "auth", StartLine: 1, EndLine: 1, Confidence: 1}},
+		Chunks:  []model.Chunk{{Handle: "doc-chunk", FilePath: "docs/auth.md", Language: "markdown", Kind: "heading", SymbolHandle: "doc", SymbolName: "auth", StartLine: 1, EndLine: 1, Content: "auth package docs", ContentHash: "doc"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	bridge, ok := any(s).(interface {
+		SearchStructuralBridge(context.Context, []string, []string, int) ([]model.RankedCandidate, error)
+	})
+	if !ok {
+		t.Fatal("store does not expose structural bridge search")
+	}
+	got, err := bridge.SearchStructuralBridge(context.Background(), []string{"auth"}, []string{"ValidateToken"}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Handle != "target-chunk" || got[0].Symbol != "ValidateToken" {
+		t.Fatalf("bridge=%+v, want only target symbol", got)
+	}
+	lexical, err := bridge.SearchStructuralBridge(context.Background(), []string{"ValidateToken", "implementation"}, nil, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lexical) != 1 || lexical[0].Handle != "target-chunk" {
+		t.Fatalf("lexical bridge=%+v, want target symbol", lexical)
+	}
+}
+
 func TestSearchMethodsHandleCancellationAndMalformedInputs(t *testing.T) {
 	s := openTestStore(t)
 	ctx, cancel := context.WithCancel(context.Background())

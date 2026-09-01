@@ -12,16 +12,19 @@ import (
 )
 
 type retrievalRecordingStore struct {
-	called      []RetrieverID
-	fts         []model.RankedCandidate
-	qualified   []model.RankedCandidate
-	exact       []model.RankedCandidate
-	prefix      []model.RankedCandidate
-	paths       []model.RankedCandidate
-	pathHints   [][]string
-	related     []model.RankedCandidate
-	relatedHits []model.RelationHit
-	errFor      RetrieverID
+	called        []RetrieverID
+	fts           []model.RankedCandidate
+	qualified     []model.RankedCandidate
+	exact         []model.RankedCandidate
+	prefix        []model.RankedCandidate
+	paths         []model.RankedCandidate
+	pathHints     [][]string
+	related       []model.RankedCandidate
+	relatedHits   []model.RelationHit
+	bridge        []model.RankedCandidate
+	bridgeHints   [][]string
+	bridgeSymbols [][]string
+	errFor        RetrieverID
 }
 
 func (s *retrievalRecordingStore) record(id RetrieverID) error {
@@ -87,6 +90,12 @@ func (s *retrievalRecordingStore) RelatedCandidateHits(_ context.Context, handle
 	return hits, nil
 }
 
+func (s *retrievalRecordingStore) SearchStructuralBridge(_ context.Context, packageHints, symbolHints []string, _ int) ([]model.RankedCandidate, error) {
+	s.bridgeHints = append(s.bridgeHints, append([]string(nil), packageHints...))
+	s.bridgeSymbols = append(s.bridgeSymbols, append([]string(nil), symbolHints...))
+	return append([]model.RankedCandidate(nil), s.bridge...), nil
+}
+
 func TestRetrieverSetSelectsBaseRetrieversByMode(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -131,6 +140,65 @@ func TestRetrieverSetPassesOnlyExplicitPathTermsToPathSearch(t *testing.T) {
 	}
 }
 
+func TestRetrieverSetUsesIdentityBridgeForStructuralPackageHint(t *testing.T) {
+	store := &retrievalRecordingStore{bridge: []model.RankedCandidate{{Handle: "bridged", Path: "internal/auth/token.go", Symbol: "ValidateToken"}}}
+	plan := query.Plan{
+		RawQuery:      "find ValidateToken in auth package",
+		Terms:         query.Terms{Words: []string{"find", "ValidateToken", "in", "auth", "package"}, Identifiers: []string{"ValidateToken", "auth"}, Symbols: []string{"ValidateToken"}},
+		PrimaryIntent: query.IntentDefinition,
+		Anchors:       []string{"ValidateToken", "auth"},
+	}
+	lists, err := NewRetrieverSet(store).Retrieve(context.Background(), plan, SearchRequest{Query: plan.RawQuery, Mode: RetrievalFull})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.bridgeHints) != 1 || !reflect.DeepEqual(store.bridgeHints[0], []string{"auth"}) {
+		t.Fatalf("bridge package hints=%v, want [[auth]]", store.bridgeHints)
+	}
+	if len(store.bridgeSymbols) != 1 || !reflect.DeepEqual(store.bridgeSymbols[0], []string{"ValidateToken"}) {
+		t.Fatalf("bridge symbol hints=%v, want [[ValidateToken]]", store.bridgeSymbols)
+	}
+	var found bool
+	for _, list := range lists {
+		if list.Retriever == RetrieverIdentityBridge {
+			found = true
+			if len(list.Items) != 1 || list.Items[0].Handle != "bridged" {
+				t.Fatalf("bridge list=%+v", list.Items)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("identity bridge retriever missing: %+v", lists)
+	}
+}
+
+func TestRetrieverSetDoesNotUseBridgeForArbitraryWordsOrExplicitPath(t *testing.T) {
+	store := &retrievalRecordingStore{}
+	plans := []query.Plan{
+		{RawQuery: "find token", Terms: query.Terms{Words: []string{"find", "token"}}},
+		{RawQuery: "src/auth/token.go ValidateToken", Terms: query.Terms{Words: []string{"src/auth/token.go", "ValidateToken"}, Paths: []string{"src/auth/token.go"}, Identifiers: []string{"ValidateToken"}}},
+	}
+	for _, plan := range plans {
+		if _, err := NewRetrieverSet(store).Retrieve(context.Background(), plan, SearchRequest{Query: plan.RawQuery, Mode: RetrievalFull}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(store.bridgeHints) != 0 {
+		t.Fatalf("unexpected bridge hints=%v", store.bridgeHints)
+	}
+}
+
+func TestRetrieverSetUsesBoundedLexicalSeedsForNaturalStructuralQuestion(t *testing.T) {
+	store := &retrievalRecordingStore{}
+	plan := query.Plan{RawQuery: "extractor registry assembled", Terms: query.Terms{Words: []string{"extractor", "registry", "assembled"}}}
+	if _, err := NewRetrieverSet(store).Retrieve(context.Background(), plan, SearchRequest{Query: plan.RawQuery, Mode: RetrievalFull}); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.bridgeHints) != 1 || !reflect.DeepEqual(store.bridgeHints[0], []string{"extractor", "registry", "assembled"}) {
+		t.Fatalf("lexical bridge hints=%v", store.bridgeHints)
+	}
+}
+
 func TestRelationRetrievalWorksWhenFTSMissesAnchor(t *testing.T) {
 	store := &retrievalRecordingStore{
 		exact:   []model.RankedCandidate{{Handle: "target", Symbol: "ValidateToken"}},
@@ -152,6 +220,30 @@ func TestRelationRetrievalWorksWhenFTSMissesAnchor(t *testing.T) {
 		if !containsRetriever(store.called, RetrieverRelation) {
 			t.Fatalf("relation was not retrieved: called=%v", store.called)
 		}
+	}
+}
+
+func TestRelationRetrievalUsesBridgeResolvedSymbolAsAnchor(t *testing.T) {
+	store := &retrievalRecordingStore{
+		bridge:  []model.RankedCandidate{{Handle: "target", Path: "internal/auth/token.go", Symbol: "ValidateToken"}},
+		related: []model.RankedCandidate{{Handle: "caller", Path: "internal/http.go", Symbol: "Authenticate"}},
+	}
+	plan := query.Plan{
+		RawQuery:      "what calls ValidateToken in auth package",
+		Terms:         query.Terms{Words: []string{"what", "calls", "validatetoken", "in", "auth", "package"}, Symbols: []string{"ValidateToken"}},
+		Intents:       []query.Intent{query.IntentCallers},
+		PrimaryIntent: query.IntentCallers,
+		Anchors:       []string{"ValidateToken", "auth"},
+		Relations:     []string{"callers"},
+	}
+	if _, err := (&RetrieverSet{store: store}).Retrieve(context.Background(), plan, SearchRequest{Query: plan.RawQuery, Mode: RetrievalFull}); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.bridgeHints) != 1 || !reflect.DeepEqual(store.bridgeHints[0], []string{"auth"}) {
+		t.Fatalf("bridge hints=%v", store.bridgeHints)
+	}
+	if !containsRetriever(store.called, RetrieverRelation) {
+		t.Fatalf("relation was not retrieved: called=%v", store.called)
 	}
 }
 

@@ -310,6 +310,93 @@ func retrievalLimit(value, fallback, maximum int) int {
 
 const rankedCandidateProjection = `SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature, c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash, COALESCE(symbol.confidence, 0) FROM chunks c JOIN files f ON f.id = c.file_id LEFT JOIN symbols symbol ON symbol.handle = c.symbol_handle WHERE `
 
+var structuralEntryKinds = []string{
+	"package", "module", "crate_module", "compilation_unit", "translation_unit",
+	"pawn_unit", "xaml_document", "resx_document", "namespace",
+}
+
+// SearchStructuralBridge resolves an explicit package/module identity to
+// symbol-bearing chunks in the matching structural files. It intentionally
+// accepts bounded identity hints rather than arbitrary natural-language words.
+func (s *Store) SearchStructuralBridge(ctx context.Context, packageHints, symbolHints []string, limit int) ([]model.RankedCandidate, error) {
+	packageHints = lookupValues(packageHints)
+	symbolHints = lookupValues(symbolHints)
+	if len(packageHints) == 0 {
+		return []model.RankedCandidate{}, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	limit = retrievalLimit(limit, 50, 500)
+	kindArgs := make([]any, len(structuralEntryKinds))
+	kindPlaceholders := make([]string, len(structuralEntryKinds))
+	for index, kind := range structuralEntryKinds {
+		kindArgs[index] = kind
+		kindPlaceholders[index] = "?"
+	}
+	entryConditions := make([]string, 0, len(packageHints))
+	entryArgs := make([]any, 0, len(packageHints)*6)
+	for _, hint := range packageHints {
+		normalized := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(hint), "\\", "/"))
+		if normalized == "" {
+			continue
+		}
+		escaped := escapeLike(normalized)
+		entryConditions = append(entryConditions, `(lower(entry.name) = lower(?) OR lower(entry.qualified_name) = lower(?) OR lower(entry_file.path) = lower(?) OR lower(entry_file.path) LIKE '%' || '/' || lower(?) || '/%' ESCAPE char(92) OR lower(entry_file.path) LIKE '%' || '/' || lower(?) ESCAPE char(92) OR EXISTS (SELECT 1 FROM chunk_fts JOIN chunks bridge_chunk ON bridge_chunk.handle = chunk_fts.handle WHERE bridge_chunk.file_id = entry.file_id AND chunk_fts MATCH ?))`)
+		entryArgs = append(entryArgs, hint, hint, normalized, escaped, escaped, quotedFTSTerm(hint))
+	}
+	if len(entryConditions) == 0 {
+		return []model.RankedCandidate{}, nil
+	}
+	symbolCondition := ""
+	symbolArgs := make([]any, 0, len(symbolHints)*2)
+	if len(symbolHints) > 0 {
+		conditions := make([]string, 0, len(symbolHints))
+		for _, hint := range symbolHints {
+			conditions = append(conditions, `(lower(symbol.name) = lower(?) OR lower(symbol.qualified_name) = lower(?))`)
+			symbolArgs = append(symbolArgs, hint, hint)
+		}
+		symbolCondition = " AND (" + strings.Join(conditions, " OR ") + ")"
+	}
+	query := `WITH entry_files AS (
+SELECT DISTINCT entry.file_id
+FROM symbols entry JOIN files entry_file ON entry_file.id = entry.file_id
+WHERE entry.kind IN (` + strings.Join(kindPlaceholders, ",") + `) AND (` + strings.Join(entryConditions, " OR ") + `)
+)
+SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature,
+       c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash,
+       COALESCE(symbol.confidence, 0)
+FROM chunks c JOIN files f ON f.id = c.file_id
+LEFT JOIN symbols symbol ON symbol.handle = c.symbol_handle
+WHERE c.file_id IN (SELECT file_id FROM entry_files)
+  AND c.symbol_handle IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM symbols entry
+    WHERE entry.handle = c.symbol_handle AND entry.kind IN (` + strings.Join(kindPlaceholders, ",") + `)
+  )` + symbolCondition + `
+ORDER BY COALESCE(symbol.confidence, 0) DESC,
+         f.path ASC, c.start_line ASC, c.handle ASC
+LIMIT ?`
+	args := make([]any, 0, len(kindArgs)*2+len(entryArgs)+len(symbolArgs)+1)
+	args = append(args, kindArgs...)
+	args = append(args, entryArgs...)
+	args = append(args, kindArgs...)
+	args = append(args, symbolArgs...)
+	args = append(args, limit)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("structural bridge search: %w", err)
+	}
+	defer rows.Close()
+	return scanRankedCandidates(rows)
+}
+
+func quotedFTSTerm(value string) string {
+	return `"` + strings.ReplaceAll(strings.TrimSpace(value), `"`, `""`) + `"`
+}
+
 func (s *Store) SearchExactSymbols(ctx context.Context, values []string, limit int) ([]model.RankedCandidate, error) {
 	values = lookupValues(values)
 	if len(values) == 0 {

@@ -15,12 +15,13 @@ const (
 )
 
 const (
-	RetrieverQualified RetrieverID = "qualified-symbol"
-	RetrieverSymbol    RetrieverID = "symbol-exact"
-	RetrieverPrefix    RetrieverID = "symbol-prefix"
-	RetrieverFTS       RetrieverID = "fts"
-	RetrieverPath      RetrieverID = "path"
-	RetrieverRelation  RetrieverID = "relation"
+	RetrieverQualified      RetrieverID = "qualified-symbol"
+	RetrieverSymbol         RetrieverID = "symbol-exact"
+	RetrieverPrefix         RetrieverID = "symbol-prefix"
+	RetrieverFTS            RetrieverID = "fts"
+	RetrieverPath           RetrieverID = "path"
+	RetrieverIdentityBridge RetrieverID = "identity-bridge"
+	RetrieverRelation       RetrieverID = "relation"
 )
 
 type RankedList struct {
