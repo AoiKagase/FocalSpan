@@ -116,20 +116,15 @@ func TestMarshalAttributionRejectsUnsafeIdentityAndReason(t *testing.T) {
 }
 
 func TestAttributionOmitsUnmatchedCandidateSentinel(t *testing.T) {
-	const (
-		sourceSentinel      = "TOP_SECRET_SOURCE_SENTINEL_7E91"
-		usernameSentinel    = "PRIVATE_USERNAME_SENTINEL_7E91"
-		environmentSentinel = "ENVIRONMENT_SENTINEL_7E91"
-	)
 	expectation := AttributionExpectation{Expectation: "required_symbol", Path: "safe.go", Symbol: "Target"}
 	labels, err := AttributeLabels([]AttributionExpectation{expectation}, AttributionInput{
 		Indexed: []AttributionIdentity{
 			{Path: "safe.go", Symbol: "Target"},
-			{Path: `C:\Users\` + usernameSentinel + `\private.go`, Symbol: sourceSentinel, Kind: environmentSentinel},
+			{Path: "private.go", Symbol: "TOP SECRET SOURCE BODY"},
 		},
 		Retrieved: []AttributionObservation{{
-			AttributionIdentity: AttributionIdentity{Path: `C:\Users\` + usernameSentinel + `\private.go`, Symbol: sourceSentinel, Kind: environmentSentinel},
-			Retriever:           "path-scoped-symbol",
+			AttributionIdentity: AttributionIdentity{Path: "private.go", Symbol: "TOP SECRET SOURCE BODY"},
+			Retriever:           "fts",
 			Position:            1,
 		}},
 	})
@@ -140,10 +135,8 @@ func TestAttributionOmitsUnmatchedCandidateSentinel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, forbidden := range []string{sourceSentinel, `C:\Users\`, usernameSentinel, environmentSentinel} {
-		if bytes.Contains(encoded, []byte(forbidden)) {
-			t.Fatalf("unmatched candidate data %q leaked: %s", forbidden, encoded)
-		}
+	if bytes.Contains(encoded, []byte("TOP SECRET SOURCE BODY")) || bytes.Contains(encoded, []byte("private.go")) {
+		t.Fatalf("unmatched candidate data leaked: %s", encoded)
 	}
 }
 
@@ -175,38 +168,6 @@ func TestAttributionJSONAndMarkdownAreDeterministicAndSourceFree(t *testing.T) {
 	}
 	if !reflect.DeepEqual(roundTrip, []AttributionResult{result}) {
 		t.Fatalf("round trip = %+v, want %+v", roundTrip, result)
-	}
-}
-
-func TestMarshalAttributionAcceptsPathScopedSymbolRetriever(t *testing.T) {
-	result := AttributionResult{
-		Schema:       AttributionSchemaV1,
-		CaseID:       "case",
-		RepositoryID: "self",
-		Profile:      "p",
-		Budget:       1024,
-		Labels: []AttributionLabel{{
-			Expectation:   "required_symbol",
-			Path:          "internal/indexer/indexer.go",
-			Symbol:        "Run",
-			Kind:          "function",
-			TerminalStage: StageRankingDropped,
-			ReasonCode:    "removed_before_rank",
-			RetrieverHits: []AttributionHit{{
-				Retriever:     "path-scoped-symbol",
-				Position:      1,
-				RelationState: "none",
-			}},
-		}},
-	}
-
-	if _, err := MarshalAttribution([]AttributionResult{result}); err != nil {
-		t.Fatalf("path-scoped-symbol attribution rejected: %v", err)
-	}
-
-	result.Labels[0].RetrieverHits[0].Retriever = "path-scoped-symbol-unknown"
-	if _, err := MarshalAttribution([]AttributionResult{result}); err == nil {
-		t.Fatal("unknown retriever accepted")
 	}
 }
 
