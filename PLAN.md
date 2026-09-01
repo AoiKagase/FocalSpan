@@ -134,7 +134,7 @@ join these observations with attribution identities without changing
   evidence per 1,000 tokens 0.3925.
 - [x] Verify `git status --short --branch` and preserve the pre-existing dirty
   `AGENTS.md`, `.focalspan.json`, and `TASKS.md`.
-- [ ] Commit only the plan transition and immutable archive with message
+- [x] Commit only the plan transition and immutable archive with message
   `docs: start packer efficiency v0.10`.
 
 ### Task 1: Add Source-Free Packing Observations (RED/GREEN)
@@ -296,6 +296,8 @@ join these observations with attribution identities without changing
 - [x] `2026-09-01` v0.10 design approved: measure packing cost first, then run
   one bounded duplicate/containment candidate; defer identity retrieval to a
   successor plan.
+- [x] `2026-09-01` plan transition committed as `6c248d2`; only `PLAN.md` and
+  the immutable v0.9 archive were staged.
 - [ ] v0.10 Task 1 source-free packing observations.
 - [ ] v0.10 Task 2 bounded packer candidate.
 - [ ] v0.10 Task 3 static verification and frozen candidate gate.
