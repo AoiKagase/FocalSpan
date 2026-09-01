@@ -208,3 +208,43 @@ untracked files remained `.focalspan.json` and `PLAN_v0.7.md`.
 symbol-identity improvement condition failed. No weight, limit, SQL order,
 hint, ranking, or packing adjustment will be attempted. Task 8 is skipped and
 Task 9 reverts the v0.7 production/test commits.
+
+### Negative closure
+
+The failed conditions separate as follows:
+
+- file/scope discovery did not expose PHP `Run` or MCP `codeContext` at all;
+- the scoped symbol list was absent for those identities and for project
+  metadata `Run`;
+- JSTS `Search` did enter the scoped list at raw position 1 but remained ranked
+  10 and unpacked; project metadata `Run` worsened from rank 20 to 28 and
+  remained unpacked;
+- no required symbol/anchor packet existed, so the failure occurred before a
+  real expansion rather than after an expansion request;
+- the v0.5 quality comparison had zero regressions, Japanese full relation
+  recall stayed `1.0`, and privacy/determinism checks passed.
+
+The five production/test commits were reverted in reverse order:
+
+- `5f3ce64` reverted Task 6 `a082ef4`;
+- `fa77e1e` reverted Task 5 `ebd1670`;
+- `5249d27` reverted Task 4 `a7f005f`;
+- `d3b6e64` reverted Task 3 `e095634`;
+- `0dd456d` reverted Task 2 `70d7b51`.
+
+After the reverts, `internal/` and `cmd/` had no diff from baseline commit
+`e9d6ec5`. Closure verification passed 666 tests in 46 packages, `go vet ./...`
+reported no issues, and `git diff --check` passed. The selected four-case
+repeat-1 closure smoke ran exactly once, produced 4 cases and 24 quality
+results, and compared with v0.5 as compatible with zero regressions. Its 44
+selected attribution rows had zero semantic differences from
+`docs/benchmarks/attribution-v0.6.json`: 20 `retrieval_missing`, 20
+`packing_dropped`, and 4 `packed`.
+
+The closure report hashes were `d2a285912f6e7efb65f0be8447cceaf11f9bb74c`,
+`fe5a7c86941e5079f77b212849a1273255730d34`,
+`9aca8bc755a73efb487b8e86401e3ec529b5f2a1`, and
+`354cc2f938b26142a8e198ef585ad5cd375c2d5d`. No v0.7 quality baseline is
+created. The next measured failure category is the split between query-to-file
+scope coverage and post-retrieval packet selection; it requires a separately
+planned milestone rather than a second v0.7 adjustment.

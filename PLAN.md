@@ -1355,7 +1355,7 @@ changes.
 - Modify: `PLAN.md`
 - Revert production/test changes from Tasks 2 through 6
 
-- [ ] Record exactly which frozen gates failed. Distinguish:
+- [x] Record exactly which frozen gates failed. Distinguish:
   - file scope absent;
   - scoped symbol absent;
   - candidate ranked but not packed;
@@ -1364,21 +1364,21 @@ changes.
   - relation regression;
   - privacy or determinism failure.
 
-- [ ] Revert only v0.7 production and feature-test commits with ordinary
+- [x] Revert only v0.7 production and feature-test commits with ordinary
   `git revert` commits, preserving history. Do not reset the branch.
 
-- [ ] Keep Task 0/1 planning, baseline, and findings commits.
+- [x] Keep Task 0/1 planning, baseline, and findings commits.
 
-- [ ] Run closure verification:
+- [x] Run closure verification:
 
       go test ./... -count=1
       go vet ./...
       git diff --check
 
-- [ ] Run the selected four-case repeat-1 closure smoke once and compare with
+- [x] Run the selected four-case repeat-1 closure smoke once and compare with
   v0.5. Require zero regressions and restored baseline-like attribution.
 
-- [ ] Add a negative conclusion to `docs/evaluation.md`:
+- [x] Add a negative conclusion to `docs/evaluation.md`:
   - the hypothesis;
   - the measured benefit;
   - the failed gate;
@@ -1386,7 +1386,7 @@ changes.
   - the next measured failure category, without proposing a second v0.7
     production fix.
 
-- [ ] Commit closure documentation:
+- [x] Commit closure documentation:
 
       git add PLAN.md docs/benchmarks/findings-v0.7.md docs/evaluation.md
       git commit -m "docs: close rejected path-scoped retrieval v0.7"
@@ -1543,6 +1543,13 @@ Update with UTC timestamps while executing.
   failed: 0/16 PHP/MCP rows advanced, no new required symbol was packed, and no
   real expansion executed. The frozen decision is FAIL; Task 8 is skipped and
   Task 9 must revert the five production/test commits without tuning.
+- [x] `2026-09-01T00:46:48Z` Task 9 negative rollback and local closure
+  completed. Five ordinary revert commits restored production to the baseline
+  tree. Closure verification passed 666 tests in 46 packages, vet, and diff
+  check. The one four-case closure smoke produced 24 quality results, compared
+  v0.5-compatible with zero regressions, and matched all 44 selected v0.6
+  attribution rows exactly. Closure documentation is ready for commit; actual
+  post-closure GitHub Actions is still pending.
 - [x] Four-case current baseline measured and frozen.
 - [x] Store file discovery implemented and verified.
 - [x] Store scoped-symbol retrieval implemented and verified.
@@ -1551,7 +1558,7 @@ Update with UTC timestamps while executing.
 - [x] Attribution accepts and safely reports the new retriever.
 - [x] Frozen four-case candidate run executed once.
 - [x] Frozen gate decision recorded.
-- [ ] Positive full acceptance completed, or negative revert completed.
+- [x] Positive full acceptance completed, or negative revert completed.
 - [ ] Local full verification completed.
 - [ ] Actual remote CI inspected.
 - [ ] Outcomes and next measured direction recorded.
@@ -1605,6 +1612,11 @@ Update with UTC timestamps while executing.
   FTS-only hit and moved from ranked position 20 to 28. This is measured
   negative evidence for the single production hypothesis, not grounds for
   changing weights, limits, ranking, or packing in v0.7.
+- **2026-09-01:** Reverting the five production/test commits restored
+  `internal/` and `cmd/` byte-semantically to baseline commit `e9d6ec5` (empty
+  `git diff --name-status e9d6ec5..HEAD -- internal cmd`). The closure smoke's
+  44 selected attribution rows had zero semantic differences from the public
+  v0.6 artifact.
 
 ---
 
@@ -1700,6 +1712,15 @@ Update with UTC timestamps while executing.
   rank 20 to 28, and was not packed; no real expansion executed; and no 2048
   selected case improved required-symbol recall. The frozen symbol-identity
   gate therefore fails. Do not run Task 8 or tune another subsystem.
+  **Date/Author:** 2026-09-01 / Codex.
+
+- **Decision:** Preserve the negative evidence and revert exactly the five
+  v0.7 production/test commits.
+  **Rationale:** Ordinary reverse-order reverts produced `5f3ce64`, `fa77e1e`,
+  `5249d27`, `d3b6e64`, and `0dd456d`. Task 0/1 and all chronological PLAN/
+  findings commits remain. After rollback, 666 tests in 46 packages, vet, and
+  diff-check passed; the one closure smoke was v0.5-compatible with zero
+  regressions and restored the baseline 20/20/4 selected stage distribution.
   **Date/Author:** 2026-09-01 / Codex.
 
 - **Decision:** Separate file discovery from symbol retrieval.

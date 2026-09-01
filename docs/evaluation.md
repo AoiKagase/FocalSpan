@@ -602,3 +602,41 @@ amd64, Linux amd64, and Darwin arm64 builds; and the public two-case repeat-1
 smoke. The smoke validated 2 cases with 0 invalid, produced 12 quality results,
 and compared as compatible with zero regressions. The manual eight-case
 repeat-3 job was skipped, preserving the recorded executed count of 0.
+
+## Bounded path-scoped symbol retrieval v0.7 (rejected)
+
+v0.7 tested one production hypothesis only: discover at most eight candidate
+files, then retrieve symbol-owned candidates inside those exact files before
+the unchanged fusion, ranking, and Evidence packing stages. The new retriever
+used fixed weight `1.35` and fixed 8-path, 8-candidate-per-path, 40-candidate
+total limits. Query normalization, planning, existing FTS/path retrieval,
+relations, linker, rank profile, Evidence packing, and MCP contracts were not
+changed.
+
+The frozen four-case candidate ran exactly once at commit `605ad7d`, repeat 1,
+with zero retries. It produced 24 quality results and compared compatible with
+v0.5 with zero regressions. The scoped retriever reached JSTS `Search` at raw
+position 1, but that identity remained ranked 10 and was not packed. It did not
+retrieve PHP `Run` or MCP `codeContext`; project metadata `Run` remained an FTS
+position-50 hit, moved from rank 20 to 28, and was not packed.
+
+The frozen gate therefore failed: 0 of the required 16 PHP/MCP missing symbol
+or anchor rows advanced, neither deficient case improved, neither required
+2048 symbol was packed, PHP `Run` remained retrieval-missing, no real expansion
+executed, and required-symbol recall improved in 0 selected 2048 cases. Budget,
+determinism, relation, forbidden-path, privacy, and v0.5 comparison invariants
+passed; the rejection is specifically a symbol-identity/packet-coverage result.
+The eight-case repeat-3 evaluation was not run.
+
+Ordinary `git revert` commits `5f3ce64`, `fa77e1e`, `5249d27`, `d3b6e64`, and
+`0dd456d` removed the Task 2-6 production/test changes while preserving the
+chronological plan and findings. After rollback, 666 tests in 46 packages,
+`go vet ./...`, and `git diff --check` passed. A separate one-time four-case
+repeat-1 closure smoke returned 24 quality results, was v0.5-compatible with
+zero regressions, and restored all 44 selected attribution rows exactly to the
+public v0.6 semantics (20 retrieval missing, 20 packing dropped, 4 packed).
+
+No `results-v0.7` baseline is created. The next measured failure category is
+the boundary between query-to-file scope coverage and post-retrieval packet
+selection. It is recorded for a future independently planned milestone; v0.7
+does not attempt a second retrieval, ranking, or packing adjustment.
