@@ -122,6 +122,7 @@ func TestEvaluateRetrievalModesImproveJapaneseRelationRecall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("Japanese auth relation metrics: full=%+v fts-only=%+v no-relations=%+v", full, ftsOnly, noRelations)
 	if full.Cases[0].HitAt3 < ftsOnly.Cases[0].HitAt3 || full.RelationRecall <= ftsOnly.RelationRecall || noRelations.RelationRecall != 0 {
 		t.Fatalf("full=%+v fts-only=%+v no-relations=%+v", full, ftsOnly, noRelations)
 	}
@@ -160,6 +161,7 @@ func TestEvaluateJapaneseJSTSFixtureAcrossRetrievalModes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("Japanese JSTS relation metrics: full=%+v fts-only=%+v no-relations=%+v", full, ftsOnly, noRelations)
 	if full.IntentRecall != 1 || full.HitAt5 != 1 || full.RelationRecall != 1 || full.BudgetCompliance != 1 || full.DeterministicOutput != 1 || full.ForbiddenPathViolations != 0 {
 		t.Fatalf("full=%+v", full)
 	}

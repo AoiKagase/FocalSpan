@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/focalspan/focalspan/internal/app"
+	"github.com/focalspan/focalspan/internal/benchmark"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -237,6 +238,133 @@ func TestServerListsToolsAndHandlesStatusContextAndValidation(t *testing.T) {
 	cancelCall()
 	if _, err := session.CallTool(canceled, &mcp.CallToolParams{Name: "code_status"}); err == nil {
 		t.Fatal("expected cancellation")
+	}
+}
+
+func TestPrivacyHistoricalSnapshotKeepsScopedTraceOutOfEvidenceAndMCP(t *testing.T) {
+	const (
+		sourceSentinel      = "TOP_SECRET_SOURCE_SENTINEL_9C42"
+		usernameSentinel    = "PRIVATE_USERNAME_SENTINEL_9C42"
+		environmentSentinel = "ENVIRONMENT_SENTINEL_9C42"
+	)
+	repository := filepath.Join(t.TempDir(), "ABSOLUTE_PATH_SENTINEL_9C42")
+	sourcePath := filepath.Join(repository, "internal", "indexer", "indexer.go")
+	if err := os.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	source := "package indexer\n\n// " + sourceSentinel + " " + usernameSentinel + " " + environmentSentinel + "\nfunc Run() error { return nil }\n"
+	if err := os.WriteFile(sourcePath, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runMCPGit(t, repository, "init", "-q")
+	runMCPGit(t, repository, "add", "--", "internal/indexer/indexer.go")
+	runMCPGit(t, repository, "-c", "user.name=FocalSpan Test", "-c", "user.email=test@example.invalid", "commit", "-q", "-m", "base")
+
+	snapshotRoot := filepath.Join(t.TempDir(), "snapshot")
+	snapshot, err := benchmark.NewGitSnapshotter(benchmark.ExecCommandRunner{}).Materialize(context.Background(), "privacy-fixture", repository, "HEAD", snapshotRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := app.New(snapshot.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Index(context.Background(), true); err != nil {
+		_ = service.Close()
+		t.Fatal(err)
+	}
+
+	request := app.EvidenceQueryRequest{Query: "internal/indexer/indexer.go Run", TokenBudget: 1200, NoUpdate: true}
+	normal, err := service.QueryEvidence(context.Background(), request)
+	if err != nil {
+		_ = service.Close()
+		t.Fatal(err)
+	}
+	attributed, err := service.QueryEvidenceAttributed(context.Background(), request)
+	if err != nil {
+		_ = service.Close()
+		t.Fatal(err)
+	}
+	normalJSON, _ := json.Marshal(normal.Packet)
+	attributedJSON, _ := json.Marshal(attributed.Compile.Packet)
+	if !bytes.Equal(normalJSON, attributedJSON) {
+		_ = service.Close()
+		t.Fatalf("trace changed packet bytes\nnormal=%s\nattributed=%s", normalJSON, attributedJSON)
+	}
+	for _, forbiddenKey := range []string{`"trace"`, `"retriever"`, `"retrieved"`, `"lists"`, `"candidates"`, `"scoped_paths"`} {
+		if bytes.Contains(normalJSON, []byte(forbiddenKey)) {
+			_ = service.Close()
+			t.Fatalf("normal Evidence exposed %s: %s", forbiddenKey, normalJSON)
+		}
+	}
+
+	input := benchmark.AttributionInput{Indexed: []benchmark.AttributionIdentity{{Path: "internal/indexer/indexer.go", Symbol: "Run", Kind: "function"}}}
+	for _, observation := range attributed.Trace.Retrieved {
+		input.Retrieved = append(input.Retrieved, benchmark.AttributionObservation{
+			AttributionIdentity: benchmark.AttributionIdentity{Path: observation.Path, Symbol: observation.Symbol, Kind: observation.Kind},
+			Retriever:           string(observation.Retriever), Position: observation.Position,
+			Relation: observation.Relation, RelationResolved: observation.RelationResolved,
+		})
+	}
+	for _, candidate := range attributed.Trace.Candidates {
+		input.Ranked = append(input.Ranked, benchmark.AttributionIdentity{Path: candidate.Path, Symbol: candidate.Symbol, Kind: candidate.Kind})
+	}
+	for _, item := range attributed.Compile.Packet.Evidence {
+		input.Packed = append(input.Packed, benchmark.AttributionIdentity{Path: item.Location.Path, Symbol: item.Symbol, Kind: item.Kind})
+	}
+	labels, err := benchmark.AttributeLabels([]benchmark.AttributionExpectation{{Expectation: "required_symbol", Path: "internal/indexer/indexer.go", Symbol: "Run", Kind: "function"}}, input)
+	if err != nil {
+		_ = service.Close()
+		t.Fatal(err)
+	}
+	attributionJSON, err := benchmark.MarshalAttribution([]benchmark.AttributionResult{{Schema: benchmark.AttributionSchemaV1, CaseID: "privacy", RepositoryID: "privacy-fixture", Profile: "default", Budget: 1200, Labels: labels}})
+	if err != nil {
+		_ = service.Close()
+		t.Fatal(err)
+	}
+	if !bytes.Contains(attributionJSON, []byte(`"retriever": "path-scoped-symbol"`)) {
+		_ = service.Close()
+		t.Fatalf("scoped retriever absent from attribution: %s", attributionJSON)
+	}
+
+	server := New(service, false)
+	defer server.Close()
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = server.Run(ctx, serverTransport) }()
+	client := mcp.NewClient(&mcp.Implementation{Name: "privacy-test", Version: "1"}, nil)
+	session, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	contextResult, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "code_context", Arguments: map[string]any{"query": request.Query, "token_budget": request.TokenBudget}})
+	if err != nil || contextResult.IsError || contextResult.StructuredContent == nil {
+		t.Fatalf("context=%+v err=%v", contextResult, err)
+	}
+	structured, err := json.Marshal(contextResult.StructuredContent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{sourceSentinel, usernameSentinel, environmentSentinel, repository, snapshot.Root} {
+		if bytes.Contains(attributionJSON, []byte(forbidden)) || bytes.Contains(structured, []byte(forbidden)) {
+			t.Fatalf("private scoped value %q leaked\nattribution=%s\nstructured=%s", forbidden, attributionJSON, structured)
+		}
+	}
+	for _, forbiddenKey := range []string{`"trace"`, `"retriever"`, `"retrieved"`, `"lists"`, `"candidates"`, `"scoped_paths"`} {
+		if bytes.Contains(structured, []byte(forbiddenKey)) {
+			t.Fatalf("MCP structured output exposed %s: %s", forbiddenKey, structured)
+		}
+	}
+}
+
+func runMCPGit(t *testing.T, root string, args ...string) {
+	t.Helper()
+	command := exec.Command("git", append([]string{"-C", root}, args...)...)
+	command.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v: %s", args, err, output)
 	}
 }
 
