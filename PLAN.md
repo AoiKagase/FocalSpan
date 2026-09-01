@@ -1004,10 +1004,10 @@ changes.
 
 **Produces:** one bounded independently traced retriever list.
 
-- [ ] Extend `CandidateStore` with `SearchFilePaths` and
+- [x] Extend `CandidateStore` with `SearchFilePaths` and
   `SearchSymbolsInPaths`.
 
-- [ ] Update fakes with explicit methods. A fake must record:
+- [x] Update fakes with explicit methods. A fake must record:
   - file-probe hints;
   - resolved scope paths;
   - symbol hints;
@@ -1015,7 +1015,7 @@ changes.
   - per-path and total limits;
   - call order.
 
-- [ ] Add failing mode-selection tests requiring:
+- [x] Add failing mode-selection tests requiring:
 
       definition/full:
         qualified, exact, prefix, FTS, explicit path,
@@ -1035,7 +1035,7 @@ changes.
 
   File-probe store calls are support operations, not `RankedList` values.
 
-- [ ] Add a failing retriever test matching the PHP pattern:
+- [x] Add a failing retriever test matching the PHP pattern:
   - no explicit path;
   - global FTS lacks `Run`;
   - `SearchFilePaths(["index", ...])` returns
@@ -1043,23 +1043,23 @@ changes.
   - scoped search returns `Run`;
   - result has a `path-scoped-symbol` list containing `Run`.
 
-- [ ] Add a failing MCP pattern test:
+- [x] Add a failing MCP pattern test:
   - FTS seed contains another chunk from `internal/mcpserver/server.go`;
   - `code_context` generates `codeContext`;
   - scoped exact search returns `codeContext`.
 
-- [ ] Add a failing relation-safety test:
+- [x] Add a failing relation-safety test:
   - a callers query has relations;
   - lexical file probe would return noisy paths if called;
   - the probe is not called;
   - FTS/explicit scope still allows exact anchor candidates;
   - relation retrieval uses only candidates matching plan anchors.
 
-- [ ] Confirm RED before implementation.
+- [x] Confirm RED before implementation.
 
-- [ ] Add `RetrieverPathScopedSymbol` to `trace.go`.
+- [x] Add `RetrieverPathScopedSymbol` to `trace.go`.
 
-- [ ] Add fixed weight `1.35` to `retrieverWeights`. Add a fusion test that
+- [x] Add fixed weight `1.35` to `retrieverWeights`. Add a fusion test that
   proves:
   - exact symbol still outranks scoped-only signal;
   - relation still outranks scoped-only signal;
@@ -1067,7 +1067,7 @@ changes.
     candidate;
   - deterministic tie order remains unchanged.
 
-- [ ] Integrate retrieval:
+- [x] Integrate retrieval:
   1. execute existing base retrievers unchanged;
   2. optionally probe file paths;
   3. collect at most eight scopes;
@@ -1075,15 +1075,15 @@ changes.
   5. append one `RankedList` when non-empty;
   6. execute relation retrieval unchanged.
 
-- [ ] Add `RetrieverPathScopedSymbol` before `RetrieverPath`,
+- [x] Add `RetrieverPathScopedSymbol` before `RetrieverPath`,
   `RetrieverPrefix`, and `RetrieverFTS` in relation-anchor preference, while
   preserving `qualified` and `exact` first. `candidateMatchesAnchor` remains
   mandatory.
 
-- [ ] Update all CandidateStore implementations and fakes. Do not add fallback
+- [x] Update all CandidateStore implementations and fakes. Do not add fallback
   behavior that hides missing methods.
 
-- [ ] Run:
+- [x] Run:
 
       go test ./internal/search -run "TestRetriever|TestPathScoped|TestFusion|TestRelation" -count=1
       go test ./internal/search ./internal/store -count=1
@@ -1091,7 +1091,7 @@ changes.
       go vet ./...
       git diff --check
 
-- [ ] Commit only retriever integration:
+- [x] Commit only retriever integration:
 
       git add internal/search internal/store
       git commit -m "feat: add path-scoped symbol retriever"
@@ -1515,11 +1515,16 @@ Update with UTC timestamps while executing.
   tests in 46 packages. `go vet ./...` and `git diff --check` passed; only
   `internal/search/retrieval.go` and its test changed. The task commit is
   production/test commit is `a7f005f`.
+- [x] `2026-09-01T00:02:46Z` Task 5 implementation and verification completed.
+  The expected RED was the absent `RetrieverPathScopedSymbol`. Focused GREEN
+  passed 13 tests, search/store passed 67 tests, and the full repository passed
+  689 tests in 46 packages. `go vet ./...` and `git diff --check` passed; no
+  store adapter change remained. The production/test commit is `ebd1670`.
 - [ ] Four-case current baseline measured and frozen.
 - [x] Store file discovery implemented and verified.
 - [x] Store scoped-symbol retrieval implemented and verified.
 - [x] Path-scope and naming-variant planning implemented.
-- [ ] `path-scoped-symbol` integrated into full/no-relations retrieval.
+- [x] `path-scoped-symbol` integrated into full/no-relations retrieval.
 - [ ] Attribution accepts and safely reports the new retriever.
 - [ ] Frozen four-case candidate run executed once.
 - [ ] Frozen gate decision recorded.
@@ -1561,6 +1566,10 @@ Update with UTC timestamps while executing.
   error: case-insensitive duplicates left seven unique cap inputs, not eight.
   Adding one independent literal term corrected the fixture; no production
   behavior or expected cap changed. The corrected suite passed 11 tests.
+- **2026-09-01:** The support file probe is observable in fake call order but
+  does not create a `RankedList`. An empty scoped result likewise adds no list,
+  preserving existing trace/list counts while still exercising explicit store
+  methods and preventing fallback behavior from hiding an incomplete adapter.
 
 ---
 
@@ -1627,6 +1636,14 @@ Update with UTC timestamps while executing.
   request, explicit-path list, FTS list, and lexical-probe order while disabling
   probes for relation plans and all scopes for FTS-only mode. Query
   normalization, planning, FTS terms, and ordinary path retrieval are untouched.
+  **Date/Author:** 2026-09-01 / Codex.
+
+- **Decision:** Integrate exactly one independently traced scoped-symbol list.
+  **Rationale:** Full and no-relations modes run base retrieval unchanged, then
+  the bounded probe/scope/store sequence; full relation plans skip lexical
+  probing but may use explicit/FTS scopes before unchanged relation lookup.
+  FTS-only returns before both new store calls. The new fixed 1.35 weight sits
+  below exact/relation and above prefix/FTS/path, with no other weight changed.
   **Date/Author:** 2026-09-01 / Codex.
 
 - **Decision:** Separate file discovery from symbol retrieval.
