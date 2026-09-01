@@ -168,25 +168,25 @@ the expected path. They never copy identities from unmatched candidates.
 - [x] Verify source and archive SHA-256 are both
   `46F2B415AD08CFB6FC5B750723D15387111E87EE8966A2A985D288A55478F8A0`.
 - [x] Replace root `PLAN.md` with this v0.8 plan and add the archive index link.
-- [ ] Run `git diff --check`, verify only intended plan files are staged, and
+- [x] Run `git diff --check`, verify only intended plan files are staged, and
   commit `docs: start failure-layer attribution v0.8`.
 
 ### Task 1: Add the Diagnosis Classifier
 
-- [ ] Add table-driven RED tests for all seven diagnostic stages and the fixed
+- [x] Add table-driven RED tests for all seven diagnostic stages and the fixed
   priority order.
-- [ ] Add RED tests proving same-path/different-symbol becomes
+- [x] Add RED tests proving same-path/different-symbol becomes
   `symbol_match_missing`, no same-path candidate becomes `path_scope_missing`,
   and required-path labels cannot become `symbol_match_missing`.
-- [ ] Add RED tests for stable path-hit grouping, first position, count, and
+- [x] Add RED tests for stable path-hit grouping, first position, count, and
   omission of unmatched symbols/source.
-- [ ] Confirm RED because diagnosis interfaces do not exist.
-- [ ] Implement `internal/benchmark/diagnosis.go` using only
+- [x] Confirm RED because diagnosis interfaces do not exist.
+- [x] Implement `internal/benchmark/diagnosis.go` using only
   `AttributionInput` and unchanged v1 attribution labels.
-- [ ] Add deterministic JSON/Markdown renderers and strict validation for
+- [x] Add deterministic JSON/Markdown renderers and strict validation for
   schema, stage/reason pairs, positions, counts, path safety, retrievers, and
   control characters.
-- [ ] Run focused benchmark tests and full `internal/benchmark` tests.
+- [x] Run focused benchmark tests and full `internal/benchmark` tests.
 - [ ] Commit `feat: classify benchmark failure layers`.
 
 ### Task 2: Integrate Runner and CLI Output
@@ -272,7 +272,8 @@ the expected path. They never copy identities from unmatched candidates.
 - [x] `2026-09-01` Starting state recorded at `77f42cf` on `master`; baseline
   `go test ./... -count=1` passed 666 tests in 46 packages.
 - [x] `2026-09-01` v0.7 archived byte-for-byte with matching SHA-256.
-- [ ] Diagnosis classifier implemented and verified.
+- [x] `2026-09-01` Diagnosis classifier implemented via explicit RED and
+  verified by 12 focused tests and 59 `internal/benchmark` tests.
 - [ ] Runner/CLI diagnosis output implemented and verified.
 - [ ] Eight-case repeat-1 measurement completed.
 - [ ] Next primary layer selected and documented.
