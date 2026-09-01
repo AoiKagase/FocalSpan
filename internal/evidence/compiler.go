@@ -242,6 +242,9 @@ func (c *Compiler) compileObservations(req CompileRequest, result CompileResult)
 			for _, item := range result.Packet.Evidence {
 				if item.Location.Path == candidate.Path && item.Location.Lines[0] <= candidate.StartLine && item.Location.Lines[1] >= candidate.EndLine && item.Handle != candidate.Handle {
 					observation.ContainedByHandle = item.Handle
+					if !hasAnchorIdentity(candidate) && (candidate.Symbol == "" || strings.EqualFold(candidate.Symbol, item.Symbol)) {
+						observation.DropReason = "contained_without_new_identity"
+					}
 					break
 				}
 			}
@@ -320,6 +323,7 @@ func (c *Compiler) preprocess(req CompileRequest, mode Mode) ([]preparedCandidat
 	seenHashes := make(map[string]bool)
 	seenSpans := make(map[string]bool)
 	prepared := make([]preparedCandidate, 0, len(classified))
+	accepted := make([]ClassifiedCandidate, 0, len(classified))
 	duplicates, skipped := preDuplicates, 0
 	for _, candidate := range classified {
 		value := candidate.Candidate
@@ -349,13 +353,50 @@ func (c *Compiler) preprocess(req CompileRequest, mode Mode) ([]preparedCandidat
 			skipped++
 			continue
 		}
+		if contained, _ := containedWithoutNewIdentity(candidate, accepted); contained {
+			duplicates++
+			continue
+		}
 		variants := BuildVariants(candidate, req.Plan, mode, c.estimator)
 		if len(variants) == 0 {
 			continue
 		}
 		prepared = append(prepared, preparedCandidate{classified: candidate, variants: variants})
+		accepted = append(accepted, candidate)
 	}
 	return prepared, duplicates, skipped
+}
+
+func containedWithoutNewIdentity(candidate ClassifiedCandidate, accepted []ClassifiedCandidate) (bool, string) {
+	if hasAnchorIdentity(candidate.Candidate) {
+		return false, ""
+	}
+	for _, prior := range accepted {
+		if prior.Candidate.Path != candidate.Candidate.Path || !containsLineSpan(prior.Candidate, candidate.Candidate) {
+			continue
+		}
+		if candidate.Candidate.Symbol != "" && !strings.EqualFold(candidate.Candidate.Symbol, prior.Candidate.Symbol) {
+			continue
+		}
+		return true, prior.Candidate.Handle
+	}
+	return false, ""
+}
+
+func hasAnchorIdentity(candidate model.RankedCandidate) bool {
+	if candidate.Relation != "" || candidate.RelationContext != nil {
+		return true
+	}
+	for _, reason := range candidate.Reasons {
+		if reason.Code == "symbol-exact" || reason.Code == "qualified-symbol" {
+			return true
+		}
+	}
+	return false
+}
+
+func containsLineSpan(outer, inner model.RankedCandidate) bool {
+	return outer.StartLine > 0 && outer.EndLine >= outer.StartLine && inner.StartLine > 0 && inner.EndLine >= inner.StartLine && outer.StartLine <= inner.StartLine && outer.EndLine >= inner.EndLine
 }
 
 func buildPacket(req CompileRequest, mode Mode, limit int, selected []selectedCandidate, omitted, skippedKnown int, estimator budget.TokenEstimator) Packet {
