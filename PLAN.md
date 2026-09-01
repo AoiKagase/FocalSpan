@@ -160,25 +160,25 @@ join these observations with attribution identities without changing
 - Produces: `evidence.CompileObservation` and deterministic observation lists
   for development-only benchmark attribution.
 
-- [ ] Write RED tests proving that `CompileWithObservations` reports one row
+- [x] Write RED tests proving that `CompileWithObservations` reports one row
   per candidate in stable input order, reports candidate and serialized-delta
   token counts, and records an explicit reason for every omitted candidate.
-- [ ] Write RED tests proving that observations contain no source content,
+- [x] Write RED tests proving that observations contain no source content,
   absolute paths, secrets, or user/environment values.
-- [ ] Write RED tests proving `Compile(req)` and
+- [x] Write RED tests proving `Compile(req)` and
   `CompileWithObservations(req)` return byte-identical packet JSON for the
   same request, including `known_handles`-driven compilation.
-- [ ] Run the focused RED tests and record the expected failure before adding
+- [x] Run the focused RED tests and record the expected failure before adding
   implementation.
-- [ ] Implement the observation wrapper around the existing compiler loop
+- [x] Implement the observation wrapper around the existing compiler loop
   without changing budget clamping, fidelity variants, item order, or omission
   behavior.
-- [ ] Thread observations through `app.AttributedEvidenceResult` only when
+- [x] Thread observations through `app.AttributedEvidenceResult` only when
   `QueryEvidenceAttributed` is used; `QueryEvidence` must discard them.
-- [ ] Add benchmark-side aggregation that consumes observations only when the
+- [x] Add benchmark-side aggregation that consumes observations only when the
   existing opt-in attribution path is enabled; normal quality and MCP output
   must ignore them.
-- [ ] Run focused compiler/benchmark/evidence tests and commit
+- [x] Run focused compiler/benchmark/evidence tests and commit
   `feat: add source-free evidence compilation observations`.
 
 ### Task 2: Implement the Single Bounded Evidence Candidate (RED/GREEN)
@@ -198,23 +198,23 @@ join these observations with attribution identities without changing
 - Produces: the same Evidence packet shape with fewer redundant source spans
   only when the candidate is not an exact-symbol or relation anchor.
 
-- [ ] Write RED tests for identical content hashes on one path, fully
+- [x] Write RED tests for identical content hashes on one path, fully
   contained same-path spans, exact-symbol anchors, relation anchors, and
   separate expansion expectations.
-- [ ] Write RED tests proving a contained candidate is retained as a
+- [x] Write RED tests proving a contained candidate is retained as a
   signature-only item when it supplies a distinct exact symbol or relation
   identity, and is omitted only when it supplies no new identity.
-- [ ] Write RED tests proving source fidelity, item order, budget limits,
+- [x] Write RED tests proving source fidelity, item order, budget limits,
   `known_handles` suppression, and packet-local handles remain valid.
-- [ ] Run the focused RED tests and record the failure.
-- [ ] Add deterministic duplicate/containment checks inside compiler
+- [x] Run the focused RED tests and record the failure.
+- [x] Add deterministic duplicate/containment checks inside compiler
   preprocessing. Compare repository-relative path and valid line spans;
   preserve the first ranked candidate, exact-symbol reasons, relation
   candidates, and any candidate needed by an expansion expectation. Do not
   alter ranking scores, query plans, or token-estimator constants.
-- [ ] Record `duplicate_span` or `contained_without_new_identity` in the
+- [x] Record `duplicate_span` or `contained_without_new_identity` in the
   observation rather than exposing a new diagnostic field in normal output.
-- [ ] Run focused compiler, Evidence wire, known-handle, and app compatibility
+- [x] Run focused compiler, Evidence wire, known-handle, and app compatibility
   tests; commit `feat: compact redundant evidence spans`.
 
 ### Task 3: Static Verification and the Frozen Candidate Gate
@@ -224,28 +224,27 @@ join these observations with attribution identities without changing
 - Create: `docs/benchmarks/findings-v0.10.md`
 - Modify: `PLAN.md`
 
-- [ ] Run formatting on changed Go files and `git diff --check`.
-- [ ] Run `go test ./... -count=1`, `go vet ./...`, and the Evidence/MCP,
+- [x] Run formatting on changed Go files and `git diff --check`.
+- [x] Run `go test ./... -count=1`, `go vet ./...`, and the Evidence/MCP,
   privacy, finite-number, forbidden-path, deterministic, budget, source
-  fidelity, and known-handle tests. Record actual counts and failures.
-- [ ] Run CGO-free native, Windows amd64, Linux amd64, and Darwin arm64 builds
-  into an ignored temporary directory and remove generated files afterward.
-- [ ] If static verification passes, run the eight-case
-  `full-evidence-focused`/2048 candidate exactly once. Retry only when the
-  harness itself fails to produce a result; record that infrastructure cause
-  before the one retry.
-- [ ] Accept the Evidence compiler candidate only when cumulative wire tokens are no
-  greater than 12,740, useful evidence per 1,000 tokens is strictly greater
-  than 0.3925, no existing packed label is lost, and all source-fidelity,
-  budget, deterministic, privacy, Evidence/MCP, and `known_handles`
-  invariants remain valid.
-- [ ] For this compiler-only milestone, retrieval counts may remain unchanged;
-  a search improvement is not claimed from an Evidence packing result. Record
-  the observed `packing_dropped` and packed-label deltas separately.
-- [ ] Record baseline, candidate, gate decision, artifact hashes, privacy
-  scan, and any infrastructure retry in
-  `docs/benchmarks/findings-v0.10.md` without source text or absolute paths.
-- [ ] If the gate fails, revert only the two candidate commits in reverse
+  fidelity, and known-handle tests. The candidate run passed 690 tests across
+  42 packages; focused Evidence/MCP/app/benchmark tests also passed.
+- [x] Run CGO-free native, Windows amd64, Linux amd64, and Darwin arm64 builds
+  into a temporary directory and remove generated files afterward; all four
+  builds succeeded.
+- [x] After static verification, run the eight-case
+  `full-evidence-focused`/2048 candidate exactly once. It completed without an
+  infrastructure retry.
+- [x] Evaluate the frozen gate: cumulative wire tokens remained 12,740,
+  useful evidence remained 5, efficiency remained 0.3925, and no packed label
+  or invariant regressed; the strict efficiency-improvement condition failed.
+- [x] For this compiler-only milestone, retrieval counts remained unchanged;
+  `path_scope_missing` stayed at 9 and focused/2048 `packing_dropped` stayed
+  at 7. No search improvement is claimed.
+- [x] Record baseline, candidate, gate decision, artifact hashes, and privacy
+  scan in `docs/benchmarks/findings-v0.10.md` without source text or absolute
+  paths.
+- [x] The gate failed, so revert only the two candidate commits in reverse
   order, retain the negative findings, and do not promote a new baseline.
 
 ### Task 4: Closure and Handoff to the Next Retrieval Hypothesis
@@ -255,19 +254,17 @@ join these observations with attribution identities without changing
 - Modify: `PLAN.md`
 - Modify: `docs/benchmarks/findings-v0.10.md`
 
-- [ ] Run the final targeted verification after any accepted/reverted result
-  and confirm no generated reports, indexes, binaries, caches, or temporary
-  workspaces remain.
-- [ ] Keep local MinGW race testing explicitly `UNVERIFIED` if the compiler
-  limitation recurs; do not report it as a pass or failure of the candidate.
-- [ ] Complete Progress, Surprises & Discoveries, Decision Log, Outcomes &
+- [x] Run final targeted verification after the reverted result and confirm no
+  generated reports, indexes, binaries, caches, or temporary workspaces remain.
+  Post-revert tests passed 687 tests across 42 packages, plus vet, diff check,
+  and the focused package suite.
+- [x] Keep local MinGW race testing explicitly `UNVERIFIED`: `cc1.exe` lacks
+  compiled 64-bit mode; this is a toolchain limitation, not a candidate result.
+- [x] Complete Progress, Surprises & Discoveries, Decision Log, Outcomes &
   Retrospective, and recovery notes with UTC timestamps and actual evidence.
-- [ ] If v0.10 passes, create a separate successor plan for the identity-bridge
-  retrieval hypothesis. That plan must measure exact/qualified symbol hints
-  independently and must not co-tune retrieval, ranking, packing, and
-  Evidence. If v0.10 fails, preserve the negative result before planning the
-  retrieval successor.
-- [ ] Commit documentation separately from product code with an explicit-path
+- [x] Preserve the v0.10 negative result before any retrieval successor; no
+  successor plan is promoted by this rejected compiler candidate.
+- [x] Commit documentation separately from product code with an explicit-path
   commit after the candidate decision.
 
 ## Validation and Acceptance
@@ -307,10 +304,21 @@ join these observations with attribution identities without changing
   retrieval to a successor plan.
 - [x] `2026-09-01` plan transition committed as `6c248d2`; only `PLAN.md` and
   the immutable v0.9 archive were staged.
-- [ ] v0.10 Task 1 source-free packing observations.
-- [ ] v0.10 Task 2 bounded Evidence compiler candidate.
-- [ ] v0.10 Task 3 static verification and frozen candidate gate.
-- [ ] v0.10 Task 4 closure and successor handoff.
+- [x] `2026-09-01T13:28:43Z` Task 1 RED/GREEN completed; targeted and full
+  `internal/evidence`, `internal/app`, and `internal/benchmark` tests passed.
+- [x] `2026-09-01T13:31:51Z` Task 2 RED/GREEN completed; containment and
+  exact/relation identity tests plus the focused package suite passed.
+- [x] `2026-09-01T13:52:11Z` v0.10 candidate benchmark completed once; the
+  focused/2048 result was 9 path-scope misses, 7 packing drops, 1 packed
+  attribution label, 12,740 estimated wire tokens, and 0.3925 efficiency.
+- [x] `2026-09-01T13:55:00Z` static verification passed: candidate tests,
+  vet, diff check, focused invariants, and all four CGO-free builds.
+- [x] `2026-09-01T13:57:38Z` frozen gate failed on strict efficiency
+  improvement; candidate commits were reverted as `499d449` and `e99c3e6`.
+- [x] `2026-09-01T14:00:08Z` post-revert verification and cleanup completed;
+  race remains UNVERIFIED due to the local MinGW compiler limitation.
+- [x] v0.10 Task 3 static verification and frozen candidate gate.
+- [x] v0.10 Task 4 closure and successor handoff.
 
 ## Surprises & Discoveries
 
@@ -337,7 +345,21 @@ join these observations with attribution identities without changing
 
 ## Outcomes & Retrospective
 
-This section is completed during Task 4 with measured candidate results. It
-must state whether v0.10 was accepted or reverted, the actual token and label
-deltas, invariant results, and any race/build limitations. A rejected candidate
-is a valid outcome and does not become a quality baseline.
+`2026-09-01T14:00:08Z` v0.10 was rejected and reverted. The candidate matched
+the frozen baseline: focused/2048 `path_scope_missing` 9→9,
+`packing_dropped` 7→7, packed labels 5→5, useful evidence 5→5, cumulative
+estimated wire tokens 12,740→12,740, and useful evidence per 1,000 tokens
+0.3925→0.3925. It therefore failed the strict efficiency gate while retaining
+all existing packed labels and all measured Evidence/MCP, source-fidelity,
+budget, deterministic, known-handle, and privacy invariants. Candidate reports
+were hashed and documented in `docs/benchmarks/findings-v0.10.md` before
+cleanup.
+
+Candidate commits `ffce23b` and `8b8702d` were reverted in reverse order by
+`499d449` and `e99c3e6`; no new quality baseline was promoted. Post-revert
+verification passed 687 tests across 42 packages, `go vet ./...`,
+`git diff --check`, and focused Evidence/MCP/app/benchmark tests. Native and
+three CGO-free cross-builds passed. Race testing is explicitly UNVERIFIED due
+to the local MinGW `cc1.exe` 64-bit-mode limitation. No generated reports,
+indexes, binaries, caches, or temporary workspaces remain; user-owned
+`AGENTS.md`, `.focalspan.json`, and `TASKS.md` remain untouched.
