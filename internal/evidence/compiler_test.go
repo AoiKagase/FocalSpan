@@ -62,40 +62,6 @@ func TestCompileWithObservationsIsSourceFreeAndMatchesCompile(t *testing.T) {
 	}
 }
 
-func TestCompilerObservationsDistinguishContainedAndIdentityCandidates(t *testing.T) {
-	req := CompileRequest{
-		Plan:     query.Plan{PrimaryIntent: query.IntentImpact, Intents: []query.Intent{query.IntentImpact}},
-		Revision: "rev-contained", TokenBudget: 4000, Mode: ModeFocused,
-		Candidates: []model.RankedCandidate{
-			{Handle: "outer", Path: "auth/service.go", Language: "go", Kind: "function", Symbol: "Service", StartLine: 1, EndLine: 30, Content: "func Service() {}", ContentHash: "outer"},
-			{Handle: "inner", Path: "auth/service.go", Language: "go", Kind: "block", StartLine: 5, EndLine: 10, Content: "return token", ContentHash: "inner"},
-			{Handle: "exact", Path: "auth/service.go", Language: "go", Kind: "method", Symbol: "ValidateToken", StartLine: 8, EndLine: 12, Reasons: []model.ScoreReason{{Code: "symbol-exact"}}, Content: "func ValidateToken() {}", ContentHash: "exact"},
-			{Handle: "relation", Path: "auth/service.go", Language: "go", Kind: "method", StartLine: 14, EndLine: 18, Relation: "callers", RelationContext: &model.RelationContext{AnchorHandle: "outer", Kind: "callers", Direction: model.RelationIncoming, Resolved: true}, Content: "func caller() {}", ContentHash: "relation"},
-		},
-	}
-	result, observations, err := NewCompiler(nil).CompileWithObservations(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	byHandle := make(map[string]CompileObservation, len(observations))
-	for _, observation := range observations {
-		byHandle[observation.Handle] = observation
-	}
-	if byHandle["inner"].DropReason != "contained_without_new_identity" || byHandle["inner"].ContainedByHandle != "outer" {
-		t.Fatalf("contained observation=%+v", byHandle["inner"])
-	}
-	for _, handle := range []string{"outer", "exact", "relation"} {
-		if !byHandle[handle].Packed {
-			t.Fatalf("identity candidate %q was not packed: %+v", handle, byHandle[handle])
-		}
-	}
-	for _, item := range result.Packet.Evidence {
-		if item.Handle == "inner" {
-			t.Fatalf("contained candidate was packed: %+v", result.Packet.Evidence)
-		}
-	}
-}
-
 func compilerCandidates() []model.RankedCandidate {
 	targetContent := "func ValidateToken() error {\n" + strings.Repeat("\twork()\n", 80) + "\treturn ErrExpiredToken\n}\n"
 	return []model.RankedCandidate{

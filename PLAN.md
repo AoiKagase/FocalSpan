@@ -198,23 +198,23 @@ join these observations with attribution identities without changing
 - Produces: the same Evidence packet shape with fewer redundant source spans
   only when the candidate is not an exact-symbol or relation anchor.
 
-- [x] Write RED tests for identical content hashes on one path, fully
+- [ ] Write RED tests for identical content hashes on one path, fully
   contained same-path spans, exact-symbol anchors, relation anchors, and
   separate expansion expectations.
-- [x] Write RED tests proving a contained candidate is retained as a
+- [ ] Write RED tests proving a contained candidate is retained as a
   signature-only item when it supplies a distinct exact symbol or relation
   identity, and is omitted only when it supplies no new identity.
-- [x] Write RED tests proving source fidelity, item order, budget limits,
+- [ ] Write RED tests proving source fidelity, item order, budget limits,
   `known_handles` suppression, and packet-local handles remain valid.
-- [x] Run the focused RED tests and record the failure.
-- [x] Add deterministic duplicate/containment checks inside compiler
+- [ ] Run the focused RED tests and record the failure.
+- [ ] Add deterministic duplicate/containment checks inside compiler
   preprocessing. Compare repository-relative path and valid line spans;
   preserve the first ranked candidate, exact-symbol reasons, relation
   candidates, and any candidate needed by an expansion expectation. Do not
   alter ranking scores, query plans, or token-estimator constants.
-- [x] Record `duplicate_span` or `contained_without_new_identity` in the
+- [ ] Record `duplicate_span` or `contained_without_new_identity` in the
   observation rather than exposing a new diagnostic field in normal output.
-- [x] Run focused compiler, Evidence wire, known-handle, and app compatibility
+- [ ] Run focused compiler, Evidence wire, known-handle, and app compatibility
   tests; commit `feat: compact redundant evidence spans`.
 
 ### Task 3: Static Verification and the Frozen Candidate Gate
@@ -310,9 +310,6 @@ join these observations with attribution identities without changing
 - [x] `2026-09-01T13:28:43Z` Task 1 RED/GREEN completed; targeted and full
   `internal/evidence`, `internal/app`, and `internal/benchmark` tests passed.
 - [x] v0.10 Task 1 source-free Evidence compilation observations.
-- [x] `2026-09-01T13:31:51Z` Task 2 RED/GREEN completed; containment and
-  exact/relation identity tests plus the focused package suite passed.
-- [x] v0.10 Task 2 bounded Evidence compiler candidate.
 - [ ] v0.10 Task 2 bounded Evidence compiler candidate.
 - [ ] v0.10 Task 3 static verification and frozen candidate gate.
 - [ ] v0.10 Task 4 closure and successor handoff.
