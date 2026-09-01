@@ -36,7 +36,7 @@ func TestPacketJSONContract(t *testing.T) {
 	if string(got) != want {
 		t.Fatalf("packet JSON mismatch\n got: %s\nwant: %s", got, want)
 	}
-	for _, forbidden := range []string{"score", "weight", "token_savings", "baseline_tokens", "saved_tokens", "savings_ratio"} {
+	for _, forbidden := range []string{"score", "weight", "token_savings", "baseline_tokens", "saved_tokens", "savings_ratio", "diagnostic_stage", "path_hits"} {
 		if strings.Contains(string(got), `"`+forbidden+`"`) {
 			t.Fatalf("packet contains forbidden key %q: %s", forbidden, got)
 		}

@@ -43,6 +43,7 @@ type fakeEngineFactory struct {
 	indexed                        []AttributionIdentity
 	attributed                     app.AttributedEvidenceResult
 	indexedCalls                   int
+	tracedQueries                  int
 }
 
 func (f *fakeEngineFactory) Open(string) (Engine, error) {
@@ -68,6 +69,7 @@ func (f *fakeEngine) QueryEvidence(_ context.Context, req app.EvidenceQueryReque
 }
 
 func (f *fakeEngine) QueryEvidenceAttributed(ctx context.Context, req app.EvidenceQueryRequest) (app.AttributedEvidenceResult, error) {
+	f.factory.tracedQueries++
 	if f.factory.attributed.Compile.Packet.Schema != "" {
 		f.factory.queries++
 		f.factory.retrievalModes = append(f.factory.retrievalModes, req.RetrievalMode)
@@ -75,6 +77,46 @@ func (f *fakeEngine) QueryEvidenceAttributed(ctx context.Context, req app.Eviden
 	}
 	packet, err := f.QueryEvidence(ctx, req)
 	return app.AttributedEvidenceResult{Compile: evidence.CompileResult{Packet: packet}}, err
+}
+
+func TestRunnerUsesOneTracedQueryPerRepeatForDevelopmentReports(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(root+"/required.go", []byte("package fixture"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name        string
+		attribution bool
+		diagnosis   bool
+	}{
+		{name: "attribution only", attribution: true},
+		{name: "diagnosis only", diagnosis: true},
+		{name: "combined", attribution: true, diagnosis: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			factory := &fakeEngineFactory{indexed: []AttributionIdentity{{Path: "required.go"}}}
+			runner := Runner{Snapshotter: &fakeSnapshotter{root: root}, EngineFactory: factory}
+			report, err := runner.Run(context.Background(), RunRequest{
+				Suite:        Suite{Name: "suite", Cases: []Case{{ID: "case", Repository: "self", BaseRef: "base", TargetRef: "target", Query: "required", RequiredPaths: []string{"required.go"}}}},
+				Repositories: map[string]string{"self": root},
+				Profiles:     []Profile{{Name: "evidence", Contract: "evidence", EvidenceMode: evidence.ModeFocused, Budgets: []int{1024}}},
+				Repeat:       2, Workspace: t.TempDir(), Attribution: test.attribution, Diagnosis: test.diagnosis,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if factory.tracedQueries != 2 || factory.queries != 2 || factory.indexedCalls != 1 {
+				t.Fatalf("traced=%d total=%d indexed=%d", factory.tracedQueries, factory.queries, factory.indexedCalls)
+			}
+			if got := len(report.Attributions); got != boolInt(test.attribution) {
+				t.Fatalf("attributions=%d", got)
+			}
+			if got := len(report.Diagnoses); got != boolInt(test.diagnosis) {
+				t.Fatalf("diagnoses=%d", got)
+			}
+		})
+	}
 }
 func (f *fakeEngine) AttributionIdentities(context.Context, []AttributionExpectation) ([]AttributionIdentity, error) {
 	f.factory.indexedCalls++

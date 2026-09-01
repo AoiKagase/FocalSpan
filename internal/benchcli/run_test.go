@@ -45,8 +45,10 @@ func TestRunBenchmarkAndCompare(t *testing.T) {
 	md := filepath.Join(t.TempDir(), "result.md")
 	attributionOut := filepath.Join(t.TempDir(), "attribution.json")
 	attributionMD := filepath.Join(t.TempDir(), "attribution.md")
+	diagnosisOut := filepath.Join(t.TempDir(), "diagnosis.json")
+	diagnosisMD := filepath.Join(t.TempDir(), "diagnosis.md")
 	var stdout, stderr bytes.Buffer
-	code := Run(context.Background(), []string{"run", "--suite", suite, "--repo", "fixture=" + repository, "--profile", "fts-evidence-focused", "--repeat", "2", "--json-out", out, "--markdown-out", md, "--attribution-json-out", attributionOut, "--attribution-markdown-out", attributionMD, "--keep-workspace"}, &stdout, &stderr)
+	code := Run(context.Background(), []string{"run", "--suite", suite, "--repo", "fixture=" + repository, "--profile", "fts-evidence-focused", "--repeat", "2", "--json-out", out, "--markdown-out", md, "--attribution-json-out", attributionOut, "--attribution-markdown-out", attributionMD, "--diagnosis-json-out", diagnosisOut, "--diagnosis-markdown-out", diagnosisMD, "--keep-workspace"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("run code=%d stderr=%q", code, stderr.String())
 	}
@@ -74,10 +76,54 @@ func TestRunBenchmarkAndCompare(t *testing.T) {
 			t.Fatalf("unsafe or incomplete attribution %s: %s", attributionPath, content)
 		}
 	}
+	for _, diagnosisPath := range []string{diagnosisOut, diagnosisMD} {
+		content, err := os.ReadFile(diagnosisPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Contains(content, []byte("focalspan.benchmark-diagnosis.v1")) || !bytes.Contains(content, []byte("service.go")) || bytes.Contains(content, []byte("package fixture")) || bytes.Contains(content, []byte(repository)) {
+			t.Fatalf("unsafe or incomplete diagnosis %s: %s", diagnosisPath, content)
+		}
+	}
+	attributionOnlyJSON := filepath.Join(t.TempDir(), "attribution-only.json")
+	attributionOnlyMD := filepath.Join(t.TempDir(), "attribution-only.md")
+	stdout.Reset()
+	stderr.Reset()
+	code = Run(context.Background(), []string{"run", "--suite", suite, "--repo", "fixture=" + repository, "--profile", "fts-evidence-focused", "--repeat", "2", "--json-out", filepath.Join(t.TempDir(), "quality-only.json"), "--markdown-out", filepath.Join(t.TempDir(), "quality-only.md"), "--attribution-json-out", attributionOnlyJSON, "--attribution-markdown-out", attributionOnlyMD}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("attribution-only run code=%d stderr=%q", code, stderr.String())
+	}
+	for _, pair := range [][2]string{{attributionOut, attributionOnlyJSON}, {attributionMD, attributionOnlyMD}} {
+		combined, err := os.ReadFile(pair[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		attributionOnly, err := os.ReadFile(pair[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(combined, attributionOnly) {
+			t.Fatalf("attribution output changed when diagnosis was enabled\ncombined=%s\nattribution-only=%s", combined, attributionOnly)
+		}
+	}
 	stdout.Reset()
 	stderr.Reset()
 	if code := Run(context.Background(), []string{"compare", "--baseline", out, "--candidate", out}, &stdout, &stderr); code != 0 {
 		t.Fatalf("compare code=%d stderr=%q", code, stderr.String())
+	}
+}
+
+func TestRunBenchmarkRequiresPairedDiagnosisOutputs(t *testing.T) {
+	base := []string{"run", "--suite", "missing.json", "--json-out", "quality.json", "--markdown-out", "quality.md"}
+	tests := [][]string{
+		append(append([]string(nil), base...), "--diagnosis-json-out", "diagnosis.json"),
+		append(append([]string(nil), base...), "--diagnosis-markdown-out", "diagnosis.md"),
+	}
+	for _, args := range tests {
+		var stdout, stderr bytes.Buffer
+		if code := Run(context.Background(), args, &stdout, &stderr); code == 0 || !strings.Contains(stderr.String(), "--diagnosis-json-out and --diagnosis-markdown-out must be used together") {
+			t.Fatalf("code=%d stderr=%q", code, stderr.String())
+		}
 	}
 }
 

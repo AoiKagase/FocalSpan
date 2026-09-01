@@ -107,7 +107,7 @@ func TestMCPStdoutContainsOnlyJSONRPCMessages(t *testing.T) {
 	if !strings.Contains(string(structured), marker) || strings.Contains(string(content), marker) {
 		t.Fatalf("marker placement structured=%s content=%s", structured, content)
 	}
-	for _, forbidden := range []string{`"score"`, `"weight"`, `"token_savings"`} {
+	for _, forbidden := range []string{`"score"`, `"weight"`, `"token_savings"`, "benchmark-diagnosis", `"diagnostic_stage"`, `"path_hits"`} {
 		if strings.Contains(line, forbidden) {
 			t.Fatalf("forbidden key %s in %s", forbidden, line)
 		}

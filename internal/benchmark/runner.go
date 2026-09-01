@@ -21,6 +21,7 @@ type RunRequest struct {
 	Repeat       int
 	Workspace    string
 	Attribution  bool
+	Diagnosis    bool
 }
 
 type Runner struct {
@@ -49,6 +50,7 @@ type RunReport struct {
 	Aggregate       AggregateQuality    `json:"aggregate"`
 	Performance     []PerformanceResult `json:"performance,omitempty"`
 	Attributions    []AttributionResult `json:"-"`
+	Diagnoses       []DiagnosisResult   `json:"-"`
 	Runs            []CaseRun           `json:"-"`
 }
 
@@ -103,7 +105,8 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 		}
 		expectations := attributionExpectations(benchmarkCase)
 		var indexed []AttributionIdentity
-		if request.Attribution {
+		developmentReports := request.Attribution || request.Diagnosis
+		if developmentReports {
 			indexed, err = engine.AttributionIdentities(ctx, expectations)
 			if err != nil {
 				_ = engine.Close()
@@ -115,7 +118,9 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 				run := CaseRun{CaseID: benchmarkCase.ID, Profile: profile.Name, Budget: budget, Changes: changes, Index: measurement, Deterministic: true}
 				var canonical []byte
 				var canonicalAttribution []byte
+				var canonicalDiagnosis []byte
 				var attribution AttributionResult
+				var diagnosis DiagnosisResult
 				queryDurations := make([]int64, 0, request.Repeat)
 				for repeat := 0; repeat < request.Repeat; repeat++ {
 					queryStarted := time.Now()
@@ -136,7 +141,7 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 						var packet evidence.Packet
 						var traceInput AttributionInput
 						var queryErr error
-						if request.Attribution {
+						if developmentReports {
 							var attributed app.AttributedEvidenceResult
 							attributed, queryErr = engine.QueryEvidenceAttributed(ctx, queryRequest)
 							packet = attributed.Compile.Packet
@@ -155,22 +160,41 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 							run.Deterministic = false
 						}
 						canonical = encoded
-						if request.Attribution {
+						if developmentReports {
 							labels, attributionErr := AttributeLabels(expectations, traceInput)
 							if attributionErr != nil {
 								_ = engine.Close()
 								return RunReport{}, attributionErr
 							}
-							attribution = AttributionResult{Schema: AttributionSchemaV1, CaseID: benchmarkCase.ID, RepositoryID: benchmarkCase.Repository, Profile: profile.Name, Budget: budget, Labels: labels}
-							encodedAttribution, attributionErr := MarshalAttribution([]AttributionResult{attribution})
-							if attributionErr != nil {
-								_ = engine.Close()
-								return RunReport{}, attributionErr
+							if request.Attribution {
+								attribution = AttributionResult{Schema: AttributionSchemaV1, CaseID: benchmarkCase.ID, RepositoryID: benchmarkCase.Repository, Profile: profile.Name, Budget: budget, Labels: labels}
+								encodedAttribution, attributionErr := MarshalAttribution([]AttributionResult{attribution})
+								if attributionErr != nil {
+									_ = engine.Close()
+									return RunReport{}, attributionErr
+								}
+								if repeat > 0 && string(encodedAttribution) != string(canonicalAttribution) {
+									run.Deterministic = false
+								}
+								canonicalAttribution = encodedAttribution
 							}
-							if repeat > 0 && string(encodedAttribution) != string(canonicalAttribution) {
-								run.Deterministic = false
+							if request.Diagnosis {
+								diagnosisLabels, diagnosisErr := CompileDiagnosisLabels(traceInput, labels)
+								if diagnosisErr != nil {
+									_ = engine.Close()
+									return RunReport{}, diagnosisErr
+								}
+								diagnosis = DiagnosisResult{Schema: DiagnosisSchemaV1, CaseID: benchmarkCase.ID, RepositoryID: benchmarkCase.Repository, Profile: profile.Name, Budget: budget, Labels: diagnosisLabels}
+								encodedDiagnosis, diagnosisErr := MarshalDiagnosis([]DiagnosisResult{diagnosis})
+								if diagnosisErr != nil {
+									_ = engine.Close()
+									return RunReport{}, diagnosisErr
+								}
+								if repeat > 0 && string(encodedDiagnosis) != string(canonicalDiagnosis) {
+									run.Deterministic = false
+								}
+								canonicalDiagnosis = encodedDiagnosis
 							}
-							canonicalAttribution = encodedAttribution
 						}
 					}
 					queryDurations = append(queryDurations, time.Since(queryStarted).Milliseconds())
@@ -178,6 +202,9 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 				report.Runs = append(report.Runs, run)
 				if request.Attribution && profile.Contract != "legacy" {
 					report.Attributions = append(report.Attributions, attribution)
+				}
+				if request.Diagnosis && profile.Contract != "legacy" {
+					report.Diagnoses = append(report.Diagnoses, diagnosis)
 				}
 				if run.Packet != nil {
 					changedPaths := make([]string, 0, len(changes.Files))

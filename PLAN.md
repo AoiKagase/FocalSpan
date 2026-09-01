@@ -187,24 +187,24 @@ the expected path. They never copy identities from unmatched candidates.
   schema, stage/reason pairs, positions, counts, path safety, retrievers, and
   control characters.
 - [x] Run focused benchmark tests and full `internal/benchmark` tests.
-- [ ] Commit `feat: classify benchmark failure layers`.
+- [x] Commit `feat: classify benchmark failure layers`.
 
 ### Task 2: Integrate Runner and CLI Output
 
-- [ ] Add runner RED tests requiring diagnosis-only and combined
+- [x] Add runner RED tests requiring diagnosis-only and combined
   attribution+diagnosis runs to use the traced query route once per repeat.
-- [ ] Add CLI RED tests for paired flags, one-sided flag rejection,
+- [x] Add CLI RED tests for paired flags, one-sided flag rejection,
   deterministic source-free files, and unchanged attribution-only behavior.
-- [ ] Confirm RED before changing runner or CLI code.
-- [ ] Extend `RunRequest` and `RunReport` with development-only diagnosis
+- [x] Confirm RED before changing runner or CLI code.
+- [x] Extend `RunRequest` and `RunReport` with development-only diagnosis
   state excluded from quality JSON.
-- [ ] Reuse a single `AttributionInput` and v1 label result to compile both
+- [x] Reuse a single `AttributionInput` and v1 label result to compile both
   reports when both outputs are requested.
-- [ ] Write diagnosis outputs only after quality and optional attribution
+- [x] Write diagnosis outputs only after quality and optional attribution
   outputs have validated successfully.
-- [ ] Add MCP and Evidence regression assertions showing trace off/on leaves
+- [x] Add MCP and Evidence regression assertions showing trace off/on leaves
   normal structured output byte-identical and diagnosis identifiers absent.
-- [ ] Run `go test ./internal/benchmark ./internal/benchcli ./internal/app
+- [x] Run `go test ./internal/benchmark ./internal/benchcli ./internal/app
   ./internal/evidence ./internal/mcpserver -count=1`.
 - [ ] Commit `feat: emit opt-in benchmark diagnosis`.
 
@@ -274,7 +274,8 @@ the expected path. They never copy identities from unmatched candidates.
 - [x] `2026-09-01` v0.7 archived byte-for-byte with matching SHA-256.
 - [x] `2026-09-01` Diagnosis classifier implemented via explicit RED and
   verified by 12 focused tests and 59 `internal/benchmark` tests.
-- [ ] Runner/CLI diagnosis output implemented and verified.
+- [x] `2026-09-01` Runner/CLI diagnosis output implemented via explicit RED;
+  the specified five-package regression suite passed 254 tests.
 - [ ] Eight-case repeat-1 measurement completed.
 - [ ] Next primary layer selected and documented.
 - [ ] Local closure verification completed.

@@ -49,7 +49,7 @@ func TestQueryEvidenceReturnsFocusedPacketAndPreservesLegacyQuery(t *testing.T) 
 	if !bytes.Equal(normalJSON, attributedJSON) || attributed.Trace.Candidates[0].RankedPosition != 1 || len(attributed.Trace.Retrieved) == 0 {
 		t.Fatalf("attributed result diverged: packet=%s trace=%+v", attributedJSON, attributed.Trace)
 	}
-	for _, forbidden := range []string{"trace", "retrieved", "ranked_position", "candidate", "token_savings", "debug"} {
+	for _, forbidden := range []string{"trace", "retrieved", "ranked_position", "candidate", "token_savings", "debug", "benchmark-diagnosis", "diagnostic_stage", "path_hits"} {
 		if strings.Contains(string(normalJSON), forbidden) {
 			t.Fatalf("normal packet exposed %q: %s", forbidden, normalJSON)
 		}
