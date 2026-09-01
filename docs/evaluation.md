@@ -651,3 +651,28 @@ was skipped as designed. These results verify the reverted closure; they do not
 constitute a v0.7 quality acceptance or an eight-case repeat-3 measurement.
 Final verification removed all candidate/closure reports and temporary build
 outputs while preserving the pre-existing untracked local inputs.
+
+## Failure-layer attribution v0.8
+
+v0.8 added a separate development-only
+`focalspan.benchmark-diagnosis.v1` report without changing the accepted v1
+attribution schema or normal CLI, MCP, Evidence, retrieval, ranking, and
+packing behavior. Focused RED-to-GREEN tests fixed the seven-stage priority,
+same-path identity boundary, paired CLI flags, one-trace-per-repeat runner
+behavior, deterministic source-free rendering, and normal-output privacy.
+
+One frozen eight-case/default/repeat-1 measurement ran at commit `8518fe8`
+with zero retries. Its 48 quality rows compared compatible with v0.5 with zero
+regressions. The 95 v1 labels retained the v0.6 counts of 55 retrieval missing,
+35 packing dropped, and 5 packed. Diagnosis split the 55 retrieval misses into
+45 `path_scope_missing` and 10 `symbol_match_missing`; there were no ranking
+drops. Every attribution/diagnosis identity matched, and all retrieval misses
+mapped to exactly one of the two new upstream layers.
+
+For `full-evidence-focused` at budget 2048, the frozen unmet-layer counts were
+9 path-scope missing, 2 symbol-match missing, 0 ranking dropped, and 7 packing
+dropped. The maximum-count rule therefore selects `path_scope_missing` as the
+one next primary layer. The six temporary outputs passed privacy and finite-
+value scans and were removed after their hashes were recorded in
+`docs/benchmarks/findings-v0.8.md`. No `results-v0.8` baseline or production
+improvement claim is introduced.

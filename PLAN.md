@@ -210,25 +210,25 @@ the expected path. They never copy identities from unmatched candidates.
 
 ### Task 3: Run the Frozen Historical Measurement
 
-- [ ] Run all static tests, vet, and diff check before the benchmark.
-- [ ] Validate all eight cases in `testdata/benchmark/focalspan-history.json`.
-- [ ] Run the eight-case repeat-1 benchmark exactly once with quality,
+- [x] Run all static tests, vet, and diff check before the benchmark.
+- [x] Validate all eight cases in `testdata/benchmark/focalspan-history.json`.
+- [x] Run the eight-case repeat-1 benchmark exactly once with quality,
   Markdown, v1 attribution, diagnosis JSON, and diagnosis Markdown outputs.
-- [ ] Compare quality with `docs/benchmarks/results-v0.5.json`; require
+- [x] Compare quality with `docs/benchmarks/results-v0.5.json`; require
   compatibility and zero regressions.
-- [ ] Require exactly 95 v1 labels and exact v0.6 stage compatibility:
+- [x] Require exactly 95 v1 labels and exact v0.6 stage compatibility:
   55 retrieval-missing, 35 packing-dropped, 5 packed, and zero other stages.
-- [ ] Require every v1 retrieval-missing row to map to exactly one of
+- [x] Require every v1 retrieval-missing row to map to exactly one of
   `path_scope_missing` or `symbol_match_missing`.
-- [ ] Scan outputs for source/content fields, absolute paths, username,
+- [x] Scan outputs for source/content fields, absolute paths, username,
   environment names/values, secret sentinels, NaN, and Infinity.
-- [ ] For `full-evidence-focused` budget 2048, count the four unmet layers and
+- [x] For `full-evidence-focused` budget 2048, count the four unmet layers and
   select the maximum; ties use this upstream order:
   `path_scope_missing`, `symbol_match_missing`, `ranking_dropped`,
   `packing_dropped`.
-- [ ] Record commands, hashes, counts, selected next layer, and limitations in
+- [x] Record commands, hashes, counts, selected next layer, and limitations in
   `docs/benchmarks/findings-v0.8.md`, `docs/evaluation.md`, and this plan.
-- [ ] Remove temporary benchmark outputs after recording verified hashes.
+- [x] Remove temporary benchmark outputs after recording verified hashes.
 - [ ] Commit `docs: record failure-layer diagnosis v0.8`.
 
 ### Task 4: Final Verification and Closure
@@ -276,8 +276,12 @@ the expected path. They never copy identities from unmatched candidates.
   verified by 12 focused tests and 59 `internal/benchmark` tests.
 - [x] `2026-09-01` Runner/CLI diagnosis output implemented via explicit RED;
   the specified five-package regression suite passed 254 tests.
-- [ ] Eight-case repeat-1 measurement completed.
-- [ ] Next primary layer selected and documented.
+- [x] `2026-09-01` Eight-case/default/repeat-1 measurement completed once at
+  `8518fe8` with zero retries; 48 quality results were v0.5-compatible with
+  zero regressions.
+- [x] `2026-09-01` The 55 v1 retrieval misses split into 45 path-scope and 10
+  symbol-match misses. Focused 2048 counts were 9/2/0/7, selecting
+  `path_scope_missing` as the next primary layer.
 - [ ] Local closure verification completed.
 - [ ] Actual remote CI inspected.
 
@@ -290,6 +294,10 @@ the expected path. They never copy identities from unmatched candidates.
   changes. It remains untouched.
 - **2026-09-01:** The initially observed untracked `PLAN_v0.7.md` disappeared
   before plan transition. FocalSpan did not delete or recreate it.
+- **2026-09-01:** The first report-analysis pass treated top-level JSON arrays
+  as one PowerShell object and could not use `Get-FileHash` in the RTK shell.
+  The valid benchmark was not rerun; corrected array enumeration and .NET
+  SHA-256 produced the recorded counts and hashes from the same six outputs.
 
 ---
 
@@ -307,6 +315,11 @@ the expected path. They never copy identities from unmatched candidates.
   present in the source-free trace. **Rationale:** This separates the measured
   failure without adding probes or changing production retrieval.
   **Date/Author:** 2026-09-01 / project plan.
+- **Decision:** Select `path_scope_missing` as the next primary layer.
+  **Rationale:** At full Evidence focused budget 2048, the frozen counts were 9
+  path-scope missing, 2 symbol-match missing, 0 ranking dropped, and 7 packing
+  dropped; 9 is the unique maximum.
+  **Date/Author:** 2026-09-01 / Codex.
 
 ---
 
