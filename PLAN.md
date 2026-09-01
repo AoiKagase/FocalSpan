@@ -1,364 +1,231 @@
-# FocalSpan Failure-Layer Attribution v0.8 Implementation Plan
+# FocalSpan File-Scope Retrieval v0.9 Implementation Plan
 
-> **For agentic workers:** Execute this plan task-by-task. Every behavior
-> change follows RED, explicit RED confirmation, minimal GREEN, focused
-> verification, `go test ./... -count=1`, `go vet ./...`, `git diff --check`,
-> and explicit-path commits. Keep Progress, discoveries, decisions, and
-> outcomes current while working.
+> **For agentic workers:** Execute task-by-task. Every production behavior
+> starts with a failing deterministic test, then RED confirmation, minimal
+> GREEN implementation, focused verification, and an explicit-path commit.
 
-**Goal:** Add a development-only diagnosis report that separates missing
-repository evidence into path-scope, symbol-match, ranking, and packing
-failure layers without changing production retrieval or model-visible output.
+**Goal:** Improve Codex/MCP useful-evidence-per-token by finding likely files
+from the complete existing `index.db` before selecting source-faithful chunks,
+without changing public MCP or Evidence contracts.
 
-**Architecture:** Reuse the existing source-free search trace and v1
-attribution result. A separate diagnosis compiler summarizes whether the
-expected path appeared in any retriever before classifying the exact expected
-identity. Benchmark CLI output is opt-in and never reaches normal CLI, MCP, or
-`focalspan.context.v1` serialization.
+**Architecture:** Add read-only file-level projections at query time over the
+existing `files`, `symbols`, `chunks`, and `chunk_fts` tables. Aggregate
+symbol, FTS, and path signals into a bounded deterministic file scope, then
+retrieve a small number of symbol-owned chunks inside that scope through one
+separately traced retriever. Ranking, packing, wire format, and normal MCP
+output remain unchanged.
 
-**Tech Stack:** Go 1.27; standard library; existing
-`internal/{benchmark,benchcli,app,search,evidence}` packages; current historical
-benchmark harness and Git snapshot runner.
+**Tech Stack:** Go 1.27, standard library, existing SQLite/FTS5 store,
+`internal/{query,search,store,benchmark,benchcli,evidence}` packages, and the
+existing historical benchmark harness. No new dependency or schema migration.
 
-**Spec:** The user-approved “FocalSpan Failure-Layer Attribution v0.8” plan.
-This root file is the sole active ExecPlan under `PLANS.md`.
+**Spec:** User-approved v0.9 design: existing `index.db` first, file-level
+evidence aggregation, balanced acceptance gate, SCIP deferred to a separate
+milestone.
 
-**Plan ID:** `v0.8-failure-layer-attribution`
+**Plan ID:** `v0.9-file-scope-aggregation`
 
-**Status:** Complete.
-
-**Starting commit:** `77f42cf5532ae1d7655e9956e8288e9203c93f93`.
-
----
+**Status:** Active.
 
 ## Global Constraints
 
-- Treat the current checkout as the only source of truth. Do not use
-  `git reset`, `git restore`, `git checkout --`, `git clean`, or `git stash`.
-- Preserve untracked `.focalspan.json` and `TASKS.md`. The pre-existing
-  `PLAN_v0.7.md` disappeared during initial inspection and must not be
-  recreated or deleted by this milestone.
-- Keep `focalspan.benchmark-attribution.v1` byte-semantically unchanged.
-- Add `focalspan.benchmark-diagnosis.v1` as a separate development contract.
-- Do not change query normalization, retrieval, RRF, ranking, linking,
-  packing, token accounting, MCP tools, server instructions, or
-  `focalspan.context.v1`.
-- Do not expose diagnosis, traces, scores, token-saving debug fields, query
-  source, candidate source, unmatched symbols, absolute paths, usernames,
-  environment values, or secrets through normal CLI/MCP output.
-- Do not add network access, external LLM calls, embeddings, semantic
-  providers, model-specific tokenizers, rerankers, repository-code execution,
-  package restore, or new runtime dependencies.
+- Preserve user-owned dirty `AGENTS.md`, untracked `.focalspan.json`, and
+  untracked `TASKS.md`; stage only intended paths.
+- Archive completed v0.8 byte-for-byte before changing the root plan.
+- Do not use `git reset`, `git restore`, `git checkout --`, `git clean`, or
+  `git stash`.
+- Keep `focalspan.context.v1`, `focalspan.benchmark-attribution.v1`, all MCP
+  tool names/instructions, `known_handles`, Evidence fidelity, and normal CLI
+  output unchanged.
+- Do not modify query normalization/planning, existing retriever SQL,
+  relation linking, rank weights except the frozen new retriever weight, or
+  packer/token estimator behavior.
+- Do not add network, external LLMs, embeddings, SCIP generation,
+  repository-code execution, package restore, or runtime dependencies.
+- New code is read-only against the index and uses bound SQL values.
 - Every production behavior begins with a failing deterministic test.
-- The eight-case repeat-1 diagnosis run executes at most once after static
-  verification passes. An infrastructure failure before valid output may be
-  retried once only after recording the reason.
-- No `results-v0.8` quality baseline is created.
-
----
+- Candidate measurements run only after static verification and only once;
+  infrastructure failure may be retried once after recording the cause.
+- A failed candidate gate triggers normal reverse-order `git revert`; findings
+  remain recorded and no quality baseline is promoted.
 
 ## Purpose / Big Picture
 
-v0.6 classified 95 historical labels as 55 `retrieval_missing`, 35
-`packing_dropped`, and 5 `packed`. v0.7 tested bounded path-scoped symbol
-retrieval, but it advanced none of the required PHP/MCP identities and was
-reverted. The remaining `retrieval_missing` category conflates two materially
-different failures:
+v0.8 measured 95 historical labels: 55 `retrieval_missing`, 35
+`packing_dropped`, and 5 `packed`. Focused/2048 unmet counts were 9
+`path_scope_missing`, 2 `symbol_match_missing`, 0 `ranking_dropped`, and 7
+`packing_dropped`; `path_scope_missing` is the next primary layer.
 
-1. no retriever returned any candidate from the expected path;
-2. a retriever reached the expected path but never returned the exact expected
-   symbol identity.
+The rejected v0.7 experiment selected paths from already returned chunk
+candidates and a bounded lexical probe. It did not advance PHP `Run` or MCP
+`codeContext`. v0.9 instead groups each signal by file across the complete
+indexed tables before candidate caps, so one file's many chunks cannot hide
+other likely files.
 
-v0.8 measures that boundary only. It does not tune a production subsystem.
-The result selects exactly one later milestone using a frozen count rule.
+The development metric is:
 
----
+`1000 * unique packed required evidence labels / sum of final serialized
+estimated tokens for code_context and executed code_expand responses`.
 
-## Interfaces
+Required labels are unique packed paths, symbols, and successfully executed
+expansion expectations. Internal scores never enter normal MCP responses.
 
-Keep the v1 attribution interfaces unchanged. Add a separate diagnosis model:
+## Context and Orientation
+
+- `internal/search/search.go`: `CandidateStore`, `SearchRequest`, entrypoint.
+- `internal/search/retrieval.go`: independent retrievers and trace lists.
+- `internal/store/store.go`: parameterized SQLite/FTS5 queries.
+- `internal/benchmark` and `internal/benchcli`: source-free attribution and
+  quality/benchmark reports.
+- `docs/benchmarks/findings-v0.8.md`: accepted diagnosis evidence;
+  `docs/benchmarks/results-v0.5.json`: quality baseline.
+
+## Interfaces and Dependencies
+
+No public API changes. Extend only the internal `CandidateStore` boundary with
+read-only methods equivalent to:
 
 ```go
-const DiagnosisSchemaV1 = "focalspan.benchmark-diagnosis.v1"
-
-const (
-    DiagnosisLabelNotIndexed    = "label_not_indexed"
-    DiagnosisPacked             = "packed"
-    DiagnosisPackingDropped     = "packing_dropped"
-    DiagnosisLinkingUnresolved  = "linking_unresolved"
-    DiagnosisRankingDropped     = "ranking_dropped"
-    DiagnosisSymbolMatchMissing = "symbol_match_missing"
-    DiagnosisPathScopeMissing   = "path_scope_missing"
-)
-
-type DiagnosisPathHit struct {
-    Retriever     string `json:"retriever"`
-    FirstPosition int    `json:"first_position"`
-    Count         int    `json:"count"`
-}
-
-type DiagnosisLabel struct {
-    Expectation      string             `json:"expectation"`
-    Path             string             `json:"path"`
-    Symbol           string             `json:"symbol,omitempty"`
-    Kind             string             `json:"kind,omitempty"`
-    Relation         string             `json:"relation,omitempty"`
-    AttributionStage string             `json:"attribution_stage"`
-    DiagnosticStage  string             `json:"diagnostic_stage"`
-    ReasonCode       string             `json:"reason_code"`
-    PathHits         []DiagnosisPathHit `json:"path_hits,omitempty"`
-    RetrieverHits    []AttributionHit    `json:"retriever_hits,omitempty"`
-    RankedPosition   int                `json:"ranked_position,omitempty"`
-    PackedPosition   int                `json:"packed_position,omitempty"`
-}
-
-type DiagnosisResult struct {
-    Schema       string           `json:"schema"`
-    CaseID       string           `json:"case_id"`
-    RepositoryID string           `json:"repository_id"`
-    Profile      string           `json:"profile"`
-    Budget       int              `json:"budget"`
-    Labels       []DiagnosisLabel `json:"labels"`
-}
+SearchSymbolFiles(ctx context.Context, hints []string, limit int) ([]string, error)
+SearchFTSFiles(ctx context.Context, ftsQuery string, limit int) ([]string, error)
+SearchPathFiles(ctx context.Context, hints []string, limit int) ([]string, error)
+SearchCandidatesInFiles(ctx context.Context, paths, symbolHints []string, ftsQuery string, perFileLimit, totalLimit int) ([]model.RankedCandidate, error)
 ```
 
-Add paired benchmark CLI flags:
-
-```text
---diagnosis-json-out PATH
---diagnosis-markdown-out PATH
-```
-
-Either both are present or neither is present. Diagnosis and attribution may
-be requested together; the runner performs one traced query per repeat.
-
----
-
-## Classification Rules
-
-`AttributionStage` is copied from the unchanged v1 attribution label.
-`DiagnosticStage` uses this fixed priority:
-
-1. `label_not_indexed` / `label_not_indexed` when the v1 stage is not indexed.
-2. `packed` / `selected_in_packet` when packed position is positive.
-3. `packing_dropped` / `omitted_by_packer` when ranked position is positive.
-4. `linking_unresolved` / `relation_unresolved` when v1 reports unresolved.
-5. `ranking_dropped` / `removed_before_rank` when exact retriever hits exist.
-6. `symbol_match_missing` / `expected_path_retrieved_identity_missing` when
-   the v1 stage is retrieval-missing but at least one raw retrieved candidate
-   has exactly the expected repository-relative path.
-7. `path_scope_missing` / `expected_path_not_retrieved` otherwise.
-
-For a required-path label, every raw candidate on the expected path is already
-an exact v1 identity match, so `symbol_match_missing` is not reachable.
-
-Path-hit summaries are grouped by valid retriever in first-observed order.
-Each group records the first raw retriever position and total candidates from
-the expected path. They never copy identities from unmatched candidates.
-
----
+The store returns only repository-relative paths for file methods and only
+symbol-owned source candidates for the final method. `internal/search` owns
+hint derivation, file-list RRF, caps, mode gating, retriever identity, and the
+fixed `1.35` weight for `path-scope-aggregate`. `internal/store` owns SQL
+ordering and caps without importing search or query packages.
 
 ## Plan of Work
 
-### Task 0: Archive v0.7 and Start v0.8
+### Task 0: Transition from v0.8 and Freeze Baseline
 
-- [x] Record starting branch, HEAD, status, task tracker, and baseline tests.
-- [x] Copy the completed v0.7 root plan byte-for-byte to
-  `docs/superpowers/plans/completed/2026-09-01-v0.7-path-scoped-symbol-retrieval.md`.
-- [x] Verify source and archive SHA-256 are both
-  `46F2B415AD08CFB6FC5B750723D15387111E87EE8966A2A985D288A55478F8A0`.
-- [x] Replace root `PLAN.md` with this v0.8 plan and add the archive index link.
-- [x] Run `git diff --check`, verify only intended plan files are staged, and
-  commit `docs: start failure-layer attribution v0.8`.
+- [ ] Verify branch, HEAD, status, `PLANS.md`, archive hash, and baseline tests.
+- [ ] Archive v0.8 at
+  `docs/superpowers/plans/completed/2026-09-01-v0.8-failure-layer-attribution.md`
+  byte-for-byte and verify matching SHA-256.
+- [ ] Make this v0.9 plan the sole active root plan and commit only the
+  transition as `docs: start file-scope aggregation v0.9`.
+- [ ] Run the current eight-case `full-evidence-focused`/2048 benchmark once;
+  freeze path-scope counts, packed labels, and cumulative token denominator.
 
-### Task 1: Add the Diagnosis Classifier
+### Task 1: Add File-Level Store Queries (RED/GREEN)
 
-- [x] Add table-driven RED tests for all seven diagnostic stages and the fixed
-  priority order.
-- [x] Add RED tests proving same-path/different-symbol becomes
-  `symbol_match_missing`, no same-path candidate becomes `path_scope_missing`,
-  and required-path labels cannot become `symbol_match_missing`.
-- [x] Add RED tests for stable path-hit grouping, first position, count, and
-  omission of unmatched symbols/source.
-- [x] Confirm RED because diagnosis interfaces do not exist.
-- [x] Implement `internal/benchmark/diagnosis.go` using only
-  `AttributionInput` and unchanged v1 attribution labels.
-- [x] Add deterministic JSON/Markdown renderers and strict validation for
-  schema, stage/reason pairs, positions, counts, path safety, retrievers, and
-  control characters.
-- [x] Run focused benchmark tests and full `internal/benchmark` tests.
-- [x] Commit `feat: classify benchmark failure layers`.
+- [ ] Add RED tests for exact/final-segment/prefix/substring path ordering,
+  case-insensitive deduplication, empty input, cancellation, limits, and
+  path-only output.
+- [ ] Add RED tests proving FTS results group by distinct file and that a
+  high-frequency file cannot consume the complete file scope with chunks.
+- [ ] Add RED tests for symbol-file lookup and path-constrained candidates,
+  including required `symbol_handle`, per-file, total, and stable tie-breaks.
+- [ ] Confirm RED, then add parameterized methods to `internal/store/store.go`
+  and `CandidateStore`; do not change migrations or schema version.
+- [ ] Use exact and naming-variant symbol passes followed by safe FTS inside
+  selected paths; exclude generic unowned chunks and preserve source fields.
+- [ ] Run focused and full store tests; commit
+  `feat: add indexed file-scope queries`.
 
-### Task 2: Integrate Runner and CLI Output
+### Task 2: Aggregate Scopes and Integrate Retriever (RED/GREEN)
 
-- [x] Add runner RED tests requiring diagnosis-only and combined
-  attribution+diagnosis runs to use the traced query route once per repeat.
-- [x] Add CLI RED tests for paired flags, one-sided flag rejection,
-  deterministic source-free files, and unchanged attribution-only behavior.
-- [x] Confirm RED before changing runner or CLI code.
-- [x] Extend `RunRequest` and `RunReport` with development-only diagnosis
-  state excluded from quality JSON.
-- [x] Reuse a single `AttributionInput` and v1 label result to compile both
-  reports when both outputs are requested.
-- [x] Write diagnosis outputs only after quality and optional attribution
-  outputs have validated successfully.
-- [x] Add MCP and Evidence regression assertions showing trace off/on leaves
-  normal structured output byte-identical and diagnosis identifiers absent.
-- [x] Run `go test ./internal/benchmark ./internal/benchcli ./internal/app
-  ./internal/evidence ./internal/mcpserver -count=1`.
-- [x] Commit `feat: emit opt-in benchmark diagnosis`.
+- [ ] Add RED tests for hint filtering, naming variants, navigation-word
+  exclusion, eight-file scope cap, stable file RRF, per-file fairness, total
+  24-candidate cap, and fixed retriever ID.
+- [ ] Add RED tests that definition full/no-relations queries call the new
+  path, while relation-bearing and `fts-only` queries do not.
+- [ ] Confirm RED, then derive at most eight file hints and sixteen symbol
+  hints from the existing `query.Plan`.
+- [ ] Fuse file lists with RRF `k=60` and weights 1.80/1.00/0.90, retain eight
+  paths, retrieve at most four candidates per path and 24 total, and integrate
+  one `path-scope-aggregate` list at frozen weight 1.35.
+- [ ] Run focused and full search tests; commit
+  `feat: aggregate indexed file scopes for retrieval`.
 
-### Task 3: Run the Frozen Historical Measurement
+### Task 3: Efficiency Metric and Frozen Candidate Gate
 
-- [x] Run all static tests, vet, and diff check before the benchmark.
-- [x] Validate all eight cases in `testdata/benchmark/focalspan-history.json`.
-- [x] Run the eight-case repeat-1 benchmark exactly once with quality,
-  Markdown, v1 attribution, diagnosis JSON, and diagnosis Markdown outputs.
-- [x] Compare quality with `docs/benchmarks/results-v0.5.json`; require
-  compatibility and zero regressions.
-- [x] Require exactly 95 v1 labels and exact v0.6 stage compatibility:
-  55 retrieval-missing, 35 packing-dropped, 5 packed, and zero other stages.
-- [x] Require every v1 retrieval-missing row to map to exactly one of
-  `path_scope_missing` or `symbol_match_missing`.
-- [x] Scan outputs for source/content fields, absolute paths, username,
-  environment names/values, secret sentinels, NaN, and Infinity.
-- [x] For `full-evidence-focused` budget 2048, count the four unmet layers and
-  select the maximum; ties use this upstream order:
-  `path_scope_missing`, `symbol_match_missing`, `ranking_dropped`,
-  `packing_dropped`.
-- [x] Record commands, hashes, counts, selected next layer, and limitations in
-  `docs/benchmarks/findings-v0.8.md`, `docs/evaluation.md`, and this plan.
-- [x] Remove temporary benchmark outputs after recording verified hashes.
-- [x] Commit `docs: record failure-layer diagnosis v0.8`.
+- [ ] Add RED tests for cumulative context/expansion token accounting, unique
+  packed-label counting, and zero-denominator handling.
+- [ ] Add RED tests proving normal quality JSON, MCP structured output, and
+  `focalspan.context.v1` bytes are unchanged with tracing enabled.
+- [ ] Implement development-only useful-evidence-per-1,000-token reporting;
+  preserve attribution v1 compatibility and normal-output privacy.
+- [ ] After tests, vet, and diff check pass, run the selected candidate once.
+- [ ] Accept only if at least 3 of 9 focused/2048 path-scope misses advance,
+  at least one new human label is packed, useful-evidence/token strictly
+  improves, and all existing packed labels/invariants remain valid.
+- [ ] If accepted, run the complete benchmark matrix and record results. If
+  rejected, revert only candidate commits and record negative evidence.
 
-### Task 4: Final Verification and Closure
+### Task 4: Closure and Verification
 
-- [x] Run formatting only on changed Go files.
-- [x] Run `git diff --check`, `go test ./... -count=1`, and `go vet ./...`.
-- [x] Run CGO-free native focalspan/focalspan-bench builds and Windows amd64,
-  Linux amd64, and Darwin arm64 focalspan cross-builds to an ignored temporary
-  directory, then remove it.
-- [x] Run existing fixture/Evidence contract tests and focused normal-output
-  privacy tests.
-- [x] Verify `focalspan.benchmark-attribution.v1`, production search/rank/pack,
-  MCP tool definitions, and `focalspan.context.v1` remain unchanged.
-- [x] Verify status contains no generated reports, indexes, binaries, or
-  temporary workspaces and preserves user-owned untracked files.
-- [x] Push only after local verification, inspect the actual CI run, and record
-  test, vet, Linux race, three cross-builds, and smoke conclusions. Do not call
-  skipped jobs successful.
-- [x] Complete Progress, discoveries, decisions, and outcomes; commit final
-  documentation if CI evidence changes tracked files.
+- [ ] Run changed-file formatting, `git diff --check`, `go test ./... -count=1`,
+  and `go vet ./...`.
+- [ ] Run Evidence/MCP/privacy, fixture, deterministic, finite-number,
+  forbidden-path, relation-validity, budget, and known-handle tests.
+- [ ] Run CGO-free native and Windows amd64/Linux amd64/Darwin arm64 builds to
+  an ignored temporary directory, then remove generated files.
+- [ ] Inspect actual CI conclusions for tests, vet, Linux race, cross-builds,
+  and public smoke; skipped jobs remain skipped.
+- [ ] Verify status contains no generated reports, indexes, binaries, or
+  temporary workspaces and preserves all pre-existing user changes.
+- [ ] Complete Progress, Discoveries, Decision Log, Outcomes, and recovery
+  notes; commit documentation separately from product code.
 
----
+## Validation and Acceptance
 
-## Frozen Acceptance Criteria
-
-- Existing v1 attribution JSON/Markdown remains byte-semantic compatible.
-- Diagnosis classification covers every label exactly once and is deterministic.
-- All 55 historical retrieval misses split into the two new upstream layers.
-- Diagnosis contains no unmatched identity or source material.
-- Normal CLI, MCP, Evidence, and quality report output remains unchanged.
-- v0.5 comparison reports compatible with zero regressions.
-- Budget, fidelity, relation validity, known-handle suppression, determinism,
-  and forbidden-path invariants remain passing.
-- One and only one next primary layer is chosen by the frozen count rule.
-- No production optimization or `results-v0.8` baseline is introduced.
-
----
-
-## Progress
-
-- [x] `2026-09-01` Starting state recorded at `77f42cf` on `master`; baseline
-  `go test ./... -count=1` passed 666 tests in 46 packages.
-- [x] `2026-09-01` v0.7 archived byte-for-byte with matching SHA-256.
-- [x] `2026-09-01` Diagnosis classifier implemented via explicit RED and
-  verified by 12 focused tests and 59 `internal/benchmark` tests.
-- [x] `2026-09-01` Runner/CLI diagnosis output implemented via explicit RED;
-  the specified five-package regression suite passed 254 tests.
-- [x] `2026-09-01` Eight-case/default/repeat-1 measurement completed once at
-  `8518fe8` with zero retries; 48 quality results were v0.5-compatible with
-  zero regressions.
-- [x] `2026-09-01` The 55 v1 retrieval misses split into 45 path-scope and 10
-  symbol-match misses. Focused 2048 counts were 9/2/0/7, selecting
-  `path_scope_missing` as the next primary layer.
-- [x] `2026-09-01` Local closure passed 683 tests in 46 packages, 16 focused
-  diagnosis/attribution/privacy tests, 205 contract tests in 5 packages, vet,
-  diff check, two native builds, and three cross-builds; temporary outputs were
-  removed and user-owned inputs preserved.
-- [x] `2026-09-01` GitHub Actions run `33462530840` at `d1c66d8` completed
-  successfully: test/vet, Linux race, three CGO-free builds, and the two-case
-  public smoke passed. The manual full benchmark job was skipped as designed.
-
----
-
-## Surprises & Discoveries
-
-- **2026-09-01:** The untracked `TASKS.md` describes an independent future
-  relation-linking/schema-v2 task and explicitly excludes active `PLAN.md`
-  changes. It remains untouched.
-- **2026-09-01:** The initially observed untracked `PLAN_v0.7.md` disappeared
-  before plan transition. FocalSpan did not delete or recreate it.
-- **2026-09-01:** The first report-analysis pass treated top-level JSON arrays
-  as one PowerShell object and could not use `Get-FileHash` in the RTK shell.
-  The valid benchmark was not rerun; corrected array enumeration and .NET
-  SHA-256 produced the recorded counts and hashes from the same six outputs.
-
----
-
-## Decision Log
-
-- **Decision:** Run v0.8 in the current master checkout.
-  **Rationale:** The approved plan explicitly makes the current checkout the
-  only source of truth, and the user directly requested implementation here.
-  **Date/Author:** 2026-09-01 / Codex.
-- **Decision:** Add a separate diagnosis schema rather than revise attribution
-  v1. **Rationale:** Historical attribution is accepted evidence; diagnosis is
-  additive development data with a narrower purpose.
-  **Date/Author:** 2026-09-01 / project plan.
-- **Decision:** Infer path-scope coverage only from raw retrieved paths already
-  present in the source-free trace. **Rationale:** This separates the measured
-  failure without adding probes or changing production retrieval.
-  **Date/Author:** 2026-09-01 / project plan.
-- **Decision:** Select `path_scope_missing` as the next primary layer.
-  **Rationale:** At full Evidence focused budget 2048, the frozen counts were 9
-  path-scope missing, 2 symbol-match missing, 0 ranking dropped, and 7 packing
-  dropped; 9 is the unique maximum.
-  **Date/Author:** 2026-09-01 / Codex.
-
----
-
-## Outcomes & Retrospective
-
-Implementation and the frozen local measurement are complete. The diagnosis
-split 55 retrieval misses into 45 path-scope and 10 symbol-match misses; the
-focused 2048 rule selected `path_scope_missing` from counts 9/2/0/7. Quality
-remained v0.5-compatible with zero regressions, privacy/finite scans were clean,
-and local verification passed. Remote CI run `33462530840` at `d1c66d8`
-verified test/vet, race, three cross-builds, and a 2-case/12-result public smoke
-that was compatible with zero regressions. The manual full job was skipped and
-is not counted as successful. This milestone diagnoses a boundary only; it
-does not claim token reduction or retrieval improvement.
-
----
+- File methods are deterministic, bounded, parameterized, path-only, and
+  read-only; candidate methods return only symbol-owned chunks.
+- FTS-only, relation-bearing retrieval, attribution v1, normal MCP, and
+  `focalspan.context.v1` remain compatible.
+- Budget, source fidelity, relation, deterministic, privacy, finite-value,
+  forbidden-path, and known-handle invariants pass.
+- The balanced focused/2048 gate passes exactly as specified in Task 3, or the
+  production candidate is reverted with negative findings retained.
+- No SCIP import or generation is included in v0.9.
 
 ## Idempotence and Recovery
 
-- Classification and rendering are pure and deterministic.
-- Benchmark snapshots remain temporary and source repositories are read-only.
-- Existing output files require `--force`; paired diagnosis flags fail before
-  benchmark execution when incomplete.
-- If the valid repeat-1 report is produced, do not rerun it to change the
-  measured selection.
-- On infrastructure failure, preserve the error in the Decision Log before the
-  one permitted retry.
-- Do not modify or remove user-owned untracked files during cleanup.
+- File queries and hint derivation are read-only and safe to repeat.
+- Temporary benchmark outputs are removed only after hashes and counts are
+  recorded; a valid candidate report is never rerun for a better result.
+- Infrastructure retry is recorded before one retry; code failures require a
+  new RED test rather than a weakened gate.
+- Failed candidates use normal reverse-order `git revert`; completed archives
+  remain immutable.
 
----
+## Progress
 
-## Dependencies
+- [x] `2026-09-01` v0.8 selected `path_scope_missing`; existing `index.db` reuse,
+  SCIP deferral, file aggregation, and balanced gate were agreed.
+- [ ] v0.8 archive, v0.9 transition commit, and baseline measurement.
+- [ ] Store file-level queries.
+- [ ] Scope aggregation and retriever integration.
+- [ ] Efficiency metric and candidate gate.
+- [ ] Closure verification and documentation.
 
-No new third-party or runtime dependency is permitted. `internal/benchmark`
-owns diagnosis types, classification, validation, and rendering;
-`internal/benchcli` owns flags and files; `internal/app` and `internal/search`
-remain read-only providers of the existing trace.
+## Surprises & Discoveries
+
+- `TASKS.md` is a separate future schema-v2 relation-linking task. It targets
+  update latency and explicitly excludes search, Evidence, MCP, and token
+  behavior; it is not part of v0.9.
+- v0.7's path-scoped-symbol candidate was reverted after no PHP/MCP identity
+  advanced. v0.9 changes the scope source to full-index file aggregation.
+
+## Decision Log
+
+- **2026-09-01 / user and Codex:** Use `.focalspan/index.db` as canonical;
+  SCIP is optional future enrichment, never a replacement.
+- **2026-09-01 / user and Codex:** v0.9 precedes `TASKS.md` because the goal is
+  useful evidence per Codex/MCP token; schema v2 primarily improves update
+  latency.
+- **2026-09-01 / user and Codex:** Choose file-level signal aggregation over
+  a new file FTS schema or multi-turn MCP interaction.
+- **2026-09-01 / user and Codex:** Freeze the balanced gate: 3/9 advances, one
+  new packed label, strict evidence/token improvement, no regressions.
+
+## Outcomes & Retrospective
+
+Pending implementation and candidate measurement. Record actual counts, token
+ratios, CI conclusions, and acceptance/reversion; do not claim improvement
+from implementation alone.
