@@ -248,3 +248,12 @@ The closure report hashes were `d2a285912f6e7efb65f0be8447cceaf11f9bb74c`,
 created. The next measured failure category is the split between query-to-file
 scope coverage and post-retrieval packet selection; it requires a separately
 planned milestone rather than a second v0.7 adjustment.
+
+Post-closure GitHub Actions run
+[`33456207885`](https://github.com/AoiKagase/FocalSpan/actions/runs/33456207885)
+completed successfully at commit `52d82e613b885e00b7636282255b9780f8800051`.
+The actual test/vet, Linux race, Windows amd64, Linux amd64, Darwin arm64, and
+public benchmark smoke jobs all succeeded. The manual full benchmark job was
+skipped by design, so no eight-case repeat-3 v0.7 evaluation was executed.
+The eight temporary candidate/closure reports were removed during final
+verification; `.focalspan.json` and `PLAN_v0.7.md` remain preserved untracked.

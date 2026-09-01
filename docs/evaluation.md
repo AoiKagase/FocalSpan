@@ -640,3 +640,14 @@ No `results-v0.7` baseline is created. The next measured failure category is
 the boundary between query-to-file scope coverage and post-retrieval packet
 selection. It is recorded for a future independently planned milestone; v0.7
 does not attempt a second retrieval, ranking, or packing adjustment.
+
+GitHub Actions run
+[`33456207885`](https://github.com/AoiKagase/FocalSpan/actions/runs/33456207885)
+then completed successfully at closure commit
+`52d82e613b885e00b7636282255b9780f8800051`. Actual job conclusions were
+success for Linux test and vet, Linux race, CGO-free Windows amd64/Linux
+amd64/Darwin arm64 builds, and the public benchmark smoke. The manual full job
+was skipped as designed. These results verify the reverted closure; they do not
+constitute a v0.7 quality acceptance or an eight-case repeat-3 measurement.
+Final verification removed all candidate/closure reports and temporary build
+outputs while preserving the pre-existing untracked local inputs.

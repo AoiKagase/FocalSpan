@@ -1391,8 +1391,13 @@ changes.
       git add PLAN.md docs/benchmarks/findings-v0.7.md docs/evaluation.md
       git commit -m "docs: close rejected path-scoped retrieval v0.7"
 
-- [ ] Push and inspect actual CI. Record the run URL and conclusions. Do not
+- [x] Push and inspect actual CI. Record the run URL and conclusions. Do not
   claim a v0.7 quality baseline or create `results-v0.7`.
+
+  Run `33456207885` completed successfully for closure commit `52d82e6`: test
+  and vet, Linux race, Windows amd64/Linux amd64/Darwin arm64 CGO-free builds,
+  and public benchmark smoke all succeeded. The manual full job was skipped by
+  design; no v0.7 repeat-3 result exists.
 
 ---
 
@@ -1405,7 +1410,7 @@ changes.
 - Modify: `docs/superpowers/plans/README.md` only if an archive link is missing
 - Modify: `README.md` and `docs/design.md` only on the positive branch
 
-- [ ] Run formatting and full static verification:
+- [x] Run formatting and full static verification:
 
       gofmt -w .
       git diff --check
@@ -1414,14 +1419,24 @@ changes.
 
   Record actual counts.
 
-- [ ] Run race tests locally when supported:
+  `gofmt -w .` stopped only at the intentionally malformed recovery fixture
+  `testdata/repos/authsample/auth/recoverable.go`; `gofmt -w cmd internal`
+  then completed with no Go diff. `git diff --check` passed, `go test ./...
+  -count=1` passed 666 tests in 46 packages, and `go vet ./...` passed.
+
+- [x] Run race tests locally when supported:
 
       go test -race ./...
 
   If Windows cannot build race support, record it as unverified locally and
   cite the actual Linux CI result separately.
 
-- [ ] Run CGO-free builds to a temporary ignored directory, then remove them:
+  The local Windows run was attempted but did not reach tests because the
+  installed C compiler reported `cc1.exe: sorry, unimplemented: 64-bit mode
+  not compiled in` while building `runtime/cgo`. Local race remains
+  unverified; the Linux race job in Actions run `33456207885` succeeded.
+
+- [x] Run CGO-free builds to a temporary ignored directory, then remove them:
 
       CGO_ENABLED=0 go build ./cmd/focalspan
       GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/focalspan
@@ -1431,7 +1446,11 @@ changes.
 
   Use shell-appropriate environment syntax and explicit output paths.
 
-- [ ] Run every checked-in fixture evaluation after rebuilding its index.
+  Native, Windows amd64, Linux amd64, and Darwin arm64 `focalspan` builds plus
+  the native `focalspan-bench` build passed with `CGO_ENABLED=0`. Their five
+  explicitly named outputs and the temporary build directory were removed.
+
+- [x] Run every checked-in fixture evaluation after rebuilding its index.
   Require:
   - no hit@5 regression;
   - no path/symbol recall regression;
@@ -1441,10 +1460,20 @@ changes.
   - Evidence fidelity and relation validity `1.0`;
   - known resend `0`.
 
-- [ ] Verify FTS-only behavior with focused golden/unit tests. The new store
+  All 17 fixture indexes were rebuilt and all 18 legacy suites ran (91 cases).
+  Auth retained hit/symbol recall `1.0` and path recall `0.9166666666666666`;
+  Lua retained hit/symbol/path recall `0.8`; every other suite reported
+  hit/symbol/path recall `1.0`. Every suite reported budget `1.0`, forbidden
+  `0`, and deterministic `1.0`. The eight-case Evidence contract comparison
+  reported coverage, role, fidelity, relation, budget, deterministic, and
+  late-hit `1.0`, with forbidden and known resend `0`.
+
+- [x] Verify FTS-only behavior with focused golden/unit tests. The new store
   methods must have zero calls in FTS-only mode.
 
-- [ ] Search production code for benchmark-specific values:
+  Six focused FTS-only tests passed after the production reverts.
+
+- [x] Search production code for benchmark-specific values:
 
       git grep -n "php-extractor-integration" -- internal
       git grep -n "project-metadata-indexing" -- internal
@@ -1456,18 +1485,27 @@ changes.
   Expected: no corpus-specific production match. Generic tests may contain
   synthetic names.
 
-- [ ] Verify no generated binary, snapshot, temporary index, or candidate report
+  The scoped production search returned no benchmark ID or candidate-path
+  match. A wider production-only search found `codeContext` only as the
+  legitimate existing MCP handler and method in `internal/mcpserver/server.go`,
+  not as corpus-specific retrieval logic.
+
+- [x] Verify no generated binary, snapshot, temporary index, or candidate report
   remains:
 
       git status --short
 
-- [ ] Complete:
+  All eight candidate/closure temporary reports and all temporary binaries
+  were removed. Status contains only the three intended tracked documentation
+  changes and the preserved untracked `.focalspan.json` and `PLAN_v0.7.md`.
+
+- [x] Complete:
   - Progress with UTC timestamps;
   - Surprises & Discoveries;
   - Decision Log;
   - Outcomes & Retrospective.
 
-- [ ] State the milestone disposition exactly:
+- [x] State the milestone disposition exactly:
 
   **Accepted:** path-scoped symbol retrieval passed the frozen gate, full
   benchmark, and CI; `results-v0.7` is the active benchmark baseline.
@@ -1475,7 +1513,7 @@ changes.
   **Rejected:** the production hypothesis was reverted; attribution and
   findings are the deliverables; v0.5 remains the active quality baseline.
 
-- [ ] Name at most one next primary milestone, selected from the terminal
+- [x] Name at most one next primary milestone, selected from the terminal
   evidence:
   - scoped file discovery still misses;
   - scoped symbol matching misses;
@@ -1485,7 +1523,11 @@ changes.
 
   Do not implement it in v0.7.
 
-- [ ] Commit final documentation:
+  The one next primary milestone is to separate query-to-file scope coverage
+  from post-retrieval packet selection in a future independently planned
+  experiment.
+
+- [x] Commit final documentation:
 
       git add PLAN.md docs/benchmarks/findings-v0.7.md docs/evaluation.md
       git add README.md docs/design.md docs/superpowers/plans/README.md
@@ -1548,8 +1590,17 @@ Update with UTC timestamps while executing.
   tree. Closure verification passed 666 tests in 46 packages, vet, and diff
   check. The one four-case closure smoke produced 24 quality results, compared
   v0.5-compatible with zero regressions, and matched all 44 selected v0.6
-  attribution rows exactly. Closure documentation is ready for commit; actual
-  post-closure GitHub Actions is still pending.
+  attribution rows exactly. Closure commit `52d82e6` was pushed and Actions
+  run `33456207885` passed test/vet, Linux race, three cross-builds, and the
+  public smoke; its manual full job was skipped by design.
+- [x] `2026-09-01T00:59:00Z` Task 10 local verification completed. Formatting
+  of production packages, 666 tests in 46 packages, vet, diff check, five
+  CGO-free builds, 17 rebuilt indexes, 18 legacy suites (91 cases), the
+  eight-case Evidence comparison, and six FTS-only tests completed as recorded
+  above. Local Windows race remains unverified because `runtime/cgo` could not
+  build with the installed compiler; the actual Linux CI race passed. All
+  generated candidate/closure reports and binaries were removed.
+- [x] v0.6 plan archived byte-for-byte; v0.7 transition committed.
 - [x] Four-case current baseline measured and frozen.
 - [x] Store file discovery implemented and verified.
 - [x] Store scoped-symbol retrieval implemented and verified.
@@ -1559,9 +1610,9 @@ Update with UTC timestamps while executing.
 - [x] Frozen four-case candidate run executed once.
 - [x] Frozen gate decision recorded.
 - [x] Positive full acceptance completed, or negative revert completed.
-- [ ] Local full verification completed.
-- [ ] Actual remote CI inspected.
-- [ ] Outcomes and next measured direction recorded.
+- [x] Local full verification completed.
+- [x] Actual remote CI inspected.
+- [x] Outcomes and next measured direction recorded.
 
 ---
 
@@ -1617,6 +1668,13 @@ Update with UTC timestamps while executing.
   `git diff --name-status e9d6ec5..HEAD -- internal cmd`). The closure smoke's
   44 selected attribution rows had zero semantic differences from the public
   v0.6 artifact.
+- **2026-09-01:** Local Windows race support remains unavailable because the
+  installed compiler cannot build 64-bit `runtime/cgo`; this is distinct from
+  the successful Linux race job in actual Actions run `33456207885`.
+- **2026-09-01:** Repository-wide `gofmt -w .` reaches the intentionally
+  malformed auth recovery fixture and stops at its expected EOF parse error.
+  Formatting `cmd` and `internal` directly completed without a production Go
+  diff, so the fixture was preserved rather than repaired as production code.
 
 ---
 
@@ -1723,6 +1781,16 @@ Update with UTC timestamps while executing.
   regressions and restored the baseline 20/20/4 selected stage distribution.
   **Date/Author:** 2026-09-01 / Codex.
 
+- **Decision:** Close v0.7 as a rejected production hypothesis after verifying
+  the reverted tree locally and in actual remote CI.
+  **Rationale:** The frozen gate failed before Task 8, all five production/test
+  commits were reverted, and closure commit `52d82e6` passed Actions run
+  `33456207885`. Attribution and findings remain the milestone deliverables;
+  v0.5 remains the active quality baseline. The only next measured direction
+  is a separately planned experiment that distinguishes query-to-file scope
+  coverage from post-retrieval packet selection.
+  **Date/Author:** 2026-09-01 / Codex.
+
 - **Decision:** Separate file discovery from symbol retrieval.
   **Rationale:** v0.6 showed that exposing a correct file via generic path
   chunks did not expose `Run`, did not unblock expansion, and could contaminate
@@ -1769,20 +1837,30 @@ Update with UTC timestamps while executing.
 
 ## Outcomes & Retrospective
 
-Implementation has not begun. At completion, replace this paragraph with:
+v0.7 started from `987c5d2`; the negative closure was committed as `52d82e6`.
+The one candidate at `605ad7d` retained the baseline selected distribution of
+20 `retrieval_missing`, 20 `packing_dropped`, and 4 `packed` rows. It advanced
+0 of 16 required PHP/MCP rows, packed no new required symbol or expansion
+anchor, executed no real expansion, and improved required-symbol recall in 0
+selected 2048 cases. JSTS `Search` reached the new retriever at raw position 1
+but stayed ranked 10 and unpacked; project `Run` worsened from rank 20 to 28.
 
-- starting and final commits;
-- accepted or rejected disposition;
-- exact selected baseline and candidate stage counts;
-- symbol recall and expansion results;
-- full benchmark metrics when accepted;
-- regression and privacy status;
-- local and remote verification;
-- limitations;
-- one evidence-selected next milestone.
+**Rejected:** the production hypothesis was reverted; attribution and findings
+are the deliverables; v0.5 remains the active quality baseline.
 
-Do not describe retrieval quality as improved unless the positive branch passes
-all frozen gates and the full report is accepted.
+No eight-case repeat-3 v0.7 evaluation was run because the frozen Task 7 gate
+failed. The candidate and closure comparisons remained v0.5-compatible with
+zero reported regressions, and privacy, determinism, budget, relation, Evidence
+fidelity, and forbidden-content checks passed. After rollback, 666 tests in 46
+packages, vet, diff check, CGO-free builds, all fixture evaluations, Evidence
+comparison, and FTS-only checks passed locally. Windows race was attempted but
+remains locally unverified due to the compiler; actual Actions run
+`33456207885` passed Linux test/vet/race, three cross-builds, and the public
+smoke. Its manual full benchmark was skipped by design.
+
+The next primary milestone, if separately planned, is to distinguish
+query-to-file scope coverage failures from post-retrieval packet-selection
+failures. v0.7 makes no second tuning attempt and creates no `results-v0.7`.
 
 ---
 
