@@ -69,6 +69,15 @@ func (r *RetrieverSet) Retrieve(ctx context.Context, plan query.Plan, req Search
 		return nil, fmt.Errorf("%s retriever: %w", RetrieverPath, err)
 	}
 	lists = append(lists, RankedList{Retriever: RetrieverPath, Items: paths})
+	if len(plan.Relations) == 0 {
+		scoped, scopeErr := r.retrievePathScope(ctx, plan, req)
+		if scopeErr != nil {
+			return nil, fmt.Errorf("%s retriever: %w", RetrieverPathScopedAggregate, scopeErr)
+		}
+		if len(scoped) > 0 {
+			lists = append(lists, RankedList{Retriever: RetrieverPathScopedAggregate, Items: scoped})
+		}
+	}
 	if mode == RetrievalNoRelations || len(plan.Relations) == 0 {
 		return lists, nil
 	}

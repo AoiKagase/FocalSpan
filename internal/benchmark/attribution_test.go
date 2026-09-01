@@ -171,6 +171,20 @@ func TestAttributionJSONAndMarkdownAreDeterministicAndSourceFree(t *testing.T) {
 	}
 }
 
+func TestMarshalAttributionAcceptsPathScopeAggregateRetriever(t *testing.T) {
+	result := AttributionResult{
+		Schema: AttributionSchemaV1, CaseID: "case", RepositoryID: "self", Profile: "p", Budget: 1024,
+		Labels: []AttributionLabel{{
+			Expectation: "required_symbol", Path: "safe.go", Symbol: "Target",
+			TerminalStage: StageRankingDropped, ReasonCode: "removed_before_rank",
+			RetrieverHits: []AttributionHit{{Retriever: "path-scope-aggregate", Position: 1, RelationState: "none"}},
+		}},
+	}
+	if _, err := MarshalAttribution([]AttributionResult{result}); err != nil {
+		t.Fatalf("path-scope aggregate retriever rejected: %v", err)
+	}
+}
+
 func TestMarshalAttributionRejectsControlCharactersAndInvalidPositions(t *testing.T) {
 	makeResult := func() AttributionResult {
 		return AttributionResult{Schema: AttributionSchemaV1, CaseID: "case", RepositoryID: "self", Profile: "p", Budget: 1024, Labels: []AttributionLabel{{Expectation: "required_path", Path: "safe.go", TerminalStage: StageRankingDropped, ReasonCode: "removed_before_rank", RetrieverHits: []AttributionHit{{Retriever: "fts", Position: 1, RelationState: "none"}}}}}

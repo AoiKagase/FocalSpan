@@ -17,6 +17,10 @@ type CandidateStore interface {
 	SearchExactSymbols(ctx context.Context, values []string, limit int) ([]model.RankedCandidate, error)
 	SearchSymbolPrefixes(ctx context.Context, values []string, limit int) ([]model.RankedCandidate, error)
 	SearchPaths(ctx context.Context, hints []string, limit int) ([]model.RankedCandidate, error)
+	SearchSymbolFiles(ctx context.Context, hints []string, limit int) ([]string, error)
+	SearchFTSFiles(ctx context.Context, ftsQuery string, limit int) ([]string, error)
+	SearchPathFiles(ctx context.Context, hints []string, limit int) ([]string, error)
+	SearchCandidatesInFiles(ctx context.Context, paths, symbolHints []string, ftsQuery string, perFileLimit, totalLimit int) ([]model.RankedCandidate, error)
 	RelatedCandidates(ctx context.Context, handles []string, relation string) ([]model.RankedCandidate, error)
 	RelatedCandidateHits(ctx context.Context, handles []string, relation string) ([]model.RelationHit, error)
 }
