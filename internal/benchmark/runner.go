@@ -43,16 +43,17 @@ type CaseRun struct {
 }
 
 type RunReport struct {
-	Schema          string              `json:"schema"`
-	Suite           string              `json:"suite"`
-	FocalSpanCommit string              `json:"focalspan_commit"`
-	Quality         []QualityResult     `json:"quality"`
-	Aggregate       AggregateQuality    `json:"aggregate"`
-	Efficiency      *EvidenceEfficiency `json:"efficiency,omitempty"`
-	Performance     []PerformanceResult `json:"performance,omitempty"`
-	Attributions    []AttributionResult `json:"-"`
-	Diagnoses       []DiagnosisResult   `json:"-"`
-	Runs            []CaseRun           `json:"-"`
+	Schema          string                     `json:"schema"`
+	Suite           string                     `json:"suite"`
+	FocalSpanCommit string                     `json:"focalspan_commit"`
+	Quality         []QualityResult            `json:"quality"`
+	Aggregate       AggregateQuality           `json:"aggregate"`
+	Efficiency      *EvidenceEfficiency        `json:"efficiency,omitempty"`
+	Packing         *PackingObservationSummary `json:"-"`
+	Performance     []PerformanceResult        `json:"performance,omitempty"`
+	Attributions    []AttributionResult        `json:"-"`
+	Diagnoses       []DiagnosisResult          `json:"-"`
+	Runs            []CaseRun                  `json:"-"`
 }
 
 const ReportSchemaV1 = "focalspan.benchmark-report.v1"
@@ -65,6 +66,7 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 		return RunReport{}, fmt.Errorf("runner dependencies are required")
 	}
 	report := RunReport{Schema: ReportSchemaV1, Suite: request.Suite.Name}
+	var packingObservations []evidence.CompileObservation
 	for _, benchmarkCase := range request.Suite.Cases {
 		repositoryPath, exists := request.Repositories[benchmarkCase.Repository]
 		if !exists {
@@ -146,6 +148,7 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 							var attributed app.AttributedEvidenceResult
 							attributed, queryErr = engine.QueryEvidenceAttributed(ctx, queryRequest)
 							packet = attributed.Compile.Packet
+							packingObservations = append(packingObservations, attributed.Observations...)
 							traceInput = attributionInput(indexed, attributed)
 						} else {
 							packet, queryErr = engine.QueryEvidence(ctx, queryRequest)
@@ -268,6 +271,10 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 	report.Aggregate = AggregateResults(report.Quality)
 	efficiency := AggregateEvidenceEfficiency(request.Suite.Cases, report.Quality)
 	report.Efficiency = &efficiency
+	if len(packingObservations) > 0 {
+		packing := AggregatePackingObservations(packingObservations)
+		report.Packing = &packing
+	}
 	return report, nil
 }
 

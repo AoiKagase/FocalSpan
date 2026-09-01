@@ -1,6 +1,21 @@
 package benchmark
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/focalspan/focalspan/internal/evidence"
+)
+
+func TestAggregatePackingObservationsCountsCandidatesAndTokens(t *testing.T) {
+	observations := []evidence.CompileObservation{
+		{Handle: "one", CandidateTokens: 30, SerializedDeltaTokens: 42, Packed: true},
+		{Handle: "two", CandidateTokens: 18, SerializedDeltaTokens: 25, Packed: false, DropReason: "known_handle"},
+	}
+	got := AggregatePackingObservations(observations)
+	if got.Candidates != 2 || got.Packed != 1 || got.Omitted != 1 || got.CandidateTokens != 48 || got.SerializedDeltaTokens != 67 {
+		t.Fatalf("summary=%+v", got)
+	}
+}
 
 func TestMeasureUsefulEvidenceCountsPackedLabelsAndUsesCumulativeWireTokens(t *testing.T) {
 	caseValue := Case{
