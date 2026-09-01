@@ -1,22 +1,23 @@
-# FocalSpan Packer Efficiency v0.10 Implementation Plan
+# FocalSpan Evidence Compiler Efficiency v0.10 Implementation Plan
 
 > **For agentic workers:** Execute task-by-task. Every production behavior
 > starts with a failing deterministic test, then RED confirmation, minimal
 > GREEN implementation, focused verification, and an explicit-path commit.
 
-**Goal:** Reduce Codex/MCP wire-token cost by making Evidence packing more
-efficient while preserving every source-fidelity, budget, known-handle, and
-public MCP contract.
+**Goal:** Reduce Codex/MCP wire-token cost in the actual Evidence compiler
+route while preserving every source-fidelity, budget, known-handle, and public
+MCP contract.
 
-**Architecture:** Keep retrieval and ranking unchanged in v0.10. Add an
-opt-in, source-free packing observation path for development attribution, then
-test one bounded packer candidate: omit duplicate or fully contained spans when
-they add no new symbol/relation identity, while retaining exact-symbol and
-relation anchors. The existing `Pack` API remains the production entry point;
-the observation path is an internal diagnostic wrapper.
+**Architecture:** Keep retrieval, ranking, and the legacy
+`internal/budget.Packer` unchanged in v0.10. Add an opt-in, source-free
+observation path around `internal/evidence.Compiler.Compile`, then test one
+bounded compiler candidate: omit duplicate or fully contained spans when they
+add no new symbol/relation identity, while retaining exact-symbol and relation
+anchors. The existing `Compile` API remains the production entry point; the
+observation path is an internal diagnostic wrapper.
 
-**Tech Stack:** Go 1.27, standard library, existing `internal/budget`,
-`internal/model`, `internal/evidence`, and `internal/benchmark` packages, and
+**Tech Stack:** Go 1.27, standard library, existing `internal/evidence`,
+`internal/model`, `internal/budget`, and `internal/benchmark` packages, and
 the existing historical benchmark harness. No new dependency, database schema,
 MCP method, or Evidence schema.
 
@@ -34,7 +35,8 @@ archive remains immutable.
   tool names/instructions, `known_handles`, Evidence fidelity, and normal CLI
   output unchanged.
 - Do not change query normalization/planning, search retrievers, relation
-  linking, ranking weights, SQLite schema, or token-estimator constants.
+  linking, ranking weights, SQLite schema, the legacy budget packer, or
+  token-estimator constants.
 - Development observations are opt-in, source-free, and excluded from normal
   MCP, Evidence, and quality JSON responses.
 - Every production behavior starts with a deterministic RED test and a recorded
@@ -56,8 +58,9 @@ there were 9 `path_scope_missing`, 2 `symbol_match_missing`, and 7
 to 13,028, and reduced useful evidence per 1,000 tokens from 0.3925 to 0.3838.
 Its production candidate was reverted and is not a quality baseline.
 
-v0.10 therefore measures where packing spends tokens before changing it. The
-candidate is intentionally limited to repeated or contained evidence spans
+v0.10 therefore measures where Evidence compilation spends tokens before
+changing it. The candidate is intentionally limited to repeated or contained
+Evidence spans
 that do not add a new identity. It must reduce the denominator without hiding
 source text required by an exact symbol, relation, expansion anchor, or
 `known_handles` delta.
@@ -72,14 +75,15 @@ expansion expectations. Internal observations never enter normal MCP output.
 
 ## Context and Orientation
 
-- `internal/budget/budget.go`: `Packer.Pack`, source-payload estimation,
-  budget elision, test/documentation policy, and current low-utility filtering.
-- `internal/budget/budget_test.go`: deterministic packer behavior and budget
-  regressions.
+- `internal/evidence/compiler.go`: `Compiler.Compile`, candidate
+  preprocessing, variant selection, packet construction, and compiler stats.
+- `internal/evidence/compiler_test.go`: deterministic compiler behavior,
+  duplicate preprocessing, anchors, relations, and budget regressions.
 - `internal/model/model.go`: `PackRequest`, `RankedCandidate`,
   `ContextBundle`, and `ContextItem` compatibility shapes.
 - `internal/app/evidence.go`: production route from search results to Evidence
-  compilation; do not alter this route's public request or response contract.
+  compilation; expose observations only through the existing development-only
+  attributed result and do not alter public request/response contracts.
 - `internal/evidence/{compiler,wire,validate}_*.go`: packet serialization,
   fidelity, budget, and known-handle invariants.
 - `internal/benchmark/{efficiency,attribution,runner}.go`: source-free label
@@ -92,12 +96,12 @@ expansion expectations. Internal observations never enter normal MCP output.
 
 ## Interfaces and Dependencies
 
-The public `Packer.Pack(req model.PackRequest) model.ContextBundle` signature
-and all model JSON fields remain unchanged. Add only an internal diagnostic
-surface in `internal/budget`:
+The public `Compiler.Compile(req CompileRequest) (CompileResult, error)` signature
+and all packet/model JSON fields remain unchanged. Add only an internal
+diagnostic surface in `internal/evidence`:
 
 ```go
-type PackObservation struct {
+type CompileObservation struct {
 	Handle                string
 	Path                  string
 	Symbol                string
@@ -108,11 +112,11 @@ type PackObservation struct {
 	ContainedByHandle     string
 }
 
-func (p *Packer) PackWithObservations(req model.PackRequest) (model.ContextBundle, []PackObservation)
+func (c *Compiler) CompileWithObservations(req CompileRequest) (CompileResult, []CompileObservation, error)
 ```
 
-`Pack` delegates to the same implementation with observations discarded, so
-existing callers and serialized bundles remain unchanged. `PackObservation`
+`Compile` delegates to the same implementation with observations discarded, so
+existing callers and serialized packets remain unchanged. `CompileObservation`
 contains identity and counts only; it must never contain source content,
 absolute paths, user names, secrets, or environment values. Benchmark code may
 join these observations with attribution identities without changing
@@ -137,57 +141,62 @@ join these observations with attribution identities without changing
 - [x] Commit only the plan transition and immutable archive with message
   `docs: start packer efficiency v0.10`.
 
-### Task 1: Add Source-Free Packing Observations (RED/GREEN)
+### Task 1: Add Source-Free Evidence-Compilation Observations (RED/GREEN)
 
 **Files:**
 
-- Modify: `internal/budget/budget.go`
-- Test: `internal/budget/budget_test.go`
+- Modify: `internal/evidence/compiler.go`
+- Test: `internal/evidence/compiler_test.go`
+- Modify: `internal/app/evidence.go`
+- Test: `internal/app/evidence_test.go`
 - Modify: `internal/benchmark/efficiency.go`
 - Test: `internal/benchmark/efficiency_test.go`
 - Test: `internal/benchmark/attribution_test.go`
 
 **Interfaces:**
 
-- Consumes: existing `model.PackRequest`, `model.RankedCandidate`, and
-  `model.ContextBundle`.
-- Produces: `budget.PackObservation` and deterministic observation lists for
-  development-only benchmark attribution.
+- Consumes: existing `evidence.CompileRequest`, `model.RankedCandidate`, and
+  `evidence.CompileResult`.
+- Produces: `evidence.CompileObservation` and deterministic observation lists
+  for development-only benchmark attribution.
 
-- [ ] Write RED tests proving that `PackWithObservations` reports one row per
-  candidate in stable input order, reports candidate and serialized-delta
+- [ ] Write RED tests proving that `CompileWithObservations` reports one row
+  per candidate in stable input order, reports candidate and serialized-delta
   token counts, and records an explicit reason for every omitted candidate.
 - [ ] Write RED tests proving that observations contain no source content,
   absolute paths, secrets, or user/environment values.
-- [ ] Write RED tests proving `Pack(req)` and
-  `PackWithObservations(req)` return byte-identical `ContextBundle` JSON for
-  the same request, including `known_handles`-driven Evidence compilation.
+- [ ] Write RED tests proving `Compile(req)` and
+  `CompileWithObservations(req)` return byte-identical packet JSON for the
+  same request, including `known_handles`-driven compilation.
 - [ ] Run the focused RED tests and record the expected failure before adding
   implementation.
-- [ ] Implement the observation wrapper around the existing pack loop without
-  changing budget clamping, elision, item order, or omission behavior.
+- [ ] Implement the observation wrapper around the existing compiler loop
+  without changing budget clamping, fidelity variants, item order, or omission
+  behavior.
+- [ ] Thread observations through `app.AttributedEvidenceResult` only when
+  `QueryEvidenceAttributed` is used; `QueryEvidence` must discard them.
 - [ ] Add benchmark-side aggregation that consumes observations only when the
   existing opt-in attribution path is enabled; normal quality and MCP output
   must ignore them.
-- [ ] Run focused budget/benchmark/evidence tests and commit
-  `feat: add source-free packing observations`.
+- [ ] Run focused compiler/benchmark/evidence tests and commit
+  `feat: add source-free evidence compilation observations`.
 
-### Task 2: Implement the Single Bounded Packer Candidate (RED/GREEN)
+### Task 2: Implement the Single Bounded Evidence Candidate (RED/GREEN)
 
 **Files:**
 
-- Modify: `internal/budget/budget.go`
-- Test: `internal/budget/budget_test.go`
+- Modify: `internal/evidence/compiler.go`
+- Test: `internal/evidence/compiler_test.go`
 - Test: `internal/evidence/wire_test.go`
 - Test: `internal/evidence/known_test.go`
 - Test: `internal/app/evidence_test.go`
 
 **Interfaces:**
 
-- Consumes: ranked candidates in their existing order and the observation
+- Consumes: classified candidates in their existing order and the observation
   helper from Task 1.
-- Produces: the same `model.ContextBundle` shape with fewer redundant source
-  spans only when the candidate is not an exact-symbol or relation anchor.
+- Produces: the same Evidence packet shape with fewer redundant source spans
+  only when the candidate is not an exact-symbol or relation anchor.
 
 - [ ] Write RED tests for identical content hashes on one path, fully
   contained same-path spans, exact-symbol anchors, relation anchors, and
@@ -198,14 +207,14 @@ join these observations with attribution identities without changing
 - [ ] Write RED tests proving source fidelity, item order, budget limits,
   `known_handles` suppression, and packet-local handles remain valid.
 - [ ] Run the focused RED tests and record the failure.
-- [ ] Add deterministic duplicate/containment checks inside the existing pack
-  loop. Compare repository-relative path and valid line spans; preserve the
-  first ranked candidate, exact-symbol reasons, relation candidates, and any
-  candidate needed by an expansion expectation. Do not alter ranking scores,
-  query plans, or token-estimator constants.
+- [ ] Add deterministic duplicate/containment checks inside compiler
+  preprocessing. Compare repository-relative path and valid line spans;
+  preserve the first ranked candidate, exact-symbol reasons, relation
+  candidates, and any candidate needed by an expansion expectation. Do not
+  alter ranking scores, query plans, or token-estimator constants.
 - [ ] Record `duplicate_span` or `contained_without_new_identity` in the
   observation rather than exposing a new diagnostic field in normal output.
-- [ ] Run focused packer, Evidence wire, known-handle, and app compatibility
+- [ ] Run focused compiler, Evidence wire, known-handle, and app compatibility
   tests; commit `feat: compact redundant evidence spans`.
 
 ### Task 3: Static Verification and the Frozen Candidate Gate
@@ -225,14 +234,14 @@ join these observations with attribution identities without changing
   `full-evidence-focused`/2048 candidate exactly once. Retry only when the
   harness itself fails to produce a result; record that infrastructure cause
   before the one retry.
-- [ ] Accept the packer candidate only when cumulative wire tokens are no
+- [ ] Accept the Evidence compiler candidate only when cumulative wire tokens are no
   greater than 12,740, useful evidence per 1,000 tokens is strictly greater
   than 0.3925, no existing packed label is lost, and all source-fidelity,
   budget, deterministic, privacy, Evidence/MCP, and `known_handles`
   invariants remain valid.
-- [ ] For this packer-only milestone, retrieval counts may remain unchanged;
-  a search improvement is not claimed from a packing result. Record the
-  observed `packing_dropped` and packed-label deltas separately.
+- [ ] For this compiler-only milestone, retrieval counts may remain unchanged;
+  a search improvement is not claimed from an Evidence packing result. Record
+  the observed `packing_dropped` and packed-label deltas separately.
 - [ ] Record baseline, candidate, gate decision, artifact hashes, privacy
   scan, and any infrastructure retry in
   `docs/benchmarks/findings-v0.10.md` without source text or absolute paths.
@@ -263,14 +272,14 @@ join these observations with attribution identities without changing
 
 ## Validation and Acceptance
 
-- `PackWithObservations` is deterministic, bounded, source-free, and does not
-  alter the `Pack` result or any public JSON bytes.
+- `CompileWithObservations` is deterministic, bounded, source-free, and does
+  not alter the `Compile` result or any public packet bytes.
 - Duplicate/contained-span compaction never removes an exact-symbol anchor,
   relation anchor, expansion expectation, or `known_handles` delta.
 - Evidence source fidelity, packet schema, wire budget, finite values,
   forbidden-path privacy, deterministic ordering, and MCP method contracts pass.
-- The frozen v0.10 gate passes only when wire tokens do not increase and
-  useful evidence per 1,000 tokens strictly improves over 0.3925, with no
+- The frozen v0.10 gate passes only when Evidence wire tokens do not increase
+  and useful evidence per 1,000 tokens strictly improves over 0.3925, with no
   existing packed label or invariant regression.
 - `go test ./... -count=1`, `go vet ./...`, `git diff --check`, and the four
   CGO-free build targets are recorded with actual results. Race status remains
@@ -293,13 +302,13 @@ join these observations with attribution identities without changing
 - [x] `2026-09-01` v0.9 candidate rejected and reverted; negative findings
   recorded in `docs/benchmarks/findings-v0.9.md`.
 - [x] `2026-09-01` v0.9 root plan archived byte-for-byte before transition.
-- [x] `2026-09-01` v0.10 design approved: measure packing cost first, then run
-  one bounded duplicate/containment candidate; defer identity retrieval to a
-  successor plan.
+- [x] `2026-09-01` v0.10 design approved: measure Evidence compilation cost
+  first, then run one bounded duplicate/containment candidate; defer identity
+  retrieval to a successor plan.
 - [x] `2026-09-01` plan transition committed as `6c248d2`; only `PLAN.md` and
   the immutable v0.9 archive were staged.
 - [ ] v0.10 Task 1 source-free packing observations.
-- [ ] v0.10 Task 2 bounded packer candidate.
+- [ ] v0.10 Task 2 bounded Evidence compiler candidate.
 - [ ] v0.10 Task 3 static verification and frozen candidate gate.
 - [ ] v0.10 Task 4 closure and successor handoff.
 
@@ -308,9 +317,9 @@ join these observations with attribution identities without changing
 - v0.9 showed that widening file scope can increase serialized token cost
   without advancing any measured evidence label; file aggregation is not a
   substitute for symbol identity.
-- The current packer already applies structural, test, documentation, and
-  budget policies, so v0.10 must measure the actual omission/duplication cost
-  before changing another policy.
+- The Evidence compiler already applies role, variant, relation, and budget
+  policies, so v0.10 must measure the actual omission/duplication cost before
+  changing another policy. The legacy CLI packer is outside this milestone.
 - The existing attribution and efficiency infrastructure is the safest place
   to inspect token economics because it is already source-free and opt-in.
 
