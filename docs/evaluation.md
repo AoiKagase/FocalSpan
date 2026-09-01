@@ -683,3 +683,12 @@ tests, `go vet ./...`, and `git diff --check`. CGO-free native focalspan and
 benchmark builds and Windows amd64, Linux amd64, and Darwin arm64 focalspan
 builds succeeded; their temporary binaries were removed. Attribution v1 and
 production search/rank/budget code remained unchanged.
+
+GitHub Actions run
+[`33462530840`](https://github.com/AoiKagase/FocalSpan/actions/runs/33462530840)
+then completed successfully at closure commit `d1c66d8`. Actual conclusions
+were success for Linux test/vet, Linux race, CGO-free Windows amd64/Linux
+amd64/Darwin arm64 builds, and the public benchmark smoke. The smoke validated
+2 cases with 0 invalid, produced 12 quality results, and compared compatible
+with v0.5 with 0 regressions. The manual full benchmark job was skipped as
+designed and is not counted as a success.

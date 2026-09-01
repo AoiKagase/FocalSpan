@@ -97,6 +97,20 @@ rank, or budget production code. Changes under app, Evidence, and MCP were
 tests only. Final status contained only the pre-existing `AGENTS.md` change and
 user-owned untracked `.focalspan.json` and `TASKS.md`.
 
+## Remote closure verification
+
+GitHub Actions run
+[`33462530840`](https://github.com/AoiKagase/FocalSpan/actions/runs/33462530840)
+completed successfully at commit
+`d1c66d8563253854ef8dba49f4d2baed5819e44c`. Actual job conclusions were
+success for Linux test and vet, Linux race, and CGO-free Windows amd64, Linux
+amd64, and Darwin arm64 builds.
+
+The public smoke validated 2 cases with 0 invalid, produced 12 quality results,
+and compared compatible with v0.5 with 0 regressions. The manual
+`public-benchmark-full` job was skipped as designed and is not reported as a
+success. Node.js action-runtime deprecation annotations did not fail any job.
+
 ## Limitations
 
 This milestone identifies the earliest measured failure boundary; it does not
@@ -104,5 +118,5 @@ show that any retrieval or packet result improved. A same-path raw candidate
 only establishes that file scope was reached, not that the intended symbol can
 be extracted, matched, ranked, or packed. The selected `path_scope_missing`
 layer requires a separately planned production hypothesis and acceptance gate.
-Remote CI remains unverified until the closure commits are pushed and the
-actual workflow jobs are inspected.
+The remote smoke is intentionally bounded to two cases; it does not repeat the
+one-shot eight-case diagnosis or create a release baseline.

@@ -25,7 +25,7 @@ This root file is the sole active ExecPlan under `PLANS.md`.
 
 **Plan ID:** `v0.8-failure-layer-attribution`
 
-**Status:** Active.
+**Status:** Complete.
 
 **Starting commit:** `77f42cf5532ae1d7655e9956e8288e9203c93f93`.
 
@@ -244,10 +244,10 @@ the expected path. They never copy identities from unmatched candidates.
   MCP tool definitions, and `focalspan.context.v1` remain unchanged.
 - [x] Verify status contains no generated reports, indexes, binaries, or
   temporary workspaces and preserves user-owned untracked files.
-- [ ] Push only after local verification, inspect the actual CI run, and record
+- [x] Push only after local verification, inspect the actual CI run, and record
   test, vet, Linux race, three cross-builds, and smoke conclusions. Do not call
   skipped jobs successful.
-- [ ] Complete Progress, discoveries, decisions, and outcomes; commit final
+- [x] Complete Progress, discoveries, decisions, and outcomes; commit final
   documentation if CI evidence changes tracked files.
 
 ---
@@ -286,7 +286,9 @@ the expected path. They never copy identities from unmatched candidates.
   diagnosis/attribution/privacy tests, 205 contract tests in 5 packages, vet,
   diff check, two native builds, and three cross-builds; temporary outputs were
   removed and user-owned inputs preserved.
-- [ ] Actual remote CI inspected.
+- [x] `2026-09-01` GitHub Actions run `33462530840` at `d1c66d8` completed
+  successfully: test/vet, Linux race, three CGO-free builds, and the two-case
+  public smoke passed. The manual full benchmark job was skipped as designed.
 
 ---
 
@@ -332,9 +334,11 @@ Implementation and the frozen local measurement are complete. The diagnosis
 split 55 retrieval misses into 45 path-scope and 10 symbol-match misses; the
 focused 2048 rule selected `path_scope_missing` from counts 9/2/0/7. Quality
 remained v0.5-compatible with zero regressions, privacy/finite scans were clean,
-and local verification passed. This milestone diagnoses a boundary only; it
-does not claim token reduction or retrieval improvement. Remote CI remains to
-be pushed and inspected before closure is complete.
+and local verification passed. Remote CI run `33462530840` at `d1c66d8`
+verified test/vet, race, three cross-builds, and a 2-case/12-result public smoke
+that was compatible with zero regressions. The manual full job was skipped and
+is not counted as successful. This milestone diagnoses a boundary only; it
+does not claim token reduction or retrieval improvement.
 
 ---
 
