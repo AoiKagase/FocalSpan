@@ -288,6 +288,28 @@ func (r *RetrieverSet) Retrieve(ctx context.Context, plan query.Plan, req Search
 		return nil, fmt.Errorf("%s retriever: %w", RetrieverPath, err)
 	}
 	lists = append(lists, RankedList{Retriever: RetrieverPath, Items: paths})
+	probed := []string{}
+	if len(plan.Relations) == 0 {
+		probed, err = r.store.SearchFilePaths(ctx, pathScopeHints(plan), pathScopeFileLimit)
+		if err != nil {
+			return nil, fmt.Errorf("file path probe: %w", err)
+		}
+	}
+	scopedPaths := collectScopedPaths(plan, req, lists, probed)
+	scoped, err := r.store.SearchSymbolsInPaths(
+		ctx,
+		scopedPaths,
+		pathScopedSymbolHints(plan),
+		query.BuildFTS(plan.Terms),
+		pathScopePerFileLimit,
+		pathScopeSymbolLimit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%s retriever: %w", RetrieverPathScopedSymbol, err)
+	}
+	if len(scoped) > 0 {
+		lists = append(lists, RankedList{Retriever: RetrieverPathScopedSymbol, Items: scoped})
+	}
 	if mode == RetrievalNoRelations || len(plan.Relations) == 0 {
 		return lists, nil
 	}
@@ -397,7 +419,7 @@ func retrievalAnchors(plan query.Plan, lists []RankedList) []model.RankedCandida
 	for _, anchor := range plan.Anchors {
 		anchorValues[strings.ToLower(strings.TrimSpace(anchor))] = true
 	}
-	order := []RetrieverID{RetrieverQualified, RetrieverSymbol, RetrieverPath, RetrieverPrefix, RetrieverFTS}
+	order := []RetrieverID{RetrieverQualified, RetrieverSymbol, RetrieverPathScopedSymbol, RetrieverPath, RetrieverPrefix, RetrieverFTS}
 	byRetriever := make(map[RetrieverID][]model.RankedCandidate, len(lists))
 	for _, list := range lists {
 		byRetriever[list.Retriever] = list.Items
