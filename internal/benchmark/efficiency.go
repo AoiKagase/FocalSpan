@@ -3,8 +3,6 @@ package benchmark
 import (
 	"math"
 	"strconv"
-
-	"github.com/focalspan/focalspan/internal/evidence"
 )
 
 // EvidenceEfficiency summarizes useful packed labels per estimated wire tokens.
@@ -13,30 +11,6 @@ type EvidenceEfficiency struct {
 	UsefulEvidence  int     `json:"useful_evidence"`
 	EstimatedTokens int     `json:"estimated_tokens"`
 	Per1000Tokens   float64 `json:"per_1000_tokens"`
-}
-
-// PackingObservationSummary is development-only accounting for compiler
-// candidates. It is not part of quality or MCP output.
-type PackingObservationSummary struct {
-	Candidates            int `json:"candidates"`
-	Packed                int `json:"packed"`
-	Omitted               int `json:"omitted"`
-	CandidateTokens       int `json:"candidate_tokens"`
-	SerializedDeltaTokens int `json:"serialized_delta_tokens"`
-}
-
-func AggregatePackingObservations(observations []evidence.CompileObservation) PackingObservationSummary {
-	summary := PackingObservationSummary{Candidates: len(observations)}
-	for _, observation := range observations {
-		summary.CandidateTokens += observation.CandidateTokens
-		summary.SerializedDeltaTokens += observation.SerializedDeltaTokens
-		if observation.Packed {
-			summary.Packed++
-		} else {
-			summary.Omitted++
-		}
-	}
-	return summary
 }
 
 func MeasureUsefulEvidence(benchmarkCase Case, result QualityResult) int {

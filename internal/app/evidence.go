@@ -24,9 +24,8 @@ type candidateResult struct {
 }
 
 type AttributedEvidenceResult struct {
-	Compile      evidence.CompileResult
-	Trace        search.SearchTrace
-	Observations []evidence.CompileObservation `json:"-"`
+	Compile evidence.CompileResult
+	Trace   search.SearchTrace
 }
 
 type EvidenceQueryRequest struct {
@@ -104,18 +103,11 @@ func (s *Service) queryEvidence(ctx context.Context, req EvidenceQueryRequest, t
 	if err != nil {
 		return AttributedEvidenceResult{}, err
 	}
-	compileRequest := evidence.CompileRequest{Plan: result.Plan, Revision: result.Revision, TokenBudget: req.TokenBudget, Mode: req.Mode, Candidates: result.Candidates, KnownHandles: known}
-	var compiled evidence.CompileResult
-	var observations []evidence.CompileObservation
-	if trace {
-		compiled, observations, err = s.evidenceCompiler.CompileWithObservations(compileRequest)
-	} else {
-		compiled, err = s.evidenceCompiler.Compile(compileRequest)
-	}
+	compiled, err := s.evidenceCompiler.Compile(evidence.CompileRequest{Plan: result.Plan, Revision: result.Revision, TokenBudget: req.TokenBudget, Mode: req.Mode, Candidates: result.Candidates, KnownHandles: known})
 	if err != nil {
 		return AttributedEvidenceResult{}, err
 	}
-	attributed := AttributedEvidenceResult{Compile: compiled, Observations: observations}
+	attributed := AttributedEvidenceResult{Compile: compiled}
 	if result.Trace != nil {
 		attributed.Trace = *result.Trace
 	}

@@ -1,7 +1,6 @@
 package evidence
 
 import (
-	"bytes"
 	"encoding/json"
 	"reflect"
 	"strconv"
@@ -12,55 +11,6 @@ import (
 	"github.com/focalspan/focalspan/internal/model"
 	"github.com/focalspan/focalspan/internal/query"
 )
-
-func TestCompileWithObservationsIsSourceFreeAndMatchesCompile(t *testing.T) {
-	req := compilerRequest(4000)
-	req.Candidates = append(req.Candidates, model.RankedCandidate{
-		Handle: "secret-candidate", Path: "auth/secret.go", Language: "go", Kind: "function", Symbol: "Secret",
-		Signature: "func Secret()", StartLine: 1, EndLine: 1, Content: "SOURCE_CONTENT_SENTINEL", ContentHash: "secret-hash",
-	})
-	req.KnownHandles = []string{"caller"}
-	compiler := NewCompiler(nil)
-	plain, err := compiler.Compile(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	observed, observations, err := compiler.CompileWithObservations(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	plainJSON, err := json.Marshal(plain.Packet)
-	if err != nil {
-		t.Fatal(err)
-	}
-	observedJSON, err := json.Marshal(observed.Packet)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(plainJSON, observedJSON) {
-		t.Fatalf("compile output changed with observations: plain=%s observed=%s", plainJSON, observedJSON)
-	}
-	if len(observations) != len(req.Candidates) {
-		t.Fatalf("observations=%d, want one per candidate=%d", len(observations), len(req.Candidates))
-	}
-	for _, observation := range observations {
-		if observation.CandidateTokens < 0 || observation.SerializedDeltaTokens < 0 {
-			t.Fatalf("negative token observation: %+v", observation)
-		}
-		encoded, err := json.Marshal(observation)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if bytes.Contains(encoded, []byte("SOURCE_CONTENT_SENTINEL")) {
-			t.Fatalf("source content leaked into observation: %s", encoded)
-		}
-	}
-	for _, observation := range observations {
-		if !observation.Packed && observation.DropReason == "" {
-			t.Fatalf("omitted candidate has no reason: %+v", observation)
-		}
-	}
-}
 
 func compilerCandidates() []model.RankedCandidate {
 	targetContent := "func ValidateToken() error {\n" + strings.Repeat("\twork()\n", 80) + "\treturn ErrExpiredToken\n}\n"

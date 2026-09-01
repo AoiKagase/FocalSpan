@@ -160,25 +160,25 @@ join these observations with attribution identities without changing
 - Produces: `evidence.CompileObservation` and deterministic observation lists
   for development-only benchmark attribution.
 
-- [x] Write RED tests proving that `CompileWithObservations` reports one row
+- [ ] Write RED tests proving that `CompileWithObservations` reports one row
   per candidate in stable input order, reports candidate and serialized-delta
   token counts, and records an explicit reason for every omitted candidate.
-- [x] Write RED tests proving that observations contain no source content,
+- [ ] Write RED tests proving that observations contain no source content,
   absolute paths, secrets, or user/environment values.
-- [x] Write RED tests proving `Compile(req)` and
+- [ ] Write RED tests proving `Compile(req)` and
   `CompileWithObservations(req)` return byte-identical packet JSON for the
   same request, including `known_handles`-driven compilation.
-- [x] Run the focused RED tests and record the expected failure before adding
+- [ ] Run the focused RED tests and record the expected failure before adding
   implementation.
-- [x] Implement the observation wrapper around the existing compiler loop
+- [ ] Implement the observation wrapper around the existing compiler loop
   without changing budget clamping, fidelity variants, item order, or omission
   behavior.
-- [x] Thread observations through `app.AttributedEvidenceResult` only when
+- [ ] Thread observations through `app.AttributedEvidenceResult` only when
   `QueryEvidenceAttributed` is used; `QueryEvidence` must discard them.
-- [x] Add benchmark-side aggregation that consumes observations only when the
+- [ ] Add benchmark-side aggregation that consumes observations only when the
   existing opt-in attribution path is enabled; normal quality and MCP output
   must ignore them.
-- [x] Run focused compiler/benchmark/evidence tests and commit
+- [ ] Run focused compiler/benchmark/evidence tests and commit
   `feat: add source-free evidence compilation observations`.
 
 ### Task 2: Implement the Single Bounded Evidence Candidate (RED/GREEN)
@@ -307,9 +307,7 @@ join these observations with attribution identities without changing
   retrieval to a successor plan.
 - [x] `2026-09-01` plan transition committed as `6c248d2`; only `PLAN.md` and
   the immutable v0.9 archive were staged.
-- [x] `2026-09-01T13:28:43Z` Task 1 RED/GREEN completed; targeted and full
-  `internal/evidence`, `internal/app`, and `internal/benchmark` tests passed.
-- [x] v0.10 Task 1 source-free Evidence compilation observations.
+- [ ] v0.10 Task 1 source-free packing observations.
 - [ ] v0.10 Task 2 bounded Evidence compiler candidate.
 - [ ] v0.10 Task 3 static verification and frozen candidate gate.
 - [ ] v0.10 Task 4 closure and successor handoff.

@@ -1,7 +1,6 @@
 package evidence
 
 import (
-	"encoding/json"
 	"errors"
 	"math"
 	"path"
@@ -48,19 +47,6 @@ type Stats struct {
 type CompileResult struct {
 	Packet Packet
 	Stats  Stats
-}
-
-// CompileObservation is a source-free development diagnostic for one input
-// candidate. It is never included in an Evidence packet or normal MCP output.
-type CompileObservation struct {
-	Handle                string `json:"handle"`
-	Path                  string `json:"path"`
-	Symbol                string `json:"symbol,omitempty"`
-	CandidateTokens       int    `json:"candidate_tokens"`
-	SerializedDeltaTokens int    `json:"serialized_delta_tokens"`
-	Packed                bool   `json:"packed"`
-	DropReason            string `json:"drop_reason,omitempty"`
-	ContainedByHandle     string `json:"contained_by_handle,omitempty"`
 }
 
 type Compiler struct {
@@ -185,94 +171,6 @@ func (c *Compiler) Compile(req CompileRequest) (CompileResult, error) {
 		Selected: len(packet.Evidence), Omitted: omitted, SkippedKnown: skippedKnown,
 	}
 	return CompileResult{Packet: packet, Stats: stats}, nil
-}
-
-// CompileWithObservations preserves Compile's packet and error behavior while
-// returning opt-in, source-free accounting for each input candidate.
-func (c *Compiler) CompileWithObservations(req CompileRequest) (CompileResult, []CompileObservation, error) {
-	result, err := c.Compile(req)
-	if err != nil {
-		return CompileResult{}, nil, err
-	}
-	return result, c.compileObservations(req, result), nil
-}
-
-func (c *Compiler) compileObservations(req CompileRequest, result CompileResult) []CompileObservation {
-	packed := make(map[string]Item, len(result.Packet.Evidence))
-	for _, item := range result.Packet.Evidence {
-		packed[item.Handle] = item
-	}
-	known := make(map[string]bool, len(req.KnownHandles))
-	for _, handle := range req.KnownHandles {
-		known[strings.TrimSpace(handle)] = true
-	}
-	seenHandles := make(map[string]bool, len(req.Candidates))
-	seenHashes := make(map[string]bool, len(req.Candidates))
-	seenSpans := make(map[string]bool, len(req.Candidates))
-	observations := make([]CompileObservation, 0, len(req.Candidates))
-	for _, original := range req.Candidates {
-		candidate := original
-		candidate.Path = strings.ReplaceAll(candidate.Path, `\`, "/")
-		if candidate.Handle == "" && candidate.Path != "" {
-			candidate.Handle = model.StableHandle("evidence", candidate.Path, candidate.Kind, candidate.Symbol, candidate.ContentHash, lineIdentity(candidate))
-		}
-		candidateTokens := c.estimator.Estimate(candidate.Content)
-		if candidateTokens == 0 {
-			candidateTokens = c.estimator.Estimate(candidate.Signature)
-		}
-		serializedDeltaTokens := c.estimator.Estimate(observationPayload(candidate))
-		observation := CompileObservation{Handle: candidate.Handle, Path: candidate.Path, Symbol: candidate.Symbol, CandidateTokens: candidateTokens, SerializedDeltaTokens: serializedDeltaTokens}
-		switch {
-		case candidate.Handle == "" || candidate.Path == "" || strings.HasPrefix(candidate.Path, "/") || path.Clean(candidate.Path) != candidate.Path || candidate.StartLine < 1 || candidate.EndLine < candidate.StartLine:
-			observation.DropReason = "invalid_candidate"
-		case known[candidate.Handle]:
-			observation.DropReason = "known_handle"
-		case seenHandles[candidate.Handle]:
-			observation.DropReason = "duplicate_handle"
-		case candidate.ContentHash != "" && seenHashes[candidate.Path+"\x00"+candidate.ContentHash]:
-			observation.DropReason = "duplicate_content"
-		case seenSpans[lineIdentity(candidate)]:
-			observation.DropReason = "duplicate_span"
-		case packed[candidate.Handle].Handle != "":
-			observation.Packed = true
-		default:
-			observation.DropReason = "not_selected"
-		}
-		if !observation.Packed && observation.DropReason == "not_selected" {
-			for _, item := range result.Packet.Evidence {
-				if item.Location.Path == candidate.Path && item.Location.Lines[0] <= candidate.StartLine && item.Location.Lines[1] >= candidate.EndLine && item.Handle != candidate.Handle {
-					observation.ContainedByHandle = item.Handle
-					break
-				}
-			}
-		}
-		observations = append(observations, observation)
-		if candidate.Handle != "" {
-			seenHandles[candidate.Handle] = true
-		}
-		if candidate.ContentHash != "" {
-			seenHashes[candidate.Path+"\x00"+candidate.ContentHash] = true
-		}
-		if candidate.Path != "" {
-			seenSpans[lineIdentity(candidate)] = true
-		}
-	}
-	return observations
-}
-
-func observationPayload(candidate model.RankedCandidate) string {
-	metadata := struct {
-		Path      string `json:"path"`
-		Language  string `json:"language"`
-		Kind      string `json:"kind"`
-		Symbol    string `json:"symbol"`
-		Signature string `json:"signature"`
-		StartLine int    `json:"start_line"`
-		EndLine   int    `json:"end_line"`
-		Content   string `json:"content"`
-	}{candidate.Path, candidate.Language, candidate.Kind, candidate.Symbol, candidate.Signature, candidate.StartLine, candidate.EndLine, candidate.Content}
-	payload, _ := json.Marshal(metadata)
-	return string(payload)
 }
 
 func selectionLimit(plan query.Plan) int {
