@@ -185,9 +185,3 @@ func TestMarshalAttributionRejectsControlCharactersAndInvalidPositions(t *testin
 		}
 	}
 }
-
-func TestAttributionValidationAcceptsIdentityBridgeRetriever(t *testing.T) {
-	if !validRetriever("identity-bridge") {
-		t.Fatal("identity-bridge retriever must be accepted by development attribution")
-	}
-}

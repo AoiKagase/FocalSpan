@@ -11,14 +11,13 @@ import (
 )
 
 const (
-	qualifiedLimit      = 50
-	exactLimit          = 50
-	prefixLimit         = 50
-	ftsLimit            = 100
-	pathLimit           = 50
-	identityBridgeLimit = 50
-	relationLimit       = 100
-	fusedLimit          = 400
+	qualifiedLimit = 50
+	exactLimit     = 50
+	prefixLimit    = 50
+	ftsLimit       = 100
+	pathLimit      = 50
+	relationLimit  = 100
+	fusedLimit     = 400
 )
 
 type RetrieverSet struct {
@@ -44,7 +43,7 @@ func (r *RetrieverSet) Retrieve(ctx context.Context, plan query.Plan, req Search
 		}
 		return []RankedList{{Retriever: RetrieverFTS, Items: items}}, nil
 	}
-	lists := make([]RankedList, 0, 7)
+	lists := make([]RankedList, 0, 6)
 	qualified, err := r.store.SearchQualifiedSymbols(ctx, plan.Terms.Identifiers, qualifiedLimit)
 	if err != nil {
 		return nil, fmt.Errorf("%s retriever: %w", RetrieverQualified, err)
@@ -70,16 +69,6 @@ func (r *RetrieverSet) Retrieve(ctx context.Context, plan query.Plan, req Search
 		return nil, fmt.Errorf("%s retriever: %w", RetrieverPath, err)
 	}
 	lists = append(lists, RankedList{Retriever: RetrieverPath, Items: paths})
-	if bridgeStore, ok := r.store.(StructuralBridgeStore); ok {
-		packageHints, symbolHints := identityBridgeHints(plan)
-		if len(packageHints) > 0 {
-			bridge, bridgeErr := bridgeStore.SearchStructuralBridge(ctx, packageHints, symbolHints, identityBridgeLimit)
-			if bridgeErr != nil {
-				return nil, fmt.Errorf("%s retriever: %w", RetrieverIdentityBridge, bridgeErr)
-			}
-			lists = append(lists, RankedList{Retriever: RetrieverIdentityBridge, Items: bridge})
-		}
-	}
 	if mode == RetrievalNoRelations || len(plan.Relations) == 0 {
 		return lists, nil
 	}
@@ -189,7 +178,7 @@ func retrievalAnchors(plan query.Plan, lists []RankedList) []model.RankedCandida
 	for _, anchor := range plan.Anchors {
 		anchorValues[strings.ToLower(strings.TrimSpace(anchor))] = true
 	}
-	order := []RetrieverID{RetrieverQualified, RetrieverSymbol, RetrieverIdentityBridge, RetrieverPath, RetrieverPrefix, RetrieverFTS}
+	order := []RetrieverID{RetrieverQualified, RetrieverSymbol, RetrieverPath, RetrieverPrefix, RetrieverFTS}
 	byRetriever := make(map[RetrieverID][]model.RankedCandidate, len(lists))
 	for _, list := range lists {
 		byRetriever[list.Retriever] = list.Items

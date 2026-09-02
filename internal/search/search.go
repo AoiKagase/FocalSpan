@@ -21,13 +21,6 @@ type CandidateStore interface {
 	RelatedCandidateHits(ctx context.Context, handles []string, relation string) ([]model.RelationHit, error)
 }
 
-// StructuralBridgeStore is implemented by stores that can resolve an
-// explicit package/module identity to symbol-bearing chunks. It is optional so
-// lightweight CandidateStore implementations retain their existing contract.
-type StructuralBridgeStore interface {
-	SearchStructuralBridge(ctx context.Context, packageHints, symbolHints []string, limit int) ([]model.RankedCandidate, error)
-}
-
 type Searcher struct {
 	store      CandidateStore
 	retrievers *RetrieverSet
