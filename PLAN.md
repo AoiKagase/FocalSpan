@@ -67,8 +67,8 @@ batch化し、候補の集合と順序を同一に保ったまま待ち時間と
 
 ### Task 0: Freeze transition
 
-- [ ] v0.17 root planを`docs/superpowers/plans/completed/2026-09-02-v0.17-intent-retriever-cap.md`へbyte-identicalにアーカイブする。
-- [ ] archiveとroot v0.18 planだけをdocumentation-only transition commitにする。
+- [x] v0.17 root planを`docs/superpowers/plans/completed/2026-09-02-v0.17-intent-retriever-cap.md`へbyte-identicalにアーカイブする。
+- [x] archiveとroot v0.18 planだけをdocumentation-only transition commitにする。
   ユーザー所有dirty filesはstageしない。
 
 ### Task 1: RED tests for batch equivalence
@@ -161,15 +161,25 @@ CLI evidence、`focalspan.context.v1`、legacy `ContextBundle`を維持する。
 
 - [x] 2026-09-02T11:15Z: v0.17 negative planをbyte-identical archiveへ保存した。
 - [x] 2026-09-02T11:15Z: v0.18 documentation-only transition planを作成した。
-- [ ] RED equivalence tests。
-- [ ] GREEN SQL batching implementation。
-- [ ] Static/equivalence verification。
-- [ ] Candidate benchmark gate。
-- [ ] Closure and recovery。
+- [x] RED equivalence tests。
+- [x] GREEN SQL batching implementation（候補 `a15584f` を実装後、ゲート不合格で `9c8e005` にrevert）。
+- [x] Static/equivalence verification。
+- [x] Candidate benchmark gate（quality/wireは合格、全profile latency gateは不合格）。
+- [x] Closure and recovery（baselineを維持し、候補artifactを削除）。
+
+実行記録（UTC）:
+
+- 2026-09-02T12:44Z: RED/GREEN、全体テスト（702 tests / 46 packages）、vet、native/CGO-free build、fixture不変条件を確認した。raceはMinGW制約でUNVERIFIED。
+- 2026-09-02T12:59Z: historical suiteを候補につき1回実行。`compatible=true`、`regressions=0`、wire/efficiency/packing同値、latency gateはlegacyのみ合格。
+- 2026-09-02T13:01Z: `a15584f` の候補実装を保存し、直後に `9c8e005` でrevertした。
+- 2026-09-02T13:04Z: source-free findingsとartifact hashを記録し、候補artifactの削除準備を完了した。
 
 ## Surprises & Discoveries
 
-- 未着手。v0.17のwire回帰を踏まえ、batch化では結果byte完全一致を最優先にする。
+- SQL batch化はcandidateと逐次baselineで結果byte、relation row、Evidence契約を一致させられた。
+- 2026-09-02のhistorical benchmarkでは`compatible=true`、`regressions=0`、wire/efficiency/packing同値だった。
+- latency改善はfull `14.1%`、FTS `14.6%`、no-relations `0.0%`、legacy `20.2%`で、全profile 20% gateを満たさなかった。
+- 候補benchmark reportのquality rowsはpath/symbol recallを改善せず、batch化は取得品質を変えないことを確認した。
 
 ## Decision Log
 
@@ -177,8 +187,12 @@ CLI evidence、`focalspan.context.v1`、legacy `ContextBundle`を維持する。
 - 2026-09-02: schema v2 relation linkingとTokenEstimator変更は同時実装しない。
 - 2026-09-02: SQL batch化は検索・relationのround-trip削減に限定し、ranking/packing/wire
   を調整しない。
+- 2026-09-02: 結果同値でも全profile latency 20% gateを満たさない候補は採用せず、
+  `a15584f`を`9c8e005`でrevertしてv0.15 baselineを維持する。
+- 2026-09-02: v0.18のhistorical suiteは候補につき1回のみ実行し、同一候補を再実行しない。
 
 ## Outcomes & Retrospective
 
-未完了。batch前後の結果完全一致、query latency実測、採用または棄却の根拠を完了時に
-追記する。
+v0.18は棄却で完了した。検索・relation batch候補の結果完全一致とstatic verification
+は確認できたが、通常profileのlatency gate未達により製品コードはbaselineへ戻した。
+実測値、privacy scan、artifact hashは`docs/benchmarks/findings-v0.18.md`へ記録した。
