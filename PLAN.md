@@ -141,12 +141,13 @@ evidence、`focalspan.context.v1`、legacy `ContextBundle`を維持する。変�
 
 - [x] 2026-09-02T10:37Z: v0.16 negative candidateを確定し、v0.15 baselineを維持した。
 - [x] 2026-09-02T10:37Z: v0.16 planをbyte-identical archiveへコピーした。
-- [ ] v0.17 documentation-only transition commit。
-- [ ] RED tests。
-- [ ] GREEN implementation。
-- [ ] Static verification。
-- [ ] Candidate benchmark gate。
-- [ ] Closure and recovery。
+- [x] 2026-09-02T10:37Z: v0.17 documentation-only transition commit (`7aab712`)を完了した。
+- [x] 2026-09-02T10:45Z: RED testsでintent/mode別cap、limit、relation capを固定した。
+- [x] 2026-09-02T10:52Z: GREEN実装を候補コミット`cff306d`として確定した。
+- [x] 2026-09-02T11:00Z: static verificationを完了した。702 tests/46 packages、vet、gofmt、diff check、native/CGO-free 3 target buildはpassed。raceはMinGW制約でunverified。
+- [x] 2026-09-02T11:03Z: Evidence fixture 8 casesを再測定し、invariant各`1`、known resend`0`、delta ratio`0.555005305978069`、metadata median`0.344969199178645`を確認した。
+- [x] 2026-09-02T11:08Z: historical benchmarkを候補につき1回実行し、v0.15比較は`compatible=true`/`regressions=4`。wire/efficiency/all-profile latency gate不合格を確定した。
+- [x] 2026-09-02T11:08Z: 製品候補を通常revertコミット`6ba04a9`で取り消し、findings-v0.17を記録する。v0.15 baselineを維持する。
 
 ## Surprises & Discoveries
 
@@ -155,14 +156,27 @@ evidence、`focalspan.context.v1`、legacy `ContextBundle`を維持する。変�
 - 固定capは`retrieval.go`に集中しており、intent別profileをprivateに追加できる。
   ただしbase listを狭めるとrelation anchorやfallbackを失うため、REDで呼び出し
   limitとanchor経路を先に固定する。
+- intent別capはFTS、no-relationsを含む複数profileのquery medianを改善したが、
+  PHPの4 quality rowsでrecall改善なしのwire 35-token増加を生み、strict
+  non-regression gateに失敗した。
+- focused/2048のpacking droppedは7、packed labelsは5でbaseline同値だった。
+  失敗原因はpackingではなく、cap後の候補集合が変わったことによるEvidence
+  選択のwire差分である。
 
 ## Decision Log
 
 - 2026-09-02: 次順位としてrank 7 intent別retriever cap / noise制御を開始する。
 - 2026-09-02: SQL batch化とschema v2 relation linkingは別系統として同時実装しない。
 - 2026-09-02: capは既存上限以下に限定し、公開trace/schema/RRF weightは変更しない。
+- 2026-09-02: quality/wire gateをlatency改善より優先し、`regressions=4`を理由に
+  候補を採用しない。製品変更は`cff306d`から`6ba04a9`でrevertする。
+- 2026-09-02: 同一候補のhistorical benchmark再実行は行わず、次候補ではper-row
+  legacy-selection fallbackまたは非回帰ガードを先に設計する。
 
 ## Outcomes & Retrospective
 
-未完了。cap profileの候補値、quality/latency実測、採用または棄却の根拠を完了時に
-追記する。
+v0.17はnegative candidateとして終了した。intent別capにより複数profileの
+query medianは改善したものの、PHP 4 rowsのwire回帰、累積wire`12,459`、
+efficiency`0.4013`、およびfull-evidence profileのlatency改善不足により、
+strict gateを満たさなかった。製品変更はrevert済みで、v0.15 baselineを維持する。
+詳細な実測値とハッシュは`docs/benchmarks/findings-v0.17.md`に記録した。
