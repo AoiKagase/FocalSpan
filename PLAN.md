@@ -79,7 +79,7 @@ changes.
 - [x] Archive the completed v0.12 root plan byte-identically at
   `docs/superpowers/plans/completed/2026-09-02-v0.12-anchor-first-evidence-packing.md`.
 - [x] Replace the root plan with this v0.13 plan before product edits.
-- [ ] Commit only the archive and root plan as one documentation-only
+- [x] Commit only the archive and root plan as one documentation-only
   transition, leaving `AGENTS.md`, `.focalspan.json`, and `TASKS.md` unstaged.
 
 ### Task 1: RED tests for adaptive excerpts
@@ -87,25 +87,25 @@ changes.
 **Files:** `internal/evidence/fidelity_test.go`,
 `internal/evidence/segments_test.go`, `internal/evidence/compiler_test.go`.
 
-- [ ] Add `TestBuildVariantsAddsSmallerAdaptiveExcerptForLongFocusedSource`.
+- [x] Add `TestBuildVariantsAddsSmallerAdaptiveExcerptForLongFocusedSource`.
   Build a 60+ line method with three separated query hits. Assert that focused
   variants contain the existing excerpt and a second excerpt with fewer
   `EvidenceTokens`; do not accept a new Fidelity value.
-- [ ] Add `TestAdaptiveFocusedSegmentsPreserveExactHitLines`.
+- [x] Add `TestAdaptiveFocusedSegmentsPreserveExactHitLines`.
   Call the private adaptive helper on long UTF-8 content with a late identifier
   and CRLF content. Assert every source segment equals the corresponding
   `testSourceLines` slice, every hit identifier is present, omitted segments
   have empty text, and the adaptive source-token count is lower than the
   standard focused result.
-- [ ] Add `TestAdaptiveExcerptDoesNotChangeShortOrNonFocusedModes`.
+- [x] Add `TestAdaptiveExcerptDoesNotChangeShortOrNonFocusedModes`.
   Assert a short target has no additional adaptive variant, `ModeSource` keeps
   its verbatim-first variants, and `ModeOutline` has no excerpt variant.
-- [ ] Add `TestAdaptiveCompilerKeepsRelationAndBudgetInvariants`.
+- [x] Add `TestAdaptiveCompilerKeepsRelationAndBudgetInvariants`.
   Compile a long target plus caller/test relation candidates at budgets 512,
   1200, and 2048. Assert required target/caller handles, the same valid edge
   direction/kind/certainty, exact source slices, `Validate` success, and
   `Budget.Used <= Budget.Limit`.
-- [ ] Run only the new tests with a repository-local Go cache and record the
+- [x] Run only the new tests with a repository-local Go cache and record the
   expected failures before editing production code. The RED result must be a
   missing adaptive variant/helper, not a cache or toolchain failure.
 
@@ -113,59 +113,59 @@ changes.
 
 **Files:** `internal/evidence/segments.go`, `internal/evidence/fidelity.go`.
 
-- [ ] Extract the current window construction into a private helper that keeps
+- [x] Extract the current window construction into a private helper that keeps
   the existing margins (`before=2`, `after=4`, prefix through
   `declarationPrefixEnd`) byte-for-byte equivalent for `focusedSegments`.
-- [ ] Add `adaptiveFocusedSegments(candidate, plan)` using the same term scoring,
+- [x] Add `adaptiveFocusedSegments(candidate, plan)` using the same term scoring,
   hit ordering, merge rule, and three-window cap, with `before=0`, `after=1`,
   and a declaration prefix capped at two lines. Build segments only through
   `joinLines` and `absoluteLines`; never synthesize markers in `Text`.
-- [ ] In `BuildVariants`, after constructing the normal focused excerpt, append
+- [x] In `BuildVariants`, after constructing the normal focused excerpt, append
   the adaptive excerpt only when the candidate has at least 40 indexed lines,
   both excerpts contain source, and the adaptive excerpt's estimated source
   tokens are strictly lower. Keep the normal excerpt first and deduplicate
   variants with the existing helper.
-- [ ] Keep `ModeSource`, `ModeOutline`, synthetic candidates, signature
+- [x] Keep `ModeSource`, `ModeOutline`, synthetic candidates, signature
   fallback, and all public types unchanged.
-- [ ] Run the focused Evidence tests and then `go test ./... -count=1`; adjust
-  only implementation details needed to satisfy the RED tests and preserve
-  existing behavior.
+- [x] Run the focused Evidence tests; full `go test ./... -count=1` remains in
+  Task 3. Adjusted only implementation details needed to satisfy the RED tests
+  and preserve existing behavior.
 
 ### Task 3: Static verification
 
-- [ ] Run `gofmt` on changed Go files and `git diff --check`.
-- [ ] Run `go test ./... -count=1` and `go vet ./...` with a repository-local
+- [x] Run `gofmt` on changed Go files and `git diff --check`.
+- [x] Run `go test ./... -count=1` and `go vet ./...` with a repository-local
   cache if the default cache is denied.
-- [ ] Run native plus CGO-free Windows amd64, Linux amd64, and Darwin arm64
+- [x] Run native plus CGO-free Windows amd64, Linux amd64, and Darwin arm64
   builds into a temporary directory; remove generated outputs afterward.
-- [ ] Run `go test -race ./...`; if the known local MinGW 64-bit compiler
+- [x] Run `go test -race ./...`; the known local MinGW 64-bit compiler
   limitation repeats, record it as `UNVERIFIED` and do not label it passed.
 
 ### Task 4: Candidate benchmark gate
 
-- [ ] Run the historical `focalspan-history-v0.5` suite exactly once with the
+- [x] Run the historical `focalspan-history-v0.5` suite exactly once with the
   `default` profile, `repeat 1`, attribution enabled, and diagnosis enabled.
-- [ ] Compare against the v0.10 baseline and require all of the following:
+- [x] Compare against the v0.10 baseline and require all of the following:
   focused/2048 `packing_dropped` does not increase; packed labels remain at
   least `5`; cumulative wire tokens are strictly below `12,740`; useful
   evidence efficiency is strictly above `0.3925`; all quality, fidelity,
   relation, budget, deterministic-ordering, known-handle, and MCP contract
   checks pass; and no source text, absolute path, username, or secret appears
   in development reports.
-- [ ] Record measured values, artifact hashes, compatibility result, and
+- [x] Record measured values, artifact hashes, compatibility result, and
   privacy scan in `docs/benchmarks/findings-v0.13.md` without source text or
   absolute paths. Do not record a new baseline unless the strict gate passes.
 
 ### Task 5: Closure and recovery
 
-- [ ] If the gate passes, keep the bounded product commit, update this plan
-  with actual measurements, and identify the new baseline explicitly.
-- [ ] If the gate fails, reverse-revert only the v0.13 product commit(s), keep
+- [x] The gate-pass branch was not taken because wire tokens and useful
+  evidence efficiency were unchanged; no new baseline was recorded.
+- [x] If the gate fails, reverse-revert only the v0.13 product commit(s), keep
   the RED/GREEN and benchmark findings as historical evidence, and leave the
   v0.10 product baseline active.
-- [ ] Remove generated reports, indexes, binaries, caches, and temporary
+- [x] Remove generated reports, indexes, binaries, caches, and temporary
   workspaces; preserve all user-owned dirty files.
-- [ ] Update this plan with UTC progress, discoveries, decisions, outcomes,
+- [x] Update this plan with UTC progress, discoveries, decisions, outcomes,
   and exact verification status. Never edit the archived v0.12 plan.
 
 ## Validation and Acceptance
@@ -200,10 +200,25 @@ existing packet and source-free labels.
   SHA-256 `FD824A54157E0F45E481B5854954192C35C8B61E2CDECA0D37B21F68E5F11887`.
 - [x] 2026-09-02: v0.13 design approved; transition plan written before
   product edits.
-- [ ] Record the documentation-only transition commit hash.
-- [ ] Record RED test output.
-- [ ] Record GREEN/static verification output.
-- [ ] Record the one candidate benchmark and gate decision.
+- [x] Documentation-only transition commit: `d2f566e`.
+- [x] 2026-09-02: RED test run failed at compile time with the expected
+  missing private `adaptiveFocusedSegments` helper; no production code had
+  been edited and no cache/toolchain failure occurred.
+- [x] 2026-09-02: GREEN focused Evidence tests passed after adding the shared
+  margin helper and adaptive focused variant; generated local caches were
+  removed immediately after the run.
+- [x] 2026-09-02: Full tests and vet passed; native and CGO-free
+  Windows/amd64, Linux/amd64, and Darwin/arm64 builds passed. Race testing is
+  `UNVERIFIED` because MinGW reports `cc1.exe: sorry, unimplemented: 64-bit
+  mode not compiled in`.
+- [x] 2026-09-02: Candidate product commit `2699946` passed focused/full
+  Evidence tests, full tests, vet, diff check, native build, and three
+  CGO-free cross-builds; it was reverted by `9d23e46` after the gate.
+- [x] 2026-09-02: One historical benchmark completed with 8 cases, 48
+  quality rows, 40 attribution results, and 40 diagnosis results. Compare
+  reported `compatible=true` and `regressions=0`; focused/2048 remained 7
+  drops, 5 packed labels, 12,740 wire tokens, and efficiency 0.3925. Findings
+  and six artifact hashes are in `docs/benchmarks/findings-v0.13.md`.
 
 ## Surprises & Discoveries
 
@@ -213,6 +228,9 @@ existing packet and source-free labels.
 - The existing focused excerpt already preserves late lexical hits and exact
   source bytes, so adaptive behavior must narrow context rather than invent
   summaries or change hit ranking.
+- The historical suite selected short/signature or non-adaptive Evidence for
+  its required labels, so the adaptive variant changed no wire denominator;
+  unit-level token savings alone were insufficient for promotion.
 
 ## Decision Log
 
@@ -224,9 +242,16 @@ existing packet and source-free labels.
 - 2026-09-02: Limit adaptive changes to focused mode and private line-window
   helpers; public packet, retrieval, relation, and metadata contracts remain
   frozen.
+- 2026-09-02: Reject v0.13 because cumulative wire tokens and useful-evidence
+  efficiency were unchanged at the strict historical gate; retain v0.10 as
+  the active product baseline and do not rerun the same candidate benchmark.
 
 ## Outcomes & Retrospective
 
-The outcome section will be completed from the measured candidate result. A
-failed gate must remain a negative milestone and must not be described as a
-quality baseline.
+v0.13 is closed as a negative candidate. The adaptive line-window helper and
+its RED/GREEN regression tests are retained only in the historical product
+commit/revert record; the working tree is back to the v0.10 baseline. The
+historical run showed no measurable wire or efficiency improvement, so no new
+quality baseline is claimed. Future excerpt work should first target a case
+that demonstrably selects a long focused source variant before spending the
+single frozen benchmark run.
