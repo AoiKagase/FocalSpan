@@ -21,6 +21,14 @@ type sourceWindow struct {
 }
 
 func focusedSegments(candidate ClassifiedCandidate, plan query.Plan) []Segment {
+	return focusedSegmentsWithMargins(candidate, plan, 2, 4, 0, 3)
+}
+
+func adaptiveFocusedSegments(candidate ClassifiedCandidate, plan query.Plan) []Segment {
+	return focusedSegmentsWithMargins(candidate, plan, 0, 1, 2, 4)
+}
+
+func focusedSegmentsWithMargins(candidate ClassifiedCandidate, plan query.Plan, contextBefore, contextAfter, prefixLineLimit, maxWindows int) []Segment {
 	content := candidate.Candidate.Content
 	if content == "" || !utf8.ValidString(content) {
 		return nil
@@ -36,11 +44,11 @@ func focusedSegments(candidate ClassifiedCandidate, plan query.Plan) []Segment {
 		if score == 0 {
 			continue
 		}
-		start := index - 2
+		start := index - contextBefore
 		if start < 0 {
 			start = 0
 		}
-		end := index + 4
+		end := index + contextAfter
 		if end >= len(lines) {
 			end = len(lines) - 1
 		}
@@ -48,6 +56,9 @@ func focusedSegments(candidate ClassifiedCandidate, plan query.Plan) []Segment {
 	}
 	hits = mergeWindows(hits)
 	prefixEnd := declarationPrefixEnd(lines)
+	if prefixLineLimit > 0 && prefixEnd >= prefixLineLimit {
+		prefixEnd = prefixLineLimit - 1
+	}
 	prefix := sourceWindow{start: 0, end: prefixEnd, score: distinctMatches(joinLines(lines, 0, prefixEnd), terms)}
 	selected := []sourceWindow{prefix}
 	sort.SliceStable(hits, func(i, j int) bool {
@@ -58,7 +69,7 @@ func focusedSegments(candidate ClassifiedCandidate, plan query.Plan) []Segment {
 	})
 	for _, hit := range hits {
 		selected = addOrMergeWindow(selected, hit)
-		if len(selected) == 3 {
+		if len(selected) == maxWindows {
 			break
 		}
 	}

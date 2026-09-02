@@ -59,6 +59,112 @@ func TestBuildVariantsFocusedLateHitFitsCommonAllowances(t *testing.T) {
 	}
 }
 
+func TestBuildVariantsAddsSmallerAdaptiveExcerptForLongFocusedSource(t *testing.T) {
+	content := adaptiveLongContent()
+	candidate := ClassifiedCandidate{Candidate: model.RankedCandidate{Handle: "adaptive", Path: "service/worker.go", Kind: "method", Symbol: "Execute", Signature: "func Execute() error", StartLine: 20, EndLine: 20 + strings.Count(content, "\n"), Content: content}, Role: RoleTarget}
+	plan := query.Plan{Terms: query.Terms{Identifiers: []string{"ErrFirst", "ErrSecond", "ErrThird"}}}
+	variants := BuildVariants(candidate, plan, ModeFocused, budget.NewEstimator())
+	excerpts := make([]ContentVariant, 0, 2)
+	for _, variant := range variants {
+		if variant.Fidelity == FidelityExcerpt {
+			excerpts = append(excerpts, variant)
+		}
+	}
+	if len(excerpts) < 2 {
+		t.Fatalf("focused variants = %+v, want normal and adaptive excerpts", variants)
+	}
+	if excerpts[1].EvidenceTokens >= excerpts[0].EvidenceTokens {
+		t.Fatalf("adaptive excerpt tokens=%d, normal=%d", excerpts[1].EvidenceTokens, excerpts[0].EvidenceTokens)
+	}
+	for _, hit := range []string{"ErrFirst", "ErrSecond", "ErrThird"} {
+		if !variantContains(excerpts[1], hit) {
+			t.Fatalf("adaptive excerpt lost required hit %q: %+v", hit, excerpts[1])
+		}
+	}
+}
+
+func TestAdaptiveFocusedSegmentsPreserveExactHitLines(t *testing.T) {
+	content := strings.Join([]string{
+		"func 検証() error {",
+		strings.Repeat("\t通常処理\r\n", 24),
+		"\treturn ErrLate\r\n",
+		strings.Repeat("\t後続処理\r\n", 24),
+		"}",
+	}, "\r\n")
+	candidate := ClassifiedCandidate{Candidate: model.RankedCandidate{Handle: "adaptive", Path: "utf8/service.go", Kind: "method", Symbol: "検証", StartLine: 30, EndLine: 30 + strings.Count(content, "\n"), Content: content}, Role: RoleTarget}
+	plan := query.Plan{Terms: query.Terms{Identifiers: []string{"ErrLate"}, UnicodeRuns: []string{"通常処理"}}}
+	standard := focusedSegments(candidate, plan)
+	adaptive := adaptiveFocusedSegments(candidate, plan)
+	if len(adaptive) == 0 {
+		t.Fatal("adaptiveFocusedSegments returned no segments")
+	}
+	standardSource, adaptiveSource := strings.Builder{}, strings.Builder{}
+	for _, segment := range standard {
+		if segment.Kind == SegmentSource {
+			standardSource.WriteString(segment.Text)
+		}
+	}
+	foundLate := false
+	for _, segment := range adaptive {
+		if segment.Kind == SegmentOmitted {
+			if segment.Text != "" {
+				t.Fatalf("omitted segment contains text: %+v", segment)
+			}
+			continue
+		}
+		want := testSourceLines(content, segment.Lines, candidate.Candidate.StartLine)
+		if segment.Text != want {
+			t.Fatalf("adaptive segment differs from source\n got: %q\nwant: %q", segment.Text, want)
+		}
+		adaptiveSource.WriteString(segment.Text)
+		foundLate = foundLate || strings.Contains(segment.Text, "ErrLate")
+	}
+	if !foundLate {
+		t.Fatalf("adaptive excerpt lost late hit: %+v", adaptive)
+	}
+	if budget.NewEstimator().Estimate(adaptiveSource.String()) >= budget.NewEstimator().Estimate(standardSource.String()) {
+		t.Fatalf("adaptive source was not smaller: standard=%q adaptive=%q", standardSource.String(), adaptiveSource.String())
+	}
+}
+
+func TestAdaptiveExcerptDoesNotChangeShortOrNonFocusedModes(t *testing.T) {
+	short := ClassifiedCandidate{Candidate: model.RankedCandidate{Handle: "short", Path: "short.go", Kind: "function", Symbol: "Run", Signature: "func Run()", StartLine: 1, EndLine: 3, Content: "func Run() {\n\treturn nil\n}\n"}, Role: RoleTarget}
+	focused := BuildVariants(short, query.Plan{Terms: query.Terms{Identifiers: []string{"Run"}}}, ModeFocused, budget.NewEstimator())
+	for _, variant := range focused {
+		if variant.Fidelity == FidelityExcerpt {
+			t.Fatalf("short candidate unexpectedly gained excerpt: %+v", focused)
+		}
+	}
+	source := BuildVariants(short, query.Plan{}, ModeSource, budget.NewEstimator())
+	if len(source) == 0 || source[0].Fidelity != FidelityVerbatim {
+		t.Fatalf("source variants changed: %+v", source)
+	}
+	outline := BuildVariants(short, query.Plan{}, ModeOutline, budget.NewEstimator())
+	for _, variant := range outline {
+		if variant.Fidelity == FidelityExcerpt {
+			t.Fatalf("outline gained excerpt: %+v", outline)
+		}
+	}
+}
+
+func adaptiveLongContent() string {
+	lines := []string{"func Execute() error {"}
+	for index := 0; index < 18; index++ {
+		lines = append(lines, "\tregularStep()")
+	}
+	lines = append(lines, "\tif first { return ErrFirst }")
+	for index := 0; index < 18; index++ {
+		lines = append(lines, "\tmiddleStep()")
+	}
+	lines = append(lines, "\tif second { return ErrSecond }")
+	for index := 0; index < 18; index++ {
+		lines = append(lines, "\tlateStep()")
+	}
+	lines = append(lines, "\tif third { return ErrThird }")
+	lines = append(lines, "\treturn nil", "}")
+	return strings.Join(lines, "\n") + "\n"
+}
+
 func TestBuildVariantsSupportsSyntheticAndBlankSignatureFallback(t *testing.T) {
 	estimator := budget.NewEstimator()
 	synthetic := ClassifiedCandidate{Candidate: model.RankedCandidate{Handle: "outline", Path: "a.go", Kind: "module-outline", Symbol: "a", Signature: "synthetic outline", StartLine: 1, EndLine: 1, Content: "functions: Run"}, Role: RoleContext}
