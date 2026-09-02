@@ -1,182 +1,184 @@
-# FocalSpan v0.17 intent別retriever cap / noise制御 実装計画
+# FocalSpan v0.18 検索・relation SQL batch化 実装計画
 
-**Goal:** query intentに応じて内部retrieverの取得上限を適応させ、fusion前の
-ノイズと処理量を減らす。公開MCP/CLI、`focalspan.context.v1`、retriever ID、
-source fidelity、relation provenance、deterministic orderingを維持し、v0.15
-baselineのwire/labelを非回帰にする。
+**Goal:** 複数の検索値とrelation anchorを1回のSQLite queryへまとめ、MCP/CLIの
+結果、Evidence wire、relation provenanceを変えずにDB round-tripとquery latencyを
+削減する。v0.15 baselineのquality/wireを厳密に維持し、v0.17で得たnegative
+evidence（候補集合変更によるwire回帰）を再発させない。
 
-**Architecture:** `internal/search.RetrieverSet.Retrieve`だけでprivateなcap
-profileを選択する。各store queryへ渡すlimitをplan intentとretrieval modeから
-決定し、fusion、ranking、Evidence compiler、公開trace schemaは変更しない。
-capは既存上限以下に限定し、path/FTS fallbackを消さない。relation anchorの
-取得はbase retrieverのcap適用後に従来どおり実行する。
+**Architecture:** `internal/store`のprivate query builderだけを変更する。入力値や
+anchorには決定的なordinalを付けたSQLite `VALUES`/CTEを使い、既存の1値ずつの
+append順とtie-breakをSQLのORDER BYで再現する。検索結果の型・fusion・ranking・
+Evidence compilerは変更しない。relationのlegacy candidateとprovenance hitは
+それぞれ全anchorを1 queryで取得するが、最終sort/dedupとmergeは既存処理を維持する。
 
-**Spec:** ユーザー承認済み「FocalSpan token効率改善候補・優先順位」rank 7
-「intent別retriever cap / noise制御」。rank 8のSQL batch化、schema v2 relation
-linking、TokenEstimator変更は別マイルストーンであり、この計画では扱わない。
+**Spec:** ユーザー承認済み「FocalSpan token効率改善候補・優先順位」rank 8
+「検索・relation SQLのbatch化」。rank 9 schema v2 relation linking、TokenEstimator、
+検索cap再試行、per-row Evidence選択fallbackは別マイルストーンで扱う。
 
 ## Purpose / Big Picture
 
-現在はqualified/exact/prefix/FTS/path/relationを固定上限（50/50/50/100/50/100）
-で取得し、最大400件をfusionする。definitionや軽量relation queryでは、上位候補
-に寄与しないprefix/FTS/path行がfusion対象を膨らませる可能性がある。intent別の
-保守的なcapでSQL結果とfusion入力を狭め、同一queryの候補品質を変えずに内部処理
-量を削減する。
+現在のStoreはexact/qualified/prefix/path検索で値ごとにSQLを発行し、relationの
+legacy/provenance取得でもanchorごとにSQLを発行する。自然文queryでは同じ処理を
+複数回繰り返すため、結果が少ない場合でもSQLite round-tripが増える。値とanchorを
+batch化し、候補の集合と順序を同一に保ったまま待ち時間とDB負荷を測定可能な範囲で
+削減する。
 
 ## Baseline and Gates
 
-- v0.15 baseline: focused/2048 `packing_dropped=7`、packed labels `5`、累積wire
-  `12,304`、useful efficiency `0.4064`、median metadata overhead `0.9222`。
-- historical suiteは候補につき1回だけ、`default` profile、repeat 1、attribution/
-  diagnosis有効で実行する。
-- `compatible=true`、`regressions=0`、wire/label/recall/fidelity/relation/
-  budget/determinism/known resend/MCP契約の非回帰を必須とする。
-- query latencyは候補のperformance rowsで計測し、profileごとのquery medianが
-  baseline比20%以上改善した場合だけ採用する。改善がない、またはqualityが
-  回帰した場合は候補をrevertし、v0.15を維持する。
+- 現行baselineはv0.15（focused/2048 packing dropped `7`、packed labels `5`、
+  累積wire `12,304`、useful efficiency `0.4064`）。
+- v0.17はintent cap候補をwire回帰で棄却済み。v0.18では同じquality/wire候補を
+  再利用・再実行しない。
+- historical suiteは候補につき1回だけ、`default` profile、repeat 1、
+  attribution/diagnosis有効で実行する。
+- `compatible=true`、`regressions=0`、recall/role/fidelity/relation/budget/
+  determinism/known resend/MCP契約の非回帰を必須とする。
+- candidateのperformance rowsで、変更対象profileのquery medianがbaseline比
+  20%以上改善することを採用条件とする。改善なし、quality回帰、または結果byte
+  不一致なら候補をrevertしてbaselineを維持する。
 
 ## Global Constraints
 
 - 公開MCP tool、CLI、`focalspan.context.v1`、JSON key、retriever ID、SQLite
   schema、`known_handles`を変更しない。
-- Search結果の順序、RRF weight、ranking、relation resolution、source fidelity、
-  Evidence packingを変更しない。
-- cap profileは既存固定cap以下。FTS-onlyはFTSだけ、no-relationsはrelationなし、
-  relation intentはanchor fallbackを従来どおり保持する。
-- traceは既存のretriever countを反映するだけで、新しいdebug/token fieldを追加しない。
+- 検索の候補集合、入力値の優先順、RRF weight、ranking、Evidence packing、
+  relation resolution/provenance、source fidelity、deterministic orderingを変えない。
+- SQL値はすべてparameter bindingし、入力が空、重複、キャンセル、malformedでも
+  既存の戻り値とエラー分類を維持する。
+- SQL batchが使えない条件では既存の逐次経路へ安全にfallbackする。SQLiteの
+  parameter上限を越える巨大入力を無制限に1 queryへ連結しない。
 - `AGENTS.md`、`.focalspan.json`、`TASKS.md`は変更・stageしない。
 - benchmark reports、binaries、repository-local cachesはゲート後に削除する。
 
 ## Context and Orientation
 
-- `internal/search/retrieval.go`に固定capと`RetrieverSet.Retrieve`がある。
-- `internal/search/retrieval_test.go`のrecording storeはretriever呼び出し順と
-  relation anchorを検証する。limit記録を追加してcapを検証する。
-- `internal/search/search.go`はretrieval結果を最大400件でfusionし、`Limit`は
-  公開結果件数でありretriever capとは別である。
-- `internal/search/fusion.go`のRRF weightとsort tie-breakは凍結する。
-- `internal/benchmark`のperformance rowsとcompareがquery latency警告を出す。
+- `internal/store/store.go`の`SearchExactSymbols`、`SearchQualifiedSymbols`、
+  `SearchSymbolPrefixes`、`SearchPaths`はlookup値ごとに`QueryContext`を呼ぶ。
+- 同ファイルの`RelatedCandidates`と`RelatedCandidateHits`はanchorごとにlegacy/
+  provenance queryを呼び、`RelatedCandidateHits`は最後に決定的sort/dedupする。
+- `internal/store/store_test.go`と`internal/store/relation_test.go`は検索順序、
+  unresolved relation、PHP/Rust/Python/module/path semanticsを固定する既存fixture。
+- `internal/search/retrieval.go`は両relation経路をmergeするため、Storeの返却内容
+  と順序を変えずにround-tripだけを減らす必要がある。
+- `internal/benchmark`のperformance rowsとcompareはquality比較とは別にquery
+  medianを出力する。
 
 ## Plan of Work
 
 ### Task 0: Freeze transition
 
-- [ ] v0.16 root planを`docs/superpowers/plans/completed/2026-09-02-v0.16-guidance-shared-budget.md`へbyte-identicalにアーカイブする。
-- [ ] archiveとroot v0.17 planだけをdocumentation-only transition commitにする。
+- [ ] v0.17 root planを`docs/superpowers/plans/completed/2026-09-02-v0.17-intent-retriever-cap.md`へbyte-identicalにアーカイブする。
+- [ ] archiveとroot v0.18 planだけをdocumentation-only transition commitにする。
   ユーザー所有dirty filesはstageしない。
 
-### Task 1: RED tests for intent caps
+### Task 1: RED tests for batch equivalence
 
-**Files:** `internal/search/retrieval_test.go`、必要に応じて`internal/search/search_test.go`。
+**Files:** `internal/store/store_test.go`、`internal/store/relation_test.go`、必要に
+応じてprivate test helper。
 
-- [ ] definition/callers/callees/tests/imports/exports/references/impact/defaultの
-  cap profileを固定する。
-- [ ] FTS-only/no-relations/full modeの呼び出し集合、limit、relation anchor、
-  empty-term fallbackを固定する。
-- [ ] cap適用後も結果の決定順序、trace count、relation provenanceが変わらない
-  fake-store回帰を追加する。
+- [ ] 複数値のexact/qualified/prefix/path結果が、同じ値を逐次投入した既存経路と
+  handle、順位、limit、dedupを完全一致することを固定する。
+- [ ] 複数anchorのlegacy relation candidatesとprovenance hitsで、direction、
+  resolved、confidence、source、anchor handle、最終sort/dedupが完全一致することを
+  固定する。
+- [ ] empty/duplicate values、unknown relation、missing anchor、cancelled context、
+  SQLite parameter-size fallbackの結果とエラーを固定する。
+- [ ] query round-trip削減を検証できるprivate計測フックまたはSQLite trace testを
+  追加する。ただし公開出力や通常traceへdebug fieldを追加しない。
 
 ### Task 2: Minimal GREEN implementation
 
-**Files:** `internal/search/retrieval.go`と必要最小限のprivate tests。
+**Files:** `internal/store/store.go`および必要最小限のprivate helper。
 
-- [ ] private `retrieverCaps`とintent/mode別選択関数を追加する。
-- [ ] 各store queryへ既存cap以下のlimitを渡し、取得リストの型・順序・エラー
-  wrappingを維持する。
-- [ ] relation取得はcap済みbase listsからanchorを作り、legacy/provenance merge
-  と既存relation capを維持する。
-- [ ] cap 0や未知intentでは安全な既存capへfallbackし、公開traceに設定値を出さない。
+- [ ] lookup値をordinal付きparameter CTEへまとめ、各検索メソッドの既存条件、
+  per-value fallback、append順、limit clamp、エラー wrappingを保ったまま1 query
+  で処理する。
+- [ ] relation anchorをparameter CTEへまとめ、legacy/provenanceの各SQLをbatch化
+  する。caller/testのcamel-case patternはanchorとの対応を失わず、既存の unresolved
+  match semanticsを保持する。
+- [ ] batch結果は既存scan型へ変換し、最終sort/dedupと`mergeRelationCandidates`の
+  入力契約を変更しない。SQL error/cancellation時はconnectionを確実にcloseする。
+- [ ] parameter上限または空入力では既存逐次経路へ戻し、DB schemaや公開interfaceを
+  変更しない。
 
-### Task 3: Static verification
+### Task 3: Static and equivalence verification
 
 - [ ] gofmt、`git diff --check`。
 - [ ] repository-local cacheで`go test ./... -count=1`、`go vet ./...`。
 - [ ] native、CGO-free Windows amd64/Linux amd64/Darwin arm64 buildを一時出力し
   削除する。
 - [ ] `go test -race ./...`を実行し、MinGW制約ならUNVERIFIEDと記録する。
-- [ ] fixture evaluatorでcoverage/role/fidelity/relation/budget/determinism、
-  known resend、delta ratioを再測定する。
+- [ ] fixture Evidence evaluatorでcoverage/role/fidelity/relation/budget/
+  determinism、known resend、delta ratio、metadata overheadを再測定する。
+- [ ] batch前後の代表fixtureでserialized result bytesとrelation rowsが完全一致する
+  ことを確認する。
 
 ### Task 4: Candidate benchmark gate
 
-- [ ] historical `focalspan-history-v0.5`を候補につき1回実行し、v0.15 baselineと
-  比較する。
-- [ ] focused/2048のpacking dropped非増加、packed labels 5以上、wire `<=12,304`、
+- [ ] historical `focalspan-history-v0.5`を候補につき1回だけ実行し、v0.15 baselineと
+  比較する。同じ候補の再実行は禁止する。
+- [ ] focused/2048のpacking dropped非増加、packed labels `>=5`、wire `<=12,304`、
   useful efficiency `>=0.4064`を要求する。
-- [ ] quality/invariant comparisonの`compatible=true`、`regressions=0`、および
-  profileごとのquery latency 20%以上改善を要求する。
+- [ ] comparisonの`compatible=true`、`regressions=0`、quality/invariant非回帰を
+  要求する。
+- [ ] 対象profileのquery medianが20%以上改善し、非対象profileに20%超のslowdownが
+  ないことを確認する。
 - [ ] privacy scan、artifact hashes、実測値をsource-free
-  `docs/benchmarks/findings-v0.17.md`へ記録する。未達ならbaselineを作らない。
+  `docs/benchmarks/findings-v0.18.md`へ記録する。未達ならbaselineを作らない。
 
 ### Task 5: Closure and recovery
 
-- [ ] 全ゲート合格時だけ製品commit、findings、`results-v0.17.{json,md}`を確定する。
+- [ ] 全ゲート合格時だけ製品commit、findings、`results-v0.18.{json,md}`を確定する。
 - [ ] gate不合格時は製品commitだけをreverse-order `git revert`し、findingsを残し、
-  v0.15 baselineを維持する。同じ候補benchmarkは再実行しない。
-- [ ] generated reportsとcandidate cacheを削除し、ユーザー所有dirty filesを保持する。
-- [ ] Progress、Discoveries、Decision Log、Outcomesを実測値で更新し、v0.16 archiveは
+  v0.15 baselineを維持する。失敗候補のhistorical benchmarkは再実行しない。
+- [ ] generated reports、binaries、cachesを削除し、ユーザー所有dirty filesを保持する。
+- [ ] Progress、Discoveries、Decision Log、Outcomesを実測値で更新し、v0.17 archiveは
   編集しない。
 
 ## Validation and Acceptance
 
-同一入力は決定的で、検索候補の順序とRRF scoreが既存と同一であること。cap適用後も
-必要path/symbol/anchorのrecall、relation validity、source fidelity、budget、
-known resend、公開trace/MCP契約が非回帰であること。historical比較は
-`compatible=true`、`regressions=0`、wire/efficiency gate合格、かつquery median
-20%以上改善をすべて満たすこと。
+同一入力に対しbatch経路と逐次経路のserialized candidate/result bytesが同一で、
+relation rowsの全field、source provenance、sort/dedup、error/cancellation semanticsが
+同一であること。公開MCP/CLI/Evidence契約、wire budget、known_handles、deterministic
+orderingが非回帰で、historical比較が`compatible=true`/`regressions=0`となり、変更対象
+profileのquery medianが20%以上改善することをすべて満たす。
 
 ## Idempotence and Recovery
 
-cap選択はpureなin-memory関数でindex/databaseを変更しない。limitは呼び出しごとに
-再計算され、同じplan/modeで同じ値になる。candidate gate不合格時は製品commitだけを
-ordinary revertし、v0.15 baselineとsource-free findingsを保持する。
+batch builderはpureなparameter/SQL生成でindex/databaseを変更しない。同じ入力は同じ
+ordinal、SQL bind順、sort結果になる。parameter上限やunsupported relationでは逐次経路
+へ戻る。candidate gate不合格時は製品commitだけをordinary revertし、source-free findings
+とbaselineを保持する。
 
 ## Interfaces and Dependencies
 
-公開interfaceは変更しない。`code_context`、`code_expand`、`code_impact`、CLI
-evidence、`focalspan.context.v1`、legacy `ContextBundle`を維持する。変更は
-`internal/search`のprivate cap profileと回帰テストに限定する。
+公開interfaceとschemaは変更しない。`code_context`、`code_expand`、`code_impact`、
+CLI evidence、`focalspan.context.v1`、legacy `ContextBundle`を維持する。変更対象は
+`internal/store`のprivate SQL batchingと回帰テストで、benchmark toolingは計測用途だけ
+に限定する。
 
 ## Progress
 
-- [x] 2026-09-02T10:37Z: v0.16 negative candidateを確定し、v0.15 baselineを維持した。
-- [x] 2026-09-02T10:37Z: v0.16 planをbyte-identical archiveへコピーした。
-- [x] 2026-09-02T10:37Z: v0.17 documentation-only transition commit (`7aab712`)を完了した。
-- [x] 2026-09-02T10:45Z: RED testsでintent/mode別cap、limit、relation capを固定した。
-- [x] 2026-09-02T10:52Z: GREEN実装を候補コミット`cff306d`として確定した。
-- [x] 2026-09-02T11:00Z: static verificationを完了した。702 tests/46 packages、vet、gofmt、diff check、native/CGO-free 3 target buildはpassed。raceはMinGW制約でunverified。
-- [x] 2026-09-02T11:03Z: Evidence fixture 8 casesを再測定し、invariant各`1`、known resend`0`、delta ratio`0.555005305978069`、metadata median`0.344969199178645`を確認した。
-- [x] 2026-09-02T11:08Z: historical benchmarkを候補につき1回実行し、v0.15比較は`compatible=true`/`regressions=4`。wire/efficiency/all-profile latency gate不合格を確定した。
-- [x] 2026-09-02T11:08Z: 製品候補を通常revertコミット`6ba04a9`で取り消し、findings-v0.17を記録する。v0.15 baselineを維持する。
+- [x] 2026-09-02T11:15Z: v0.17 negative planをbyte-identical archiveへ保存した。
+- [x] 2026-09-02T11:15Z: v0.18 documentation-only transition planを作成した。
+- [ ] RED equivalence tests。
+- [ ] GREEN SQL batching implementation。
+- [ ] Static/equivalence verification。
+- [ ] Candidate benchmark gate。
+- [ ] Closure and recovery。
 
 ## Surprises & Discoveries
 
-- v0.16ではaggregate wire改善だけでは不十分で、MCP 5行のper-row wire回帰により
-  strict gateを失敗した。v0.17もquality非回帰をwire/latencyと同列に扱う。
-- 固定capは`retrieval.go`に集中しており、intent別profileをprivateに追加できる。
-  ただしbase listを狭めるとrelation anchorやfallbackを失うため、REDで呼び出し
-  limitとanchor経路を先に固定する。
-- intent別capはFTS、no-relationsを含む複数profileのquery medianを改善したが、
-  PHPの4 quality rowsでrecall改善なしのwire 35-token増加を生み、strict
-  non-regression gateに失敗した。
-- focused/2048のpacking droppedは7、packed labelsは5でbaseline同値だった。
-  失敗原因はpackingではなく、cap後の候補集合が変わったことによるEvidence
-  選択のwire差分である。
+- 未着手。v0.17のwire回帰を踏まえ、batch化では結果byte完全一致を最優先にする。
 
 ## Decision Log
 
-- 2026-09-02: 次順位としてrank 7 intent別retriever cap / noise制御を開始する。
-- 2026-09-02: SQL batch化とschema v2 relation linkingは別系統として同時実装しない。
-- 2026-09-02: capは既存上限以下に限定し、公開trace/schema/RRF weightは変更しない。
-- 2026-09-02: quality/wire gateをlatency改善より優先し、`regressions=4`を理由に
-  候補を採用しない。製品変更は`cff306d`から`6ba04a9`でrevertする。
-- 2026-09-02: 同一候補のhistorical benchmark再実行は行わず、次候補ではper-row
-  legacy-selection fallbackまたは非回帰ガードを先に設計する。
+- 2026-09-02: v0.17の次順位としてrank 8 SQL batch化を開始する。
+- 2026-09-02: schema v2 relation linkingとTokenEstimator変更は同時実装しない。
+- 2026-09-02: SQL batch化は検索・relationのround-trip削減に限定し、ranking/packing/wire
+  を調整しない。
 
 ## Outcomes & Retrospective
 
-v0.17はnegative candidateとして終了した。intent別capにより複数profileの
-query medianは改善したものの、PHP 4 rowsのwire回帰、累積wire`12,459`、
-efficiency`0.4013`、およびfull-evidence profileのlatency改善不足により、
-strict gateを満たさなかった。製品変更はrevert済みで、v0.15 baselineを維持する。
-詳細な実測値とハッシュは`docs/benchmarks/findings-v0.17.md`に記録した。
+未完了。batch前後の結果完全一致、query latency実測、採用または棄却の根拠を完了時に
+追記する。
