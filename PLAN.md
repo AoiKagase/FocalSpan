@@ -8,7 +8,7 @@
 packing budget so useful evidence increases without changing retrieval, ranking,
 wire schemas, or public MCP/CLI interfaces.
 
-**Architecture:** `internal/budget.Packer` will perform one bounded anchor
+**Architecture:** `internal/evidence.Compiler` will perform one bounded anchor
 reservation pass over the already ranked candidates, then use the existing
 utility, role, mode, and variant logic for the remaining slots. Reservation is
 internal only: candidates keep their existing model fields and final packet
@@ -40,11 +40,11 @@ benchmark.
 
 ## Context and Orientation
 
-- `internal/budget/budget.go` owns legacy `model.ContextBundle` packing,
-  content elision, test/documentation filters, and final JSON budget checks.
-- `internal/evidence/compiler.go` owns the public Evidence packet and already
-  assigns roles, variants, relations, and guidance; it must not be redesigned
-  in this milestone.
+- `internal/budget/budget.go` owns legacy `model.ContextBundle` packing and
+  remains a comparison path; it is not changed in this milestone.
+- `internal/evidence/compiler.go` owns the public Evidence packet and assigns
+  roles, variants, relations, guidance, and budget-aware selection. The
+  reservation pass is limited to this compiler path.
 - `internal/benchmark` measures packed labels, cumulative wire tokens, and
   source-free attribution/diagnosis; the frozen focused/2048 baseline is
   `packing_dropped=7`, packed labels `5`, cumulative wire `12,740`, and useful
@@ -61,63 +61,63 @@ benchmark.
 
 ### Task 1: RED tests for anchor reservation
 
-**Files:** `internal/budget/budget_test.go` and, only if required by an
-observable Evidence invariant, `internal/evidence/compiler_test.go`.
+**Files:** `internal/evidence/compiler_test.go`.
 
-- [ ] Add a failing test where a lower-ranked exact-symbol anchor appears after
+- [x] Add a failing test where a lower-ranked exact-symbol anchor appears after
   a large relation/source candidate and must remain in the packed bundle when
   the current tail-trim would otherwise remove it.
-- [ ] Add a failing test where a relation anchor and its relation candidate are
+- [x] Add a failing test where a relation anchor and its relation candidate are
   both retained, with no dangling public relation edge and stable item order.
-- [ ] Add a failing test proving generic lexical/documentation candidates are
+- [x] Add a failing test proving generic lexical/documentation candidates are
   not treated as reserved anchors.
-- [ ] Add a failing test for tight-budget fallback: an anchor may be elided or
+- [x] Add a failing test for tight-budget fallback: an anchor may be elided or
   reduced to its signature, but must not exceed the serialized budget or alter
   source bytes that remain verbatim.
-- [ ] Run only the new tests and record the expected RED failure before editing
-  `internal/budget/budget.go`.
+- [x] Run only the new tests and record the expected RED failure before editing
+  `internal/evidence/compiler.go`; the initial cache-path failure was retried
+  with a repository-local cache, after which all four tests failed as expected.
 
 ### Task 2: Minimal GREEN implementation
 
-**Files:** `internal/budget/budget.go` and the tests from Task 1.
+**Files:** `internal/evidence/compiler.go` and the tests from Task 1.
 
-- [ ] Introduce a private deterministic anchor classifier. It returns true for
+- [x] Introduce a private deterministic anchor classifier. It returns true for
   candidates with `symbol-exact`, a `path` score reason, or a non-empty
   relation/relation context; it returns false for documentation, configuration,
   and generic lexical candidates.
-- [ ] Build a stable reservation set keyed by candidate handle before the main
+- [x] Build a stable reservation set keyed by candidate handle before the main
   packing loop, preserving the existing ranked order for output.
-- [ ] During budget pressure, prefer the reserved anchor over non-reserved
+- [x] During budget pressure, prefer the reserved anchor over non-reserved
   candidates and try the existing content elision/signature fallback before
   incrementing `OmittedCount` for the anchor.
-- [ ] Keep relation metadata and existing duplicate-relation elision unchanged;
+- [x] Keep relation metadata and existing duplicate-relation elision unchanged;
   never emit a relation edge whose endpoints are absent from the final bundle.
-- [ ] Run the focused budget/evidence tests, then the full Go package suite.
+- [x] Run the focused Evidence tests, then the full Go package suite.
 
 ### Task 3: Static verification and candidate gate
 
-- [ ] Run `gofmt` on changed Go files and `git diff --check`.
-- [ ] Run `go test ./... -count=1` and `go vet ./...`.
-- [ ] Run native plus CGO-free Windows amd64, Linux amd64, and Darwin arm64
+- [x] Run `gofmt` on changed Go files and `git diff --check`.
+- [x] Run `go test ./... -count=1` and `go vet ./...`.
+- [x] Run native plus CGO-free Windows amd64, Linux amd64, and Darwin arm64
   builds into a temporary directory; remove outputs after verification.
-- [ ] Run the historical suite exactly once with `default`, `repeat 1`,
+- [x] Run the historical suite exactly once with `default`, `repeat 1`,
   attribution, and diagnosis enabled.
-- [ ] Accept only if focused/2048 reduces `packing_dropped` by at least three,
+- [x] Accept only if focused/2048 reduces `packing_dropped` by at least three,
   keeps packed labels at least `5`, keeps wire `<=12,740`, improves efficiency
   strictly above `0.3925`, and preserves all fidelity, relation, budget,
   deterministic-ordering, known-handle, and MCP contract checks.
-- [ ] Record measured values, artifact hashes, and privacy scan in
+- [x] Record measured values, artifact hashes, and privacy scan in
   `docs/benchmarks/findings-v0.12.md` without source text or absolute paths.
 
 ### Task 4: Closure and recovery
 
-- [ ] If the gate fails, reverse-revert only the v0.12 product commit(s), retain
+- [x] If the gate fails, reverse-revert only the v0.12 product commit(s), retain
   the negative findings, and leave the v0.10 baseline intact.
-- [ ] If the gate passes, retain the implementation and record the new measured
-  baseline without changing public interfaces.
-- [ ] Update this plan with UTC progress, discoveries, decisions, outcomes, and
+- [x] Evaluate the pass branch; it was not taken because the strict wire gate
+  failed, so no new measured baseline was recorded.
+- [x] Update this plan with UTC progress, discoveries, decisions, outcomes, and
   actual verification evidence; do not modify archived plans.
-- [ ] Remove generated reports, indexes, binaries, caches, and temporary
+- [x] Remove generated reports, indexes, binaries, caches, and temporary
   workspaces; preserve user-owned dirty/untracked files.
 
 ## Validation and Acceptance
@@ -144,17 +144,23 @@ No public interface changes. `model.PackRequest`, `model.ContextBundle`,
 Evidence packet schemas, MCP methods, CLI output, and `known_handles` remain
 unchanged. The private classifier and reservation helpers are consumed only by
 `Packer.Pack`; benchmark attribution sees ordinary existing candidate identities
-and no new public debug fields.
+and no new public debug fields. The private classifier and reservation helpers
+were consumed only by `Compiler.Compile` and were removed with the reverted
+candidate.
 
 ## Progress
 
 - [x] 2026-09-02: v0.11 archive SHA-256 matches the active plan; user-owned
   files remain unstaged.
 - [x] 2026-09-02: v0.12 design approved; transition prepared for RED tests.
-- [ ] Task 1 RED tests.
-- [ ] Task 2 anchor-first implementation.
-- [ ] Task 3 static verification and candidate gate.
-- [ ] Task 4 closure and recovery.
+- [x] 2026-09-02T01:20Z: Evidence RED tests reproduced four packing failures;
+  the repository-local cache was required after the default cache was denied.
+- [x] 2026-09-02T01:28Z: Minimal reservation implementation passed focused
+  Evidence tests and the full Go suite.
+- [x] 2026-09-02T01:32Z: vet, diff check, native/cgo-free builds, and the one
+  historical candidate run completed; race remained unverified by MinGW.
+- [x] 2026-09-02T01:46Z: Gate failed on cumulative wire growth; temporary
+  product commit `ab62461` was reverted by `43ca5fc`, and findings were saved.
 
 ## Surprises & Discoveries
 
@@ -163,6 +169,11 @@ and no new public debug fields.
   its content has been accepted.
 - Existing relation duplicate elision changes content only; relation endpoint
   validity must remain a separate invariant while reservation is added.
+- The public Evidence compiler is the active packing path; changing the legacy
+  budget packer would not affect the benchmark gate.
+- Reserving every structural candidate before utility selection reduced focused
+  packing drops from 7 to 4, but increased cumulative wire from 12,740 to
+  27,667 because additional Evidence items and their metadata were admitted.
 
 ## Decision Log
 
@@ -172,7 +183,16 @@ and no new public debug fields.
   handle; do not reserve broad symbol-prefix or lexical hits.
 - 2026-09-02: Preserve ranked output order and use existing elision/signature
   variants rather than introducing a new public packet field.
+- 2026-09-02: Treat the candidate as rejected despite recall/efficiency gains
+  because the strict no-wire-growth gate is non-negotiable; retain v0.10 as the
+  active baseline and do not claim a v0.12 quality baseline.
 
 ## Outcomes & Retrospective
 
-Pending Task 1 RED tests and the single measured candidate gate.
+v0.12 is closed as a negative candidate. The reservation invariant and
+regression tests were verified locally, but the product candidate was reverted
+after the single measured gate: packing drops improved (7→4) and efficiency
+improved (0.3925→0.6506), while cumulative wire exceeded the limit
+(12,740→27,667). A future packing attempt must preserve the baseline wire
+denominator or replace content with measured compact variants before rerunning
+the historical gate.
