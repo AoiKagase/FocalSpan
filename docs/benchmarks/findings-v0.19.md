@@ -50,10 +50,10 @@ CLI stdout protocolに変更はない。findingsと生成artifactをscanし、�
 | Artifact | SHA-256 |
 |---|---|
 | current-scale benchmark log | `41ef6c1583ad2dc9f7035b8096e3c6d2ad01556cf023a5e018f36dd1f0225eb` |
-| Windows amd64 CGO-free build | `474bd19d41741da42df1099f7061a6142400c383639a6878ae055ba4f4a4cf1f` |
-| Windows amd64 native build | `b1aeab3bde8558405b60c1bbb9d6d1a2906533c89fbc8d3a5543f44c8c6ee2a7` |
-| Linux amd64 CGO-free build | `eae2e0bddb32c0f2bc5b657d603667bfb92fce326d6d9dcc76ca01cc04fba0` |
-| Darwin arm64 CGO-free build | `51dcc628496c17843d44ef401f5b4be3d4fe7fa582b3467e22dbfb1a5d326942` |
+| Windows amd64 CGO-free build | `e3dcab6a712b386e36c94cbdaa246edaa74a0081b42e4da625d975834bc1ac60` |
+| Windows amd64 native build | `730d9f1fc6e04766c151ac7cbbd68a80a4c1f44851b8c88027f0557e65190fd4` |
+| Linux amd64 CGO-free build | `e45e265c493dcc79369b018d942bd8fe3b0eb45bd571686f9fec0d7b9101ed78` |
+| Darwin arm64 CGO-free build | `3b72256214442d2332633d4686dcedbefe4168d337e20da2c049bb15c1db3a9f` |
 
 ## Outcome and retrospective
 
