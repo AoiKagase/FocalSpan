@@ -216,3 +216,130 @@ func TestCompilerUnresolvedRelationNeverProducesExactEdge(t *testing.T) {
 		t.Fatalf("limitations=%v", result.Packet.Limitations)
 	}
 }
+
+func TestCompilerReservesLaterExactAnchorUnderBudgetPressure(t *testing.T) {
+	req := compilerRequest(512)
+	req.Mode = ModeOutline
+	candidates := []model.RankedCandidate{
+		{Handle: "caller", Path: "src/caller.go", Language: "go", Kind: "method", Symbol: "Caller", Signature: "func Caller()", StartLine: 1, EndLine: 90, Score: 500, Relation: "callers", RelationContext: &model.RelationContext{AnchorHandle: "first-exact", Kind: "callers", Direction: model.RelationIncoming, Confidence: .95, Source: "go-ast", Resolved: true}},
+		{Handle: "first-exact", Path: "src/first.go", Language: "go", Kind: "function", Symbol: "First", Signature: "func First()", StartLine: 1, EndLine: 1, Score: 40, Reasons: []model.ScoreReason{{Code: "symbol-exact"}}, Content: "func First() {}"},
+		{Handle: "noise-1", Path: "src/noise-1.go", Language: "go", Kind: "function", Symbol: "NoiseOne", Signature: "func NoiseOne()", StartLine: 1, EndLine: 1, Score: 30, Reasons: []model.ScoreReason{{Code: "lexical"}}},
+		{Handle: "noise-2", Path: "src/noise-2.go", Language: "go", Kind: "function", Symbol: "NoiseTwo", Signature: "func NoiseTwo()", StartLine: 1, EndLine: 1, Score: 20, Reasons: []model.ScoreReason{{Code: "lexical"}}},
+		{Handle: "noise-3", Path: "src/noise-3.go", Language: "go", Kind: "function", Symbol: "NoiseThree", Signature: "func NoiseThree()", StartLine: 1, EndLine: 1, Score: 10, Reasons: []model.ScoreReason{{Code: "lexical"}}},
+		{Handle: "noise-4", Path: "src/noise-4.go", Language: "go", Kind: "function", Symbol: "NoiseFour", Signature: "func NoiseFour()", StartLine: 1, EndLine: 1, Score: 9, Reasons: []model.ScoreReason{{Code: "lexical"}}},
+		{Handle: "noise-5", Path: "src/noise-5.go", Language: "go", Kind: "function", Symbol: "NoiseFive", Signature: "func NoiseFive()", StartLine: 1, EndLine: 1, Score: 8, Reasons: []model.ScoreReason{{Code: "lexical"}}},
+		{Handle: "noise-6", Path: "src/noise-6.go", Language: "go", Kind: "function", Symbol: "NoiseSix", Signature: "func NoiseSix()", StartLine: 1, EndLine: 1, Score: 7, Reasons: []model.ScoreReason{{Code: "lexical"}}},
+	}
+	for index := 7; index <= 20; index++ {
+		candidates = append(candidates, model.RankedCandidate{Handle: "noise-" + strconv.Itoa(index), Path: "src/noise-" + strconv.Itoa(index) + ".go", Language: "go", Kind: "function", Symbol: "Noise" + strconv.Itoa(index), Signature: "func Noise" + strconv.Itoa(index) + "()", StartLine: 1, EndLine: 1, Score: float64(30 - index), Reasons: []model.ScoreReason{{Code: "lexical"}}})
+	}
+	req.Candidates = append(candidates, model.RankedCandidate{Handle: "later-exact", Path: "src/target.go", Language: "go", Kind: "function", Symbol: "Target", Signature: "func Target()", StartLine: 1, EndLine: 1, Score: 10, Reasons: []model.ScoreReason{{Code: "symbol-exact"}}, Content: "func Target() {}"})
+	result, err := NewCompiler(nil).Compile(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !packetHasHandle(result.Packet, "later-exact") {
+		t.Fatalf("later exact anchor was dropped: packet=%+v", result.Packet)
+	}
+}
+
+func TestCompilerReservesRelationAnchorAndCandidateWithoutDanglingEdge(t *testing.T) {
+	req := compilerRequest(512)
+	req.Mode = ModeOutline
+	req.Candidates = []model.RankedCandidate{
+		{Handle: "target", Path: "src/target.go", Language: "go", Kind: "function", Symbol: "Target", Signature: "func Target()", StartLine: 1, EndLine: 1, Score: 100, Reasons: []model.ScoreReason{{Code: "symbol-exact"}}, Content: "func Target() {}"},
+		{Handle: "dependent", Path: "src/dependent.go", Language: "go", Kind: "function", Symbol: "Dependent", Signature: "func Dependent()", StartLine: 1, EndLine: 80, Score: 90, Content: "func Dependent() {\n" + strings.Repeat("\tuse()\n", 80) + "}\n", Relation: "callers", RelationContext: &model.RelationContext{AnchorHandle: "path-anchor", Kind: "callers", Direction: model.RelationIncoming, Confidence: .95, Source: "go-ast", Resolved: true}},
+		{Handle: "noise-1", Path: "src/noise-1.go", Language: "go", Kind: "function", Symbol: "NoiseOne", Signature: "func NoiseOne()", StartLine: 1, EndLine: 1, Score: 80, Reasons: []model.ScoreReason{{Code: "lexical"}}},
+		{Handle: "noise-2", Path: "src/noise-2.go", Language: "go", Kind: "function", Symbol: "NoiseTwo", Signature: "func NoiseTwo()", StartLine: 1, EndLine: 1, Score: 70, Reasons: []model.ScoreReason{{Code: "lexical"}}},
+		{Handle: "noise-3", Path: "src/noise-3.go", Language: "go", Kind: "function", Symbol: "NoiseThree", Signature: "func NoiseThree()", StartLine: 1, EndLine: 1, Score: 60, Reasons: []model.ScoreReason{{Code: "lexical"}}},
+		{Handle: "path-anchor", Path: "src/path-anchor.go", Language: "go", Kind: "function", Symbol: "PathAnchor", Signature: "func PathAnchor()", StartLine: 1, EndLine: 1, Score: 5, Reasons: []model.ScoreReason{{Code: "path"}}, Content: "func PathAnchor() {}"},
+	}
+	result, err := NewCompiler(nil).Compile(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !packetHasHandle(result.Packet, "dependent") || !packetHasHandle(result.Packet, "path-anchor") {
+		t.Fatalf("relation anchor pair not retained: packet=%+v", result.Packet)
+	}
+	if len(result.Packet.Relations) != 1 {
+		t.Fatalf("relation edge missing or duplicated: %+v", result.Packet.Relations)
+	}
+	ids := map[string]bool{}
+	for _, item := range result.Packet.Evidence {
+		ids[item.ID] = true
+	}
+	for _, edge := range result.Packet.Relations {
+		if !ids[edge.From] || !ids[edge.To] {
+			t.Fatalf("dangling relation edge: %+v", edge)
+		}
+	}
+}
+
+func TestCompilerDoesNotReserveGenericLexicalCandidate(t *testing.T) {
+	req := compilerRequest(512)
+	req.Mode = ModeOutline
+	req.Candidates = []model.RankedCandidate{
+		{Handle: "target", Path: "src/target.go", Language: "go", Kind: "function", Symbol: "Target", Signature: "func Target()", StartLine: 1, EndLine: 1, Score: 20, Reasons: []model.ScoreReason{{Code: "symbol-exact"}}, Content: "func Target() {}"},
+		{Handle: "lexical-1", Path: "src/lexical-1.go", Language: "go", Kind: "function", Symbol: "LexicalOne", Signature: "func LexicalOne()", StartLine: 1, EndLine: 1, Score: 1000, Reasons: []model.ScoreReason{{Code: "lexical"}}},
+		{Handle: "lexical-2", Path: "src/lexical-2.go", Language: "go", Kind: "function", Symbol: "LexicalTwo", Signature: "func LexicalTwo()", StartLine: 1, EndLine: 1, Score: 900, Reasons: []model.ScoreReason{{Code: "lexical"}}},
+		{Handle: "lexical-3", Path: "src/lexical-3.go", Language: "go", Kind: "function", Symbol: "LexicalThree", Signature: "func LexicalThree()", StartLine: 1, EndLine: 1, Score: 800, Reasons: []model.ScoreReason{{Code: "lexical"}}},
+		{Handle: "path-anchor", Path: "src/path-anchor.go", Language: "go", Kind: "function", Symbol: "PathAnchor", Signature: "func PathAnchor()", StartLine: 1, EndLine: 1, Score: 5, Reasons: []model.ScoreReason{{Code: "path"}}, Content: "func PathAnchor() {}"},
+	}
+	req.Plan.Anchors = []string{"Target", "PathAnchor"}
+	result, err := NewCompiler(nil).Compile(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !packetHasHandle(result.Packet, "path-anchor") {
+		t.Fatalf("path anchor was dropped while lexical noise was retained: %+v", result.Packet.Evidence)
+	}
+	lexicalCount := 0
+	for _, item := range result.Packet.Evidence {
+		if strings.HasPrefix(item.Handle, "lexical-") {
+			lexicalCount++
+		}
+	}
+	if lexicalCount == 3 {
+		t.Fatalf("generic lexical candidates were all retained as if reserved: %+v", result.Packet.Evidence)
+	}
+}
+
+func TestCompilerKeepsAnchorWithSignatureFallbackAtTightBudget(t *testing.T) {
+	req := compilerRequest(512)
+	req.Mode = ModeSource
+	req.Candidates = []model.RankedCandidate{
+		{Handle: "target", Path: "src/target.go", Language: "go", Kind: "function", Symbol: "Target", Signature: "func Target()", StartLine: 1, EndLine: 1, Score: 100, Reasons: []model.ScoreReason{{Code: "symbol-exact"}}, Content: "func Target() {}"},
+		{Handle: "lexical-1", Path: "src/lexical-1.go", Language: "go", Kind: "function", Symbol: "LexicalOne", Signature: "func LexicalOne()", StartLine: 1, EndLine: 100, Score: 1000, Reasons: []model.ScoreReason{{Code: "lexical"}}, Content: "func LexicalOne() {\n" + strings.Repeat("\tnoise()\n", 100) + "}\n"},
+		{Handle: "lexical-2", Path: "src/lexical-2.go", Language: "go", Kind: "function", Symbol: "LexicalTwo", Signature: "func LexicalTwo()", StartLine: 1, EndLine: 100, Score: 900, Reasons: []model.ScoreReason{{Code: "lexical"}}, Content: "func LexicalTwo() {\n" + strings.Repeat("\tnoise()\n", 100) + "}\n"},
+		{Handle: "lexical-3", Path: "src/lexical-3.go", Language: "go", Kind: "function", Symbol: "LexicalThree", Signature: "func LexicalThree()", StartLine: 1, EndLine: 100, Score: 800, Reasons: []model.ScoreReason{{Code: "lexical"}}, Content: "func LexicalThree() {\n" + strings.Repeat("\tnoise()\n", 100) + "}\n"},
+		{Handle: "path-anchor", Path: "src/path-anchor.go", Language: "go", Kind: "function", Symbol: "PathAnchor", Signature: "func PathAnchor()", StartLine: 1, EndLine: 122, Score: 5, Reasons: []model.ScoreReason{{Code: "path"}}, Content: "func PathAnchor() {\n" + strings.Repeat("\tveryLongBody()\n", 120) + "}\n"},
+	}
+	result, err := NewCompiler(nil).Compile(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var anchor Item
+	for _, item := range result.Packet.Evidence {
+		if item.Handle == "path-anchor" {
+			anchor = item
+		}
+	}
+	if anchor.Handle == "" {
+		t.Fatalf("tight-budget path anchor was omitted: %+v", result.Packet.Evidence)
+	}
+	if anchor.Fidelity != FidelitySignature && anchor.Fidelity != FidelityExcerpt {
+		t.Fatalf("tight-budget anchor retained without fallback: %+v", anchor)
+	}
+	if result.Packet.Budget.Used > result.Packet.Budget.Limit {
+		t.Fatalf("budget exceeded: %+v", result.Packet.Budget)
+	}
+}
+
+func packetHasHandle(packet Packet, handle string) bool {
+	for _, item := range packet.Evidence {
+		if item.Handle == handle {
+			return true
+		}
+	}
+	return false
+}

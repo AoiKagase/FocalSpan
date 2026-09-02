@@ -84,25 +84,21 @@ func (c *Compiler) Compile(req CompileRequest) (CompileResult, error) {
 	baseOmitted := duplicateOmitted + skippedKnown
 	selected := make([]selectedCandidate, 0, len(prepared))
 	selectedHandles := make(map[string]bool, len(prepared))
-
-	anchorIndex := -1
+	reservedHandles := reserveAnchorHandles(prepared)
 	for index := range prepared {
-		if prepared[index].classified.Role == RoleTarget || prepared[index].classified.Role == RoleChange {
-			anchorIndex = index
+		if len(selected) >= selectionLimit(req.Plan) {
 			break
 		}
-	}
-	if anchorIndex >= 0 {
-		anchor := prepared[anchorIndex]
-		for index := 0; index < len(anchor.variants); index++ {
-			trial := appendSelected(selected, selectedCandidate{prepared: anchor, variant: anchor.variants[index], utility: candidateUtility(req.Plan, anchor.classified, nil, nil)})
-			packet := buildPacket(req, mode, limit, trial, len(prepared)-len(trial)+baseOmitted, skippedKnown, c.estimator)
-			if packet.Budget.Used <= limit {
-				selected = trial
-				selectedHandles[anchor.classified.Candidate.Handle] = true
-				break
-			}
+		candidate := prepared[index]
+		if !reservedHandles[candidate.classified.Candidate.Handle] {
+			continue
 		}
+		choice, ok := fitReservedCandidate(req, mode, limit, prepared, selected, candidate, baseOmitted, skippedKnown, c.estimator)
+		if !ok {
+			continue
+		}
+		selected = append(selected, choice)
+		selectedHandles[candidate.classified.Candidate.Handle] = true
 	}
 
 	for len(selected) < selectionLimit(req.Plan) {
@@ -113,7 +109,7 @@ func (c *Compiler) Compile(req CompileRequest) (CompileResult, error) {
 		bestUtility := 0.0
 		for candidateIndex := range prepared {
 			candidate := prepared[candidateIndex]
-			if selectedHandles[candidate.classified.Candidate.Handle] {
+			if selectedHandles[candidate.classified.Candidate.Handle] || reservedHandles[candidate.classified.Candidate.Handle] {
 				continue
 			}
 			baseUtility := candidateUtility(req.Plan, candidate.classified, roles, paths)
@@ -146,7 +142,7 @@ func (c *Compiler) Compile(req CompileRequest) (CompileResult, error) {
 	omitted := len(prepared) - len(selected) + baseOmitted
 	packet := buildPacket(req, mode, limit, selected, omitted, skippedKnown, c.estimator)
 	for packet.Budget.Used > limit && len(selected) > 0 {
-		remove := lowestUtilityNonAnchor(selected)
+		remove := lowestUtilityNonAnchor(selected, reservedHandles)
 		selected = append(selected[:remove], selected[remove+1:]...)
 		omitted++
 		packet = buildPacket(req, mode, limit, selected, omitted, skippedKnown, c.estimator)
@@ -446,6 +442,56 @@ func selectedDiversity(selected []selectedCandidate) (map[Role]bool, map[string]
 	return roles, paths
 }
 
+func reserveAnchorHandles(prepared []preparedCandidate) map[string]bool {
+	reserved := make(map[string]bool, len(prepared))
+	knownHandles := make(map[string]bool, len(prepared))
+	for _, candidate := range prepared {
+		handle := candidate.classified.Candidate.Handle
+		if handle != "" {
+			knownHandles[handle] = true
+		}
+		if isReservedAnchor(candidate.classified) {
+			reserved[handle] = true
+		}
+	}
+	for _, candidate := range prepared {
+		context := candidate.classified.Candidate.RelationContext
+		if context != nil && knownHandles[context.AnchorHandle] {
+			reserved[context.AnchorHandle] = true
+		}
+	}
+	return reserved
+}
+
+func isReservedAnchor(candidate ClassifiedCandidate) bool {
+	if candidate.Role == RoleTarget || candidate.Role == RoleChange {
+		return true
+	}
+	value := candidate.Candidate
+	if value.Relation != "" || value.RelationContext != nil {
+		return true
+	}
+	for _, reason := range value.Reasons {
+		if reason.Code == "symbol-exact" || reason.Code == "path" {
+			return true
+		}
+	}
+	return false
+}
+
+func fitReservedCandidate(req CompileRequest, mode Mode, limit int, prepared []preparedCandidate, selected []selectedCandidate, candidate preparedCandidate, baseOmitted, skippedKnown int, estimator budget.TokenEstimator) (selectedCandidate, bool) {
+	baseUtility := candidateUtility(req.Plan, candidate.classified, nil, nil)
+	for _, variant := range candidate.variants {
+		choice := selectedCandidate{prepared: candidate, variant: variant, utility: baseUtility * variantQuality(variant.Fidelity)}
+		trial := appendSelected(selected, choice)
+		packet := buildPacket(req, mode, limit, trial, len(prepared)-len(trial)+baseOmitted, skippedKnown, estimator)
+		if packet.Budget.Used <= limit {
+			return choice, true
+		}
+	}
+	return selectedCandidate{}, false
+}
+
 func selectedEvidenceTokens(selected []selectedCandidate) int {
 	total := 0
 	for _, item := range selected {
@@ -457,10 +503,13 @@ func appendSelected(values []selectedCandidate, value selectedCandidate) []selec
 	result := append([]selectedCandidate(nil), values...)
 	return append(result, value)
 }
-func lowestUtilityNonAnchor(selected []selectedCandidate) int {
+func lowestUtilityNonAnchor(selected []selectedCandidate, reserved map[string]bool) int {
 	index := len(selected) - 1
 	lowest := math.MaxFloat64
 	for i, item := range selected {
+		if reserved[item.prepared.classified.Candidate.Handle] {
+			continue
+		}
 		if (item.prepared.classified.Role == RoleTarget || item.prepared.classified.Role == RoleChange) && len(selected) > 1 {
 			continue
 		}
