@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/focalspan/focalspan/internal/app"
+	"github.com/focalspan/focalspan/internal/config"
 	"github.com/focalspan/focalspan/internal/evidence"
 )
 
@@ -18,7 +19,11 @@ func TestEvaluateEvidenceMeasuresContractComparisonAndDelta(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "auth.go"), []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	service, err := app.New(root)
+	cfg, _, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := app.NewWithConfigForUpdate(root, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +55,11 @@ func TestEvidenceFixtureDeltaRatioImprovesWithKnownGuidancePruning(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := app.New(root)
+	cfg, _, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := app.NewWithConfigForUpdate(root, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

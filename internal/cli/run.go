@@ -166,7 +166,7 @@ func runSetup(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	for _, warning := range warnings {
 		_, _ = fmt.Fprintf(stderr, "focalspan: warning: %s\n", warning)
 	}
-	service, err := app.NewWithConfig(root, cfg)
+	service, err := app.NewWithConfigForUpdate(root, cfg)
 	if err != nil {
 		return err
 	}
@@ -203,7 +203,7 @@ func runUpdate(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	if err != nil {
 		return err
 	}
-	service, err := app.NewWithConfig(root, cfg)
+	service, err := app.NewWithConfigForUpdate(root, cfg)
 	if err != nil {
 		return err
 	}
@@ -336,7 +336,16 @@ func runQuery(ctx context.Context, args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	service, err := app.New(root)
+	var service *app.Service
+	if *autoUpdate {
+		cfg, _, cfgErr := config.Load(root)
+		if cfgErr != nil {
+			return cfgErr
+		}
+		service, err = app.NewWithConfigForUpdate(root, cfg)
+	} else {
+		service, err = app.New(root)
+	}
 	if err != nil {
 		return err
 	}
@@ -413,7 +422,16 @@ func runServe(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	service, err := app.New(root)
+	var service *app.Service
+	if *autoUpdate {
+		cfg, _, cfgErr := config.Load(root)
+		if cfgErr != nil {
+			return cfgErr
+		}
+		service, err = app.NewWithConfigForUpdate(root, cfg)
+	} else {
+		service, err = app.New(root)
+	}
 	if err != nil {
 		return err
 	}

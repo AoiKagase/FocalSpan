@@ -20,13 +20,35 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = "1"
+const schemaVersion = "2"
+
+// SchemaUpgradeRequiredError reports that the on-disk derived index is an
+// older schema and must be rebuilt through an explicitly allowed update path.
+// Normal opens never mutate the old database.
+type SchemaUpgradeRequiredError struct {
+	Path    string
+	Version string
+}
+
+func (e *SchemaUpgradeRequiredError) Error() string {
+	if e == nil {
+		return "schema upgrade required"
+	}
+	return fmt.Sprintf("schema upgrade required for %s (found version %q); run focalspan update --rebuild", e.Path, e.Version)
+}
+
+func IsSchemaUpgradeRequired(err error) bool {
+	var target *SchemaUpgradeRequiredError
+	return errors.As(err, &target)
+}
 
 type Store struct {
-	db     *sql.DB
-	root   string
-	dbPath string
-	mu     sync.RWMutex
+	db             *sql.DB
+	root           string
+	dbPath         string
+	liveDBPath     string
+	upgradePending bool
+	mu             sync.RWMutex
 }
 
 type FileUpdate struct {
@@ -39,7 +61,37 @@ type MetaUpdate struct {
 	Value string
 }
 
+type IndexDelta struct {
+	ChangedPaths []string
+	LookupKeys   []string
+}
+
+type LinkScope struct {
+	Full          bool
+	UseProjection bool
+	ChangedPaths  []string
+	LookupKeys    []string
+}
+
+type RelationLink struct {
+	FromHandle   string
+	UnresolvedTo string
+	Kind         string
+	ToHandle     string
+}
+
 func Open(root, indexDir string) (*Store, error) {
+	return open(root, indexDir, false)
+}
+
+// OpenForUpdate allows setup/update entry points to rebuild a legacy derived
+// database in an isolated sibling path. The old database remains untouched
+// until FinalizeUpgrade succeeds.
+func OpenForUpdate(root, indexDir string) (*Store, error) {
+	return open(root, indexDir, true)
+}
+
+func open(root, indexDir string, allowUpgrade bool) (*Store, error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return nil, fmt.Errorf("absolute root: %w", err)
@@ -59,18 +111,91 @@ func Open(root, indexDir string) (*Store, error) {
 		return nil, fmt.Errorf("create index directory: %w", err)
 	}
 	dbPath := filepath.Join(dir, "index.db")
+	if allowUpgrade {
+		if err := recoverUpgradeArtifacts(dbPath); err != nil {
+			return nil, err
+		}
+	}
+	exists := false
+	if _, statErr := os.Stat(dbPath); statErr == nil {
+		exists = true
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return nil, fmt.Errorf("stat index database: %w", statErr)
+	}
+	if allowUpgrade && exists {
+		version, versionErr := readSchemaVersionPath(dbPath)
+		if versionErr != nil && !errors.Is(versionErr, sql.ErrNoRows) {
+			return nil, versionErr
+		}
+		if version == "1" {
+			tempPath := dbPath + ".v2.tmp"
+			if err := removeSQLiteFiles(tempPath); err != nil {
+				return nil, fmt.Errorf("remove stale schema v2 temporary database: %w", err)
+			}
+			s, err := openDatabase(root, tempPath, false)
+			if err != nil {
+				return nil, err
+			}
+			s.liveDBPath = dbPath
+			s.upgradePending = true
+			return s, nil
+		}
+		if version != schemaVersion {
+			return nil, unsupportedSchemaVersionError(dbPath, version)
+		}
+	}
+	if !allowUpgrade && exists {
+		version, versionErr := readSchemaVersionPath(dbPath)
+		if versionErr != nil && !errors.Is(versionErr, sql.ErrNoRows) {
+			return nil, versionErr
+		}
+		if version == "1" {
+			return nil, &SchemaUpgradeRequiredError{Path: dbPath, Version: version}
+		}
+		if version != schemaVersion {
+			return nil, unsupportedSchemaVersionError(dbPath, version)
+		}
+	}
+	return openDatabase(root, dbPath, exists)
+}
+
+func unsupportedSchemaVersionError(path, version string) error {
+	if version == "" {
+		version = "<missing>"
+	}
+	return fmt.Errorf("unsupported schema version %q; remove %s, then run focalspan update --rebuild", version, path)
+}
+
+func openDatabase(root, dbPath string, existing bool) (*Store, error) {
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("open index database: %w", err)
 	}
 	db.SetMaxOpenConns(4)
 	db.SetMaxIdleConns(4)
-	s := &Store{db: db, root: root, dbPath: dbPath}
+	s := &Store{db: db, root: root, dbPath: dbPath, liveDBPath: dbPath}
 	if err := s.configureAndMigrate(); err != nil {
 		db.Close()
 		return nil, err
 	}
 	return s, nil
+}
+
+func readSchemaVersionPath(path string) (string, error) {
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return "", fmt.Errorf("open index database: %w", err)
+	}
+	defer db.Close()
+	var version string
+	err = db.QueryRow(`SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&version)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", sql.ErrNoRows
+	}
+	if err != nil {
+		return "", fmt.Errorf("read schema version: %w", err)
+	}
+	return version, nil
 }
 
 func (s *Store) configureAndMigrate() error {
@@ -83,14 +208,16 @@ func (s *Store) configureAndMigrate() error {
 	if err != nil {
 		return fmt.Errorf("begin migration: %w", err)
 	}
-	sqlText, err := migrationFiles.ReadFile("migrations/001_initial.sql")
-	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("read migration: %w", err)
-	}
-	if _, err := tx.Exec(string(sqlText)); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("apply migration: %w", err)
+	for _, migration := range []string{"migrations/001_initial.sql", "migrations/002_schema_v2.sql"} {
+		sqlText, readErr := migrationFiles.ReadFile(migration)
+		if readErr != nil {
+			tx.Rollback()
+			return fmt.Errorf("read migration %s: %w", migration, readErr)
+		}
+		if _, execErr := tx.Exec(string(sqlText)); execErr != nil {
+			tx.Rollback()
+			return fmt.Errorf("apply migration %s: %w", migration, execErr)
+		}
 	}
 	if _, err := tx.Exec(`INSERT INTO meta(key, value) VALUES('schema_version', ?) ON CONFLICT(key) DO NOTHING`, schemaVersion); err != nil {
 		tx.Rollback()
@@ -103,7 +230,7 @@ func (s *Store) configureAndMigrate() error {
 	}
 	if version != schemaVersion {
 		tx.Rollback()
-		return fmt.Errorf("unsupported schema version %q; remove %s, then run focalspan update --rebuild", version, s.dbPath)
+		return unsupportedSchemaVersionError(s.dbPath, version)
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit migration: %w", err)
@@ -111,9 +238,136 @@ func (s *Store) configureAndMigrate() error {
 	return nil
 }
 
-func (s *Store) Close() error { return s.db.Close() }
+func (s *Store) Close() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	err := s.db.Close()
+	if s.upgradePending {
+		_ = removeSQLiteFiles(s.dbPath)
+		s.upgradePending = false
+	}
+	return err
+}
 
 func (s *Store) DBPath() string { return s.dbPath }
+
+// FinalizeUpgrade atomically replaces the legacy database after the temporary
+// v2 database has been fully indexed and integrity-checked.
+func (s *Store) FinalizeUpgrade(ctx context.Context) error {
+	if s == nil || !s.upgradePending {
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := s.verifyIntegrity(); err != nil {
+		return err
+	}
+	if err := s.db.Close(); err != nil {
+		return fmt.Errorf("close temporary schema v2 database: %w", err)
+	}
+	tempPath := s.dbPath
+	livePath := s.liveDBPath
+	backupPath := livePath + ".v1.bak"
+	if err := removeSQLiteFiles(backupPath); err != nil {
+		return fmt.Errorf("remove stale schema v1 backup: %w", err)
+	}
+	if err := renameSQLiteFiles(livePath, backupPath); err != nil {
+		return fmt.Errorf("stage legacy database for replacement: %w", err)
+	}
+	if err := renameSQLiteFiles(tempPath, livePath); err != nil {
+		_ = renameSQLiteFiles(backupPath, livePath)
+		return fmt.Errorf("replace index database: %w", err)
+	}
+	if err := removeSQLiteFiles(backupPath); err != nil {
+		return fmt.Errorf("remove legacy database backup: %w", err)
+	}
+	db, err := sql.Open("sqlite", livePath)
+	if err != nil {
+		return fmt.Errorf("reopen schema v2 database: %w", err)
+	}
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(4)
+	s.db = db
+	s.dbPath = livePath
+	s.liveDBPath = livePath
+	s.upgradePending = false
+	if err := s.configureAndMigrate(); err != nil {
+		_ = db.Close()
+		return err
+	}
+	return nil
+}
+
+func (s *Store) verifyIntegrity() error {
+	var result string
+	if err := s.db.QueryRow(`PRAGMA integrity_check`).Scan(&result); err != nil {
+		return fmt.Errorf("schema v2 integrity check: %w", err)
+	}
+	if !strings.EqualFold(strings.TrimSpace(result), "ok") {
+		return fmt.Errorf("schema v2 integrity check failed: %s", result)
+	}
+	version, err := s.Meta(context.Background(), "schema_version")
+	if err != nil {
+		return fmt.Errorf("verify schema version: %w", err)
+	}
+	if version != schemaVersion {
+		return fmt.Errorf("temporary database has schema version %q, want %q", version, schemaVersion)
+	}
+	return nil
+}
+
+func recoverUpgradeArtifacts(livePath string) error {
+	backupPath := livePath + ".v1.bak"
+	tempPath := livePath + ".v2.tmp"
+	liveExists := fileExists(livePath)
+	backupExists := fileExists(backupPath)
+	tempExists := fileExists(tempPath)
+	if !liveExists && backupExists {
+		if err := os.Rename(backupPath, livePath); err != nil {
+			return fmt.Errorf("recover legacy index database: %w", err)
+		}
+		liveExists = true
+	}
+	if backupExists && liveExists {
+		if err := removeSQLiteFiles(backupPath); err != nil {
+			return fmt.Errorf("remove recovered legacy backup: %w", err)
+		}
+	}
+	if tempExists && liveExists {
+		if err := removeSQLiteFiles(tempPath); err != nil {
+			return fmt.Errorf("remove interrupted schema v2 database: %w", err)
+		}
+	}
+	return nil
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func removeSQLiteFiles(path string) error {
+	for _, candidate := range []string{path, path + "-wal", path + "-shm"} {
+		if err := os.Remove(candidate); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
+}
+
+func renameSQLiteFiles(from, to string) error {
+	if err := os.Rename(from, to); err != nil {
+		return err
+	}
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if err := os.Rename(from+suffix, to+suffix); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
+}
 
 func (s *Store) ReplaceFile(ctx context.Context, file model.SourceFile, extraction model.Extraction) error {
 	s.mu.Lock()
@@ -171,6 +425,22 @@ func (s *Store) replaceFileTx(ctx context.Context, tx *sql.Tx, file model.Source
 		if _, err := tx.ExecContext(ctx, `INSERT INTO symbols(handle, file_id, kind, name, qualified_name, signature, start_line, end_line, start_byte, end_byte, parent_handle, confidence) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, symbol.Handle, fileID, symbol.Kind, symbol.Name, symbol.QualifiedName, symbol.Signature, symbol.StartLine, symbol.EndLine, symbol.StartByte, symbol.EndByte, nullable(symbol.ParentHandle), symbol.Confidence); err != nil {
 			return fmt.Errorf("insert symbol: %w", err)
 		}
+		for keyKind, key := range symbolLookupKeys(symbol) {
+			if key == "" {
+				continue
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO symbol_lookup(lookup_key, key_kind, handle) VALUES(?, ?, ?)`, key, keyKind, symbol.Handle); err != nil {
+				return fmt.Errorf("insert symbol lookup: %w", err)
+			}
+		}
+	}
+	for keyKind, key := range fileLookupKeys(file.Path) {
+		if key == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO file_lookup(lookup_key, key_kind, file_id) VALUES(?, ?, ?)`, key, keyKind, fileID); err != nil {
+			return fmt.Errorf("insert file lookup: %w", err)
+		}
 	}
 	for _, chunk := range extraction.Chunks {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO chunks(handle, file_id, symbol_handle, kind, symbol_name, signature, start_line, end_line, start_byte, end_byte, content, content_hash, estimated_tokens) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, chunk.Handle, fileID, nullable(chunk.SymbolHandle), chunk.Kind, chunk.SymbolName, chunk.Signature, chunk.StartLine, chunk.EndLine, chunk.StartByte, chunk.EndByte, chunk.Content, chunk.ContentHash, chunk.EstimatedTokens); err != nil {
@@ -181,8 +451,23 @@ func (s *Store) replaceFileTx(ctx context.Context, tx *sql.Tx, file model.Source
 		}
 	}
 	for _, relation := range extraction.Relations {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO relations(from_handle, to_handle, unresolved_to, kind, confidence, source) VALUES(?, ?, ?, ?, ?, ?)`, relation.FromHandle, nullable(relation.ToHandle), nullable(relation.UnresolvedTo), relation.Kind, relation.Confidence, relation.Source); err != nil {
+		result, err := tx.ExecContext(ctx, `INSERT INTO relations(from_handle, to_handle, unresolved_to, kind, confidence, source) VALUES(?, ?, ?, ?, ?, ?)`, relation.FromHandle, nullable(relation.ToHandle), nullable(relation.UnresolvedTo), relation.Kind, relation.Confidence, relation.Source)
+		if err != nil {
 			return fmt.Errorf("insert relation: %w", err)
+		}
+		if relation.UnresolvedTo != "" {
+			relationID, idErr := result.LastInsertId()
+			if idErr != nil {
+				return fmt.Errorf("relation id: %w", idErr)
+			}
+			for keyKind, key := range relationLookupKeys(relation.UnresolvedTo) {
+				if key == "" {
+					continue
+				}
+				if _, err := tx.ExecContext(ctx, `INSERT INTO relation_lookup(relation_id, lookup_key, key_kind, origin_path) VALUES(?, ?, ?, ?)`, relationID, key, keyKind, file.Path); err != nil {
+					return fmt.Errorf("insert relation lookup: %w", err)
+				}
+			}
 		}
 	}
 	for _, diagnostic := range extraction.Diagnostics {
@@ -232,13 +517,52 @@ func (s *Store) deleteFileTx(ctx context.Context, tx *sql.Tx, path string) error
 }
 
 func (s *Store) ApplyIndex(ctx context.Context, deletions []string, updates []FileUpdate, metadata []MetaUpdate, run model.IndexRun) error {
+	_, err := s.ApplyIndexWithDelta(ctx, deletions, updates, metadata, run)
+	return err
+}
+
+func (s *Store) ApplyIndexWithDelta(ctx context.Context, deletions []string, updates []FileUpdate, metadata []MetaUpdate, run model.IndexRun) (IndexDelta, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin index update: %w", err)
+		return IndexDelta{}, fmt.Errorf("begin index update: %w", err)
 	}
-	rollback := func(e error) error { _ = tx.Rollback(); return e }
+	delta := IndexDelta{ChangedPaths: append([]string(nil), deletions...)}
+	for _, update := range updates {
+		delta.ChangedPaths = append(delta.ChangedPaths, update.File.Path)
+	}
+	keySet := make(map[string]bool)
+	for _, path := range deletions {
+		keys, keyErr := lookupKeysForPathTx(ctx, tx, path)
+		if keyErr != nil {
+			_ = tx.Rollback()
+			return IndexDelta{}, fmt.Errorf("read lookup keys for deleted file %s: %w", path, keyErr)
+		}
+		for _, key := range keys {
+			keySet[key] = true
+		}
+	}
+	for _, update := range updates {
+		keys, keyErr := lookupKeysForPathTx(ctx, tx, update.File.Path)
+		if keyErr != nil {
+			_ = tx.Rollback()
+			return IndexDelta{}, fmt.Errorf("read lookup keys for updated file %s: %w", update.File.Path, keyErr)
+		}
+		for _, key := range keys {
+			keySet[key] = true
+		}
+		for _, key := range extractionLookupKeys(update.File, update.Extraction) {
+			keySet[key] = true
+		}
+	}
+	sort.Strings(delta.ChangedPaths)
+	delta.ChangedPaths = uniqueStrings(delta.ChangedPaths)
+	for key := range keySet {
+		delta.LookupKeys = append(delta.LookupKeys, key)
+	}
+	sort.Strings(delta.LookupKeys)
+	rollback := func(e error) (IndexDelta, error) { _ = tx.Rollback(); return IndexDelta{}, e }
 	for _, path := range deletions {
 		if err := s.deleteFileTx(ctx, tx, path); err != nil {
 			return rollback(fmt.Errorf("delete stale file %s: %w", path, err))
@@ -258,9 +582,9 @@ func (s *Store) ApplyIndex(ctx context.Context, deletions []string, updates []Fi
 		return rollback(fmt.Errorf("record index run: %w", err))
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit index update: %w", err)
+		return IndexDelta{}, fmt.Errorf("commit index update: %w", err)
 	}
-	return nil
+	return delta, nil
 }
 
 func nullable(value string) any {
@@ -268,6 +592,150 @@ func nullable(value string) any {
 		return nil
 	}
 	return value
+}
+
+func normalizeLookupKey(value string) string {
+	return strings.ToLower(strings.TrimSpace(strings.ReplaceAll(value, "\\", "/")))
+}
+
+func relationLookupKeys(value string) map[string]string {
+	raw := strings.TrimSpace(strings.ReplaceAll(value, "\\", "/"))
+	normalized := strings.ToLower(raw)
+	if normalized == "" {
+		return nil
+	}
+	result := map[string]string{"target": normalized}
+	if strings.Contains(normalized, ".") {
+		moduleRaw := strings.TrimLeft(raw, ".")
+		parts := strings.Split(moduleRaw, ".")
+		if len(parts) > 1 {
+			last := parts[len(parts)-1]
+			if last != "" && last[0] >= 'A' && last[0] <= 'Z' {
+				parts = parts[:len(parts)-1]
+			}
+		}
+		result["module"] = strings.ToLower(strings.ReplaceAll(strings.Join(parts, "."), ".", "/"))
+	}
+	if strings.Contains(normalized, "::") {
+		parts := strings.Split(normalized, "::")
+		if len(parts) > 1 {
+			parts = parts[:len(parts)-1]
+			if len(parts) > 0 && (parts[0] == "crate" || parts[0] == "self" || parts[0] == "super") {
+				parts = parts[1:]
+			}
+			if len(parts) > 0 {
+				result["rust_module"] = strings.Join(parts, "/")
+			}
+		}
+	}
+	return result
+}
+
+func symbolLookupKeys(symbol model.Symbol) map[string]string {
+	result := make(map[string]string, 2)
+	if key := normalizeLookupKey(symbol.Name); key != "" {
+		result["name"] = key
+	}
+	if key := normalizeLookupKey(symbol.QualifiedName); key != "" {
+		result["qualified"] = key
+	}
+	return result
+}
+
+func fileLookupKeys(path string) map[string]string {
+	normalized := normalizeLookupKey(path)
+	if normalized == "" {
+		return nil
+	}
+	result := map[string]string{"path": normalized}
+	if extension := filepath.Ext(normalized); extension != "" {
+		result["extensionless"] = strings.TrimSuffix(normalized, extension)
+	}
+	if extensionless := strings.TrimSuffix(normalized, filepath.Ext(normalized)); extensionless != "" {
+		result["module"] = strings.ReplaceAll(extensionless, "/", ".")
+	}
+	if base := filepath.Base(normalized); base != "." && base != "" {
+		result["basename"] = base
+	}
+	parts := strings.Split(strings.Trim(normalized, "/"), "/")
+	for start := 1; start < len(parts); start++ {
+		if suffix := strings.Join(parts[start:], "/"); suffix != "" {
+			result["suffix:"+suffix] = suffix
+		}
+	}
+	if extensionless := strings.TrimSuffix(normalized, filepath.Ext(normalized)); extensionless != normalized {
+		extensionlessParts := strings.Split(strings.Trim(extensionless, "/"), "/")
+		for start := 1; start < len(extensionlessParts); start++ {
+			if suffix := strings.Join(extensionlessParts[start:], "/"); suffix != "" {
+				result["suffix:"+suffix] = suffix
+			}
+		}
+	}
+	for start := 0; start < len(parts)-1; start++ {
+		if directory := strings.Join(parts[start:len(parts)-1], "/"); directory != "" {
+			result["directory:"+directory] = directory
+		}
+	}
+	return result
+}
+
+func extractionLookupKeys(file model.SourceFile, extraction model.Extraction) []string {
+	set := make(map[string]bool)
+	for _, key := range fileLookupKeys(file.Path) {
+		if key != "" {
+			set[key] = true
+		}
+	}
+	for _, symbol := range extraction.Symbols {
+		for _, key := range symbolLookupKeys(symbol) {
+			if key != "" {
+				set[key] = true
+			}
+		}
+	}
+	for _, relation := range extraction.Relations {
+		for _, key := range relationLookupKeys(relation.UnresolvedTo) {
+			if key != "" {
+				set[key] = true
+			}
+		}
+	}
+	result := make([]string, 0, len(set))
+	for key := range set {
+		result = append(result, key)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func lookupKeysForPathTx(ctx context.Context, tx *sql.Tx, path string) ([]string, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT lookup_key FROM file_lookup WHERE file_id = (SELECT id FROM files WHERE path = ?) UNION SELECT lookup_key FROM symbol_lookup WHERE handle IN (SELECT handle FROM symbols WHERE file_id = (SELECT id FROM files WHERE path = ?))`, path, path)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make([]string, 0)
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		result = append(result, key)
+	}
+	return result, rows.Err()
+}
+
+func uniqueStrings(values []string) []string {
+	if len(values) < 2 {
+		return values
+	}
+	result := values[:1]
+	for _, value := range values[1:] {
+		if value != result[len(result)-1] {
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 func (s *Store) SearchFTS(ctx context.Context, query string, limit int) ([]model.RankedCandidate, error) {
@@ -975,6 +1443,13 @@ func (s *Store) RecordRun(ctx context.Context, run model.IndexRun) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	_, err := s.db.ExecContext(ctx, `INSERT INTO index_runs(started_at, completed_at, files_seen, files_added, files_changed, files_unchanged, files_deleted, parse_failures, duration_ms, revision) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, run.StartedAt, run.CompletedAt, run.FilesSeen, run.FilesAdded, run.FilesChanged, run.FilesUnchanged, run.FilesDeleted, run.ParseFailures, run.DurationMS, run.Revision)
+	return err
+}
+
+func (s *Store) FinalizeIndexRun(ctx context.Context, run model.IndexRun) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.ExecContext(ctx, `UPDATE index_runs SET completed_at = ?, duration_ms = ? WHERE id = (SELECT id FROM index_runs ORDER BY id DESC LIMIT 1)`, run.CompletedAt, run.DurationMS)
 	return err
 }
 

@@ -180,6 +180,33 @@ func TestLinkerResolvesQualifiedPythonPathToNamedSymbol(t *testing.T) {
 	t.Fatal("qualified Python import relation missing")
 }
 
+func TestLinkerScopedLinkingLeavesUnrelatedRelationsUntouched(t *testing.T) {
+	s := openLinkerStore(t)
+	defer s.Close()
+	seedLinkerFile(t, s, "src/target.go", "target", "ValidateToken", "func ValidateToken", nil)
+	seedLinkerFile(t, s, "src/changed.go", "changed", "Changed", "func Changed", []model.Relation{{FromHandle: "changed", UnresolvedTo: "ValidateToken", Kind: "calls", Confidence: .9, Source: "test"}})
+	seedLinkerFile(t, s, "src/unrelated.go", "unrelated", "Unrelated", "func Unrelated", []model.Relation{{FromHandle: "unrelated", UnresolvedTo: "ValidateToken", Kind: "calls", Confidence: .9, Source: "test"}})
+	if err := (&Linker{Store: s}).LinkWithScope(context.Background(), nil, store.LinkScope{ChangedPaths: []string{"src/changed.go"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	relations, err := s.Relations(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, relation := range relations {
+		switch relation.FromHandle {
+		case "changed":
+			if relation.ToHandle != "target" || relation.UnresolvedTo != "" {
+				t.Fatalf("changed relation=%+v, want linked", relation)
+			}
+		case "unrelated":
+			if relation.ToHandle != "" || relation.UnresolvedTo != "ValidateToken" {
+				t.Fatalf("unrelated relation=%+v, want unresolved", relation)
+			}
+		}
+	}
+}
+
 func openLinkerStore(t *testing.T) *store.Store {
 	t.Helper()
 	s, err := store.Open(t.TempDir(), ".focalspan")

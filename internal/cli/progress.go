@@ -33,6 +33,8 @@ func (r *indexProgressReporter) report(event app.IndexProgress) {
 		r.count("parsing", event)
 	case app.IndexPhaseWriting:
 		r.line("writing index...")
+	case app.IndexPhaseLinking:
+		r.count("linking", event)
 	case app.IndexPhaseComplete:
 		r.line("complete")
 	}
@@ -48,7 +50,11 @@ func (r *indexProgressReporter) count(phase string, event app.IndexProgress) {
 	if event.Completed == r.lastCompleted {
 		return
 	}
-	_, _ = fmt.Fprintf(r.writer, "%s: %s %d/%d files\n", r.label, phase, event.Completed, event.Total)
+	unit := "files"
+	if phase == "linking" {
+		unit = "relations"
+	}
+	_, _ = fmt.Fprintf(r.writer, "%s: %s %d/%d %s\n", r.label, phase, event.Completed, event.Total, unit)
 	r.lastCompleted = event.Completed
 }
 

@@ -17,19 +17,32 @@ type Linker struct {
 }
 
 func (l *Linker) Link(ctx context.Context, facts []projectmeta.Fact) error {
+	return l.LinkWithScope(ctx, facts, store.LinkScope{Full: true}, nil)
+}
+
+func (l *Linker) LinkWithScope(ctx context.Context, facts []projectmeta.Fact, scope store.LinkScope, progress func(completed, total int)) error {
 	if l == nil || l.Store == nil {
 		return errors.New("linker store is required")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if !scope.Full && len(scope.ChangedPaths) == 0 && len(scope.LookupKeys) == 0 {
+		return nil
+	}
+	if scope.Full && len(facts) == 0 {
+		scope.UseProjection = true
+	}
 	symbols, err := l.Store.Symbols(ctx)
 	if err != nil {
 		return err
 	}
-	relations, err := l.Store.Relations(ctx)
+	relations, err := l.Store.RelationsForLink(ctx, scope)
 	if err != nil {
 		return err
+	}
+	if progress != nil {
+		progress(0, len(relations))
 	}
 	byHandle := make(map[string]model.Symbol, len(symbols))
 	for _, symbol := range symbols {
@@ -42,7 +55,9 @@ func (l *Linker) Link(ctx context.Context, facts []projectmeta.Fact) error {
 		}
 		return orderedFacts[i].Target < orderedFacts[j].Target
 	})
-	for _, relation := range relations {
+	index := newSymbolIndex(symbols)
+	links := make([]store.RelationLink, 0)
+	for indexRelation, relation := range relations {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -50,15 +65,187 @@ func (l *Linker) Link(ctx context.Context, facts []projectmeta.Fact) error {
 			continue
 		}
 		from := byHandle[relation.FromHandle]
-		candidates := resolveCandidates(from, relation.UnresolvedTo, symbols, orderedFacts)
-		if len(candidates) != 1 {
+		candidatePool := index.candidates(from, relation.UnresolvedTo, orderedFacts)
+		if len(candidatePool) == 0 {
+			if progress != nil {
+				progress(indexRelation+1, len(relations))
+			}
 			continue
 		}
-		if err := l.Store.LinkRelation(ctx, relation.FromHandle, relation.UnresolvedTo, relation.Kind, candidates[0].Handle); err != nil {
-			return err
+		candidates := resolveCandidates(from, relation.UnresolvedTo, candidatePool, orderedFacts)
+		if len(candidates) != 1 {
+			if progress != nil {
+				progress(indexRelation+1, len(relations))
+			}
+			continue
+		}
+		links = append(links, store.RelationLink{FromHandle: relation.FromHandle, UnresolvedTo: relation.UnresolvedTo, Kind: relation.Kind, ToHandle: candidates[0].Handle})
+		if progress != nil {
+			progress(indexRelation+1, len(relations))
 		}
 	}
-	return nil
+	return l.Store.LinkRelations(ctx, links)
+}
+
+type symbolIndex struct {
+	all       []model.Symbol
+	byLookup  map[string][]model.Symbol
+	byFileKey map[string][]model.Symbol
+}
+
+func newSymbolIndex(symbols []model.Symbol) symbolIndex {
+	index := symbolIndex{all: symbols, byLookup: make(map[string][]model.Symbol), byFileKey: make(map[string][]model.Symbol)}
+	for _, symbol := range symbols {
+		for kind, key := range linkerSymbolKeys(symbol) {
+			index.byLookup[kind+"\x00"+key] = append(index.byLookup[kind+"\x00"+key], symbol)
+		}
+		for _, key := range linkerFileKeys(symbol.FilePath) {
+			index.byFileKey[key] = append(index.byFileKey[key], symbol)
+		}
+	}
+	return index
+}
+
+func (i symbolIndex) candidates(from model.Symbol, target string, facts []projectmeta.Fact) []model.Symbol {
+	set := make(map[string]model.Symbol)
+	add := func(symbols []model.Symbol) {
+		for _, symbol := range symbols {
+			if symbol.Handle != from.Handle {
+				set[symbol.Handle] = symbol
+			}
+		}
+	}
+	normalized := normalizeLinkerKey(target)
+	add(i.byLookup["name\x00"+normalized])
+	add(i.byLookup["qualified\x00"+normalized])
+	for _, key := range linkerFileKeys(target) {
+		add(i.byFileKey[key])
+	}
+	for _, key := range linkerModuleKeys(target) {
+		add(i.byFileKey[key])
+	}
+	if from.FilePath != "" {
+		dir := filepath.ToSlash(filepath.Dir(from.FilePath))
+		for _, key := range linkerFileKeys(filepath.ToSlash(filepath.Join(dir, strings.ReplaceAll(target, "\\", "/")))) {
+			add(i.byFileKey[key])
+		}
+		for _, path := range linkerPythonPaths(from.FilePath, target) {
+			for _, key := range linkerFileKeys(path) {
+				add(i.byFileKey[key])
+			}
+		}
+	}
+	for _, fact := range facts {
+		for _, path := range factCandidatePaths(fact, target) {
+			for _, key := range linkerFileKeys(path) {
+				add(i.byFileKey[key])
+			}
+		}
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	result := make([]model.Symbol, 0, len(set))
+	for _, symbol := range i.all {
+		if _, ok := set[symbol.Handle]; ok {
+			result = append(result, symbol)
+		}
+	}
+	return result
+}
+
+func normalizeLinkerKey(value string) string {
+	return strings.ToLower(strings.TrimSpace(strings.ReplaceAll(value, "\\", "/")))
+}
+
+func linkerSymbolKeys(symbol model.Symbol) map[string]string {
+	result := make(map[string]string, 2)
+	if key := normalizeLinkerKey(symbol.Name); key != "" {
+		result["name"] = key
+	}
+	if key := normalizeLinkerKey(symbol.QualifiedName); key != "" {
+		result["qualified"] = key
+	}
+	return result
+}
+
+func linkerFileKeys(path string) []string {
+	normalized := normalizeLinkerKey(path)
+	if normalized == "" {
+		return nil
+	}
+	result := []string{normalized}
+	if extension := filepath.Ext(normalized); extension != "" {
+		result = append(result, strings.TrimSuffix(normalized, extension))
+	}
+	if extensionless := strings.TrimSuffix(normalized, filepath.Ext(normalized)); extensionless != "" {
+		result = append(result, strings.ReplaceAll(extensionless, "/", "."))
+	}
+	if base := filepath.Base(normalized); base != "." && base != "" {
+		result = append(result, base)
+	}
+	parts := strings.Split(strings.Trim(normalized, "/"), "/")
+	for start := 1; start < len(parts); start++ {
+		if suffix := strings.Join(parts[start:], "/"); suffix != "" {
+			result = append(result, suffix)
+		}
+	}
+	if extensionless := strings.TrimSuffix(normalized, filepath.Ext(normalized)); extensionless != normalized {
+		extensionlessParts := strings.Split(strings.Trim(extensionless, "/"), "/")
+		for start := 1; start < len(extensionlessParts); start++ {
+			if suffix := strings.Join(extensionlessParts[start:], "/"); suffix != "" {
+				result = append(result, suffix)
+			}
+		}
+	}
+	for start := 0; start < len(parts)-1; start++ {
+		if directory := strings.Join(parts[start:len(parts)-1], "/"); directory != "" {
+			result = append(result, directory)
+		}
+	}
+	return result
+}
+
+func linkerModuleKeys(target string) []string {
+	normalized := normalizeLinkerKey(target)
+	result := make([]string, 0, 2)
+	if strings.Contains(normalized, "::") {
+		parts := strings.Split(normalized, "::")
+		if len(parts) > 1 {
+			parts = parts[:len(parts)-1]
+			if len(parts) > 0 && (parts[0] == "crate" || parts[0] == "self" || parts[0] == "super") {
+				parts = parts[1:]
+			}
+			if len(parts) > 0 {
+				result = append(result, strings.Join(parts, "/"))
+			}
+		}
+	}
+	return result
+}
+
+func linkerPythonPaths(importer, target string) []string {
+	if !strings.HasSuffix(strings.ToLower(importer), ".py") && !strings.HasSuffix(strings.ToLower(importer), ".pyi") {
+		return nil
+	}
+	leadingDots := len(target) - len(strings.TrimLeft(target, "."))
+	module := strings.TrimLeft(target, ".")
+	if module == "" {
+		return nil
+	}
+	parts := strings.Split(module, ".")
+	if len(parts) > 1 && parts[len(parts)-1] != "" && parts[len(parts)-1][0] >= 'A' && parts[len(parts)-1][0] <= 'Z' {
+		parts = parts[:len(parts)-1]
+	}
+	module = strings.Join(parts, "/")
+	base := ""
+	if leadingDots > 0 {
+		base = filepath.ToSlash(filepath.Dir(importer))
+		for level := 1; level < leadingDots; level++ {
+			base = filepath.ToSlash(filepath.Dir(base))
+		}
+	}
+	return []string{filepath.ToSlash(filepath.Join(base, module))}
 }
 
 func resolveCandidates(from model.Symbol, target string, symbols []model.Symbol, facts []projectmeta.Fact) []model.Symbol {

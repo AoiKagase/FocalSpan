@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/focalspan/focalspan/internal/app"
+	"github.com/focalspan/focalspan/internal/config"
 	"github.com/focalspan/focalspan/internal/evidence"
 	"github.com/focalspan/focalspan/internal/model"
 )
@@ -39,7 +40,11 @@ type appEngineFactory struct{}
 func NewAppEngineFactory() EngineFactory { return appEngineFactory{} }
 
 func (appEngineFactory) Open(root string) (Engine, error) {
-	service, err := app.New(root)
+	cfg, _, err := config.Load(root)
+	if err != nil {
+		return nil, err
+	}
+	service, err := app.NewWithConfigForUpdate(root, cfg)
 	if err != nil {
 		return nil, err
 	}

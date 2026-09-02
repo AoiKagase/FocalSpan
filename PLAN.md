@@ -191,18 +191,34 @@ linker/resolver、既存projectmeta factsだけとし、network、外部LLM、re
 ## Progress
 
 - [x] 2026-09-02T13:20Z: v0.18最終PLANをcompleted archiveへ保存し、schema v2設計をactive PLANへ切り替えた。
-- [ ] RED schema-safety/equivalence tests。
-- [ ] schema v2 projection and guarded open。
-- [ ] dependency selection and batch linking。
-- [ ] atomic replacement/recovery。
-- [ ] static/semantic verification。
-- [ ] current-scale benchmark gate。
-- [ ] closure and recovery。
+- [x] RED schema-safety/equivalence tests。
+- [x] schema v2 projection and guarded open。
+- [x] dependency selection and batch linking。
+- [x] atomic replacement/recovery。
+- [x] static/semantic verification。
+- [x] current-scale benchmark gate。
+- [x] closure and recovery。
+
+実行記録（UTC）:
+
+- 2026-09-02T14:00Z前後: relation lookupのPython qualified module正規化を修正し、
+  temporary debug testを除去した。store/linker/indexer/app/cli/extractor targeted test、
+  全体`go test ./... -count=1`、`go vet ./...`が成功した。`go test -race ./...`は
+  ローカルMinGWの64-bit compiler制約によりUNVERIFIEDとした。
+- 2026-09-02T14:03Z前後: Windows amd64（native/CGO-free）、Linux amd64（CGO-free）、
+  Darwin arm64（CGO-free）のcross-buildが成功した。生成物はfindingsへhash記録後に削除する。
+- 2026-09-02T13:58Z前後: current-scale専用benchmarkを直近修正後に1回実行し、files=450、
+  symbols=5000、relations=28000、unresolved=21676、unchanged `0s`、small-related
+  `322.2249ms`、full `101.2515ms`を記録した。絶対時間gate（250ms/1s/5s）は全てpass。
+- 2026-09-02T14:08Z: future schema guardと非破壊テストを追加し、gofmt、targeted test、
+  全体test、race、vetを再実行した。通常test/vetは成功し、raceはMinGW制約でUNVERIFIEDだった。
 
 ## Surprises & Discoveries
 
 - v0.18 SQL batch化は結果同値だったが通常profileのlatency gate未達で棄却された。v0.19はDB更新性能に限定し、token wireと検索rankingを調整しない。
 - 現行`Indexer.RunWithProgress`は`writing`前にdurationを確定し、linkerが全relationを走査しているため、progress/duration修正はschema v2と同時に検証する必要がある。
+- projection miss時に全symbolへ戻るfallbackは、解決候補が存在しないrelationを大量に再走査していた。full scopeでもprojectionをsuperset filterとして適用し、候補が存在するrelationだけをresolverへ渡すことで、current-scale full linkingを秒単位から約100msへ縮約できた。
+- Pythonのqualified module keyは、大文字の最終symbol segmentをraw targetで判定しないとmodule/file projectionが一致しない。正規化前に判定する回帰テストを追加した。
 
 ## Decision Log
 
@@ -210,8 +226,13 @@ linker/resolver、既存projectmeta factsだけとし、network、外部LLM、re
 - 2026-09-02: schema v1はin-place migrationせず、setup/update/明示auto-updateだけがtemporary DBをatomic swapする。
 - 2026-09-02: projectionはsuperset filter、最終relation判定は既存Go resolver、成功更新はsingle transactionとする。
 - 2026-09-02: public MCP/CLI/Evidence、token wire、ranking、known_handlesは変更しない。
+- 2026-09-02: futureまたは欠落schema_versionはupdate許可経路でもunsupportedとして停止し、既存DBへmigrationを試みない。
 
 ## Outcomes & Retrospective
 
-未完了。v1/v2 relation完全一致、atomic replacement/recovery、current-scale性能gateの実測を
-完了時に追記する。
+v1/v2 relation fixtureの同値性、normal openの非破壊diagnostic、temporary rebuildとatomic
+swap、batch rollback、progress timingを実装・検証した。全体test、vet、native/CGO-free
+cross-buildが成功し、current-scale専用測定は unchanged `0s`、small-related
+`322.2249ms`、full `101.2515ms` で絶対時間gateを満たした。candidate benchmarkは専用の
+v1 wall-clock comparatorを持たないため、10x/5x/2xの比率は独立測定せず、絶対時間と構造的
+equivalenceを採用判断の根拠とした。この制約は次のbenchmark改善課題として残す。

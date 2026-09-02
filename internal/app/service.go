@@ -54,7 +54,24 @@ func New(root string) (*Service, error) {
 }
 
 func NewWithConfig(root string, cfg config.Config) (*Service, error) {
-	st, err := store.Open(root, cfg.IndexDirectory)
+	return newWithConfig(root, cfg, false)
+}
+
+// NewWithConfigForUpdate is used only by setup/update or an explicitly
+// requested auto-update path. It is allowed to rebuild a legacy derived index
+// in an isolated temporary database before swapping it into place.
+func NewWithConfigForUpdate(root string, cfg config.Config) (*Service, error) {
+	return newWithConfig(root, cfg, true)
+}
+
+func newWithConfig(root string, cfg config.Config, allowSchemaUpgrade bool) (*Service, error) {
+	var st *store.Store
+	var err error
+	if allowSchemaUpgrade {
+		st, err = store.OpenForUpdate(root, cfg.IndexDirectory)
+	} else {
+		st, err = store.Open(root, cfg.IndexDirectory)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -103,11 +120,19 @@ const (
 	IndexPhaseChecking = indexer.PhaseChecking
 	IndexPhaseParsing  = indexer.PhaseParsing
 	IndexPhaseWriting  = indexer.PhaseWriting
+	IndexPhaseLinking  = indexer.PhaseLinking
 	IndexPhaseComplete = indexer.PhaseComplete
 )
 
 func (s *Service) IndexWithProgress(ctx context.Context, full bool, progress IndexProgressFunc) (model.IndexRun, error) {
-	return s.indexer.RunWithProgress(ctx, full, progress)
+	run, err := s.indexer.RunWithProgress(ctx, full, progress)
+	if err != nil {
+		return model.IndexRun{}, err
+	}
+	if err := s.Store.FinalizeUpgrade(ctx); err != nil {
+		return model.IndexRun{}, fmt.Errorf("finalize schema upgrade: %w", err)
+	}
+	return run, nil
 }
 
 type QueryRequest struct {

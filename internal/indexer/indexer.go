@@ -38,6 +38,7 @@ const (
 	PhaseChecking = "checking"
 	PhaseParsing  = "parsing"
 	PhaseWriting  = "writing"
+	PhaseLinking  = "linking"
 	PhaseComplete = "complete"
 
 	extractorVersion = "extractors-v5-polyglot"
@@ -140,20 +141,33 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 		}
 	}
 	revision := revisionFor(files)
-	run.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	run.DurationMS = time.Since(started).Milliseconds()
+	factsRevision := revisionForFacts(facts)
+	previousFactsRevision, previousFactsErr := i.store.Meta(ctx, "manifest_facts_revision")
+	manifestChanged := previousFactsErr != nil || previousFactsRevision != factsRevision
 	run.Revision = revision
 	emit(Progress{Phase: PhaseWriting, Total: 1})
-	if err := i.store.ApplyIndex(ctx, deletions, updates, []store.MetaUpdate{
+	delta, err := i.store.ApplyIndexWithDelta(ctx, deletions, updates, []store.MetaUpdate{
 		{Key: "last_revision", Value: revision},
 		{Key: "configuration_hash", Value: i.config.Hash()},
 		{Key: "extractor_version", Value: extractorVersion},
-		{Key: "last_successful_index", Value: run.CompletedAt},
-	}, run); err != nil {
+		{Key: "manifest_facts_revision", Value: factsRevision},
+	}, run)
+	if err != nil {
 		return model.IndexRun{}, err
 	}
-	if err := (&linker.Linker{Store: i.store}).Link(ctx, facts); err != nil {
+	linkScope := store.LinkScope{Full: full || reindexRequired || manifestChanged, ChangedPaths: delta.ChangedPaths, LookupKeys: delta.LookupKeys}
+	if err := (&linker.Linker{Store: i.store}).LinkWithScope(ctx, facts, linkScope, func(completed, total int) {
+		emit(Progress{Phase: PhaseLinking, Completed: completed, Total: total})
+	}); err != nil {
 		return model.IndexRun{}, fmt.Errorf("link project relations: %w", err)
+	}
+	run.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	run.DurationMS = time.Since(started).Milliseconds()
+	if err := i.store.FinalizeIndexRun(ctx, run); err != nil {
+		return model.IndexRun{}, fmt.Errorf("finalize index run: %w", err)
+	}
+	if err := i.store.SetMeta(ctx, "last_successful_index", run.CompletedAt); err != nil {
+		return model.IndexRun{}, fmt.Errorf("record successful index time: %w", err)
 	}
 	emit(Progress{Phase: PhaseComplete, Completed: 1, Total: 1})
 	return run, nil
@@ -225,6 +239,34 @@ func revisionFor(files []model.SourceFile) string {
 		h.Write([]byte{0})
 		h.Write([]byte(file.SHA256))
 		h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil))[:16]
+}
+
+func revisionForFacts(facts []projectmeta.Fact) string {
+	sorted := append([]projectmeta.Fact(nil), facts...)
+	sort.SliceStable(sorted, func(a, b int) bool {
+		left, right := sorted[a], sorted[b]
+		if left.SourcePath != right.SourcePath {
+			return left.SourcePath < right.SourcePath
+		}
+		if left.Kind != right.Kind {
+			return left.Kind < right.Kind
+		}
+		if left.Name != right.Name {
+			return left.Name < right.Name
+		}
+		if left.Target != right.Target {
+			return left.Target < right.Target
+		}
+		return left.Confidence < right.Confidence
+	})
+	h := sha256.New()
+	for _, fact := range sorted {
+		for _, value := range []string{fact.SourcePath, fact.Kind, fact.Name, fact.Target, fmt.Sprintf("%.17g", fact.Confidence)} {
+			h.Write([]byte(value))
+			h.Write([]byte{0})
+		}
 	}
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
