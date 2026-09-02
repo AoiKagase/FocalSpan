@@ -88,8 +88,8 @@ func TestExpandEvidenceSuppressesKnownHandlesButUsesAnchor(t *testing.T) {
 			t.Fatalf("known handle %q retransmitted", item.Handle)
 		}
 	}
-	if expanded.Packet.SkippedKnown == 0 || !containsEvidenceLimitation(expanded.Packet.Limitations, "known_anchor_not_repeated") {
-		t.Fatalf("delta metadata absent: %+v", expanded.Packet)
+	if expanded.Packet.SkippedKnown == 0 || containsEvidenceLimitation(expanded.Packet.Limitations, "known_anchor_not_repeated") {
+		t.Fatalf("redundant delta metadata retained: %+v", expanded.Packet)
 	}
 }
 

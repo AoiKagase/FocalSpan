@@ -44,6 +44,36 @@ func TestEvaluateEvidenceMeasuresContractComparisonAndDelta(t *testing.T) {
 	}
 }
 
+func TestEvidenceFixtureDeltaRatioImprovesWithKnownGuidancePruning(t *testing.T) {
+	root := filepath.Join("..", "..", "testdata", "repos", "evidencesample")
+	cases, err := LoadEvidenceCases(filepath.Join("..", "..", "testdata", "eval", "evidence-cases.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := app.New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	if _, err := service.Index(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	report, err := EvaluateEvidence(context.Background(), service, cases, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const baseline = 0.5578351609480015
+	for _, result := range report.Cases {
+		if result.Name == "go-stateless-delta" {
+			if result.DeltaTokenRatio <= 0 || result.DeltaTokenRatio >= baseline {
+				t.Fatalf("delta ratio=%v, want less than baseline %v", result.DeltaTokenRatio, baseline)
+			}
+			return
+		}
+	}
+	t.Fatal("go-stateless-delta case missing")
+}
+
 func TestForbiddenEvidenceKeysInspectsObjectKeysOnly(t *testing.T) {
 	allowed, _ := json.Marshal(map[string]any{"source": "score token_savings are source words"})
 	if err := forbiddenEvidenceKeys(allowed); err != nil {

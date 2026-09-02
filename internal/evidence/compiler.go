@@ -160,6 +160,7 @@ func (c *Compiler) Compile(req CompileRequest) (CompileResult, error) {
 		guidanceSelected = append(guidanceSelected, GuidanceSelection{Candidate: item.prepared.classified, Fidelity: item.variant.Fidelity})
 	}
 	limitations, next := BuildGuidance(GuidanceInput{Plan: req.Plan, Selected: guidanceSelected, Omitted: omittedCandidates, KnownHandles: req.KnownHandles, ExpansionAnchors: req.ExpansionAnchors, Truncated: omitted > 0})
+	limitations, next = pruneKnownDeltaGuidance(packet, req.KnownHandles, limitations, next)
 	applyGuidanceWithinBudget(&packet, limitations, next, c.estimator)
 	prunePacketMetadata(&packet)
 	settleWireUsage(&packet, c.estimator)

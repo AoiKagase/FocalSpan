@@ -114,6 +114,127 @@ func TestCompilerPreprocessesDuplicatesAndKnownHandles(t *testing.T) {
 	}
 }
 
+func TestKnownHandleDeltaKeepsKnownSkipAndRelationInvariants(t *testing.T) {
+	req := compilerRequest(4000)
+	req.Candidates = req.Candidates[:3]
+	req.KnownHandles = []string{"target"}
+	req.ExpansionAnchors = []string{"target"}
+	result, err := NewCompiler(nil).Compile(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Packet.SkippedKnown != 1 || result.Stats.SkippedKnown != 1 {
+		t.Fatalf("known skip=%d/%d, packet=%+v", result.Packet.SkippedKnown, result.Stats.SkippedKnown, result.Packet)
+	}
+	known := map[string]bool{"target": true}
+	ids := map[string]bool{}
+	for _, item := range result.Packet.Evidence {
+		if known[item.Handle] {
+			t.Fatalf("known handle retransmitted: %q", item.Handle)
+		}
+		ids[item.ID] = true
+	}
+	for _, edge := range result.Packet.Relations {
+		if !ids[edge.From] || !ids[edge.To] {
+			t.Fatalf("dangling edge: %+v", edge)
+		}
+	}
+	if err := Validate(result.Packet); err != nil {
+		t.Fatalf("known delta packet invalid: %v", err)
+	}
+}
+
+func TestKnownHandleDeltaSuppressesOnlyRedundantGuidance(t *testing.T) {
+	known := []string{"target"}
+	limitations := []string{"budget_limited", "known_anchor_not_repeated", "no_relevant_source_found", "source_reduced_to_signature", "lexical_relation_only"}
+	actions := []NextAction{
+		{Handle: "target", Relation: "self", Reason: "source_body_omitted"},
+		{Handle: "new", Relation: "self", Reason: "source_body_omitted"},
+	}
+	gotLimitations, gotActions := pruneKnownDeltaGuidance(Packet{SkippedKnown: 1}, known, limitations, actions)
+	if containsString(gotLimitations, "known_anchor_not_repeated") {
+		t.Fatalf("redundant known limitation retained: %v", gotLimitations)
+	}
+	if containsNextAction(gotActions, NextAction{Handle: "target", Relation: "self", Reason: "source_body_omitted"}) {
+		t.Fatalf("redundant known self action retained: %v", gotActions)
+	}
+	if !containsString(gotLimitations, "budget_limited") || !containsString(gotLimitations, "source_reduced_to_signature") || !containsString(gotLimitations, "lexical_relation_only") {
+		t.Fatalf("required limitations were pruned: %v", gotLimitations)
+	}
+	if containsString(gotLimitations, "no_relevant_source_found") {
+		t.Fatalf("known-only empty limitation retained: %v", gotLimitations)
+	}
+	if !containsNextAction(gotActions, NextAction{Handle: "new", Relation: "self", Reason: "source_body_omitted"}) {
+		t.Fatalf("source omission action was pruned: %v", gotActions)
+	}
+
+	withRelationAction := []NextAction{{Handle: "target", Relation: "callers", Reason: "more_callers_omitted"}}
+	keptLimitations, keptActions := pruneKnownDeltaGuidance(Packet{SkippedKnown: 1}, known, limitations, withRelationAction)
+	if !containsString(keptLimitations, "known_anchor_not_repeated") || !reflect.DeepEqual(keptActions, withRelationAction) {
+		t.Fatalf("separate relation action changed known guidance: limitations=%v actions=%v", keptLimitations, keptActions)
+	}
+	withEdgeLimitations, withEdgeActions := pruneKnownDeltaGuidance(Packet{Relations: []Edge{{From: "e1", To: "e2", Kind: "calls", Certainty: CertaintyExact}}}, known, limitations, actions)
+	if !containsString(withEdgeLimitations, "known_anchor_not_repeated") || !reflect.DeepEqual(withEdgeActions, actions) {
+		t.Fatalf("relation edge changed known guidance: limitations=%v actions=%v", withEdgeLimitations, withEdgeActions)
+	}
+}
+
+func TestKnownHandleDeltaDoesNotChangeControlOrInitialPackets(t *testing.T) {
+	req := compilerRequest(1200)
+	compiler := NewCompiler(nil)
+	first, err := compiler.Compile(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	control, err := compiler.Compile(CompileRequest{
+		Plan: req.Plan, Revision: req.Revision, TokenBudget: req.TokenBudget, Mode: req.Mode,
+		Candidates: req.Candidates, KnownHandles: []string{}, ExpansionAnchors: req.ExpansionAnchors,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstJSON, err := json.Marshal(first.Packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	controlJSON, err := json.Marshal(control.Packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(firstJSON, controlJSON) || !reflect.DeepEqual(first.Stats, control.Stats) {
+		t.Fatalf("control packet changed: first=%s/%+v control=%s/%+v", firstJSON, first.Stats, controlJSON, control.Stats)
+	}
+}
+
+func TestKnownHandleDeltaIsDeterministicAndBudgetSafe(t *testing.T) {
+	req := compilerRequest(1200)
+	req.KnownHandles = []string{"target"}
+	req.ExpansionAnchors = []string{"target"}
+	compiler := NewCompiler(budget.NewEstimator())
+	var want []byte
+	for iteration := 0; iteration < 50; iteration++ {
+		result, err := compiler.Compile(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Packet.Budget.Used > result.Packet.Budget.Limit || result.Packet.Budget.Used != MeasureModelVisible(result.Packet, budget.NewEstimator()) || result.Packet.Budget.Used != result.Stats.WireTokens {
+			t.Fatalf("iteration %d budget mismatch: packet=%+v stats=%+v", iteration, result.Packet.Budget, result.Stats)
+		}
+		if err := Validate(result.Packet); err != nil {
+			t.Fatalf("iteration %d invalid packet: %v", iteration, err)
+		}
+		got, err := json.Marshal(result.Packet)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want == nil {
+			want = got
+		} else if !reflect.DeepEqual(got, want) {
+			t.Fatalf("iteration %d differs\n got: %s\nwant: %s", iteration, got, want)
+		}
+	}
+}
+
 func TestCompilerIsDeterministic(t *testing.T) {
 	compiler := NewCompiler(nil)
 	var want []byte
@@ -336,4 +457,13 @@ func TestPruneMetadataIsIdempotentAndSchemaCompatible(t *testing.T) {
 			t.Fatalf("debug field leaked into packet: %s", forbidden)
 		}
 	}
+}
+
+func containsNextAction(values []NextAction, want NextAction) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
