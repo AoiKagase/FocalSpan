@@ -1,257 +1,124 @@
-# FocalSpan v0.13 Adaptive Focused Excerpt Implementation Plan
+# FocalSpan v0.14 v1互換 metadata field pruning 実装計画
 
-> **For agentic workers:** Use `superpowers:executing-plans` to implement this
-> plan task-by-task. Keep the RED/GREEN verification order and update this
-> file with actual results.
+> **For agentic workers:** REDテストを先に追加し、最小実装後に静的検証と候補ベンチマークを行う。
 
-**Goal:** Reduce wire tokens for long focused Evidence without losing required
-symbol/relation hits, source fidelity, budget compliance, or deterministic
-ordering.
+**Goal:** `focalspan.context.v1` の公開キーと意味を変更せず、冗長または低価値なEvidenceメタデータを条件付きで省略し、wire tokensを削減する。
 
-**Architecture:** Keep the current `focusedSegments` representation and public
-Evidence packet unchanged. Add a private adaptive focused excerpt variant in
-`internal/evidence/fidelity.go` that reuses the current ranked hit selection
-but narrows declaration and hit context only when it is measurably smaller than
-the existing excerpt. The existing variant and selection logic remain the
-fallback, so short sources, source mode, outline mode, and candidates without a
-useful reduction retain their current behavior.
+**Architecture:** 検索・ranking・候補packingは変更しない。通常の候補選択は現行メタデータで行い、最終Packetを組み立てた後だけ、privateなpruning規則を適用する。必須のhandle、role、location、symbol、fidelity、source/segments、relation、budget、known_handlesの挙動は保持する。JSON `omitempty` で既に任意の `language`、`kind`、`symbol`、`why` を、意味を損なわない範囲で省略する。
 
-**Tech Stack:** Go, deterministic line-window selection, the existing
-`budget.TokenEstimator`, `internal/evidence` compiler/fidelity tests, and the
-source-free historical benchmark.
+**Tech Stack:** Go、`internal/evidence` compiler/model/wire tests、既存の `budget.TokenEstimator`、source-free historical benchmark。
 
-**Spec:** User-approved “FocalSpan token効率改善候補・優先順位”, rank 3
-`長いsourceのadaptive focused excerpt`.
+**Spec:** ユーザー承認済み「FocalSpan token効率改善候補・優先順位」rank 4「v1互換のmetadata field pruning」。
 
 ## Purpose / Big Picture
 
-Focused Evidence already preserves source bytes but can carry more declaration
-and surrounding context than the query needs. The adaptive variant will be
-considered only for long candidates and will contain exact source line slices
-around the same highest-scoring focused terms. The compiler may select the
-smaller variant through its existing utility-per-token comparison; no public
-field, schema, retriever, ranker, relation resolver, or known-handle contract
-changes.
+現在のEvidence itemは、sourceやsegmentsに加えてlanguage/kind/symbol/whyを持つ。これらは全て任意JSONフィールドで、特にrelation候補の繰り返しlanguage、補助的なkind、`path_match`/`lexical_match`/`same_file`などのwhyは、同一Packet内での有用性が低い一方、metadata overheadの中央値が約0.924ある。最終出力だけをpruneすることで、候補の選択順・relation構築・fidelity判定を変えず、後方互換な省略としてwireを削減する。
 
 ## Global Constraints
 
-- Do not change retrieval, RRF/ranking weights, query planning, Evidence schema,
-  MCP/CLI methods, `known_handles`, or SQLite schema.
-- Only `ModeFocused` receives the adaptive variant; `ModeSource` remains
-  verbatim-first and `ModeOutline` remains synthetic/signature-only.
-- Every emitted source segment must be an exact byte slice of the candidate
-  content; omitted segments contain no generated source text.
-- Required symbol metadata, relation provenance, valid relation endpoints,
-  hard serialized budgets, and deterministic output ordering must remain
-  unchanged.
-- Development attribution/diagnosis reports remain source-free and outside
-  normal MCP/CLI output.
-- Run the historical candidate benchmark once after static verification; retry
-  only a clear infrastructure failure once, and never promote an unmeasured
-  result.
-- Preserve user-owned dirty files (`AGENTS.md`, `.focalspan.json`, `TASKS.md`)
-  and stage explicit paths only.
-- `PLAN.md` is the only active ExecPlan. The v0.12 archive is immutable.
+- `focalspan.context.v1`、公開MCP tool、CLI、`known_handles`、JSONキー名、SQLite schemaは変更しない。
+- 検索、RRF/ranking、候補packing、Evidenceのsource fidelity、relation provenance、budget、deterministic orderingを変更しない。
+- target/changeの`symbol`と、全itemのhandle/role/location/fidelityを必ず保持する。
+- source/segments/outline/signature本文は変更せず、relation endpointは省略しない。
+- `language`はtarget/change、およびPacket内で推論不能なitemでは保持する。Packet内で同一言語が既に明示され、itemが補助roleの場合だけ省略する。
+- `kind`はtarget/change、symbolが空のitem、signature/outlineだけで種別判定に必要なitemでは保持する。補助roleでsymbolとsource/segmentsがあり、kindが役割と重複する場合だけ省略する。
+- `symbol`は省略しない。`why`はidentity/relation/changedを示す高価値コードだけ保持し、path/lexical/same-fileなど低価値コードは条件付きで削る。
+- guidance（limitations/next）は公開契約と上限を維持する。内容を削る場合も、source omission・relation expansion・budget limitationを示す必須項目は保持する。
+- `AGENTS.md`、`.focalspan.json`、`TASKS.md`は変更・stageしない。
+- ベンチマークは候補ごとに1回だけ実行し、source text、絶対パス、ユーザー名、秘密情報を開発レポートへ書かない。
 
 ## Context and Orientation
 
-- `internal/evidence/fidelity.go` builds ordered `ContentVariant` values. The
-  current focused excerpt calls `focusedSegments` from `segments.go`.
-- `internal/evidence/segments.go` selects a declaration prefix and up to three
-  scored hit windows with two lines before and four lines after each hit.
-- `internal/evidence/compiler.go` compares variants by utility per measured
-  incremental wire cost; changing variant cost does not change candidate
-  retrieval or relation construction.
-- `internal/evidence/fidelity_test.go` and `segments_test.go` assert source
-  fidelity, late-hit retention, UTF-8/CRLF handling, and variant ordering.
-- `internal/evidence/compiler_test.go`, `wire_test.go`, and `validate_test.go`
-  cover packet budgets, relation endpoint validity, known handles, and
-  deterministic JSON.
-- The active v0.10 baseline is retained after rejected v0.11/v0.12 candidates:
-  focused/2048 `packing_dropped=7`, packed labels `5`, cumulative wire tokens
-  `12,740`, useful evidence efficiency `0.3925`, and median metadata overhead
-  `0.924`.
+- `internal/evidence/compiler.go` の `buildPacket` がItem/Relationを組み立て、`Compile` が最終Packetへguidanceを付与する。
+- `internal/evidence/model.go` の `Item.Language`、`Item.Kind`、`Item.Symbol`、`Item.Why` とPacketの`Limitations`/`Next`はJSON `omitempty` を使用する。
+- `internal/evidence/validate.go` はoptional metadataの存在を要求せず、必須のhandle/role/location/fidelity/source/segmentsとrelation endpoint、budgetを検証する。
+- `internal/evidence/wire.go` の `MeasureModelVisible` がJSONとsummaryを含む実wire tokenを測定する。
+- active v0.10 baselineはfocused/2048で `packing_dropped=7`、packed labels `5`、累積wire tokens `12,740`、useful evidence efficiency `0.3925`、median metadata overhead `0.924`。
 
 ## Plan of Work
 
 ### Task 0: Freeze transition
 
-- [x] Archive the completed v0.12 root plan byte-identically at
-  `docs/superpowers/plans/completed/2026-09-02-v0.12-anchor-first-evidence-packing.md`.
-- [x] Replace the root plan with this v0.13 plan before product edits.
-- [x] Commit only the archive and root plan as one documentation-only
-  transition, leaving `AGENTS.md`, `.focalspan.json`, and `TASKS.md` unstaged.
+- [x] 完了したv0.13 root planを `docs/superpowers/plans/completed/2026-09-02-v0.13-adaptive-focused-excerpt.md` へbyte-identicalにアーカイブする。
+- [x] root `PLAN.md`をこのv0.14計画へ置き換える。
+- [ ] archiveとroot planだけを1つのdocumentation-only transition commitにする。ユーザー所有のdirty filesはstageしない。
 
-### Task 1: RED tests for adaptive excerpts
+### Task 1: RED tests for pruning
 
-**Files:** `internal/evidence/fidelity_test.go`,
-`internal/evidence/segments_test.go`, `internal/evidence/compiler_test.go`.
+**Files:** `internal/evidence/compiler_test.go`、必要に応じて`wire_test.go`/`validate_test.go`。
 
-- [x] Add `TestBuildVariantsAddsSmallerAdaptiveExcerptForLongFocusedSource`.
-  Build a 60+ line method with three separated query hits. Assert that focused
-  variants contain the existing excerpt and a second excerpt with fewer
-  `EvidenceTokens`; do not accept a new Fidelity value.
-- [x] Add `TestAdaptiveFocusedSegmentsPreserveExactHitLines`.
-  Call the private adaptive helper on long UTF-8 content with a late identifier
-  and CRLF content. Assert every source segment equals the corresponding
-  `testSourceLines` slice, every hit identifier is present, omitted segments
-  have empty text, and the adaptive source-token count is lower than the
-  standard focused result.
-- [x] Add `TestAdaptiveExcerptDoesNotChangeShortOrNonFocusedModes`.
-  Assert a short target has no additional adaptive variant, `ModeSource` keeps
-  its verbatim-first variants, and `ModeOutline` has no excerpt variant.
-- [x] Add `TestAdaptiveCompilerKeepsRelationAndBudgetInvariants`.
-  Compile a long target plus caller/test relation candidates at budgets 512,
-  1200, and 2048. Assert required target/caller handles, the same valid edge
-  direction/kind/certainty, exact source slices, `Validate` success, and
-  `Budget.Used <= Budget.Limit`.
-- [x] Run only the new tests with a repository-local Go cache and record the
-  expected failures before editing production code. The RED result must be a
-  missing adaptive variant/helper, not a cache or toolchain failure.
+- [ ] `TestPruneMetadataPreservesV1RequiredFields` を追加する。target/changeのsymbol、全itemのhandle/role/location/fidelity、source/segments、relation endpoints、known-handle skip、budgetをprune前後で保持し、`Validate`とdeterministic marshalが通ることを確認する。
+- [ ] `TestPruneMetadataDropsOnlyRedundantOptionalFields` を追加する。同一languageの補助role、重複kind、低価値why、非必須guidance候補を省略し、高価値identity/relation/changed whyとtarget language/kind/symbolは保持することを確認する。
+- [ ] `TestPruneMetadataReducesMeasuredWireWithoutChangingSelection` を追加する。同一CompileRequestの選択handle/role/relationをprune前後で比較し、prune後の`MeasureModelVisible`が小さく、`Budget.Used <= Budget.Limit`であることを確認する。
+- [ ] `TestPruneMetadataIsIdempotentAndSchemaCompatible` を追加する。二重適用で変化せず、schemaが`focalspan.context.v1`のまま、公開キー以外のdebug/token-savingsフィールドが出ないことを確認する。
+- [ ] 新テストだけを実行し、private pruning関数が未定義でcompile failureになるRED結果を記録する。
 
 ### Task 2: Minimal GREEN implementation
 
-**Files:** `internal/evidence/segments.go`, `internal/evidence/fidelity.go`.
+**Files:** `internal/evidence/compiler.go` と必要最小限の新規private helper/test fixture。
 
-- [x] Extract the current window construction into a private helper that keeps
-  the existing margins (`before=2`, `after=4`, prefix through
-  `declarationPrefixEnd`) byte-for-byte equivalent for `focusedSegments`.
-- [x] Add `adaptiveFocusedSegments(candidate, plan)` using the same term scoring,
-  hit ordering, merge rule, and three-window cap, with `before=0`, `after=1`,
-  and a declaration prefix capped at two lines. Build segments only through
-  `joinLines` and `absoluteLines`; never synthesize markers in `Text`.
-- [x] In `BuildVariants`, after constructing the normal focused excerpt, append
-  the adaptive excerpt only when the candidate has at least 40 indexed lines,
-  both excerpts contain source, and the adaptive excerpt's estimated source
-  tokens are strictly lower. Keep the normal excerpt first and deduplicate
-  variants with the existing helper.
-- [x] Keep `ModeSource`, `ModeOutline`, synthetic candidates, signature
-  fallback, and all public types unchanged.
-- [x] Run the focused Evidence tests; full `go test ./... -count=1` remains in
-  Task 3. Adjusted only implementation details needed to satisfy the RED tests
-  and preserve existing behavior.
+- [ ] 最終Packetにだけ適用する `prunePacketMetadata` を追加する。候補選択中のtrial packetには適用せず、selection/ranking/packingを不変にする。
+- [ ] Packet内の明示language集合を決定し、target/changeと推論不能なitemはlanguageを保持する。同一languageが既に明示された補助roleだけ`Language`を空にする。
+- [ ] target/change、symbol空、signature/outlineのみ、またはsourceなしのitemは`Kind`を保持する。補助roleでsource/segmentsとsymbolがあり役割と重複するkindだけ空にする。
+- [ ] `Symbol`、handle、role、location、fidelity、本文、relations、budget、known-handle統計は常に保持する。
+- [ ] `Why`は既存順序を保ったまま、identity（exact/qualified/same-symbol）、relation、changedを優先し、path/lexical/same-fileだけを必要時に省略する。空になったsliceはnilにして`omitempty`を効かせる。
+- [ ] guidanceは原則そのまま保持し、wire budgetを超える場合の既存`applyGuidanceWithinBudget`だけを利用する。新しい上限・キー・理由文字列は導入しない。
+- [ ] prune後に`settleWireUsage`を再計算し、`CompileResult.Stats`を最終Packetと一致させる。
 
 ### Task 3: Static verification
 
-- [x] Run `gofmt` on changed Go files and `git diff --check`.
-- [x] Run `go test ./... -count=1` and `go vet ./...` with a repository-local
-  cache if the default cache is denied.
-- [x] Run native plus CGO-free Windows amd64, Linux amd64, and Darwin arm64
-  builds into a temporary directory; remove generated outputs afterward.
-- [x] Run `go test -race ./...`; the known local MinGW 64-bit compiler
-  limitation repeats, record it as `UNVERIFIED` and do not label it passed.
+- [ ] 変更Goファイルをgofmtし、`git diff --check`を実行する。
+- [ ] `go test ./... -count=1`、`go vet ./...`をrepository-local cacheで実行する。
+- [ ] nativeおよび`CGO_ENABLED=0`のWindows amd64、Linux amd64、Darwin arm64 buildをtemporary directoryへ出力し、生成物を削除する。
+- [ ] `go test -race ./...`を実行する。MinGWの既知の64-bit compiler制限が再発した場合は`UNVERIFIED`として記録し、成功とは呼ばない。
 
 ### Task 4: Candidate benchmark gate
 
-- [x] Run the historical `focalspan-history-v0.5` suite exactly once with the
-  `default` profile, `repeat 1`, attribution enabled, and diagnosis enabled.
-- [x] Compare against the v0.10 baseline and require all of the following:
-  focused/2048 `packing_dropped` does not increase; packed labels remain at
-  least `5`; cumulative wire tokens are strictly below `12,740`; useful
-  evidence efficiency is strictly above `0.3925`; all quality, fidelity,
-  relation, budget, deterministic-ordering, known-handle, and MCP contract
-  checks pass; and no source text, absolute path, username, or secret appears
-  in development reports.
-- [x] Record measured values, artifact hashes, compatibility result, and
-  privacy scan in `docs/benchmarks/findings-v0.13.md` without source text or
-  absolute paths. Do not record a new baseline unless the strict gate passes.
+- [ ] historical `focalspan-history-v0.5`をdefault profile、repeat 1、attribution/diagnosis有効で1回だけ実行する。
+- [ ] v0.10 baselineに対して、focused/2048の`packing_dropped`非増加、packed labels 5以上、累積wire tokensの`12,740`未満、useful evidence efficiencyの`0.3925`超、quality/fidelity/relation/budget/deterministic/known-handle/MCP契約全通過を要求する。
+- [ ] compatible=true、regressions=0、privacy scan結果、artifact hashes、実測値を`docs/benchmarks/findings-v0.14.md`へsource-freeに記録する。strict gate不合格なら新baselineを記録しない。
 
 ### Task 5: Closure and recovery
 
-- [x] The gate-pass branch was not taken because wire tokens and useful
-  evidence efficiency were unchanged; no new baseline was recorded.
-- [x] If the gate fails, reverse-revert only the v0.13 product commit(s), keep
-  the RED/GREEN and benchmark findings as historical evidence, and leave the
-  v0.10 product baseline active.
-- [x] Remove generated reports, indexes, binaries, caches, and temporary
-  workspaces; preserve all user-owned dirty files.
-- [x] Update this plan with UTC progress, discoveries, decisions, outcomes,
-  and exact verification status. Never edit the archived v0.12 plan.
+- [ ] strict gate合格時だけ製品commitとbaselineを確定する。
+- [ ] gate不合格時は製品commitだけを通常のreverse-order `git revert`で戻し、RED/GREENテストとfindingsを歴史証拠として残し、v0.10 product baselineを維持する。
+- [ ] generated reports、indexes、binaries、caches、temporary workspacesを削除し、ユーザー所有dirty filesを保持する。
+- [ ] このplanのProgress、Discoveries、Decision Log、Outcomesを実測結果で更新する。archive済みv0.13 planは編集しない。
 
 ## Validation and Acceptance
 
-For every adaptive packet, all source segments must be exact slices of the
-candidate source, required query hits and relation endpoints must remain
-present, and `MeasureModelVisible(packet)` must equal the reported usage and
-stay within the clamped limit. Repeated identical inputs must marshal to
-identical JSON. The strict candidate gate requires a wire-token reduction with
-no packed-label loss or quality/invariant regression; otherwise the candidate
-is rejected and reverted.
+全Packetで、必須identity/location/fidelity/source/segmentsとrelation endpointが不変で、`Validate`が通り、`MeasureModelVisible(packet)`が`Budget.Used`と一致しclamped limit以下であること。pruneは二重適用で不変、同一入力で同一JSONを返すこと。strict candidate gateはwire-token削減とquality/invariant非回帰の両方を要求し、wireまたはefficiencyが改善しない場合は候補を棄却する。
 
 ## Idempotence and Recovery
 
-Adaptive variants are computed in memory from candidate content and query terms;
-no index or persistent state changes. Re-running compilation with identical
-inputs is deterministic. A rejected candidate is recovered with ordinary
-reverse-order `git revert` of only its explicit product commit(s); findings and
-the immutable v0.12 archive remain.
+pruningはin-memory Packetへのprivate変換で、index/database/永続stateを変更しない。同一Packetへの再適用はno-opで、Compileのselectionはprune前と同一である。候補が棄却された場合は製品commitのみをordinary `git revert`し、計画とsource-free findingsを保持する。
 
 ## Interfaces and Dependencies
 
-No public interface changes. `model.PackRequest`, `model.ContextBundle`, the
-Evidence packet schema `focalspan.context.v1`, MCP methods, CLI output, and
-`known_handles` remain unchanged. The adaptive helper is private to
-`internal/evidence`; benchmark attribution and diagnosis observe only the
-existing packet and source-free labels.
+公開interfaceは変更しない。`model.PackRequest`、`model.ContextBundle`、Evidence schema `focalspan.context.v1`、MCP methods、CLI output、`known_handles`を維持する。private helperは`internal/evidence`内だけで使用し、通常のMCP/CLI出力にranking/token-savings debug fieldを追加しない。
 
 ## Progress
 
-- [x] 2026-09-02: v0.12 archive created from the active plan with matching
-  SHA-256 `FD824A54157E0F45E481B5854954192C35C8B61E2CDECA0D37B21F68E5F11887`.
-- [x] 2026-09-02: v0.13 design approved; transition plan written before
-  product edits.
-- [x] Documentation-only transition commit: `d2f566e`.
-- [x] 2026-09-02: RED test run failed at compile time with the expected
-  missing private `adaptiveFocusedSegments` helper; no production code had
-  been edited and no cache/toolchain failure occurred.
-- [x] 2026-09-02: GREEN focused Evidence tests passed after adding the shared
-  margin helper and adaptive focused variant; generated local caches were
-  removed immediately after the run.
-- [x] 2026-09-02: Full tests and vet passed; native and CGO-free
-  Windows/amd64, Linux/amd64, and Darwin/arm64 builds passed. Race testing is
-  `UNVERIFIED` because MinGW reports `cc1.exe: sorry, unimplemented: 64-bit
-  mode not compiled in`.
-- [x] 2026-09-02: Candidate product commit `2699946` passed focused/full
-  Evidence tests, full tests, vet, diff check, native build, and three
-  CGO-free cross-builds; it was reverted by `9d23e46` after the gate.
-- [x] 2026-09-02: One historical benchmark completed with 8 cases, 48
-  quality rows, 40 attribution results, and 40 diagnosis results. Compare
-  reported `compatible=true` and `regressions=0`; focused/2048 remained 7
-  drops, 5 packed labels, 12,740 wire tokens, and efficiency 0.3925. Findings
-  and six artifact hashes are in `docs/benchmarks/findings-v0.13.md`.
+- [x] 2026-09-02: v0.13 adaptive focused excerpt planをbyte-identicalにアーカイブし、v0.10 product baselineへ復帰済み。
+- [x] 2026-09-02: v0.14 designとして、最終Packet限定のoptional metadata pruning、必須identity/fidelity/relation保持、公開schema固定を決定。
+- [ ] Documentation-only transition commit。
+- [ ] RED tests。
+- [ ] GREEN implementation。
+- [ ] Static verification。
+- [ ] Candidate benchmark gate。
+- [ ] Closure and recovery。
 
 ## Surprises & Discoveries
 
-- v0.12 showed that admitting more structural Evidence can improve recall and
-  efficiency while violating the no-wire-growth gate; v0.13 therefore adds a
-  variant only when its measured source token cost is lower.
-- The existing focused excerpt already preserves late lexical hits and exact
-  source bytes, so adaptive behavior must narrow context rather than invent
-  summaries or change hit ranking.
-- The historical suite selected short/signature or non-adaptive Evidence for
-  its required labels, so the adaptive variant changed no wire denominator;
-  unit-level token savings alone were insufficient for promotion.
+- 未測定。v0.13のadaptive excerptは単体で候補を縮約できても、historical suiteでは選択されずwireとefficiencyが変わらなかったため、v0.14ではselectionを変えず最終Packetのmetadataだけを直接削減する。
 
 ## Decision Log
 
-- 2026-09-02: Proceed to rank 3 only after v0.12 anchor-first packing was
-  rejected for wire growth.
-- 2026-09-02: Keep the normal excerpt as the first variant and add a same-
-  fidelity adaptive excerpt only for long candidates with a strict token
-  reduction; this preserves existing fallback behavior.
-- 2026-09-02: Limit adaptive changes to focused mode and private line-window
-  helpers; public packet, retrieval, relation, and metadata contracts remain
-  frozen.
-- 2026-09-02: Reject v0.13 because cumulative wire tokens and useful-evidence
-  efficiency were unchanged at the strict historical gate; retain v0.10 as
-  the active product baseline and do not rerun the same candidate benchmark.
+- 2026-09-02: v0.13がstrict gate不合格だったため、優先順位4のmetadata pruningへ遷移する。
+- 2026-09-02: 候補選択中のtrial packetをpruneせず、最終出力だけをpruneしてranking/packingの回帰を防ぐ。
+- 2026-09-02: `symbol`は常時保持し、target/changeのlanguage/kindとrelation provenanceを保持する。optional field omissionだけでv1互換を保つ。
+- 2026-09-02: guidanceの公開上限と理由文字列は変更せず、rank 6の共同budget化と分離する。
 
 ## Outcomes & Retrospective
 
-v0.13 is closed as a negative candidate. The adaptive line-window helper and
-its RED/GREEN regression tests are retained only in the historical product
-commit/revert record; the working tree is back to the v0.10 baseline. The
-historical run showed no measurable wire or efficiency improvement, so no new
-quality baseline is claimed. Future excerpt work should first target a case
-that demonstrably selects a long focused source variant before spending the
-single frozen benchmark run.
+未完了。候補ベンチマークの実測値と、採用または棄却の根拠を完了時に追記する。
