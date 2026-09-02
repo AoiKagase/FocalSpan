@@ -1,184 +1,178 @@
-# FocalSpan v0.11 Identity-Bridge Retrieval Plan
+# FocalSpan v0.12 Anchor-First Evidence Packing Implementation Plan
 
-## Purpose / Big Picture
+> **For agentic workers:** Use `superpowers:executing-plans` to implement this
+> plan task-by-task. Keep the RED/GREEN verification order and update this
+> file with actual results.
 
-Reduce retrieval misses without increasing the frozen v0.10 wire baseline. The
-largest remaining gap is `path_scope_missing`; this milestone adds one bounded
-identity bridge that resolves natural-language package/module hints to
-structural entry points, then to symbol-bearing paths and symbols. It does not
-change ranking, packing, Evidence, MCP schemas, or known handles.
+**Goal:** Preserve exact, path, and relation anchors inside the existing Evidence
+packing budget so useful evidence increases without changing retrieval, ranking,
+wire schemas, or public MCP/CLI interfaces.
 
-Frozen gate: focused/2048 path-scope misses 9, symbol misses 2,
-packing drops 7, packed labels 5, cumulative estimated wire tokens 12,740,
-useful-evidence efficiency 0.3925.
+**Architecture:** `internal/budget.Packer` will perform one bounded anchor
+reservation pass over the already ranked candidates, then use the existing
+utility, role, mode, and variant logic for the remaining slots. Reservation is
+internal only: candidates keep their existing model fields and final packet
+ordering remains deterministic. If an anchor cannot fit verbatim, existing
+elision/signature variants are tried before the anchor is omitted.
+
+**Tech Stack:** Go, SQLite-backed model candidates, existing deterministic token
+estimator, `internal/evidence` packet compiler, and the source-free historical
+benchmark.
+
+**Spec:** User-approved “FocalSpan token効率改善候補・優先順位”, rank 2
+`anchor-first Evidence packing`.
+
+## Global Constraints
+
+- Do not change retrieval, RRF/ranking weights, query planning, Evidence schema,
+  MCP/CLI methods, `known_handles`, or SQLite schema.
+- Preserve source fidelity, relation provenance, deterministic ordering, and
+  the hard serialized budget for every packet.
+- Reserve only exact symbol, explicit path, and relation anchors; generic
+  lexical, documentation, and configuration candidates remain governed by the
+  existing filters.
+- Keep the development attribution/diagnosis reports source-free and outside
+  normal MCP/CLI output.
+- Run one candidate benchmark after static verification; retry only a clear
+  infrastructure failure once, and never promote an unmeasured result.
+- Preserve user-owned dirty files (`AGENTS.md`, `.focalspan.json`, `TASKS.md`)
+  and stage explicit paths only.
 
 ## Context and Orientation
 
-- `internal/query`: normalized terms and intent/anchor planning.
-- `internal/search/retrieval.go`: ordered retriever execution and relation
-  anchor selection.
-- `internal/search/search.go`: fusion, path filtering, and final ranking.
-- `internal/store/store.go`: SQLite candidate queries.
-- Structural entry-point kinds include `package`, `module`, `crate_module`,
-  `compilation_unit`, `translation_unit`, `pawn_unit`, and `xaml_document`.
-- `internal/linker` already contains path-mapping logic; this milestone must
-  not widen linker relation resolution or persist new schema.
-
-## Interfaces and Dependencies
-
-The public search, CLI, MCP, `focalspan.context.v1`, and `known_handles`
-interfaces remain unchanged. Add only an internal CandidateStore method and a
-retriever list entry. The bridge accepts bounded structural hints and returns
-ordinary `model.RankedCandidate` values. Generic documentation/configuration
-chunks are excluded. No source content is placed in trace-only bridge data.
+- `internal/budget/budget.go` owns legacy `model.ContextBundle` packing,
+  content elision, test/documentation filters, and final JSON budget checks.
+- `internal/evidence/compiler.go` owns the public Evidence packet and already
+  assigns roles, variants, relations, and guidance; it must not be redesigned
+  in this milestone.
+- `internal/benchmark` measures packed labels, cumulative wire tokens, and
+  source-free attribution/diagnosis; the frozen focused/2048 baseline is
+  `packing_dropped=7`, packed labels `5`, cumulative wire `12,740`, and useful
+  evidence efficiency `0.3925`.
 
 ## Plan of Work
 
 ### Task 0: Freeze transition
 
-- [x] Archive v0.10 byte-identically at
-  `docs/superpowers/plans/completed/2026-09-02-v0.10-evidence-compaction.md`.
-- [x] Replace the root plan with this single v0.11 milestone before product
-  edits; preserve dirty user files (`AGENTS.md`, `.focalspan.json`,
-  `TASKS.md`).
+- [x] Archive v0.11 byte-identically at
+  `docs/superpowers/plans/completed/2026-09-02-v0.11-identity-bridge-retrieval.md`.
+- [x] Replace the root plan with this v0.12 plan before product edits.
+- [x] Preserve dirty user files and make the transition documentation-only.
 
-### Task 1: RED tests for staged identity bridge
+### Task 1: RED tests for anchor reservation
 
-Files: `internal/search/retrieval_test.go`, `internal/search/search_test.go`,
-`internal/store/store_test.go`.
+**Files:** `internal/budget/budget_test.go` and, only if required by an
+observable Evidence invariant, `internal/evidence/compiler_test.go`.
 
-- [x] Test that natural-language package/module hints produce a structural
-  bridge query, followed by symbol-bearing path candidates, while explicit
-  path terms continue using only `SearchPaths`.
-- [x] Test that bridge candidates are deterministic, bounded, and fused as a
-  distinct internal retriever without changing existing retriever order.
-- [x] Test that documentation/configuration chunks and broad arbitrary words
-  are never promoted to structural anchors.
-- [x] Test relation expansion receives only exact/structural symbol anchors,
-  never a broad path candidate.
-- [x] Run the focused tests and record the expected RED failure.
+- [ ] Add a failing test where a lower-ranked exact-symbol anchor appears after
+  a large relation/source candidate and must remain in the packed bundle when
+  the current tail-trim would otherwise remove it.
+- [ ] Add a failing test where a relation anchor and its relation candidate are
+  both retained, with no dangling public relation edge and stable item order.
+- [ ] Add a failing test proving generic lexical/documentation candidates are
+  not treated as reserved anchors.
+- [ ] Add a failing test for tight-budget fallback: an anchor may be elided or
+  reduced to its signature, but must not exceed the serialized budget or alter
+  source bytes that remain verbatim.
+- [ ] Run only the new tests and record the expected RED failure before editing
+  `internal/budget/budget.go`.
 
 ### Task 2: Minimal GREEN implementation
 
-Files: `internal/query/planner.go` or a new internal helper,
-`internal/search/retrieval.go`, `internal/search/search.go`,
-`internal/store/store.go`, and their tests.
+**Files:** `internal/budget/budget.go` and the tests from Task 1.
 
-- [x] Derive at most a small deterministic set of bridge hints from package,
-  module, namespace, crate, or equivalent structural language terms. Do not
-  pass all natural-language words to path search.
-- [x] Add a store query that first selects structural entry-point candidates
-  by exact/qualified identity, then returns only their symbol-bearing paths
-  and symbols. Use stable path/line/handle ordering and the existing limit.
-- [x] Mark bridge results with an internal retriever identity/score only;
-  preserve existing public trace fields and ranking weights unless required
-  to keep deterministic fusion. Do not adjust packing or Evidence.
-- [x] Ensure path filters and changed-only filters still apply after fusion.
-- [x] Keep relation anchors restricted to exact symbol or bridge-resolved
-  structural symbols; do not feed generic documents or raw path expansions.
-- [x] Run focused GREEN tests, then the full package suite.
+- [ ] Introduce a private deterministic anchor classifier. It returns true for
+  candidates with `symbol-exact`, a `path` score reason, or a non-empty
+  relation/relation context; it returns false for documentation, configuration,
+  and generic lexical candidates.
+- [ ] Build a stable reservation set keyed by candidate handle before the main
+  packing loop, preserving the existing ranked order for output.
+- [ ] During budget pressure, prefer the reserved anchor over non-reserved
+  candidates and try the existing content elision/signature fallback before
+  incrementing `OmittedCount` for the anchor.
+- [ ] Keep relation metadata and existing duplicate-relation elision unchanged;
+  never emit a relation edge whose endpoints are absent from the final bundle.
+- [ ] Run the focused budget/evidence tests, then the full Go package suite.
 
 ### Task 3: Static verification and candidate gate
 
-- [x] `gofmt` changed Go files and run `git diff --check`.
-- [x] Run `go test ./... -count=1` and `go vet ./...`.
-- [x] Run native and CGO-free Windows amd64, Linux amd64, and Darwin arm64
-  builds into a temporary directory, then remove generated artifacts.
-- [x] Run the historical focused/2048 candidate benchmark exactly once after
-  static verification; retry only an infrastructure failure once.
-- [ ] Accept only if at least three path/symbol/anchor labels improve, wire is
-  `<=12,740`, efficiency is `>0.3925`, and all fidelity, budget,
-  deterministic-ordering, known-handle, and MCP contract tests remain green.
-- [x] Record execution status and privacy scan in
-  `docs/benchmarks/findings-v0.11.md` without source text or absolute paths.
+- [ ] Run `gofmt` on changed Go files and `git diff --check`.
+- [ ] Run `go test ./... -count=1` and `go vet ./...`.
+- [ ] Run native plus CGO-free Windows amd64, Linux amd64, and Darwin arm64
+  builds into a temporary directory; remove outputs after verification.
+- [ ] Run the historical suite exactly once with `default`, `repeat 1`,
+  attribution, and diagnosis enabled.
+- [ ] Accept only if focused/2048 reduces `packing_dropped` by at least three,
+  keeps packed labels at least `5`, keeps wire `<=12,740`, improves efficiency
+  strictly above `0.3925`, and preserves all fidelity, relation, budget,
+  deterministic-ordering, known-handle, and MCP contract checks.
+- [ ] Record measured values, artifact hashes, and privacy scan in
+  `docs/benchmarks/findings-v0.12.md` without source text or absolute paths.
 
 ### Task 4: Closure and recovery
 
-- [x] If the gate fails, reverse-revert only this milestone's product commits,
-  retain the negative findings, and leave the v0.10 baseline intact.
-- [x] Update this plan with UTC progress, discoveries, decisions, outcomes,
-  and actual verification evidence. Do not modify archived plans.
-- [x] Preserve user-owned dirty/untracked files and remove generated reports,
-  indexes, binaries, caches, and temporary workspaces.
+- [ ] If the gate fails, reverse-revert only the v0.12 product commit(s), retain
+  the negative findings, and leave the v0.10 baseline intact.
+- [ ] If the gate passes, retain the implementation and record the new measured
+  baseline without changing public interfaces.
+- [ ] Update this plan with UTC progress, discoveries, decisions, outcomes, and
+  actual verification evidence; do not modify archived plans.
+- [ ] Remove generated reports, indexes, binaries, caches, and temporary
+  workspaces; preserve user-owned dirty/untracked files.
 
 ## Validation and Acceptance
 
-Identity bridge behavior must be deterministic and bounded. Existing explicit
-path queries, exact symbol queries, relation provenance, source fidelity,
-budget limits, packet bytes, MCP method contracts, and known-handle behavior
-must remain unchanged. The candidate gate is strict: three or more improved
-path/symbol/anchor labels, no wire increase, and efficiency strictly above
-0.3925.
+Every packed bundle must remain within its serialized token budget, preserve
+source bytes for verbatim content, preserve valid relation endpoints, and remain
+deterministic for identical input. Existing explicit path/symbol behavior,
+known-handle suppression, normal MCP output, and `focalspan.context.v1` bytes
+must remain unchanged. The strict candidate gate requires at least three fewer
+focused/2048 packing drops, no loss of packed labels, no wire increase, and
+strictly higher useful-evidence efficiency.
 
 ## Idempotence and Recovery
 
-Search is read-only and repeatable. No database schema migration is allowed.
-Candidate benchmarks run once after static verification. A failed gate is
-recovered with normal reverse-order `git revert`; documentation remains as
-historical evidence. Race testing may be recorded `UNVERIFIED` only for the
-known local MinGW 64-bit compiler limitation.
+Packing is read-only and repeatable. Reservation uses only in-memory candidate
+identity and does not persist state. A failed candidate is recovered with
+ordinary reverse-order `git revert`; source-free findings remain as historical
+evidence. Race testing may be recorded `UNVERIFIED` only for the known local
+MinGW compiler limitation.
+
+## Interfaces and Dependencies
+
+No public interface changes. `model.PackRequest`, `model.ContextBundle`,
+Evidence packet schemas, MCP methods, CLI output, and `known_handles` remain
+unchanged. The private classifier and reservation helpers are consumed only by
+`Packer.Pack`; benchmark attribution sees ordinary existing candidate identities
+and no new public debug fields.
 
 ## Progress
 
-- [x] 2026-09-02: v0.10 plan archived byte-identically and v0.11 plan made
-  active; no user-owned files staged.
-- [x] 2026-09-01T23:39Z: identity bridge RED tests failed for the missing
-  retriever and store API, then focused search/store tests passed GREEN.
-- [x] 2026-09-01T23:44Z: full tests, vet, diff check, and all three distinct
-  CGO-free targets passed; temporary outputs were removed.
-- [x] 2026-09-01T23:44Z: benchmark first invocation had no report (infra
-  failure); the attribution allow-list was fixed with a RED/GREEN regression
-  test before the post-fix candidate run.
-- [x] Task 1 RED tests.
-- [x] Task 2 bridge implementation.
-- [x] Task 3 static verification and candidate benchmark execution.
-- [x] Task 4 closure, negative finding, and product-commit recovery.
-- [x] 2026-09-01T23:49Z: implementation committed as `5231e89` and
-  plan/findings committed as `753cf8d`; user-owned dirty/untracked files remain
-  unstaged.
-- [x] 2026-09-02: After correcting the attribution allow-list, the single
-  valid post-fix candidate benchmark completed: focused/2048 path-scope
-  misses 9->7 (two advances), symbol misses 2->2, packing drops 7->9,
-  packed labels 5->5, cumulative wire 12,740->12,840, and efficiency
-  0.3925->0.3894. Baseline comparison also found four required-path recall
-  regressions in project-metadata indexing. The strict gate failed.
-- [x] 2026-09-02: Candidate reports were privacy-scanned and hashed, then
-  generated reports/cache were removed. Product commit `5231e89` was
-  reverse-reverted as `d69d282`; findings and user-owned files were retained.
+- [x] 2026-09-02: v0.11 archive SHA-256 matches the active plan; user-owned
+  files remain unstaged.
+- [x] 2026-09-02: v0.12 design approved; transition prepared for RED tests.
+- [ ] Task 1 RED tests.
+- [ ] Task 2 anchor-first implementation.
+- [ ] Task 3 static verification and candidate gate.
+- [ ] Task 4 closure and recovery.
 
 ## Surprises & Discoveries
 
-- Structural owner chunks are not present for every language (for example Go
-  package owners), so the bridge scopes files through owner symbols and then
-  returns only child symbol chunks.
-- SQLite FTS aliases cannot be used with `MATCH`; the bridge uses the canonical
-  FTS table name and still preserves deterministic ordering.
-- The development attribution validator had a closed retriever allow-list;
-  adding a retriever requires an explicit validator regression test.
+- The legacy packer currently removes final items from the tail when the
+  serialized bundle exceeds budget, so a later anchor can be lost even after
+  its content has been accepted.
+- Existing relation duplicate elision changes content only; relation endpoint
+  validity must remain a separate invariant while reservation is added.
 
 ## Decision Log
 
-- 2026-09-02: Execute only the first recommended hypothesis in this
-  milestone; later packing, excerpt, metadata, known-handle, guidance, cap,
-  SQL-batch, schema-v2, estimator, envelope, and handle candidates remain
-  separate milestones.
-- 2026-09-02: Natural-language words are not sent wholesale to `SearchPaths`;
-  bridge hints must pass through structural identity and exclude generic docs.
-- 2026-09-01: Before the post-fix run, an attribution allow-list validation
-  error was fixed with a RED/GREEN regression test; no benchmark result was
-  inferred from that failed invocation.
-- 2026-09-02: The post-fix identity bridge failed the strict gate (two rather
-  than three advances, wire increase, efficiency decline, packing regression,
-  and four required-path recall regressions). Revert only the product commit;
-  keep the source-free negative findings for future planning.
+- 2026-09-02: Proceed to rank 2 only after v0.11 identity-bridge rejection;
+  retrieval and packing remain separate milestones.
+- 2026-09-02: Reserve exact symbol, explicit path, and relation candidates by
+  handle; do not reserve broad symbol-prefix or lexical hits.
+- 2026-09-02: Preserve ranked output order and use existing elision/signature
+  variants rather than introducing a new public packet field.
 
 ## Outcomes & Retrospective
 
-The identity-bridge implementation and static verification were completed, but
-the post-fix candidate failed its strict gate: it advanced only two
-path-scope labels, increased packing drops and cumulative wire, reduced
-efficiency, and introduced four required-path recall regressions. The product
-commit was reverse-reverted, so v0.10 remains the quality baseline. Source-free
-findings, artifact hashes, privacy results, and recovery evidence are retained
-in `docs/benchmarks/findings-v0.11.md`; later optimization candidates require
-a new plan.
+Pending Task 1 RED tests and the single measured candidate gate.
