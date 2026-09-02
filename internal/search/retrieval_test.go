@@ -13,6 +13,7 @@ import (
 
 type retrievalRecordingStore struct {
 	called      []RetrieverID
+	limits      map[RetrieverID][]int
 	fts         []model.RankedCandidate
 	qualified   []model.RankedCandidate
 	exact       []model.RankedCandidate
@@ -32,34 +33,46 @@ func (s *retrievalRecordingStore) record(id RetrieverID) error {
 	return nil
 }
 
-func (s *retrievalRecordingStore) SearchFTS(context.Context, string, int) ([]model.RankedCandidate, error) {
+func (s *retrievalRecordingStore) recordLimit(id RetrieverID, limit int) {
+	if s.limits == nil {
+		s.limits = make(map[RetrieverID][]int)
+	}
+	s.limits[id] = append(s.limits[id], limit)
+}
+
+func (s *retrievalRecordingStore) SearchFTS(_ context.Context, _ string, limit int) ([]model.RankedCandidate, error) {
 	if err := s.record(RetrieverFTS); err != nil {
 		return nil, err
 	}
+	s.recordLimit(RetrieverFTS, limit)
 	return append([]model.RankedCandidate(nil), s.fts...), nil
 }
-func (s *retrievalRecordingStore) SearchQualifiedSymbols(context.Context, []string, int) ([]model.RankedCandidate, error) {
+func (s *retrievalRecordingStore) SearchQualifiedSymbols(_ context.Context, _ []string, limit int) ([]model.RankedCandidate, error) {
 	if err := s.record(RetrieverQualified); err != nil {
 		return nil, err
 	}
+	s.recordLimit(RetrieverQualified, limit)
 	return append([]model.RankedCandidate(nil), s.qualified...), nil
 }
-func (s *retrievalRecordingStore) SearchExactSymbols(context.Context, []string, int) ([]model.RankedCandidate, error) {
+func (s *retrievalRecordingStore) SearchExactSymbols(_ context.Context, _ []string, limit int) ([]model.RankedCandidate, error) {
 	if err := s.record(RetrieverSymbol); err != nil {
 		return nil, err
 	}
+	s.recordLimit(RetrieverSymbol, limit)
 	return append([]model.RankedCandidate(nil), s.exact...), nil
 }
-func (s *retrievalRecordingStore) SearchSymbolPrefixes(context.Context, []string, int) ([]model.RankedCandidate, error) {
+func (s *retrievalRecordingStore) SearchSymbolPrefixes(_ context.Context, _ []string, limit int) ([]model.RankedCandidate, error) {
 	if err := s.record(RetrieverPrefix); err != nil {
 		return nil, err
 	}
+	s.recordLimit(RetrieverPrefix, limit)
 	return append([]model.RankedCandidate(nil), s.prefix...), nil
 }
-func (s *retrievalRecordingStore) SearchPaths(_ context.Context, hints []string, _ int) ([]model.RankedCandidate, error) {
+func (s *retrievalRecordingStore) SearchPaths(_ context.Context, hints []string, limit int) ([]model.RankedCandidate, error) {
 	if err := s.record(RetrieverPath); err != nil {
 		return nil, err
 	}
+	s.recordLimit(RetrieverPath, limit)
 	s.pathHints = append(s.pathHints, append([]string(nil), hints...))
 	return append([]model.RankedCandidate(nil), s.paths...), nil
 }
@@ -171,6 +184,82 @@ func TestFTSOnlyNeverCallsRelationStore(t *testing.T) {
 	}
 	if containsRetriever(store.called, RetrieverRelation) {
 		t.Fatalf("relation called in fts-only mode: %v", store.called)
+	}
+}
+
+func TestRetrieverSetUsesIntentSpecificCaps(t *testing.T) {
+	tests := []struct {
+		name string
+		plan query.Plan
+		want map[RetrieverID]int
+	}{
+		{
+			name: "definition",
+			plan: query.Plan{Terms: query.Terms{Identifiers: []string{"ValidateToken"}}, PrimaryIntent: query.IntentDefinition},
+			want: map[RetrieverID]int{RetrieverQualified: 40, RetrieverSymbol: 40, RetrieverPrefix: 32, RetrieverFTS: 80, RetrieverPath: 32},
+		},
+		{
+			name: "callers",
+			plan: query.Plan{Terms: query.Terms{Identifiers: []string{"ValidateToken"}}, PrimaryIntent: query.IntentCallers, Intents: []query.Intent{query.IntentCallers}},
+			want: map[RetrieverID]int{RetrieverQualified: 40, RetrieverSymbol: 40, RetrieverPrefix: 32, RetrieverFTS: 80, RetrieverPath: 32},
+		},
+		{
+			name: "impact",
+			plan: query.Plan{Terms: query.Terms{Identifiers: []string{"Apply"}}, PrimaryIntent: query.IntentImpact},
+			want: map[RetrieverID]int{RetrieverQualified: 50, RetrieverSymbol: 50, RetrieverPrefix: 40, RetrieverFTS: 80, RetrieverPath: 40},
+		},
+		{
+			name: "unknown fallback",
+			plan: query.Plan{Terms: query.Terms{Identifiers: []string{"ValidateToken"}}},
+			want: map[RetrieverID]int{RetrieverQualified: 50, RetrieverSymbol: 50, RetrieverPrefix: 50, RetrieverFTS: 100, RetrieverPath: 50},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			store := &retrievalRecordingStore{}
+			if _, err := NewRetrieverSet(store).Retrieve(context.Background(), test.plan, SearchRequest{Mode: RetrievalFull}); err != nil {
+				t.Fatal(err)
+			}
+			for retriever, want := range test.want {
+				got := store.limits[retriever]
+				if len(got) != 1 || got[0] != want {
+					t.Fatalf("%s limits=%v, want [%d]", retriever, got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestRetrieverSetCapsFTSOnlyAndRelationLists(t *testing.T) {
+	ftsStore := &retrievalRecordingStore{}
+	ftsPlan := query.Plan{PrimaryIntent: query.IntentCallers, Intents: []query.Intent{query.IntentCallers}}
+	if _, err := NewRetrieverSet(ftsStore).Retrieve(context.Background(), ftsPlan, SearchRequest{Mode: RetrievalFTSOnly}); err != nil {
+		t.Fatal(err)
+	}
+	if got := ftsStore.limits[RetrieverFTS]; len(got) != 1 || got[0] != 80 {
+		t.Fatalf("fts-only limit=%v, want [80]", got)
+	}
+	if len(ftsStore.called) != 1 || ftsStore.called[0] != RetrieverFTS {
+		t.Fatalf("fts-only calls=%v", ftsStore.called)
+	}
+
+	related := make([]model.RankedCandidate, 120)
+	for index := range related {
+		related[index] = model.RankedCandidate{Handle: "related-" + strings.Repeat("x", index+1), Path: "related.go", Symbol: "Related"}
+	}
+	relationStore := &retrievalRecordingStore{
+		exact:   []model.RankedCandidate{{Handle: "target", Symbol: "ValidateToken"}},
+		related: related,
+	}
+	relationPlan := query.Plan{Terms: query.Terms{Identifiers: []string{"ValidateToken"}}, PrimaryIntent: query.IntentCallers, Intents: []query.Intent{query.IntentCallers}, Anchors: []string{"ValidateToken"}, Relations: []string{"callers"}}
+	lists, err := NewRetrieverSet(relationStore).Retrieve(context.Background(), relationPlan, SearchRequest{Mode: RetrievalFull})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, list := range lists {
+		if list.Retriever == RetrieverRelation && len(list.Items) != 80 {
+			t.Fatalf("relation items=%d, want 80", len(list.Items))
+		}
 	}
 }
 
