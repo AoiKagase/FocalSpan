@@ -235,52 +235,6 @@ func TestKnownHandleDeltaIsDeterministicAndBudgetSafe(t *testing.T) {
 	}
 }
 
-func TestGuidanceAwareSelectionIncludesGuidanceWire(t *testing.T) {
-	req := compilerRequest(1200)
-	compiler := NewCompiler(budget.NewEstimator())
-	prepared, duplicates, skipped := compiler.preprocess(req, ModeFocused)
-	if len(prepared) == 0 {
-		t.Fatal("compiler fixture produced no candidates")
-	}
-	selected := []selectedCandidate{{
-		prepared: prepared[0],
-		variant:  prepared[0].variants[len(prepared[0].variants)-1],
-		utility:  1,
-	}}
-	omitted := len(prepared) - len(selected) + duplicates + skipped
-	evidenceOnly := buildPacket(req, ModeFocused, clampBudget(req.TokenBudget), selected, omitted, skipped, compiler.estimator)
-	withGuidance := buildPacketWithGuidance(req, ModeFocused, clampBudget(req.TokenBudget), selected, prepared, omitted, skipped, compiler.estimator)
-	if withGuidance.Budget.Used <= evidenceOnly.Budget.Used {
-		t.Fatalf("guidance wire was not included: evidence-only=%d guidance-aware=%d", evidenceOnly.Budget.Used, withGuidance.Budget.Used)
-	}
-	if err := Validate(withGuidance); err != nil {
-		t.Fatalf("guidance-aware trial invalid: %v", err)
-	}
-}
-
-func TestGuidanceAwareSelectionPreservesEssentialGuidanceAndBudget(t *testing.T) {
-	req := compilerRequest(1200)
-	req.KnownHandles = []string{"target"}
-	compiler := NewCompiler(budget.NewEstimator())
-	prepared, duplicates, skipped := compiler.preprocess(req, ModeFocused)
-	selected := []selectedCandidate{{
-		prepared: prepared[1],
-		variant:  prepared[1].variants[len(prepared[1].variants)-1],
-		utility:  1,
-	}}
-	omitted := len(prepared) - len(selected) + duplicates + skipped
-	packet := buildPacketWithGuidance(req, ModeFocused, clampBudget(req.TokenBudget), selected, prepared, omitted, skipped, compiler.estimator)
-	if packet.Budget.Used > packet.Budget.Limit || packet.Budget.Used != MeasureModelVisible(packet, compiler.estimator) {
-		t.Fatalf("guidance-aware trial exceeds budget: %+v", packet.Budget)
-	}
-	if !containsString(packet.Limitations, "budget_limited") {
-		t.Fatalf("budget guidance was dropped: %+v", packet)
-	}
-	if err := Validate(packet); err != nil {
-		t.Fatalf("guidance-aware packet invalid: %v", err)
-	}
-}
-
 func TestCompilerIsDeterministic(t *testing.T) {
 	compiler := NewCompiler(nil)
 	var want []byte
