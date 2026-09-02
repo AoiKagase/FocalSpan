@@ -8,8 +8,6 @@ import (
 	"github.com/focalspan/focalspan/internal/query"
 )
 
-const adaptiveExcerptMinLines = 40
-
 type ContentVariant struct {
 	Fidelity       Fidelity
 	Source         string
@@ -32,16 +30,6 @@ func BuildVariants(candidate ClassifiedCandidate, plan query.Plan, mode Mode, es
 	}
 	excerpt := func() ContentVariant {
 		segments := focusedSegments(candidate, plan)
-		var source strings.Builder
-		for _, segment := range segments {
-			if segment.Kind == SegmentSource {
-				source.WriteString(segment.Text)
-			}
-		}
-		return ContentVariant{Fidelity: FidelityExcerpt, Segments: segments, EvidenceTokens: estimator.Estimate(source.String())}
-	}
-	adaptiveExcerpt := func() ContentVariant {
-		segments := adaptiveFocusedSegments(candidate, plan)
 		var source strings.Builder
 		for _, segment := range segments {
 			if segment.Kind == SegmentSource {
@@ -80,14 +68,7 @@ func BuildVariants(candidate ClassifiedCandidate, plan query.Plan, mode Mode, es
 		case compactVerbatimCandidate(candidate, lineCount) && candidate.Candidate.Content != "":
 			variants = append(variants, verbatim())
 		case candidate.Candidate.Content != "" && (candidate.Role == RoleTarget || candidate.Role == RoleImplementation || hasFocusedHits(candidate, plan)):
-			normalExcerpt := excerpt()
-			variants = append(variants, normalExcerpt)
-			if lineCount >= adaptiveExcerptMinLines {
-				compactExcerpt := adaptiveExcerpt()
-				if hasVariantSource(compactExcerpt) && compactExcerpt.EvidenceTokens < normalExcerpt.EvidenceTokens {
-					variants = append(variants, compactExcerpt)
-				}
-			}
+			variants = append(variants, excerpt())
 		}
 		variants = append(variants, signatureVariant)
 	}
@@ -146,16 +127,4 @@ func removeDuplicateVariants(variants []ContentVariant) []ContentVariant {
 		result = append(result, variant)
 	}
 	return result
-}
-
-func hasVariantSource(variant ContentVariant) bool {
-	if variant.Source != "" {
-		return true
-	}
-	for _, segment := range variant.Segments {
-		if segment.Kind == SegmentSource && segment.Text != "" {
-			return true
-		}
-	}
-	return false
 }
