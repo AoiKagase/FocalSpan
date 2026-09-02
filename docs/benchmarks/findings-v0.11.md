@@ -20,18 +20,49 @@ Static verification completed after the implementation:
 
 ## Candidate gate status
 
-The historical benchmark did not produce a valid candidate report. The first
-invocation produced no completion output or report files and was recorded as
-an infrastructure failure. The one permitted retry reached attribution
-validation but stopped on `invalid sanitized hit` because the development
-retriever allow-list did not yet include `identity-bridge`. A RED test then
-fixed that allow-list and passed GREEN. Per the one-candidate policy, the
-historical benchmark was not run again after the code correction.
+After static verification, the historical benchmark was run with the eight
+case `focalspan-history-v0.5` suite, `default` profile, `repeat 1`, and
+attribution plus diagnosis enabled. The first invocation stopped before the
+benchmark because the default Go build cache was not writable; the same
+invocation was then rerun with a writable temporary cache and completed with
+48 quality rows, 40 attribution results, and 40 diagnosis results.
 
-Consequently, v0.11 has **no measured gate result**: path/symbol/anchor
-improvement, cumulative wire tokens, and efficiency are unmeasured. No new
-quality baseline is claimed, and no source text, absolute path, username, or
-environment value is included in this report.
+The frozen gate was evaluated for `full-evidence-focused` at budget 2048:
+
+| Metric | Baseline | Identity bridge | Gate |
+|---|---:|---:|---|
+| `path_scope_missing` labels | 9 | 7 | at least 3 advances |
+| `symbol_match_missing` labels | 2 | 2 | no improvement |
+| `packing_dropped` labels | 7 | 9 | no regression |
+| packed labels (all profiles) | 5 | 5 | retain all |
+| useful evidence | 5 | 5 | strictly increase efficiency |
+| estimated cumulative wire tokens | 12,740 | 12,840 | no increase |
+| useful evidence / 1,000 tokens | 0.3925 | 0.3894 | strictly greater |
+
+The candidate therefore **failed**: only two path-scope labels advanced,
+packing drops increased by two, wire increased by 100 tokens, and efficiency
+declined. Baseline comparison also found four quality rows with a required-path
+recall regression in the project-metadata case. All candidate rows remained
+budget-compliant, deterministic, relation-valid, and forbidden-free, but those
+invariants do not override the failed gate. No new quality baseline is
+claimed.
+
+The six temporary reports were privacy-scanned for source/content fields,
+absolute paths, usernames, environment values, secret sentinels, NaN, and
+Infinity; no matches were found. Their SHA-256 hashes were:
+
+| Artifact | SHA-256 |
+|---|---|
+| candidate quality JSON | `51ae4ef2e4259f20c5644431776f7e01331de0023d16969a547fff381541ee61` |
+| candidate quality Markdown | `9d751f428402a2321a63804f386d58a80fa09565c979bfd2d97c2f7cbc7e11c1` |
+| candidate attribution JSON | `a4af9dbbb45654d3bb4939e34a8b05d5c2eaa22bd32ee368aa91a552d75e3cb1` |
+| candidate attribution Markdown | `66db40c49edf55b31053c64a00b9aaad60f3956cd22dbf9307319e368b126722` |
+| candidate diagnosis JSON | `396f68296aca708bcc4d81c084a48cf05a3c436dbaf87d79df048200f23c6bb8` |
+| candidate diagnosis Markdown | `4012a7c9669ec9a73196917ebe4e7b0da3ea02f73a1824e03d65ad22b6f8fa14` |
+
+Temporary reports, the benchmark workspace, and the writable Go cache are
+removed after this finding is recorded. No source text, absolute path,
+username, or environment value is included in this report.
 
 ## Implementation evidence
 
@@ -43,8 +74,7 @@ retriever identity without changing the v1 wire schema.
 
 ## Next action
 
-Before promotion, run a successor candidate gate under a revised ExecPlan (or
-explicitly authorize one post-fix benchmark run) and require the frozen v0.10
-conditions: at least three improved path/symbol/anchor labels, wire tokens
-`<=12,740`, and efficiency strictly above `0.3925`, with all existing
-invariants preserved.
+Reverse-revert only the identity-bridge product commit and retain this
+negative finding. The next optimization must start from the v0.10 baseline;
+do not retry the rejected identity-bridge hypothesis without a new plan and
+new evidence.

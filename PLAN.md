@@ -94,7 +94,7 @@ Files: `internal/query/planner.go` or a new internal helper,
 
 ### Task 4: Closure and recovery
 
-- [ ] If the gate fails, reverse-revert only this milestone's product commits,
+- [x] If the gate fails, reverse-revert only this milestone's product commits,
   retain the negative findings, and leave the v0.10 baseline intact.
 - [x] Update this plan with UTC progress, discoveries, decisions, outcomes,
   and actual verification evidence. Do not modify archived plans.
@@ -127,15 +127,24 @@ known local MinGW 64-bit compiler limitation.
 - [x] 2026-09-01T23:44Z: full tests, vet, diff check, and all three distinct
   CGO-free targets passed; temporary outputs were removed.
 - [x] 2026-09-01T23:44Z: benchmark first invocation had no report (infra
-  failure); one retry stopped on the pre-existing attribution allow-list.
-  The allow-list was fixed with a RED/GREEN regression test; no rerun was made.
+  failure); the attribution allow-list was fixed with a RED/GREEN regression
+  test before the post-fix candidate run.
 - [x] Task 1 RED tests.
 - [x] Task 2 bridge implementation.
-- [x] Task 3 static verification and benchmark execution attempt.
-- [x] Task 4 closure documentation; promotion gate remains unmeasured.
+- [x] Task 3 static verification and candidate benchmark execution.
+- [x] Task 4 closure, negative finding, and product-commit recovery.
 - [x] 2026-09-01T23:49Z: implementation committed as `5231e89` and
   plan/findings committed as `753cf8d`; user-owned dirty/untracked files remain
   unstaged.
+- [x] 2026-09-02: After correcting the attribution allow-list, the single
+  valid post-fix candidate benchmark completed: focused/2048 path-scope
+  misses 9->7 (two advances), symbol misses 2->2, packing drops 7->9,
+  packed labels 5->5, cumulative wire 12,740->12,840, and efficiency
+  0.3925->0.3894. Baseline comparison also found four required-path recall
+  regressions in project-metadata indexing. The strict gate failed.
+- [x] 2026-09-02: Candidate reports were privacy-scanned and hashed, then
+  generated reports/cache were removed. Product commit `5231e89` was
+  reverse-reverted as `d69d282`; findings and user-owned files were retained.
 
 ## Surprises & Discoveries
 
@@ -155,14 +164,21 @@ known local MinGW 64-bit compiler limitation.
   separate milestones.
 - 2026-09-02: Natural-language words are not sent wholesale to `SearchPaths`;
   bridge hints must pass through structural identity and exclude generic docs.
-- 2026-09-01: Because the only permitted benchmark retry stopped on an
-  implementation validation error, the v0.11 candidate gate is recorded as
-  unmeasured rather than inferring an efficiency result.
+- 2026-09-01: Before the post-fix run, an attribution allow-list validation
+  error was fixed with a RED/GREEN regression test; no benchmark result was
+  inferred from that failed invocation.
+- 2026-09-02: The post-fix identity bridge failed the strict gate (two rather
+  than three advances, wire increase, efficiency decline, packing regression,
+  and four required-path recall regressions). Revert only the product commit;
+  keep the source-free negative findings for future planning.
 
 ## Outcomes & Retrospective
 
-Implementation and static verification are complete, but the historical
-candidate gate is unmeasured after the allowed benchmark retry stopped at
-attribution validation. The implementation is not promoted as a new quality
-baseline; findings and a post-fix successor action are recorded in
-`docs/benchmarks/findings-v0.11.md`.
+The identity-bridge implementation and static verification were completed, but
+the post-fix candidate failed its strict gate: it advanced only two
+path-scope labels, increased packing drops and cumulative wire, reduced
+efficiency, and introduced four required-path recall regressions. The product
+commit was reverse-reverted, so v0.10 remains the quality baseline. Source-free
+findings, artifact hashes, privacy results, and recovery evidence are retained
+in `docs/benchmarks/findings-v0.11.md`; later optimization candidates require
+a new plan.
