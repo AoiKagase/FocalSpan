@@ -1,118 +1,168 @@
-# FocalSpan v0.16 guidance共同budget化 実装計画
+# FocalSpan v0.17 intent別retriever cap / noise制御 実装計画
 
-> **For agentic workers:** 候補選択がguidance wireを予算へ含めることをREDテストで固定し、最小のselection-envelope実装後に品質・wireゲートを測定する。
+**Goal:** query intentに応じて内部retrieverの取得上限を適応させ、fusion前の
+ノイズと処理量を減らす。公開MCP/CLI、`focalspan.context.v1`、retriever ID、
+source fidelity、relation provenance、deterministic orderingを維持し、v0.15
+baselineのwire/labelを非回帰にする。
 
-**Goal:** Evidence候補の選択時にlimitations/next guidanceのwireコストも同じbudgetへ予約し、不要なguidanceを抑えながら有用Evidenceを保持する。初回・known expansion・MCP/CLI契約、anchor recall、source fidelity、determinismを維持し、v0.15 baselineの累積wire `12,304`以下、useful efficiency `0.4064`以上を満たす。
+**Architecture:** `internal/search.RetrieverSet.Retrieve`だけでprivateなcap
+profileを選択する。各store queryへ渡すlimitをplan intentとretrieval modeから
+決定し、fusion、ranking、Evidence compiler、公開trace schemaは変更しない。
+capは既存上限以下に限定し、path/FTS fallbackを消さない。relation anchorの
+取得はbase retrieverのcap適用後に従来どおり実行する。
 
-**Architecture:** retrieval/rankingと公開型は変更しない。compilerのselection trialだけにprivateなguidance-aware packet builderを使い、候補ごとのomitted relationとguidanceを含むmodel-visible wireを比較する。最終Packetは既存のguidance budget trimming、v0.15 known-delta pruning、metadata pruningを同じ順序で適用する。guidance-aware候補が一つもfitしない場合は既存selectionへ安全にフォールバックする。
-
-**Spec:** ユーザー承認済み「FocalSpan token効率改善候補・優先順位」rank 6「guidanceと候補選択の共同budget化」。
+**Spec:** ユーザー承認済み「FocalSpan token効率改善候補・優先順位」rank 7
+「intent別retriever cap / noise制御」。rank 8のSQL batch化、schema v2 relation
+linking、TokenEstimator変更は別マイルストーンであり、この計画では扱わない。
 
 ## Purpose / Big Picture
 
-現在のcompilerは候補をEvidenceだけのwireで選択し、選択完了後にguidanceを付加する。予算超過時はnext/limitationsだけが後から削られるため、guidanceの多い候補集合を選んだ結果、必要なEvidenceと次操作案が競合する。selection trial時点で同じguidanceを合成し、予算内の候補をutility/wire比で選ぶことで、同一hard budget内のEvidence密度を改善する。
+現在はqualified/exact/prefix/FTS/path/relationを固定上限（50/50/50/100/50/100）
+で取得し、最大400件をfusionする。definitionや軽量relation queryでは、上位候補
+に寄与しないprefix/FTS/path行がfusion対象を膨らませる可能性がある。intent別の
+保守的なcapでSQL結果とfusion入力を狭め、同一queryの候補品質を変えずに内部処理
+量を削減する。
+
+## Baseline and Gates
+
+- v0.15 baseline: focused/2048 `packing_dropped=7`、packed labels `5`、累積wire
+  `12,304`、useful efficiency `0.4064`、median metadata overhead `0.9222`。
+- historical suiteは候補につき1回だけ、`default` profile、repeat 1、attribution/
+  diagnosis有効で実行する。
+- `compatible=true`、`regressions=0`、wire/label/recall/fidelity/relation/
+  budget/determinism/known resend/MCP契約の非回帰を必須とする。
+- query latencyは候補のperformance rowsで計測し、profileごとのquery medianが
+  baseline比20%以上改善した場合だけ採用する。改善がない、またはqualityが
+  回帰した場合は候補をrevertし、v0.15を維持する。
 
 ## Global Constraints
 
-- 公開MCP tool、CLI、`focalspan.context.v1`、JSON key、`known_handles`、SQLite schemaを変更しない。
-- retrieval、RRF/ranking、relation resolution、source fidelity、handle、local ID、deterministic orderingを変更しない。
-- `source_body_omitted`、unresolved/omitted relation、`budget_limited`、known skip、relation endpointは保持する。
-- guidanceの上限（limitations 8、next 4）と既存理由コードを変更しない。
-- guidance-aware試行はprivate in-memory評価のみ。通常Packetにranking/token-savings debug fieldを出さない。
+- 公開MCP tool、CLI、`focalspan.context.v1`、JSON key、retriever ID、SQLite
+  schema、`known_handles`を変更しない。
+- Search結果の順序、RRF weight、ranking、relation resolution、source fidelity、
+  Evidence packingを変更しない。
+- cap profileは既存固定cap以下。FTS-onlyはFTSだけ、no-relationsはrelationなし、
+  relation intentはanchor fallbackを従来どおり保持する。
+- traceは既存のretriever countを反映するだけで、新しいdebug/token fieldを追加しない。
 - `AGENTS.md`、`.focalspan.json`、`TASKS.md`は変更・stageしない。
-- fixture/historical reports、generated indexes、binaries、cacheはゲート後に削除する。benchmarkは候補につき1回だけ。
+- benchmark reports、binaries、repository-local cachesはゲート後に削除する。
 
 ## Context and Orientation
 
-- `internal/evidence/compiler.go` のselection loopは`buildPacket`でEvidence wireだけを試し、Compile末尾で`BuildGuidance`と`applyGuidanceWithinBudget`を実行する。
-- `internal/evidence/next.go` はintent、omitted relation、source omission、known-deltaのguidanceを決定順に構築する。
-- `internal/evidence/wire.go` の`MeasureModelVisible`がJSONとsummaryを含む実wireを測定し、metadata/known pruning後に`Budget.Used`を確定する。
-- `internal/benchmark/efficiency.go` と`internal/eval/evidence.go` はuseful evidence、累積wire、known resend、delta ratioを集計する。
+- `internal/search/retrieval.go`に固定capと`RetrieverSet.Retrieve`がある。
+- `internal/search/retrieval_test.go`のrecording storeはretriever呼び出し順と
+  relation anchorを検証する。limit記録を追加してcapを検証する。
+- `internal/search/search.go`はretrieval結果を最大400件でfusionし、`Limit`は
+  公開結果件数でありretriever capとは別である。
+- `internal/search/fusion.go`のRRF weightとsort tie-breakは凍結する。
+- `internal/benchmark`のperformance rowsとcompareがquery latency警告を出す。
 
 ## Plan of Work
 
 ### Task 0: Freeze transition
 
-- [x] v0.15 root planを`docs/superpowers/plans/completed/2026-09-02-v0.15-known-handle-delta.md`へbyte-identicalにアーカイブする。
-- [x] root `PLAN.md`をこのv0.16計画へ置き換える。
-- [x] archiveとroot planだけをdocumentation-only transition commitにする。ユーザー所有dirty filesはstageしない。
+- [ ] v0.16 root planを`docs/superpowers/plans/completed/2026-09-02-v0.16-guidance-shared-budget.md`へbyte-identicalにアーカイブする。
+- [ ] archiveとroot v0.17 planだけをdocumentation-only transition commitにする。
+  ユーザー所有dirty filesはstageしない。
 
-### Task 1: RED tests for shared budget
+### Task 1: RED tests for intent caps
 
-**Files:** `internal/evidence/compiler_test.go`、必要に応じて`internal/app/evidence_test.go`。
+**Files:** `internal/search/retrieval_test.go`、必要に応じて`internal/search/search_test.go`。
 
-- [x] guidance-aware trialがEvidence wireだけでなくlimitations/nextを含めて測定することを固定する。
-- [x] `budget_limited`、source omission、unresolved/omitted relation、known skipを削らず、guidance上限と`Validate`を保持することを固定する。
-- [x] initial、knownなしcontrol、known expansionのselection/JSON determinismとhard budgetを固定する。
-- [x] guidance-aware候補がfitしない場合の既存selection fallbackを固定する。
+- [ ] definition/callers/callees/tests/imports/exports/references/impact/defaultの
+  cap profileを固定する。
+- [ ] FTS-only/no-relations/full modeの呼び出し集合、limit、relation anchor、
+  empty-term fallbackを固定する。
+- [ ] cap適用後も結果の決定順序、trace count、relation provenanceが変わらない
+  fake-store回帰を追加する。
 
 ### Task 2: Minimal GREEN implementation
 
-**Files:** `internal/evidence/compiler.go` と必要最小限のprivate helper/tests。
+**Files:** `internal/search/retrieval.go`と必要最小限のprivate tests。
 
-- [x] `CompileRequest`や公開型を変えず、selection trial用`buildPacketWithGuidance`を追加する。
-- [x] trial packetは`buildPacket`→`BuildGuidance`→known-delta pruning→metadata pruning→`settleWireUsage`の順で作り、omitted relationとguidanceコストを同じwire予算へ含める。
-- [x] anchor/trial/currentの候補比較だけをguidance-awareにし、utility、tie-break、candidate order、fallbackを維持する。
-- [x] Compile末尾の最終guidance trimmingとStats再計算は既存順序を保ち、二重適用をno-opにする。
-- [x] 候補実装をfocused/full testで検証したが、歴史ベンチのwire回帰により `f940b84` から `7b24f55` でrevertした。既存selectionとの品質比較fallbackは次候補の前提として残す。
+- [ ] private `retrieverCaps`とintent/mode別選択関数を追加する。
+- [ ] 各store queryへ既存cap以下のlimitを渡し、取得リストの型・順序・エラー
+  wrappingを維持する。
+- [ ] relation取得はcap済みbase listsからanchorを作り、legacy/provenance merge
+  と既存relation capを維持する。
+- [ ] cap 0や未知intentでは安全な既存capへfallbackし、公開traceに設定値を出さない。
 
 ### Task 3: Static verification
 
-- [x] gofmt、`git diff --check`。
-- [x] repository-local cacheで`go test ./... -count=1`、`go vet ./...`。
-- [x] native、CGO-free Windows amd64/Linux amd64/Darwin arm64 buildを一時出力し削除する。
-- [x] `go test -race ./...`を実行し、MinGW制約（`cc1.exe: sorry, unimplemented: 64-bit mode not compiled in`）のためUNVERIFIEDと記録する。
-- [x] fixture evaluatorでcoverage/role/fidelity/relation/budget/determinism、known resend、delta ratioを再測定する。
+- [ ] gofmt、`git diff --check`。
+- [ ] repository-local cacheで`go test ./... -count=1`、`go vet ./...`。
+- [ ] native、CGO-free Windows amd64/Linux amd64/Darwin arm64 buildを一時出力し
+  削除する。
+- [ ] `go test -race ./...`を実行し、MinGW制約ならUNVERIFIEDと記録する。
+- [ ] fixture evaluatorでcoverage/role/fidelity/relation/budget/determinism、
+  known resend、delta ratioを再測定する。
 
 ### Task 4: Candidate benchmark gate
 
-- [x] historical `focalspan-history-v0.5`をdefault profile、repeat 1、attribution/diagnosis有効で1回実行し、v0.15 baselineと比較する。
-- [x] focused/2048の`packing_dropped`非増加、packed labels 5以上、累積wire `<=12,304`、useful efficiency `>=0.4064`を要求する。
-- [x] anchor recall、source fidelity、relation validity、budget、determinism、known resend、MCP契約に非回帰を要求する。
-- [x] `compatible=true`、privacy scan、artifact hashes、実測値を`docs/benchmarks/findings-v0.16.md`へsource-freeに記録した。`regressions=5`のためbaselineは作成しない。
+- [ ] historical `focalspan-history-v0.5`を候補につき1回実行し、v0.15 baselineと
+  比較する。
+- [ ] focused/2048のpacking dropped非増加、packed labels 5以上、wire `<=12,304`、
+  useful efficiency `>=0.4064`を要求する。
+- [ ] quality/invariant comparisonの`compatible=true`、`regressions=0`、および
+  profileごとのquery latency 20%以上改善を要求する。
+- [ ] privacy scan、artifact hashes、実測値をsource-free
+  `docs/benchmarks/findings-v0.17.md`へ記録する。未達ならbaselineを作らない。
 
 ### Task 5: Closure and recovery
 
-- [x] 全ゲート合格時だけ製品commit、findings、`results-v0.16.{json,md}`を確定する（不合格のためresultsは作成しない）。
-- [x] gate不合格時は製品commit `f940b84` を reverse-order `git revert` `7b24f55` で取り消し、RED/GREENテストとfindingsを履歴へ残し、v0.15 baselineを維持する。
-- [x] v0.16 generated reportsとrepository-local cacheを削除し、既存のindex/worktree/binary artifactsおよびユーザー所有dirty filesを保持する。
-- [x] Progress、Discoveries、Decision Log、Outcomesを実測値で更新し、v0.15 archiveは編集しない。
+- [ ] 全ゲート合格時だけ製品commit、findings、`results-v0.17.{json,md}`を確定する。
+- [ ] gate不合格時は製品commitだけをreverse-order `git revert`し、findingsを残し、
+  v0.15 baselineを維持する。同じ候補benchmarkは再実行しない。
+- [ ] generated reportsとcandidate cacheを削除し、ユーザー所有dirty filesを保持する。
+- [ ] Progress、Discoveries、Decision Log、Outcomesを実測値で更新し、v0.16 archiveは
+  編集しない。
 
 ## Validation and Acceptance
 
-同一入力は決定的で、`Validate`が成功し、model-visible wireと`Budget.Used`/Statsが一致すること。initialとknownなしcontrolは既存JSONと同一、known expansionはknown resend 0とrelation validity 1を維持すること。historical gateはv0.15のquality、packed labels、wire、efficiencyを下回らず、比較はcompatible=true/regressions=0であること。
+同一入力は決定的で、検索候補の順序とRRF scoreが既存と同一であること。cap適用後も
+必要path/symbol/anchorのrecall、relation validity、source fidelity、budget、
+known resend、公開trace/MCP契約が非回帰であること。historical比較は
+`compatible=true`、`regressions=0`、wire/efficiency gate合格、かつquery median
+20%以上改善をすべて満たすこと。
 
 ## Idempotence and Recovery
 
-guidance-aware builderはin-memory trialだけでindex/databaseを変更しない。known-delta/metadata pruningの二重適用はno-op。候補棄却時は製品commitのみordinary revertし、v0.15 baselineとsource-free findingsを維持する。
+cap選択はpureなin-memory関数でindex/databaseを変更しない。limitは呼び出しごとに
+再計算され、同じplan/modeで同じ値になる。candidate gate不合格時は製品commitだけを
+ordinary revertし、v0.15 baselineとsource-free findingsを保持する。
 
 ## Interfaces and Dependencies
 
-公開interfaceは変更しない。`code_context`、`code_expand`、`code_impact`、CLI evidence、`focalspan.context.v1`、`known_handles`、legacy `ContextBundle`を維持する。private helperは`internal/evidence`内に限定する。
+公開interfaceは変更しない。`code_context`、`code_expand`、`code_impact`、CLI
+evidence、`focalspan.context.v1`、legacy `ContextBundle`を維持する。変更は
+`internal/search`のprivate cap profileと回帰テストに限定する。
 
 ## Progress
 
-- [x] 2026-09-02: v0.15 strict gate通過、product `b07203a`、docs/baseline `20b78c9`を確定。
-- [x] 2026-09-02: v0.15 planをbyte-identical archiveへコピーした。
-- [x] 2026-09-02T06:53Z: v0.16 documentation-only transition commit `b746cc3` を確定した。
-- [x] 2026-09-02T07:20Z: guidance wire共同選択のRED/GREEN実装とcandidate commit `f940b84` を検証した。
-- [x] 2026-09-02T07:20Z: historical benchmarkを1回実行し、48 quality/40 attribution/40 diagnosisを生成。比較はcompatible=true、regressions=5。
-- [x] 2026-09-02T07:20Z: strict gate不合格を確定し、product commitを `7b24f55` でrevertした。findings-v0.16を作成し、v0.15 baselineを維持する。
-- [x] 2026-09-02T07:24Z: revert後の `go test ./... -count=1`（696 tests/46 packages）、`go vet ./...`、gofmt、diff checkを再確認。raceはMinGW制約でUNVERIFIED。
+- [x] 2026-09-02T10:37Z: v0.16 negative candidateを確定し、v0.15 baselineを維持した。
+- [x] 2026-09-02T10:37Z: v0.16 planをbyte-identical archiveへコピーした。
+- [ ] v0.17 documentation-only transition commit。
+- [ ] RED tests。
+- [ ] GREEN implementation。
+- [ ] Static verification。
+- [ ] Candidate benchmark gate。
+- [ ] Closure and recovery。
 
 ## Surprises & Discoveries
 
-- guidance-aware trialはaggregate wire（12,304→12,240）と効率（0.4064→0.4085）を改善したが、MCPケースのvariant選択がverbatimへ寄り、5行でwire 251→286の回帰を生んだ。
-- attribution/diagnosis出力はv0.15と同一hashで、packing_dropped 7、packed labels 5、recall/fidelity/relation/budget/determinismは非回帰だった。
-- 単純な「fitしない場合だけlegacy fallback」では、fitするがwireが悪化する候補を防げない。per-row legacy-selection比較が必要である。
+- v0.16ではaggregate wire改善だけでは不十分で、MCP 5行のper-row wire回帰により
+  strict gateを失敗した。v0.17もquality非回帰をwire/latencyと同列に扱う。
+- 固定capは`retrieval.go`に集中しており、intent別profileをprivateに追加できる。
+  ただしbase listを狭めるとrelation anchorやfallbackを失うため、REDで呼び出し
+  limitとanchor経路を先に固定する。
 
 ## Decision Log
 
-- 2026-09-02: v0.15の次順位としてguidanceと候補選択の共同budget化を開始する。
-- 2026-09-02: retrieval/ranking/public schemaを変更せず、compiler selection trialだけへ適用する。
-- 2026-09-02: essential guidanceを削除せず、fitしない場合は既存selectionへfallbackする。
-- 2026-09-02: strict historical gateはper-row wire回帰5件を理由に不合格とし、v0.15 baselineを維持する。候補は `f940b84` から `7b24f55` でrevertし、同じ候補を再実行しない。
+- 2026-09-02: 次順位としてrank 7 intent別retriever cap / noise制御を開始する。
+- 2026-09-02: SQL batch化とschema v2 relation linkingは別系統として同時実装しない。
+- 2026-09-02: capは既存上限以下に限定し、公開trace/schema/RRF weightは変更しない。
 
 ## Outcomes & Retrospective
 
-v0.16はnegative candidateとして終了した。共同budget化は局所テストとaggregate効率では有望だったが、MCPの5 quality rowsでwire回帰が発生し、strict non-regression gateを満たさなかった。製品変更はrevertされ、v0.15（wire 12,304、efficiency 0.4064）が現行baselineである。将来再検討する場合は、guidance-aware trialとlegacy selectionのper-row比較fallbackを先に実装し、別マイルストーンとして新しい単一ベンチを実行する。
+未完了。cap profileの候補値、quality/latency実測、採用または棄却の根拠を完了時に
+追記する。
