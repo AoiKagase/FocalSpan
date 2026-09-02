@@ -161,6 +161,8 @@ func (c *Compiler) Compile(req CompileRequest) (CompileResult, error) {
 	}
 	limitations, next := BuildGuidance(GuidanceInput{Plan: req.Plan, Selected: guidanceSelected, Omitted: omittedCandidates, KnownHandles: req.KnownHandles, ExpansionAnchors: req.ExpansionAnchors, Truncated: omitted > 0})
 	applyGuidanceWithinBudget(&packet, limitations, next, c.estimator)
+	prunePacketMetadata(&packet)
+	settleWireUsage(&packet, c.estimator)
 	if err := Validate(packet); err != nil {
 		return CompileResult{}, err
 	}
@@ -563,4 +565,81 @@ func duplicateSourceBytes(items []Item) int {
 		}
 	}
 	return total
+}
+
+func prunePacketMetadata(packet *Packet) {
+	if packet == nil {
+		return
+	}
+
+	anchorLanguages := make(map[string]bool)
+	for _, item := range packet.Evidence {
+		if isAnchorRole(item.Role) && item.Language != "" {
+			anchorLanguages[strings.ToLower(item.Language)] = true
+		}
+	}
+	explicitLanguages := make(map[string]bool, len(anchorLanguages))
+	for language := range anchorLanguages {
+		explicitLanguages[language] = true
+	}
+
+	for index := range packet.Evidence {
+		item := &packet.Evidence[index]
+		if item.Language != "" && !isAnchorRole(item.Role) {
+			language := strings.ToLower(item.Language)
+			if anchorLanguages[language] || explicitLanguages[language] {
+				item.Language = ""
+			} else {
+				explicitLanguages[language] = true
+			}
+		}
+		if canOmitKind(*item) {
+			item.Kind = ""
+		}
+		item.Why = pruneWhy(item.Why)
+	}
+}
+
+func isAnchorRole(role Role) bool {
+	return role == RoleTarget || role == RoleChange
+}
+
+func canOmitKind(item Item) bool {
+	if item.Kind == "" || isAnchorRole(item.Role) || item.Symbol == "" {
+		return false
+	}
+	if item.Fidelity == FidelitySignature || item.Fidelity == FidelitySynthetic {
+		return false
+	}
+	if item.Source == "" && len(item.Segments) == 0 {
+		return false
+	}
+	switch item.Role {
+	case RoleCaller, RoleCallee, RoleTest, RoleImport, RoleExport, RoleReference,
+		RoleDependent, RoleContext, RoleDocumentation, RoleConfig, RoleTemplate:
+		return true
+	default:
+		return false
+	}
+}
+
+func pruneWhy(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	lowValue := map[string]bool{
+		"path_match":    true,
+		"lexical_match": true,
+		"same_file":     true,
+	}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if !lowValue[value] {
+			result = append(result, value)
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }

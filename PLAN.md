@@ -41,36 +41,36 @@
 
 - [x] 完了したv0.13 root planを `docs/superpowers/plans/completed/2026-09-02-v0.13-adaptive-focused-excerpt.md` へbyte-identicalにアーカイブする。
 - [x] root `PLAN.md`をこのv0.14計画へ置き換える。
-- [ ] archiveとroot planだけを1つのdocumentation-only transition commitにする。ユーザー所有のdirty filesはstageしない。
+- [x] archiveとroot planだけを1つのdocumentation-only transition commitにする。ユーザー所有のdirty filesはstageしない。
 
 ### Task 1: RED tests for pruning
 
 **Files:** `internal/evidence/compiler_test.go`、必要に応じて`wire_test.go`/`validate_test.go`。
 
-- [ ] `TestPruneMetadataPreservesV1RequiredFields` を追加する。target/changeのsymbol、全itemのhandle/role/location/fidelity、source/segments、relation endpoints、known-handle skip、budgetをprune前後で保持し、`Validate`とdeterministic marshalが通ることを確認する。
-- [ ] `TestPruneMetadataDropsOnlyRedundantOptionalFields` を追加する。同一languageの補助role、重複kind、低価値why、非必須guidance候補を省略し、高価値identity/relation/changed whyとtarget language/kind/symbolは保持することを確認する。
-- [ ] `TestPruneMetadataReducesMeasuredWireWithoutChangingSelection` を追加する。同一CompileRequestの選択handle/role/relationをprune前後で比較し、prune後の`MeasureModelVisible`が小さく、`Budget.Used <= Budget.Limit`であることを確認する。
-- [ ] `TestPruneMetadataIsIdempotentAndSchemaCompatible` を追加する。二重適用で変化せず、schemaが`focalspan.context.v1`のまま、公開キー以外のdebug/token-savingsフィールドが出ないことを確認する。
-- [ ] 新テストだけを実行し、private pruning関数が未定義でcompile failureになるRED結果を記録する。
+- [x] `TestPruneMetadataPreservesV1RequiredFields` を追加する。target/changeのsymbol、全itemのhandle/role/location/fidelity、source/segments、relation endpoints、known-handle skip、budgetをprune前後で保持し、`Validate`とdeterministic marshalが通ることを確認する。
+- [x] `TestPruneMetadataDropsOnlyRedundantOptionalFields` を追加する。同一languageの補助role、重複kind、低価値why、非必須guidance候補を省略し、高価値identity/relation/changed whyとtarget language/kind/symbolは保持することを確認する。
+- [x] `TestPruneMetadataReducesMeasuredWireWithoutChangingSelection` を追加する。同一CompileRequestの選択handle/role/relationをprune前後で比較し、prune後の`MeasureModelVisible`が小さく、`Budget.Used <= Budget.Limit`であることを確認する。
+- [x] `TestPruneMetadataIsIdempotentAndSchemaCompatible` を追加する。二重適用で変化せず、schemaが`focalspan.context.v1`のまま、公開キー以外のdebug/token-savingsフィールドが出ないことを確認する。
+- [x] 新テストだけを実行し、private pruning関数が未定義でcompile failureになるRED結果を記録する。
 
 ### Task 2: Minimal GREEN implementation
 
 **Files:** `internal/evidence/compiler.go` と必要最小限の新規private helper/test fixture。
 
-- [ ] 最終Packetにだけ適用する `prunePacketMetadata` を追加する。候補選択中のtrial packetには適用せず、selection/ranking/packingを不変にする。
-- [ ] Packet内の明示language集合を決定し、target/changeと推論不能なitemはlanguageを保持する。同一languageが既に明示された補助roleだけ`Language`を空にする。
-- [ ] target/change、symbol空、signature/outlineのみ、またはsourceなしのitemは`Kind`を保持する。補助roleでsource/segmentsとsymbolがあり役割と重複するkindだけ空にする。
-- [ ] `Symbol`、handle、role、location、fidelity、本文、relations、budget、known-handle統計は常に保持する。
-- [ ] `Why`は既存順序を保ったまま、identity（exact/qualified/same-symbol）、relation、changedを優先し、path/lexical/same-fileだけを必要時に省略する。空になったsliceはnilにして`omitempty`を効かせる。
-- [ ] guidanceは原則そのまま保持し、wire budgetを超える場合の既存`applyGuidanceWithinBudget`だけを利用する。新しい上限・キー・理由文字列は導入しない。
-- [ ] prune後に`settleWireUsage`を再計算し、`CompileResult.Stats`を最終Packetと一致させる。
+- [x] 最終Packetにだけ適用する `prunePacketMetadata` を追加する。候補選択中のtrial packetには適用せず、selection/ranking/packingを不変にする。
+- [x] Packet内の明示language集合を決定し、target/changeと推論不能なitemはlanguageを保持する。同一languageが既に明示された補助roleだけ`Language`を空にする。
+- [x] target/change、symbol空、signature/outlineのみ、またはsourceなしのitemは`Kind`を保持する。補助roleでsource/segmentsとsymbolがあり役割と重複するkindだけ空にする。
+- [x] `Symbol`、handle、role、location、fidelity、本文、relations、budget、known-handle統計は常に保持する。
+- [x] `Why`は既存順序を保ったまま、identity（exact/qualified/same-symbol）、relation、changedを優先し、path/lexical/same-fileだけを必要時に省略する。空になったsliceはnilにして`omitempty`を効かせる。
+- [x] guidanceは原則そのまま保持し、wire budgetを超える場合の既存`applyGuidanceWithinBudget`だけを利用する。新しい上限・キー・理由文字列は導入しない。
+- [x] prune後に`settleWireUsage`を再計算し、`CompileResult.Stats`を最終Packetと一致させる。
 
 ### Task 3: Static verification
 
-- [ ] 変更Goファイルをgofmtし、`git diff --check`を実行する。
-- [ ] `go test ./... -count=1`、`go vet ./...`をrepository-local cacheで実行する。
-- [ ] nativeおよび`CGO_ENABLED=0`のWindows amd64、Linux amd64、Darwin arm64 buildをtemporary directoryへ出力し、生成物を削除する。
-- [ ] `go test -race ./...`を実行する。MinGWの既知の64-bit compiler制限が再発した場合は`UNVERIFIED`として記録し、成功とは呼ばない。
+- [x] 変更Goファイルをgofmtし、`git diff --check`を実行する。
+- [x] `go test ./... -count=1`、`go vet ./...`をrepository-local cacheで実行する。
+- [x] nativeおよび`CGO_ENABLED=0`のWindows amd64、Linux amd64、Darwin arm64 buildをtemporary directoryへ出力し、生成物を削除する。
+- [x] `go test -race ./...`を実行する。MinGWの既知の64-bit compiler制限が再発した場合は`UNVERIFIED`として記録し、成功とは呼ばない。
 
 ### Task 4: Candidate benchmark gate
 
@@ -101,16 +101,17 @@ pruningはin-memory Packetへのprivate変換で、index/database/永続stateを
 
 - [x] 2026-09-02: v0.13 adaptive focused excerpt planをbyte-identicalにアーカイブし、v0.10 product baselineへ復帰済み。
 - [x] 2026-09-02: v0.14 designとして、最終Packet限定のoptional metadata pruning、必須identity/fidelity/relation保持、公開schema固定を決定。
-- [ ] Documentation-only transition commit。
-- [ ] RED tests。
-- [ ] GREEN implementation。
-- [ ] Static verification。
+- [x] Documentation-only transition commit（`5760016`）。
+- [x] RED tests（未定義`prunePacketMetadata`によるcompile failureを確認）。
+- [x] GREEN implementation（pruning回帰テスト36件を通過）。
+- [x] Static verification（全691件、vet、native/cross-build成功。raceはMinGW `cc1.exe: sorry, unimplemented: 64-bit mode not compiled in`でUNVERIFIED）。
 - [ ] Candidate benchmark gate。
 - [ ] Closure and recovery。
 
 ## Surprises & Discoveries
 
-- 未測定。v0.13のadaptive excerptは単体で候補を縮約できても、historical suiteでは選択されずwireとefficiencyが変わらなかったため、v0.14ではselectionを変えず最終Packetのmetadataだけを直接削減する。
+- v0.13のadaptive excerptは単体で候補を縮約できてもhistorical suiteでは選択されずwireとefficiencyが変わらなかったため、v0.14ではselectionを変えず最終Packetのmetadataだけを直接削減する。
+- metadata pruning後もselection/ranking/packingを変えない設計により、全691テスト、vet、native/cross-buildは通過した。raceだけは既知のMinGW toolchain制約で実行不能だった。
 
 ## Decision Log
 
