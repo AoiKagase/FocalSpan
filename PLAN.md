@@ -1,127 +1,122 @@
-# FocalSpan v0.14 v1互換 metadata field pruning 実装計画
+# FocalSpan v0.15 multi-turn known_handles差分最適化 実装計画
 
-> **For agentic workers:** REDテストを先に追加し、最小実装後に静的検証と候補ベンチマークを行う。
+> **For agentic workers:** REDテストを先に追加し、known_handlesを含む二段階deltaだけを測定してから最小実装する。
 
-**Goal:** `focalspan.context.v1` の公開キーと意味を変更せず、冗長または低価値なEvidenceメタデータを条件付きで省略し、wire tokensを削減する。
+**Goal:** `code_context → code_expand` の既知handle差分を、公開MCP/CLIインターフェースとEvidence品質を変えずに効率化する。既知Evidenceの再送を0件に保ち、fixture評価の二段階delta token ratioを現行`0.5578351609480015`未満へ下げる。
 
-**Architecture:** 検索・ranking・候補packingは変更しない。通常の候補選択は現行メタデータで行い、最終Packetを組み立てた後だけ、privateなpruning規則を適用する。必須のhandle、role、location、symbol、fidelity、source/segments、relation、budget、known_handlesの挙動は保持する。JSON `omitempty` で既に任意の `language`、`kind`、`symbol`、`why` を、意味を損なわない範囲で省略する。
+**Architecture:** `known_handles`の正規化、候補選択、relation endpoint、source fidelityは維持する。最終Packetを組み立てる際、known_handlesを含むexpandだけに適用するprivateなdelta-envelope規則を追加し、既知anchorに由来する冗長なlimitations/next guidanceを安全に抑制する。通常の初回query、known_handlesなしのcontrol expand、legacy packetは変更しない。空Packetでも`schema`、`mode`、`budget`、`skipped_known`、必須relation状態を維持し、JSONキー名とsummary契約は固定する。
 
-**Tech Stack:** Go、`internal/evidence` compiler/model/wire tests、既存の `budget.TokenEstimator`、source-free historical benchmark。
+**Tech Stack:** Go、`internal/evidence` compiler/known tests、`internal/app` expansion tests、`internal/eval` evidence evaluator、`budget.TokenEstimator`、fixture `evidencesample`。
 
-**Spec:** ユーザー承認済み「FocalSpan token効率改善候補・優先順位」rank 4「v1互換のmetadata field pruning」。
+**Spec:** ユーザー承認済み「FocalSpan token効率改善候補・優先順位」rank 5「multi-turn known_handles差分最適化」。
 
 ## Purpose / Big Picture
 
-現在のEvidence itemは、sourceやsegmentsに加えてlanguage/kind/symbol/whyを持つ。これらは全て任意JSONフィールドで、特にrelation候補の繰り返しlanguage、補助的なkind、`path_match`/`lexical_match`/`same_file`などのwhyは、同一Packet内での有用性が低い一方、metadata overheadの中央値が約0.924ある。最終出力だけをpruneすることで、候補の選択順・relation構築・fidelity判定を変えず、後方互換な省略としてwireを削減する。
+statelessな`known_handles`は、会話の前ターンで返したhandleを次の`code_expand`に渡して同じEvidenceを再送しない契約である。現在は既知anchorの抑制自体は機能し、known resendは0だが、既知anchorが省略されたexpandでも固定のguidanceとPacket envelopeが残り、fixtureのmedian two-step delta ratioは`0.5578351609480015`である。known-only deltaで不要な次アクションや重複制限を出さないことで、初回queryとcontrol expandの意味を保ちながら、known expand側のwireを縮める。
 
 ## Global Constraints
 
-- `focalspan.context.v1`、公開MCP tool、CLI、`known_handles`、JSONキー名、SQLite schemaは変更しない。
-- 検索、RRF/ranking、候補packing、Evidenceのsource fidelity、relation provenance、budget、deterministic orderingを変更しない。
-- target/changeの`symbol`と、全itemのhandle/role/location/fidelityを必ず保持する。
-- source/segments/outline/signature本文は変更せず、relation endpointは省略しない。
-- `language`はtarget/change、およびPacket内で推論不能なitemでは保持する。Packet内で同一言語が既に明示され、itemが補助roleの場合だけ省略する。
-- `kind`はtarget/change、symbolが空のitem、signature/outlineだけで種別判定に必要なitemでは保持する。補助roleでsymbolとsource/segmentsがあり、kindが役割と重複する場合だけ省略する。
-- `symbol`は省略しない。`why`はidentity/relation/changedを示す高価値コードだけ保持し、path/lexical/same-fileなど低価値コードは条件付きで削る。
-- guidance（limitations/next）は公開契約と上限を維持する。内容を削る場合も、source omission・relation expansion・budget limitationを示す必須項目は保持する。
+- 公開MCP tool、CLI、`focalspan.context.v1`、JSONキー名、`known_handles`入力、SQLite schemaは変更しない。
+- source fidelity、relation provenance、relation endpoint validity、budget、deterministic ordering、handle安定性を維持する。
+- known handleは常に再送しない。known-onlyでEvidenceが空でも`skipped_known`の意味と整数値を保持する。
+- 初回queryとknown_handlesなしcontrol expandは同じPacket内容・選択結果を維持する。変更対象はknown_handlesを含むexpandの冗長guidanceに限定する。
+- `source_body_omitted`、未解決relation、budget limitationなど、ユーザーの次操作や安全性に必要なguidanceは削除しない。既知anchorの重複を説明するだけの項目を抑制する。
+- 公開summaryはsource-free、通常Packetにranking/token-savings debug fieldを追加しない。
 - `AGENTS.md`、`.focalspan.json`、`TASKS.md`は変更・stageしない。
-- ベンチマークは候補ごとに1回だけ実行し、source text、絶対パス、ユーザー名、秘密情報を開発レポートへ書かない。
+- fixture評価、生成index、レポート、cacheは完了後に明示的に削除する。ベンチマークの同一候補再実行はしない。
 
 ## Context and Orientation
 
-- `internal/evidence/compiler.go` の `buildPacket` がItem/Relationを組み立て、`Compile` が最終Packetへguidanceを付与する。
-- `internal/evidence/model.go` の `Item.Language`、`Item.Kind`、`Item.Symbol`、`Item.Why` とPacketの`Limitations`/`Next`はJSON `omitempty` を使用する。
-- `internal/evidence/validate.go` はoptional metadataの存在を要求せず、必須のhandle/role/location/fidelity/source/segmentsとrelation endpoint、budgetを検証する。
-- `internal/evidence/wire.go` の `MeasureModelVisible` がJSONとsummaryを含む実wire tokenを測定する。
-- active v0.10 baselineはfocused/2048で `packing_dropped=7`、packed labels `5`、累積wire tokens `12,740`、useful evidence efficiency `0.3925`、median metadata overhead `0.924`。
+- `internal/app/evidence.go` の `ExpandEvidence` は`known_handles`を正規化し、relation候補とanchorを取得して`evidence.Compiler.Compile`へ渡す。
+- `internal/evidence/compiler.go` の`preprocess`はknown handleを候補からskipし、`Compile`後半でguidanceとwire使用量を確定する。
+- `internal/evidence/next.go` の`BuildGuidance`はsignature/source omission、relation omission、known anchor not repeatedをlimitations/nextへ変換する。
+- `internal/benchmark/expand.go` と `internal/eval/evidence.go` は、known resend、relation validity、累積wire、二段階delta ratioを測定する。
+- v0.14では最終Packetのmetadata pruningを導入済みだが、known expansion envelopeは未最適化。v0.14 baselineのwire/qualityを下回らないことを確認する。
 
 ## Plan of Work
 
 ### Task 0: Freeze transition
 
-- [x] 完了したv0.13 root planを `docs/superpowers/plans/completed/2026-09-02-v0.13-adaptive-focused-excerpt.md` へbyte-identicalにアーカイブする。
-- [x] root `PLAN.md`をこのv0.14計画へ置き換える。
-- [x] archiveとroot planだけを1つのdocumentation-only transition commitにする。ユーザー所有のdirty filesはstageしない。
+- [x] 完了したv0.14 root planを `docs/superpowers/plans/completed/2026-09-02-v0.14-metadata-field-pruning.md` へbyte-identicalにアーカイブする。
+- [x] root `PLAN.md`をこのv0.15計画へ置き換える。
+- [ ] archiveとroot planだけを1つのdocumentation-only transition commitにする。ユーザー所有のdirty filesはstageしない。
 
-### Task 1: RED tests for pruning
+### Task 1: RED tests for known-handle delta
 
-**Files:** `internal/evidence/compiler_test.go`、必要に応じて`wire_test.go`/`validate_test.go`。
+**Files:** `internal/evidence/compiler_test.go`、`internal/app/evidence_test.go`、必要に応じて`internal/eval/evidence_test.go`。
 
-- [x] `TestPruneMetadataPreservesV1RequiredFields` を追加する。target/changeのsymbol、全itemのhandle/role/location/fidelity、source/segments、relation endpoints、known-handle skip、budgetをprune前後で保持し、`Validate`とdeterministic marshalが通ることを確認する。
-- [x] `TestPruneMetadataDropsOnlyRedundantOptionalFields` を追加する。同一languageの補助role、重複kind、低価値why、非必須guidance候補を省略し、高価値identity/relation/changed whyとtarget language/kind/symbolは保持することを確認する。
-- [x] `TestPruneMetadataReducesMeasuredWireWithoutChangingSelection` を追加する。同一CompileRequestの選択handle/role/relationをprune前後で比較し、prune後の`MeasureModelVisible`が小さく、`Budget.Used <= Budget.Limit`であることを確認する。
-- [x] `TestPruneMetadataIsIdempotentAndSchemaCompatible` を追加する。二重適用で変化せず、schemaが`focalspan.context.v1`のまま、公開キー以外のdebug/token-savingsフィールドが出ないことを確認する。
-- [x] 新テストだけを実行し、private pruning関数が未定義でcompile failureになるRED結果を記録する。
+- [ ] `TestKnownHandleDeltaKeepsKnownSkipAndRelationInvariants` を追加する。初回Packetのhandlesをknownに渡したexpandでknown Evidenceが0件再送、`SkippedKnown`が正確、dangling edgeがなく、relation candidateのsource/fidelityは保持されることを確認する。
+- [ ] `TestKnownHandleDeltaSuppressesOnlyRedundantGuidance` を追加する。known anchorを説明する重複guidanceだけを抑制し、unresolved relation、source omission、budget limitation、next relation actionは保持することを確認する。
+- [ ] `TestKnownHandleDeltaDoesNotChangeControlOrInitialPackets` を追加する。同一query、knownなしcontrol expand、source/outline mode、空knownのPacketをbyte-identicalに比較する。
+- [ ] `TestKnownHandleDeltaIsDeterministicAndBudgetSafe` を追加する。同一known入力を反復して同じJSONを得て、`Validate`、`Budget.Used == MeasureModelVisible`、hard limitを確認する。
+- [ ] `TestKnownHandleDeltaRatioImprovesOnEvidenceFixture` を追加する。fixture queryの既存ratioを計測し、実装前は現行基準以上であることを固定する。新private helperが未定義でcompile failureになるRED結果を記録する。
 
 ### Task 2: Minimal GREEN implementation
 
-**Files:** `internal/evidence/compiler.go` と必要最小限の新規private helper/test fixture。
+**Files:** `internal/evidence/compiler.go` と必要最小限の`internal/evidence/next.go` helper、テストfixture。
 
-- [x] 最終Packetにだけ適用する `prunePacketMetadata` を追加する。候補選択中のtrial packetには適用せず、selection/ranking/packingを不変にする。
-- [x] Packet内の明示language集合を決定し、target/changeと推論不能なitemはlanguageを保持する。同一languageが既に明示された補助roleだけ`Language`を空にする。
-- [x] target/change、symbol空、signature/outlineのみ、またはsourceなしのitemは`Kind`を保持する。補助roleでsource/segmentsとsymbolがあり役割と重複するkindだけ空にする。
-- [x] `Symbol`、handle、role、location、fidelity、本文、relations、budget、known-handle統計は常に保持する。
-- [x] `Why`は既存順序を保ったまま、identity（exact/qualified/same-symbol）、relation、changedを優先し、path/lexical/same-fileだけを必要時に省略する。空になったsliceはnilにして`omitempty`を効かせる。
-- [x] guidanceは原則そのまま保持し、wire budgetを超える場合の既存`applyGuidanceWithinBudget`だけを利用する。新しい上限・キー・理由文字列は導入しない。
-- [x] prune後に`settleWireUsage`を再計算し、`CompileResult.Stats`を最終Packetと一致させる。
+- [ ] `CompileRequest`の公開型を変えず、`len(req.KnownHandles)>0`をprivateなdelta-envelope判定に使う。
+- [ ] known expandで、既知anchorを再説明するだけの`known_anchor_not_repeated` limitationや同一handleのself `NextAction`を、relation/actionが別途存在しない場合だけ抑制する。unresolved relation、omitted relation、source omission、budget limitationは残す。
+- [ ] known handles自体、`SkippedKnown`、selected relation candidates、`selectedEdges`、source/segments/signature、local IDs、guidance上限は変更しない。
+- [ ] control expandと初回queryにはpruneを適用せず、既存JSONを保持する。
+- [ ] 最終Packetのwire使用量と`CompileResult.Stats`を再計算し、known-only empty packetも`Validate`を通す。
+- [ ] private規則を二重適用してもno-opにし、既存のmetadata pruningと決定順を壊さない。
 
 ### Task 3: Static verification
 
-- [x] 変更Goファイルをgofmtし、`git diff --check`を実行する。
-- [x] `go test ./... -count=1`、`go vet ./...`をrepository-local cacheで実行する。
-- [x] nativeおよび`CGO_ENABLED=0`のWindows amd64、Linux amd64、Darwin arm64 buildをtemporary directoryへ出力し、生成物を削除する。
-- [x] `go test -race ./...`を実行する。MinGWの既知の64-bit compiler制限が再発した場合は`UNVERIFIED`として記録し、成功とは呼ばない。
+- [ ] gofmtと`git diff --check`を実行する。
+- [ ] `go test ./... -count=1`、`go vet ./...`をrepository-local cacheで実行する。
+- [ ] nativeおよび`CGO_ENABLED=0`のWindows amd64、Linux amd64、Darwin arm64 buildを一時出力へ実行し、生成物を削除する。
+- [ ] `go test -race ./...`を実行する。MinGWの64-bit compiler制限が再発した場合は`UNVERIFIED`として記録する。
+- [ ] `cmd/focalspan-eval --root testdata/repos/evidencesample --cases testdata/eval/evidence-cases.jsonl --contract compare --json` を実行し、known resend 0、relation/fidelity/budget/deterministic 1、delta ratio基準を記録する。
 
 ### Task 4: Candidate benchmark gate
 
-- [x] historical `focalspan-history-v0.5`をdefault profile、repeat 1、attribution/diagnosis有効で1回だけ実行する。
-- [x] v0.10 baselineに対して、focused/2048の`packing_dropped`非増加、packed labels 5以上、累積wire tokensの`12,740`未満、useful evidence efficiencyの`0.3925`超、quality/fidelity/relation/budget/deterministic/known-handle/MCP契約全通過を要求する。
-- [x] compatible=true、regressions=0、privacy scan結果、artifact hashes、実測値を`docs/benchmarks/findings-v0.14.md`へsource-freeに記録する。strict gate合格のためv0.14 baselineを記録した。
+- [ ] historical `focalspan-history-v0.5`をdefault profile、repeat 1、attribution/diagnosis有効で候補ごとに1回だけ実行する。v0.14 baseline reportと比較する。
+- [ ] focused/2048の`packing_dropped`非増加、packed labels 5以上、累積wireがv0.14の12,304以下、useful efficiencyが0.4064以上、quality/fidelity/relation/budget/deterministic/known-handle/MCP契約非回帰を要求する。
+- [ ] fixture delta ratioが`0.5578351609480015`未満、known resend 0、relation validity 1を要求する。未達ならstrict gate不合格とする。
+- [ ] compatible=true、regressions=0、privacy scan、artifact hashes、実測値を`docs/benchmarks/findings-v0.15.md`へsource-freeに記録する。strict gate不合格なら新baselineを記録しない。
 
 ### Task 5: Closure and recovery
 
-- [x] strict gate合格時だけ製品commitとbaselineを確定する。
-- [x] gate不合格時は製品commitだけを通常のreverse-order `git revert`で戻し、RED/GREENテストとfindingsを歴史証拠として残し、v0.10 product baselineを維持する（今回は不適用）。
-- [x] generated reports、indexes、binaries、caches、temporary workspacesを削除し、ユーザー所有dirty filesを保持する。
-- [x] このplanのProgress、Discoveries、Decision Log、Outcomesを実測結果で更新する。archive済みv0.13 planは編集しない。
+- [ ] 全ゲート合格時だけ製品commit、findings、必要なら`results-v0.15.{json,md}` baselineを確定する。
+- [ ] gate不合格時は製品commitだけを通常のreverse-order `git revert`で戻し、RED/GREENテストとfindingsを残し、v0.14 product baselineを維持する。
+- [ ] generated reports、fixture indexes、binaries、caches、temporary workspacesを削除し、ユーザー所有dirty filesを保持する。
+- [ ] このplanのProgress、Discoveries、Decision Log、Outcomesを実測結果で更新し、archive済みv0.14 planは編集しない。
 
 ## Validation and Acceptance
 
-全Packetで、必須identity/location/fidelity/source/segmentsとrelation endpointが不変で、`Validate`が通り、`MeasureModelVisible(packet)`が`Budget.Used`と一致しclamped limit以下であること。pruneは二重適用で不変、同一入力で同一JSONを返すこと。strict candidate gateはwire-token削減とquality/invariant非回帰の両方を要求し、wireまたはefficiencyが改善しない場合は候補を棄却する。
+known expansionで既知handleの再送が0、`skipped_known`が正確、relation endpointが有効、source fidelityと必須identityが不変、`Validate`が成功し、wire使用量がbudget内で`MeasureModelVisible`と一致すること。初回およびknownなしcontrolのPacketは既存JSONと同一で、同一入力は決定的であること。fixtureのmedian two-step delta ratioが`0.5578351609480015`未満になり、historical gateもv0.14 qualityを下回らないこと。
 
 ## Idempotence and Recovery
 
-pruningはin-memory Packetへのprivate変換で、index/database/永続stateを変更しない。同一Packetへの再適用はno-opで、Compileのselectionはprune前と同一である。候補が棄却された場合は製品commitのみをordinary `git revert`し、計画とsource-free findingsを保持する。
+known delta pruningはin-memory Packetへのprivate変換で、index/database/永続stateを変更しない。二重適用はno-opで、known handlesの順序・重複除去は既存NormalizeKnownHandlesに委ねる。候補が棄却された場合は製品commitだけをordinary `git revert`し、v0.14 baselineを保持する。
 
 ## Interfaces and Dependencies
 
-公開interfaceは変更しない。`model.PackRequest`、`model.ContextBundle`、Evidence schema `focalspan.context.v1`、MCP methods、CLI output、`known_handles`を維持する。private helperは`internal/evidence`内だけで使用し、通常のMCP/CLI出力にranking/token-savings debug fieldを追加しない。
+公開interfaceは変更しない。`code_context`、`code_expand`、`code_impact`、CLI evidence、`focalspan.context.v1`、`known_handles`、legacy `ContextBundle`、MCP summaryを維持する。private helperは`internal/evidence`に限定し、development trace以外へranking/token-savings debug情報を出さない。
 
 ## Progress
 
-- [x] 2026-09-02: v0.13 adaptive focused excerpt planをbyte-identicalにアーカイブし、v0.10 product baselineへ復帰済み。
-- [x] 2026-09-02: v0.14 designとして、最終Packet限定のoptional metadata pruning、必須identity/fidelity/relation保持、公開schema固定を決定。
-- [x] Documentation-only transition commit（`5760016`）。
-- [x] RED tests（未定義`prunePacketMetadata`によるcompile failureを確認）。
-- [x] GREEN implementation（pruning回帰テスト36件を通過）。
-- [x] Static verification（全691件、vet、native/cross-build成功。raceはMinGW `cc1.exe: sorry, unimplemented: 64-bit mode not compiled in`でUNVERIFIED）。
-- [x] Candidate benchmark gate（8ケース、quality 48、attribution 40、diagnosis 40。wire 12,304、efficiency 0.4064、compatible=true、regressions=0）。
-- [x] Closure and recovery（v0.14 baseline reportを記録し、一時生成物を削除済み）。
+- [x] 2026-09-02: v0.14 metadata pruningを採用し、v0.14 baseline reportを保存済み。
+- [x] 2026-09-02: v0.14 planをbyte-identicalにアーカイブし、v0.15のknown_handles差分設計を作成。
+- [ ] Documentation-only transition commit。
+- [ ] RED tests。
+- [ ] GREEN implementation。
+- [ ] Static verification。
+- [ ] Candidate benchmark gate。
+- [ ] Closure and recovery。
 
 ## Surprises & Discoveries
 
-- v0.13のadaptive excerptは単体で候補を縮約できてもhistorical suiteでは選択されずwireとefficiencyが変わらなかったため、v0.14ではselectionを変えず最終Packetのmetadataだけを直接削減する。
-- metadata pruning後もselection/ranking/packingを変えない設計により、全691テスト、vet、native/cross-buildは通過した。raceだけは既知のMinGW toolchain制約で実行不能だった。
-- attribution出力はv0.13と同一hashで、retrieval/packingの失敗層を変えずにwireだけを削減できた。candidate quality reportでは累積wireが436 tokens減り、efficiencyが0.3925から0.4064へ改善した。
+- 未測定。v0.14でmetadata pruningは初回・expand双方のPacketへ適用済みだが、known-only envelopeのguidance重複とfixture delta ratioへの影響は未確認である。
 
 ## Decision Log
 
-- 2026-09-02: v0.13がstrict gate不合格だったため、優先順位4のmetadata pruningへ遷移する。
-- 2026-09-02: 候補選択中のtrial packetをpruneせず、最終出力だけをpruneしてranking/packingの回帰を防ぐ。
-- 2026-09-02: `symbol`は常時保持し、target/changeのlanguage/kindとrelation provenanceを保持する。optional field omissionだけでv1互換を保つ。
-- 2026-09-02: guidanceの公開上限と理由文字列は変更せず、rank 6の共同budget化と分離する。
-- 2026-09-02: strict benchmark gateがwire/efficiency、quality/invariant、compatibilityをすべて満たしたため、v0.14を採用し`results-v0.14.{json,md}`をbaselineとして保存する。
+- 2026-09-02: 次順位としてmulti-turn known_handles差分を選択し、retrieval/ranking/packingの変更を避ける。
+- 2026-09-02: 初回queryとknownなしcontrolを不変にし、known handlesを含むexpandの冗長guidanceだけを対象にする。
+- 2026-09-02: `skipped_known`、relation validity、source fidelity、public schemaを保持し、stateless契約を壊さない。
 
 ## Outcomes & Retrospective
 
-v0.14は採用。最終Packet限定pruningにより、focused/2048のpacking_dropped 7とpacked 5を維持したまま、累積wireを12,740から12,304へ削減し、useful evidence効率を0.3925から0.4064へ改善した。公開schema、source fidelity、relation endpoint、budget、deterministic ordering、known_handlesは非回帰。race検証だけはMinGW制約のためUNVERIFIEDとして残る。
+未完了。fixture delta ratioとhistorical gateの実測値、採用または棄却の根拠を完了時に追記する。
