@@ -94,20 +94,33 @@ func (c *Compiler) Compile(req CompileRequest) (CompileResult, error) {
 	}
 	if anchorIndex >= 0 {
 		anchor := prepared[anchorIndex]
+		anchorSelected := false
 		for index := 0; index < len(anchor.variants); index++ {
 			trial := appendSelected(selected, selectedCandidate{prepared: anchor, variant: anchor.variants[index], utility: candidateUtility(req.Plan, anchor.classified, nil, nil)})
-			packet := buildPacket(req, mode, limit, trial, len(prepared)-len(trial)+baseOmitted, skippedKnown, c.estimator)
+			packet := buildPacketWithGuidance(req, mode, limit, trial, prepared, len(prepared)-len(trial)+baseOmitted, skippedKnown, c.estimator)
 			if packet.Budget.Used <= limit {
 				selected = trial
 				selectedHandles[anchor.classified.Candidate.Handle] = true
+				anchorSelected = true
 				break
+			}
+		}
+		if !anchorSelected {
+			for index := 0; index < len(anchor.variants); index++ {
+				trial := appendSelected(selected, selectedCandidate{prepared: anchor, variant: anchor.variants[index], utility: candidateUtility(req.Plan, anchor.classified, nil, nil)})
+				packet := buildPacket(req, mode, limit, trial, len(prepared)-len(trial)+baseOmitted, skippedKnown, c.estimator)
+				if packet.Budget.Used <= limit {
+					selected = trial
+					selectedHandles[anchor.classified.Candidate.Handle] = true
+					break
+				}
 			}
 		}
 	}
 
 	for len(selected) < selectionLimit(req.Plan) {
 		roles, paths := selectedDiversity(selected)
-		current := buildPacket(req, mode, limit, selected, len(prepared)-len(selected)+baseOmitted, skippedKnown, c.estimator)
+		current := buildPacketWithGuidance(req, mode, limit, selected, prepared, len(prepared)-len(selected)+baseOmitted, skippedKnown, c.estimator)
 		bestIndex, bestVariant := -1, -1
 		bestRatio := -1.0
 		bestUtility := 0.0
@@ -121,7 +134,7 @@ func (c *Compiler) Compile(req CompileRequest) (CompileResult, error) {
 				quality := variantQuality(variant.Fidelity)
 				utility := baseUtility * quality
 				trial := appendSelected(selected, selectedCandidate{prepared: candidate, variant: variant, utility: utility})
-				packet := buildPacket(req, mode, limit, trial, len(prepared)-len(trial)+baseOmitted, skippedKnown, c.estimator)
+				packet := buildPacketWithGuidance(req, mode, limit, trial, prepared, len(prepared)-len(trial)+baseOmitted, skippedKnown, c.estimator)
 				if packet.Budget.Used > limit {
 					continue
 				}
@@ -136,7 +149,37 @@ func (c *Compiler) Compile(req CompileRequest) (CompileResult, error) {
 			}
 		}
 		if bestIndex < 0 {
-			break
+			// Guidance is optional at selection time. If no guidance-aware
+			// candidate fits, preserve the pre-v0.16 Evidence-only selection.
+			current = buildPacket(req, mode, limit, selected, len(prepared)-len(selected)+baseOmitted, skippedKnown, c.estimator)
+			bestRatio = -1.0
+			bestUtility = 0
+			for candidateIndex := range prepared {
+				candidate := prepared[candidateIndex]
+				if selectedHandles[candidate.classified.Candidate.Handle] {
+					continue
+				}
+				baseUtility := candidateUtility(req.Plan, candidate.classified, roles, paths)
+				for variantIndex, variant := range candidate.variants {
+					utility := baseUtility * variantQuality(variant.Fidelity)
+					trial := appendSelected(selected, selectedCandidate{prepared: candidate, variant: variant, utility: utility})
+					packet := buildPacket(req, mode, limit, trial, len(prepared)-len(trial)+baseOmitted, skippedKnown, c.estimator)
+					if packet.Budget.Used > limit {
+						continue
+					}
+					incremental := packet.Budget.Used - current.Budget.Used
+					if incremental < 1 {
+						incremental = 1
+					}
+					ratio := utility / float64(incremental)
+					if ratio > bestRatio || ratio == bestRatio && betterOption(candidate, variantIndex, prepared[bestIndexSafe(bestIndex)], bestVariant) {
+						bestIndex, bestVariant, bestRatio, bestUtility = candidateIndex, variantIndex, ratio, utility
+					}
+				}
+			}
+			if bestIndex < 0 {
+				break
+			}
 		}
 		choice := prepared[bestIndex]
 		selected = append(selected, selectedCandidate{prepared: choice, variant: choice.variants[bestVariant], utility: bestUtility})
@@ -294,6 +337,24 @@ func buildPacket(req CompileRequest, mode Mode, limit int, selected []selectedCa
 		packet.Limitations = []string{"budget_limited"}
 	}
 	packet.Relations = selectedEdges(ordered, ids)
+	settleWireUsage(&packet, estimator)
+	return packet
+}
+
+func buildPacketWithGuidance(req CompileRequest, mode Mode, limit int, selected []selectedCandidate, prepared []preparedCandidate, omitted, skippedKnown int, estimator budget.TokenEstimator) Packet {
+	packet := buildPacket(req, mode, limit, selected, omitted, skippedKnown, estimator)
+	guidanceSelected := make([]GuidanceSelection, 0, len(selected))
+	for _, item := range selected {
+		guidanceSelected = append(guidanceSelected, GuidanceSelection{Candidate: item.prepared.classified, Fidelity: item.variant.Fidelity})
+	}
+	limitations, next := BuildGuidance(GuidanceInput{
+		Plan: req.Plan, Selected: guidanceSelected, Omitted: omittedClassified(prepared, selected),
+		KnownHandles: req.KnownHandles, ExpansionAnchors: req.ExpansionAnchors, Truncated: omitted > 0,
+	})
+	limitations, next = pruneKnownDeltaGuidance(packet, req.KnownHandles, limitations, next)
+	packet.Limitations = append([]string(nil), limitations...)
+	packet.Next = append([]NextAction(nil), next...)
+	prunePacketMetadata(&packet)
 	settleWireUsage(&packet, estimator)
 	return packet
 }
