@@ -74,16 +74,16 @@
 
 ### Task 4: Candidate benchmark gate
 
-- [ ] historical `focalspan-history-v0.5`をdefault profile、repeat 1、attribution/diagnosis有効で1回だけ実行する。
-- [ ] v0.10 baselineに対して、focused/2048の`packing_dropped`非増加、packed labels 5以上、累積wire tokensの`12,740`未満、useful evidence efficiencyの`0.3925`超、quality/fidelity/relation/budget/deterministic/known-handle/MCP契約全通過を要求する。
-- [ ] compatible=true、regressions=0、privacy scan結果、artifact hashes、実測値を`docs/benchmarks/findings-v0.14.md`へsource-freeに記録する。strict gate不合格なら新baselineを記録しない。
+- [x] historical `focalspan-history-v0.5`をdefault profile、repeat 1、attribution/diagnosis有効で1回だけ実行する。
+- [x] v0.10 baselineに対して、focused/2048の`packing_dropped`非増加、packed labels 5以上、累積wire tokensの`12,740`未満、useful evidence efficiencyの`0.3925`超、quality/fidelity/relation/budget/deterministic/known-handle/MCP契約全通過を要求する。
+- [x] compatible=true、regressions=0、privacy scan結果、artifact hashes、実測値を`docs/benchmarks/findings-v0.14.md`へsource-freeに記録する。strict gate合格のためv0.14 baselineを記録した。
 
 ### Task 5: Closure and recovery
 
-- [ ] strict gate合格時だけ製品commitとbaselineを確定する。
-- [ ] gate不合格時は製品commitだけを通常のreverse-order `git revert`で戻し、RED/GREENテストとfindingsを歴史証拠として残し、v0.10 product baselineを維持する。
-- [ ] generated reports、indexes、binaries、caches、temporary workspacesを削除し、ユーザー所有dirty filesを保持する。
-- [ ] このplanのProgress、Discoveries、Decision Log、Outcomesを実測結果で更新する。archive済みv0.13 planは編集しない。
+- [x] strict gate合格時だけ製品commitとbaselineを確定する。
+- [x] gate不合格時は製品commitだけを通常のreverse-order `git revert`で戻し、RED/GREENテストとfindingsを歴史証拠として残し、v0.10 product baselineを維持する（今回は不適用）。
+- [x] generated reports、indexes、binaries、caches、temporary workspacesを削除し、ユーザー所有dirty filesを保持する。
+- [x] このplanのProgress、Discoveries、Decision Log、Outcomesを実測結果で更新する。archive済みv0.13 planは編集しない。
 
 ## Validation and Acceptance
 
@@ -105,13 +105,14 @@ pruningはin-memory Packetへのprivate変換で、index/database/永続stateを
 - [x] RED tests（未定義`prunePacketMetadata`によるcompile failureを確認）。
 - [x] GREEN implementation（pruning回帰テスト36件を通過）。
 - [x] Static verification（全691件、vet、native/cross-build成功。raceはMinGW `cc1.exe: sorry, unimplemented: 64-bit mode not compiled in`でUNVERIFIED）。
-- [ ] Candidate benchmark gate。
-- [ ] Closure and recovery。
+- [x] Candidate benchmark gate（8ケース、quality 48、attribution 40、diagnosis 40。wire 12,304、efficiency 0.4064、compatible=true、regressions=0）。
+- [x] Closure and recovery（v0.14 baseline reportを記録し、一時生成物を削除済み）。
 
 ## Surprises & Discoveries
 
 - v0.13のadaptive excerptは単体で候補を縮約できてもhistorical suiteでは選択されずwireとefficiencyが変わらなかったため、v0.14ではselectionを変えず最終Packetのmetadataだけを直接削減する。
 - metadata pruning後もselection/ranking/packingを変えない設計により、全691テスト、vet、native/cross-buildは通過した。raceだけは既知のMinGW toolchain制約で実行不能だった。
+- attribution出力はv0.13と同一hashで、retrieval/packingの失敗層を変えずにwireだけを削減できた。candidate quality reportでは累積wireが436 tokens減り、efficiencyが0.3925から0.4064へ改善した。
 
 ## Decision Log
 
@@ -119,7 +120,8 @@ pruningはin-memory Packetへのprivate変換で、index/database/永続stateを
 - 2026-09-02: 候補選択中のtrial packetをpruneせず、最終出力だけをpruneしてranking/packingの回帰を防ぐ。
 - 2026-09-02: `symbol`は常時保持し、target/changeのlanguage/kindとrelation provenanceを保持する。optional field omissionだけでv1互換を保つ。
 - 2026-09-02: guidanceの公開上限と理由文字列は変更せず、rank 6の共同budget化と分離する。
+- 2026-09-02: strict benchmark gateがwire/efficiency、quality/invariant、compatibilityをすべて満たしたため、v0.14を採用し`results-v0.14.{json,md}`をbaselineとして保存する。
 
 ## Outcomes & Retrospective
 
-未完了。候補ベンチマークの実測値と、採用または棄却の根拠を完了時に追記する。
+v0.14は採用。最終Packet限定pruningにより、focused/2048のpacking_dropped 7とpacked 5を維持したまま、累積wireを12,740から12,304へ削減し、useful evidence効率を0.3925から0.4064へ改善した。公開schema、source fidelity、relation endpoint、budget、deterministic ordering、known_handlesは非回帰。race検証だけはMinGW制約のためUNVERIFIEDとして残る。
