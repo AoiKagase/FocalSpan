@@ -586,6 +586,9 @@ func prunePacketMetadata(packet *Packet) {
 
 	for index := range packet.Evidence {
 		item := &packet.Evidence[index]
+		if languageIsImpliedByPath(item.Location.Path, item.Language) {
+			item.Language = ""
+		}
 		if item.Language != "" && !isAnchorRole(item.Role) {
 			language := strings.ToLower(item.Language)
 			if anchorLanguages[language] || explicitLanguages[language] {
@@ -597,7 +600,7 @@ func prunePacketMetadata(packet *Packet) {
 		if canOmitKind(*item) {
 			item.Kind = ""
 		}
-		item.Why = pruneWhy(item.Why)
+		item.Why = pruneWhy(*item)
 	}
 }
 
@@ -624,7 +627,8 @@ func canOmitKind(item Item) bool {
 	}
 }
 
-func pruneWhy(values []string) []string {
+func pruneWhy(item Item) []string {
+	values := item.Why
 	if len(values) == 0 {
 		return nil
 	}
@@ -636,6 +640,9 @@ func pruneWhy(values []string) []string {
 	result := make([]string, 0, len(values))
 	for _, value := range values {
 		if !lowValue[value] {
+			if isAnchorRole(item.Role) && item.Symbol != "" && (value == "exact_symbol" || value == "qualified_symbol") {
+				continue
+			}
 			result = append(result, value)
 		}
 	}
@@ -643,4 +650,17 @@ func pruneWhy(values []string) []string {
 		return nil
 	}
 	return result
+}
+
+func languageIsImpliedByPath(filename, language string) bool {
+	if language == "" {
+		return false
+	}
+	byExtension := map[string]string{
+		".go": "go", ".rs": "rust", ".py": "python", ".pyi": "python",
+		".cs": "csharp", ".java": "java", ".js": "javascript", ".jsx": "javascript",
+		".ts": "typescript", ".tsx": "typescript",
+	}
+	want, ok := byExtension[strings.ToLower(path.Ext(filename))]
+	return ok && strings.EqualFold(language, want)
 }

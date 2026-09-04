@@ -381,19 +381,27 @@ func TestPruneMetadataDropsOnlyRedundantOptionalFields(t *testing.T) {
 			{ID: "e1", Handle: "target", Role: RoleTarget, Location: Location{Path: "auth/service.go", Lines: [2]int{1, 4}}, Language: "go", Kind: "method", Symbol: "ValidateToken", Fidelity: FidelitySignature, Signature: "func ValidateToken() error", Why: []string{"exact_symbol", "path_match"}},
 			{ID: "e2", Handle: "caller", Role: RoleCaller, Location: Location{Path: "http/middleware.go", Lines: [2]int{10, 14}}, Language: "go", Kind: "method", Symbol: "Authenticate", Fidelity: FidelityVerbatim, Source: "func Authenticate() error { return nil }", Why: []string{"direct_caller", "lexical_match", "same_file"}},
 			{ID: "e3", Handle: "rust", Role: RoleCaller, Location: Location{Path: "worker/lib.rs", Lines: [2]int{2, 5}}, Language: "rust", Kind: "function", Symbol: "run", Fidelity: FidelitySignature, Signature: "fn run()", Why: []string{"qualified_symbol", "path_match"}},
+			{ID: "e4", Handle: "header", Role: RoleTarget, Location: Location{Path: "cpp/token.h", Lines: [2]int{1, 2}}, Language: "cpp", Kind: "function", Symbol: "Validate", Fidelity: FidelitySignature, Signature: "bool Validate();", Why: []string{"exact_symbol"}},
+			{ID: "e5", Handle: "template", Role: RoleTarget, Location: Location{Path: "views/login.tpl", Lines: [2]int{1, 2}}, Language: "smarty", Kind: "block", Symbol: "login", Fidelity: FidelitySignature, Signature: "block login", Why: []string{"qualified_symbol"}},
 		},
 	}
 	prunePacketMetadata(&packet)
 
-	target, caller, rust := packet.Evidence[0], packet.Evidence[1], packet.Evidence[2]
-	if target.Language != "go" || target.Kind != "method" || target.Symbol != "ValidateToken" || !reflect.DeepEqual(target.Why, []string{"exact_symbol"}) {
+	target, caller, rust, header, template := packet.Evidence[0], packet.Evidence[1], packet.Evidence[2], packet.Evidence[3], packet.Evidence[4]
+	if target.Language != "" || target.Kind != "method" || target.Symbol != "ValidateToken" || len(target.Why) != 0 {
 		t.Fatalf("target metadata was over-pruned: %+v", target)
 	}
 	if caller.Language != "" || caller.Kind != "" || caller.Symbol != "Authenticate" || !reflect.DeepEqual(caller.Why, []string{"direct_caller"}) {
 		t.Fatalf("redundant caller metadata was not pruned: %+v", caller)
 	}
-	if rust.Language != "rust" || rust.Symbol != "run" || !reflect.DeepEqual(rust.Why, []string{"qualified_symbol"}) {
+	if rust.Language != "" || rust.Symbol != "run" || !reflect.DeepEqual(rust.Why, []string{"qualified_symbol"}) {
 		t.Fatalf("distinct-language metadata was over-pruned: %+v", rust)
+	}
+	if header.Language != "cpp" || len(header.Why) != 0 {
+		t.Fatalf("ambiguous header language or redundant why was mishandled: %+v", header)
+	}
+	if template.Language != "smarty" || len(template.Why) != 0 {
+		t.Fatalf("mixed template language or redundant why was mishandled: %+v", template)
 	}
 }
 

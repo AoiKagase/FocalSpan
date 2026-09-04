@@ -28,24 +28,24 @@ envelope/metadataは24,487 bytesだった。公開v1 schemaと必須identityを�
 ### Task 0: Transition
 
 - [x] v0.22をarchiveし、本PLANへ切り替える。
-- [ ] documentation transition commitを作成する。
+- [x] documentation transition commitを作成する。
 
 ### Task 1: RED tests
 
-- [ ] unambiguous extensionのlanguage省略とambiguous/mixed保持を固定する。
-- [ ] target/changeのexact/qualified whyだけを省略し、relation whyを保持する。
-- [ ] selection、wire、idempotence、MCP非露出の既存contractを拡張する。
+- [x] unambiguous extensionのlanguage省略とambiguous/mixed保持を固定する。
+- [x] target/changeのexact/qualified whyだけを省略し、relation whyを保持する。
+- [x] selection、wire、idempotence、MCP非露出の既存contractを拡張する。
 
 ### Task 2: GREEN implementation
 
-- [ ] private extension-language allowlistを追加する。
-- [ ] `prunePacketMetadata`で上記2規則だけを適用する。
+- [x] private extension-language allowlistを追加する。
+- [x] `prunePacketMetadata`で上記2規則だけを適用する。
 
 ### Task 3: Verification and gate
 
-- [ ] focused/full tests、vet、diff checkを通す。
-- [ ] history candidateを1回測定し、v0.15 qualityとv0.21 bytesを比較する。
-- [ ] strict gateで採否を決め、findingsとcommit/revertを確定する。
+- [x] focused/full tests、vet、diff checkを通す。
+- [x] history candidateを1回測定し、v0.15 qualityとv0.21 bytesを比較する。
+- [x] strict gateで採否を決め、findingsとcommit/revertを確定する。
 - [ ] 完了後v0.24 summary planへ遷移する。
 
 ## Validation and Acceptance
@@ -63,15 +63,26 @@ pruningはpure/idempotentとする。不合格時は製品候補だけを通常r
 ## Progress
 
 - [x] 2026-09-04: v0.22 negative closure後、v0.23へ遷移した。
+- [x] 2026-09-04: RED/GREEN testsと限定pruning実装を完了した。
+- [x] 2026-09-04: focused/full tests、vet、diff checkを通過した。
+- [x] 2026-09-04: candidate benchmarkを1回実行し、strict gate合格により採用した。
 
 ## Surprises & Discoveries
 
-実装中に更新する。
+- estimator-independent bytesの削減量866はすべてpacket JSONの
+  envelope/metadataから生じ、Evidence content、guidance、summaryは不変だった。
+- focused/2048の取得・packing診断は不変であり、この候補は既存Evidenceの
+  wire表現だけを改善した。
 
 ## Decision Log
 
 - 2026-09-04: language allowlistは拡張子とparser languageが一意な形式だけに限定する。
+- 2026-09-04: 40 rowすべてが改善し、累積wire 12,304から11,983、UTF-8 bytes
+  34,280から33,414、comparison regression 0だったため候補を採用する。
 
 ## Outcomes & Retrospective
 
-測定後に更新する。
+v0.23はuseful Evidence 5とfidelity 10 / 15 / 30 / 0を維持したまま、累積
+estimated wireを321、model-visible UTF-8 bytesを866削減した。効率は0.4064から
+0.4173へ改善した。公開schemaを変えずに成功したため、次は独立マイルストーンで
+MCP text summaryの重複を測定・最小化する。
