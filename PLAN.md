@@ -1,88 +1,80 @@
-# FocalSpan v0.23 metadata pruning phase 2 実装計画
+# FocalSpan v0.24 MCP text summary 最小化計画
 
-**Goal:** v0.14のfinal-packet-only pruningを限定的に拡張し、path拡張子から一意に
-復元できるlanguageと、target/changeのsymbol identityから冗長なexact/qualified `why`
-だけを省略して、Evidence selectionを変えずにmodel-visible wireを削減する。
+**Goal:** Evidence packetと重複するMCP text summaryを固定短形式へ縮約し、件数、
+budget使用量・上限、omitted件数を維持したままmodel-visible wireを削減する。
 
 ## Purpose / Big Picture
 
-v0.21では34,280 UTF-8 bytes中、Evidence contentは3,459 bytesに対し、残る
-envelope/metadataは24,487 bytesだった。公開v1 schemaと必須identityを維持したまま、
-既存`omitempty`で安全に除去できる重複値を削る。
+v0.23時点でsummaryは累積2,324 UTF-8 bytesを占め、structuredContentに既に存在する
+説明語を繰り返している。`Summary`の数値情報とsource-free contractは維持し、機械的で
+短い一形式だけを返す。
 
 ## Baseline and Gates
 
-- v0.15/v0.21: wire 12,304、bytes 34,280、useful 5、効率0.4064。
-- 全rowのselected handle/role/fidelity/source/relationは不変。
-- cumulative wireとUTF-8 bytesを両方厳密に削減し、comparison regression 0。
-- ambiguous extension、mixed source、unknown languageは保持する。
+- v0.23: wire 11,983、bytes 33,414、summary bytes 2,324、useful 5、効率0.4173。
+- 全rowのpacket JSONとselected handle/role/fidelity/source/relationは不変。
+- 全rowのwire非増加、cumulative wire・UTF-8 bytes・summary bytesを厳密に削減する。
+- comparison regression 0、全MCP client/test互換、source/query非露出を維持する。
 
 ## Global Constraints
 
-- JSON key、schema、MCP/CLI、known handles、guidanceを変更しない。
-- final-packet pruningだけを変更し、selection/rankingへ影響させない。
+- structuredContent、JSON key、schema、MCP/CLI、known handlesを変更しない。
+- `evidence.Summary`だけを変更し、Evidence compilerとbudget selectionへ影響させない。
 - `AGENTS.md`、`.focalspan.json`、`TASKS.md`を変更・stageしない。
 
 ## Plan of Work
 
 ### Task 0: Transition
 
-- [x] v0.22をarchiveし、本PLANへ切り替える。
+- [x] v0.23をarchiveし、本PLANへ切り替える。
 - [x] documentation transition commitを作成する。
 
 ### Task 1: RED tests
 
-- [x] unambiguous extensionのlanguage省略とambiguous/mixed保持を固定する。
-- [x] target/changeのexact/qualified whyだけを省略し、relation whyを保持する。
-- [x] selection、wire、idempotence、MCP非露出の既存contractを拡張する。
+- [ ] summaryの固定短形式と4つの数値をexact testで固定する。
+- [ ] source、symbol、queryがsummaryへ出ないcontractを維持する。
+- [ ] MCP context/expand/impactが同じstructuredContentと短形式textを返すことを固定する。
 
 ### Task 2: GREEN implementation
 
-- [x] private extension-language allowlistを追加する。
-- [x] `prunePacketMetadata`で上記2規則だけを適用する。
+- [ ] `internal/evidence/wire.go`の`Summary`だけを固定短形式へ変更する。
+- [ ] status/restart summaryとpublic packet schemaは変更しない。
 
 ### Task 3: Verification and gate
 
-- [x] focused/full tests、vet、diff checkを通す。
-- [x] history candidateを1回測定し、v0.15 qualityとv0.21 bytesを比較する。
-- [x] strict gateで採否を決め、findingsとcommit/revertを確定する。
-- [ ] 完了後v0.24 summary planへ遷移する。
+- [ ] focused/full tests、vet、diff checkを通す。
+- [ ] history candidateを1回測定し、v0.23 baselineと比較する。
+- [ ] strict gateで採否を決め、findingsとcommit/revertを確定する。
+- [ ] 完了後v0.25 relevance-aware abstention planへ遷移する。
 
 ## Validation and Acceptance
 
-公開意味を維持し、全row非回帰のままestimated wireとUTF-8 bytesがともに減ること。
+summaryの数値情報とMCP互換性を維持し、packet byte-identicalのまま全row非回帰、
+cumulative estimated wire・UTF-8 bytes・summary bytesがすべて減ること。
 
 ## Idempotence and Recovery
 
-pruningはpure/idempotentとする。不合格時は製品候補だけを通常revertする。
+summary生成はpure/deterministicとする。不合格時は製品候補だけを通常revertし、
+測定結果とfindingは保持する。
 
 ## Interfaces and Dependencies
 
-公開interface変更なし。`internal/evidence/compiler.go`とtestsだけを製品対象とする。
+公開interface変更なし。`internal/evidence/wire.go`とそのunit/MCP contract testsだけを
+製品対象とする。
 
 ## Progress
 
-- [x] 2026-09-04: v0.22 negative closure後、v0.23へ遷移した。
-- [x] 2026-09-04: RED/GREEN testsと限定pruning実装を完了した。
-- [x] 2026-09-04: focused/full tests、vet、diff checkを通過した。
-- [x] 2026-09-04: candidate benchmarkを1回実行し、strict gate合格により採用した。
+- [x] 2026-09-04: v0.23 acceptance後、v0.24へ遷移した。
 
 ## Surprises & Discoveries
 
-- estimator-independent bytesの削減量866はすべてpacket JSONの
-  envelope/metadataから生じ、Evidence content、guidance、summaryは不変だった。
-- focused/2048の取得・packing診断は不変であり、この候補は既存Evidenceの
-  wire表現だけを改善した。
+実装中に更新する。
 
 ## Decision Log
 
-- 2026-09-04: language allowlistは拡張子とparser languageが一意な形式だけに限定する。
-- 2026-09-04: 40 rowすべてが改善し、累積wire 12,304から11,983、UTF-8 bytes
-  34,280から33,414、comparison regression 0だったため候補を採用する。
+- 2026-09-04: `FocalSpan evidence:`等の説明語は削減対象とするが、items、used/limit、
+  omittedの4数値はclient可観測情報として残す。
 
 ## Outcomes & Retrospective
 
-v0.23はuseful Evidence 5とfidelity 10 / 15 / 30 / 0を維持したまま、累積
-estimated wireを321、model-visible UTF-8 bytesを866削減した。効率は0.4064から
-0.4173へ改善した。公開schemaを変えずに成功したため、次は独立マイルストーンで
-MCP text summaryの重複を測定・最小化する。
+測定後に更新する。
