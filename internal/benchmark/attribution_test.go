@@ -185,3 +185,10 @@ func TestMarshalAttributionRejectsControlCharactersAndInvalidPositions(t *testin
 		}
 	}
 }
+
+func TestMarshalAttributionAcceptsStructuralConstructorRetriever(t *testing.T) {
+	result := AttributionResult{Schema: AttributionSchemaV1, CaseID: "case", RepositoryID: "self", Profile: "full-evidence-focused", Budget: 2048, Labels: []AttributionLabel{{Expectation: "required_symbol", Path: "internal/app/service.go", Symbol: "NewWithConfig", TerminalStage: StagePacked, ReasonCode: "selected_in_packet", RetrieverHits: []AttributionHit{{Retriever: "structural-constructor", Position: 1, RelationState: "none"}}, PackedPosition: 1}}}
+	if _, err := MarshalAttribution([]AttributionResult{result}); err != nil {
+		t.Fatal(err)
+	}
+}

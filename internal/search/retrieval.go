@@ -11,13 +11,14 @@ import (
 )
 
 const (
-	qualifiedLimit = 50
-	exactLimit     = 50
-	prefixLimit    = 50
-	ftsLimit       = 100
-	pathLimit      = 50
-	relationLimit  = 100
-	fusedLimit     = 400
+	qualifiedLimit             = 50
+	exactLimit                 = 50
+	prefixLimit                = 50
+	ftsLimit                   = 100
+	pathLimit                  = 50
+	structuralConstructorLimit = 8
+	relationLimit              = 100
+	fusedLimit                 = 400
 )
 
 type RetrieverSet struct {
@@ -43,7 +44,7 @@ func (r *RetrieverSet) Retrieve(ctx context.Context, plan query.Plan, req Search
 		}
 		return []RankedList{{Retriever: RetrieverFTS, Items: items}}, nil
 	}
-	lists := make([]RankedList, 0, 6)
+	lists := make([]RankedList, 0, 7)
 	qualified, err := r.store.SearchQualifiedSymbols(ctx, plan.Terms.Identifiers, qualifiedLimit)
 	if err != nil {
 		return nil, fmt.Errorf("%s retriever: %w", RetrieverQualified, err)
@@ -69,6 +70,16 @@ func (r *RetrieverSet) Retrieve(ctx context.Context, plan query.Plan, req Search
 		return nil, fmt.Errorf("%s retriever: %w", RetrieverPath, err)
 	}
 	lists = append(lists, RankedList{Retriever: RetrieverPath, Items: paths})
+	if hints := structuralConstructorHints(plan, req); len(hints) > 0 {
+		constructors, constructorErr := r.store.SearchExactSymbols(ctx, hints, structuralConstructorLimit)
+		if constructorErr != nil {
+			return nil, fmt.Errorf("%s retriever: %w", RetrieverStructuralConstructor, constructorErr)
+		}
+		for index := range constructors {
+			constructors[index].Reasons = append(constructors[index].Reasons, model.ScoreReason{Code: "structural-constructor", Detail: "query asks for a registry assembly entry point"})
+		}
+		lists = append(lists, RankedList{Retriever: RetrieverStructuralConstructor, Items: constructors})
+	}
 	if mode == RetrievalNoRelations || len(plan.Relations) == 0 {
 		return lists, nil
 	}

@@ -125,7 +125,7 @@ func shouldAbstainEvidenceQuery(req EvidenceQueryRequest, plan query.Plan, candi
 	for _, candidate := range candidates {
 		for _, reason := range candidate.Reasons {
 			switch reason.Code {
-			case "symbol-exact", "qualified-symbol", "symbol-prefix", "path", "changed-file":
+			case "symbol-exact", "qualified-symbol", "symbol-prefix", "path", "changed-file", "structural-constructor":
 				return false
 			case "lexical", "test-pair", "reference-kind":
 				if !requiresIdentity {

@@ -16,6 +16,9 @@ type retrievalRecordingStore struct {
 	fts         []model.RankedCandidate
 	qualified   []model.RankedCandidate
 	exact       []model.RankedCandidate
+	constructor []model.RankedCandidate
+	exactHints  [][]string
+	exactLimits []int
 	prefix      []model.RankedCandidate
 	paths       []model.RankedCandidate
 	pathHints   [][]string
@@ -44,9 +47,14 @@ func (s *retrievalRecordingStore) SearchQualifiedSymbols(context.Context, []stri
 	}
 	return append([]model.RankedCandidate(nil), s.qualified...), nil
 }
-func (s *retrievalRecordingStore) SearchExactSymbols(context.Context, []string, int) ([]model.RankedCandidate, error) {
+func (s *retrievalRecordingStore) SearchExactSymbols(_ context.Context, hints []string, limit int) ([]model.RankedCandidate, error) {
 	if err := s.record(RetrieverSymbol); err != nil {
 		return nil, err
+	}
+	s.exactHints = append(s.exactHints, append([]string(nil), hints...))
+	s.exactLimits = append(s.exactLimits, limit)
+	if reflect.DeepEqual(hints, []string{"NewWithConfig"}) {
+		return append([]model.RankedCandidate(nil), s.constructor...), nil
 	}
 	return append([]model.RankedCandidate(nil), s.exact...), nil
 }
@@ -129,6 +137,58 @@ func TestRetrieverSetPassesOnlyExplicitPathTermsToPathSearch(t *testing.T) {
 	if !reflect.DeepEqual(store.pathHints, [][]string{{"src/token.ts"}}) {
 		t.Fatalf("path hints=%v", store.pathHints)
 	}
+}
+
+func TestStructuralConstructorHintsAreNarrow(t *testing.T) {
+	positives := []string{
+		"Where is the extractor registry assembled?",
+		"Where are structural extractors wired?",
+		"Rust extractorを既存serviceへ登録する場所",
+	}
+	for _, raw := range positives {
+		if got := structuralConstructorHints(query.PlanQuery(raw), SearchRequest{}); !reflect.DeepEqual(got, []string{"NewWithConfig"}) {
+			t.Fatalf("hints(%q)=%v", raw, got)
+		}
+	}
+	for _, raw := range []string{"combine extracted files before metadata linking", "ValidateToken implementation"} {
+		if got := structuralConstructorHints(query.PlanQuery(raw), SearchRequest{}); len(got) != 0 {
+			t.Fatalf("unexpected hints(%q)=%v", raw, got)
+		}
+	}
+	plan := query.PlanQuery("Where is the extractor registry assembled?")
+	plan.Terms.Paths = []string{"internal/app/service.go"}
+	if got := structuralConstructorHints(plan, SearchRequest{Paths: []string{"internal/app/service.go"}}); len(got) != 0 {
+		t.Fatalf("explicit path produced hints=%v", got)
+	}
+}
+
+func TestStructuralConstructorRetrieverIsBoundedAndTraceable(t *testing.T) {
+	store := &retrievalRecordingStore{constructor: []model.RankedCandidate{{Handle: "constructor", Path: "internal/app/service.go", Symbol: "NewWithConfig"}}}
+	lists, err := NewRetrieverSet(store).Retrieve(context.Background(), query.PlanQuery("Where is the extractor registry assembled?"), SearchRequest{Mode: RetrievalFull})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.exactHints) != 2 || !reflect.DeepEqual(store.exactHints[1], []string{"NewWithConfig"}) || store.exactLimits[1] != 8 {
+		t.Fatalf("exact calls hints=%v limits=%v", store.exactHints, store.exactLimits)
+	}
+	for _, list := range lists {
+		if list.Retriever == RetrieverStructuralConstructor {
+			if len(list.Items) != 1 || list.Items[0].Symbol != "NewWithConfig" || !candidateHasReasonCode(list.Items[0], "structural-constructor") {
+				t.Fatalf("constructor list=%+v", list)
+			}
+			return
+		}
+	}
+	t.Fatalf("constructor retriever absent: %+v", lists)
+}
+
+func candidateHasReasonCode(candidate model.RankedCandidate, want string) bool {
+	for _, reason := range candidate.Reasons {
+		if reason.Code == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestRelationRetrievalWorksWhenFTSMissesAnchor(t *testing.T) {
