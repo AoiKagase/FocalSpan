@@ -255,6 +255,61 @@ func TestCompilerIsDeterministic(t *testing.T) {
 	}
 }
 
+func TestBoundedBeamFindsHigherUtilityCombinationWithinBudget(t *testing.T) {
+	estimator := budget.NewEstimator()
+	compiler := NewCompiler(estimator)
+	prepared := []preparedCandidate{
+		beamTestPrepared("target", RoleTarget, 0, 90, estimator),
+		beamTestPrepared("large-caller", RoleCaller, 1, 420, estimator),
+		beamTestPrepared("small-caller", RoleCaller, 2, 20, estimator),
+		beamTestPrepared("test", RoleTest, 3, 180, estimator),
+		beamTestPrepared("callee", RoleCallee, 4, 160, estimator),
+	}
+	req := CompileRequest{Plan: query.Plan{PrimaryIntent: query.IntentCallers}, Mode: ModeFocused}
+	found := false
+	for limit := 256; limit <= 1200; limit += 8 {
+		control := compiler.selectGreedy(req, ModeFocused, limit, prepared, 0, 0)
+		_, controlFinal, _ := compiler.finalizeSelected(req, ModeFocused, limit, prepared, control, 0, 0)
+		beam := compiler.selectBeam(req, ModeFocused, limit, prepared, 0, 0, len(control), limit)
+		beamPacket, beamFinal, _ := compiler.finalizeSelected(req, ModeFocused, limit, prepared, beam, 0, 0)
+		if len(beamFinal) <= len(controlFinal) && beamPacket.Budget.Used <= limit && selectedUtility(beamFinal) > selectedUtility(controlFinal) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("fixture did not expose a higher-utility bounded beam combination")
+	}
+}
+
+func TestPreferBeamRejectsCountWireAndUtilityRegressions(t *testing.T) {
+	control := []selectedCandidate{{utility: 10}}
+	better := []selectedCandidate{{utility: 11}}
+	if !preferBeam(control, Packet{Budget: Budget{Used: 100}}, better, Packet{Budget: Budget{Used: 100}}) {
+		t.Fatal("valid beam improvement was rejected")
+	}
+	if preferBeam(control, Packet{Budget: Budget{Used: 100}}, append(better, selectedCandidate{utility: 1}), Packet{Budget: Budget{Used: 100}}) {
+		t.Fatal("beam count regression was accepted")
+	}
+	if preferBeam(control, Packet{Budget: Budget{Used: 100}}, better, Packet{Budget: Budget{Used: 101}}) {
+		t.Fatal("beam wire regression was accepted")
+	}
+	if preferBeam(control, Packet{Budget: Budget{Used: 100}}, []selectedCandidate{{utility: 10}}, Packet{Budget: Budget{Used: 99}}) {
+		t.Fatal("beam without utility improvement was accepted")
+	}
+}
+
+func beamTestPrepared(handle string, role Role, rank, signatureLength int, estimator budget.TokenEstimator) preparedCandidate {
+	signature := strings.Repeat(handle+"_", signatureLength/maxInt(1, len(handle)+1)+1)[:signatureLength]
+	classified := ClassifiedCandidate{
+		Candidate:       model.RankedCandidate{Handle: handle, Path: handle + ".go", Kind: "function", Symbol: handle, StartLine: 1, EndLine: 1},
+		OriginalRank:    rank,
+		Role:            role,
+		PresentationKey: PresentationKey{RolePriority: rank, OriginalRank: rank, Path: handle + ".go", Handle: handle},
+	}
+	return preparedCandidate{classified: classified, variants: []ContentVariant{{Fidelity: FidelitySignature, Signature: signature, EvidenceTokens: estimator.Estimate(signature)}}}
+}
+
 func TestCompilerTinyBudgetBoundaryMatrix(t *testing.T) {
 	estimator := budget.NewEstimator()
 	for _, requested := range []int{0, 1, 255, 256, 257, 511, 512, 1199, 1200, 63999, 64000, 64001} {
