@@ -31,19 +31,19 @@ selectionを先に完成させ、そのhandle集合を変えないbounded fallba
 
 ### Task 1: RED tests
 
-- [ ] handles固定、wire ceiling、決定性を固定する。
-- [ ] affordable upgradeとno-op fallbackを固定する。
-- [ ] guidanceが昇格後fidelityから再計算されることを固定する。
+- [x] handles固定、wire ceiling、決定性を固定する。
+- [x] affordable upgradeとno-op fallbackを固定する。
+- [x] guidanceが昇格後fidelityから再計算されることを固定する。
 
 ### Task 2: GREEN implementation
 
-- [ ] 完成packet生成をprivate helperへ抽出する。
-- [ ] selected variantだけをboundedに昇格し、strict fallbackを適用する。
+- [x] 完成packet生成をprivate helperへ抽出する。
+- [x] selected variantだけをboundedに昇格し、strict fallbackを適用する。
 
 ### Task 3: Verification and gate
 
-- [ ] focused/full tests、vet、diff checkを通す。
-- [ ] history candidateを1回測定し、採否を確定する。
+- [x] focused/full tests、vet、diff checkを通す。
+- [x] history candidateを1回測定し、採否を確定する。
 - [ ] 完了後v0.29 known-handles delta phase 2へ遷移する。
 
 ## Validation and Acceptance
@@ -62,15 +62,21 @@ fallbackはpure/deterministic。不合格時は製品候補を通常revertし、
 ## Progress
 
 - [x] 2026-09-04: v0.27 rejection後、v0.28へ遷移した。
+- [x] 2026-09-04: RED/GREEN、711 tests、vet、diff checkを通過した。
+- [x] 2026-09-04: candidate benchmarkは全48 row byte-identicalでno-opだった。
+- [x] 2026-09-04: candidate `c63cb12`を通常revert `9d6a11b`で除去した。
 
 ## Surprises & Discoveries
 
-実装中に更新する。
+- strict fallbackによりv0.16型の回帰は防げたが、historyには採用可能なrowがゼロだった。
 
 ## Decision Log
 
 - 2026-09-04: v0.16と異なりlegacy selectionを変更しないpost-selection fallbackに限定する。
+- 2026-09-04: wire/fidelity/guidanceが完全同一のため、複雑性を残さずreject/revertする。
 
 ## Outcomes & Retrospective
 
-測定後に更新する。
+v0.28は安全性を証明したが実測効果ゼロで不採用。accepted baselineは11,693 wire、
+32,494 bytes、useful 5、効率0.4276のまま。次はv0.15成功系列のknown-handle deltaを、
+relation actionとlimitationsの重複だけに限定して拡張する。
