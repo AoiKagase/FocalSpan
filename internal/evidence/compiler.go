@@ -82,29 +82,6 @@ func (c *Compiler) Compile(req CompileRequest) (CompileResult, error) {
 	}
 	prepared, duplicateOmitted, skippedKnown := c.preprocess(req, mode)
 	baseOmitted := duplicateOmitted + skippedKnown
-	controlSelected := c.selectGreedy(req, mode, limit, prepared, baseOmitted, skippedKnown)
-	controlPacket, controlSelected, controlOmitted := c.finalizeSelected(req, mode, limit, prepared, controlSelected, baseOmitted, skippedKnown)
-	selected, packet, omitted := controlSelected, controlPacket, controlOmitted
-	beamSelected := c.selectBeam(req, mode, limit, prepared, baseOmitted, skippedKnown, len(controlSelected), controlPacket.Budget.Used)
-	if len(beamSelected) > 0 {
-		beamPacket, beamFinal, beamOmitted := c.finalizeSelected(req, mode, limit, prepared, beamSelected, baseOmitted, skippedKnown)
-		if preferBeam(controlSelected, controlPacket, beamFinal, beamPacket) {
-			selected, packet, omitted = beamFinal, beamPacket, beamOmitted
-		}
-	}
-	if err := Validate(packet); err != nil {
-		return CompileResult{}, err
-	}
-	evidenceTokens := selectedEvidenceTokens(selected)
-	stats := Stats{
-		WireTokens: packet.Budget.Used, EvidenceTokens: evidenceTokens,
-		MetadataTokens: maxInt(0, packet.Budget.Used-evidenceTokens), DuplicateSourceBytes: duplicateSourceBytes(packet.Evidence),
-		Selected: len(packet.Evidence), Omitted: omitted, SkippedKnown: skippedKnown,
-	}
-	return CompileResult{Packet: packet, Stats: stats}, nil
-}
-
-func (c *Compiler) selectGreedy(req CompileRequest, mode Mode, limit int, prepared []preparedCandidate, baseOmitted, skippedKnown int) []selectedCandidate {
 	selected := make([]selectedCandidate, 0, len(prepared))
 	selectedHandles := make(map[string]bool, len(prepared))
 
@@ -166,11 +143,6 @@ func (c *Compiler) selectGreedy(req CompileRequest, mode Mode, limit int, prepar
 		selectedHandles[choice.classified.Candidate.Handle] = true
 	}
 
-	return selected
-}
-
-func (c *Compiler) finalizeSelected(req CompileRequest, mode Mode, limit int, prepared []preparedCandidate, selection []selectedCandidate, baseOmitted, skippedKnown int) (Packet, []selectedCandidate, int) {
-	selected := append([]selectedCandidate(nil), selection...)
 	omitted := len(prepared) - len(selected) + baseOmitted
 	packet := buildPacket(req, mode, limit, selected, omitted, skippedKnown, c.estimator)
 	for packet.Budget.Used > limit && len(selected) > 0 {
@@ -180,7 +152,7 @@ func (c *Compiler) finalizeSelected(req CompileRequest, mode Mode, limit int, pr
 		packet = buildPacket(req, mode, limit, selected, omitted, skippedKnown, c.estimator)
 	}
 	if packet.Budget.Used > limit {
-		return packet, selected, omitted
+		return CompileResult{}, errors.New("empty evidence packet does not fit clamped budget")
 	}
 	omittedCandidates := omittedClassified(prepared, selected)
 	guidanceSelected := make([]GuidanceSelection, 0, len(selected))
@@ -192,120 +164,16 @@ func (c *Compiler) finalizeSelected(req CompileRequest, mode Mode, limit int, pr
 	applyGuidanceWithinBudget(&packet, limitations, next, c.estimator)
 	prunePacketMetadata(&packet)
 	settleWireUsage(&packet, c.estimator)
-	return packet, selected, omitted
-}
-
-const beamWidth = 8
-
-type beamState struct {
-	selected []selectedCandidate
-	utility  float64
-	wire     int
-	key      string
-}
-
-func (c *Compiler) selectBeam(req CompileRequest, mode Mode, limit int, prepared []preparedCandidate, baseOmitted, skippedKnown, maxItems, wireCeiling int) []selectedCandidate {
-	if maxItems <= 0 || len(prepared) == 0 {
-		return nil
+	if err := Validate(packet); err != nil {
+		return CompileResult{}, err
 	}
-	anchorIndex := -1
-	for index := range prepared {
-		if prepared[index].classified.Role == RoleTarget || prepared[index].classified.Role == RoleChange {
-			anchorIndex = index
-			break
-		}
+	evidenceTokens := selectedEvidenceTokens(selected)
+	stats := Stats{
+		WireTokens: packet.Budget.Used, EvidenceTokens: evidenceTokens,
+		MetadataTokens: maxInt(0, packet.Budget.Used-evidenceTokens), DuplicateSourceBytes: duplicateSourceBytes(packet.Evidence),
+		Selected: len(packet.Evidence), Omitted: omitted, SkippedKnown: skippedKnown,
 	}
-	states := make([]beamState, 0, beamWidth)
-	if anchorIndex >= 0 {
-		anchor := prepared[anchorIndex]
-		for _, variant := range anchor.variants {
-			selected := []selectedCandidate{{prepared: anchor, variant: variant, utility: candidateUtility(req.Plan, anchor.classified, nil, nil)}}
-			packet := buildPacket(req, mode, limit, selected, len(prepared)-1+baseOmitted, skippedKnown, c.estimator)
-			if packet.Budget.Used <= limit && packet.Budget.Used <= wireCeiling {
-				states = append(states, newBeamState(selected, packet.Budget.Used))
-			}
-		}
-		if len(states) == 0 {
-			return nil
-		}
-	} else {
-		states = append(states, newBeamState(nil, buildPacket(req, mode, limit, nil, len(prepared)+baseOmitted, skippedKnown, c.estimator).Budget.Used))
-	}
-	all := append([]beamState(nil), states...)
-	for depth := len(states[0].selected); depth < maxItems; depth++ {
-		nextByKey := make(map[string]beamState)
-		for _, state := range states {
-			roles, paths := selectedDiversity(state.selected)
-			selectedHandles := make(map[string]bool, len(state.selected))
-			for _, item := range state.selected {
-				selectedHandles[item.prepared.classified.Candidate.Handle] = true
-			}
-			for _, candidate := range prepared {
-				if selectedHandles[candidate.classified.Candidate.Handle] {
-					continue
-				}
-				baseUtility := candidateUtility(req.Plan, candidate.classified, roles, paths)
-				for _, variant := range candidate.variants {
-					utility := baseUtility * variantQuality(variant.Fidelity)
-					selected := appendSelected(state.selected, selectedCandidate{prepared: candidate, variant: variant, utility: utility})
-					packet := buildPacket(req, mode, limit, selected, len(prepared)-len(selected)+baseOmitted, skippedKnown, c.estimator)
-					if packet.Budget.Used > limit || packet.Budget.Used > wireCeiling {
-						continue
-					}
-					candidateState := newBeamState(selected, packet.Budget.Used)
-					if current, exists := nextByKey[candidateState.key]; !exists || betterBeamState(candidateState, current) {
-						nextByKey[candidateState.key] = candidateState
-					}
-				}
-			}
-		}
-		if len(nextByKey) == 0 {
-			break
-		}
-		states = states[:0]
-		for _, state := range nextByKey {
-			states = append(states, state)
-		}
-		sort.Slice(states, func(i, j int) bool { return betterBeamState(states[i], states[j]) })
-		if len(states) > beamWidth {
-			states = states[:beamWidth]
-		}
-		all = append(all, states...)
-	}
-	sort.Slice(all, func(i, j int) bool { return betterBeamState(all[i], all[j]) })
-	return append([]selectedCandidate(nil), all[0].selected...)
-}
-
-func newBeamState(selected []selectedCandidate, wire int) beamState {
-	copySelected := append([]selectedCandidate(nil), selected...)
-	parts := make([]string, 0, len(copySelected))
-	for _, item := range copySelected {
-		parts = append(parts, item.prepared.classified.Candidate.Handle+"\x00"+string(item.variant.Fidelity)+"\x00"+strconv.Itoa(item.variant.EvidenceTokens))
-	}
-	sort.Strings(parts)
-	return beamState{selected: copySelected, utility: selectedUtility(copySelected), wire: wire, key: strings.Join(parts, "\x01")}
-}
-
-func betterBeamState(left, right beamState) bool {
-	if left.utility != right.utility {
-		return left.utility > right.utility
-	}
-	if left.wire != right.wire {
-		return left.wire < right.wire
-	}
-	return left.key < right.key
-}
-
-func selectedUtility(selected []selectedCandidate) float64 {
-	total := 0.0
-	for _, item := range selected {
-		total += item.utility
-	}
-	return total
-}
-
-func preferBeam(control []selectedCandidate, controlPacket Packet, beam []selectedCandidate, beamPacket Packet) bool {
-	return len(beam) <= len(control) && beamPacket.Budget.Used <= controlPacket.Budget.Used && selectedUtility(beam) > selectedUtility(control)
+	return CompileResult{Packet: packet, Stats: stats}, nil
 }
 
 func selectionLimit(plan query.Plan) int {
