@@ -1,12 +1,42 @@
 package benchmark
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/focalspan/focalspan/internal/budget"
 	"github.com/focalspan/focalspan/internal/evidence"
 	"testing"
 )
+
+func TestMetricPacketByteBreakdownIsExactAndSourceFree(t *testing.T) {
+	packet := evidence.Packet{
+		Schema: evidence.SchemaContextV1, Intent: "definition", Mode: evidence.ModeFocused,
+		Budget:      evidence.Budget{Limit: 1000, Used: 300},
+		Evidence:    []evidence.Item{{ID: "e1", Handle: "handle-one", Role: evidence.RoleTarget, Location: evidence.Location{Path: "a.go", Lines: [2]int{1, 2}}, Fidelity: evidence.FidelitySignature, Signature: "func Target()"}},
+		Limitations: []string{"source_reduced_to_signature"},
+		Next:        []evidence.NextAction{{Handle: "handle-one", Relation: "self", Reason: "source_body_omitted"}},
+	}
+	result := MeasurePacket(Case{ID: "bytes"}, "p", 1000, packet, true, nil)
+	payload, err := json.Marshal(packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantWire := len(payload) + 1 + len(evidence.Summary(packet))
+	if result.WireBytes != wantWire || result.PacketJSONBytes != len(payload) || result.SummaryBytes != len(evidence.Summary(packet))+1 {
+		t.Fatalf("byte metrics=%+v want wire/json/summary=%d/%d/%d", result, wantWire, len(payload), len(evidence.Summary(packet))+1)
+	}
+	if result.EvidenceContentBytes+result.GuidanceBytes+result.EnvelopeMetadataBytes+result.SummaryBytes != result.WireBytes {
+		t.Fatalf("byte breakdown does not sum: %+v", result)
+	}
+	if result.SignatureItems != 1 || result.VerbatimItems != 0 || result.ExcerptItems != 0 || result.SyntheticItems != 0 {
+		t.Fatalf("fidelity counts=%+v", result)
+	}
+	encoded, _ := json.Marshal(result)
+	if strings.Contains(string(encoded), "func Target()") {
+		t.Fatalf("source content leaked into metrics: %s", encoded)
+	}
+}
 
 func TestMetricResultFromPacket(t *testing.T) {
 	packet := evidence.Packet{Intent: "definition", Budget: evidence.Budget{Limit: 1000, Used: 400}, Evidence: []evidence.Item{{ID: "e1", Role: evidence.RoleTarget, Location: evidence.Location{Path: "a.go"}, Symbol: "Target", Source: "same"}, {ID: "e2", Location: evidence.Location{Path: "b.go"}, Source: "same"}}}

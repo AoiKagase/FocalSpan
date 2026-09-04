@@ -1,6 +1,7 @@
 package benchmark
 
 import (
+	"encoding/json"
 	"sort"
 	"strings"
 
@@ -38,6 +39,16 @@ type QualityResult struct {
 	CumulativeWireTokensWithoutKnown int              `json:"cumulative_wire_tokens_without_known,omitempty"`
 	DeltaTokenRatio                  float64          `json:"delta_token_ratio,omitempty"`
 	KnownResendCount                 int              `json:"known_resend_count,omitempty"`
+	WireBytes                        int              `json:"wire_bytes,omitempty"`
+	PacketJSONBytes                  int              `json:"packet_json_bytes,omitempty"`
+	SummaryBytes                     int              `json:"summary_bytes,omitempty"`
+	EvidenceContentBytes             int              `json:"evidence_content_bytes,omitempty"`
+	GuidanceBytes                    int              `json:"guidance_bytes,omitempty"`
+	EnvelopeMetadataBytes            int              `json:"envelope_metadata_bytes,omitempty"`
+	VerbatimItems                    int              `json:"verbatim_items,omitempty"`
+	ExcerptItems                     int              `json:"excerpt_items,omitempty"`
+	SignatureItems                   int              `json:"signature_items,omitempty"`
+	SyntheticItems                   int              `json:"synthetic_items,omitempty"`
 }
 
 type MissDiagnostic struct {
@@ -158,6 +169,7 @@ func MeasurePacket(c Case, profile string, budget int, packet evidence.Packet, d
 		}
 	}
 	r.EvidenceTokens = budgetpkg.NewEstimator().Estimate(evidenceText.String())
+	measurePacketBytes(&r, packet)
 	if r.WireTokens > 0 {
 		overhead := float64(r.WireTokens-r.EvidenceTokens) / float64(r.WireTokens)
 		if overhead < 0 {
@@ -184,6 +196,54 @@ func MeasurePacket(c Case, profile string, budget int, packet evidence.Packet, d
 		r.ChangedPathRecall = ratio(selected, len(changedPaths))
 	}
 	return r
+}
+
+func measurePacketBytes(result *QualityResult, packet evidence.Packet) {
+	payload, err := json.Marshal(packet)
+	if err != nil {
+		return
+	}
+	result.PacketJSONBytes = len(payload)
+	result.SummaryBytes = len(evidence.Summary(packet)) + 1
+	result.WireBytes = result.PacketJSONBytes + result.SummaryBytes
+	for _, item := range packet.Evidence {
+		result.EvidenceContentBytes += serializedStringValueBytes(item.Source)
+		result.EvidenceContentBytes += serializedStringValueBytes(item.Signature)
+		result.EvidenceContentBytes += serializedStringValueBytes(item.Outline)
+		for _, segment := range item.Segments {
+			result.EvidenceContentBytes += serializedStringValueBytes(segment.Text)
+		}
+		switch item.Fidelity {
+		case evidence.FidelityVerbatim:
+			result.VerbatimItems++
+		case evidence.FidelityExcerpt:
+			result.ExcerptItems++
+		case evidence.FidelitySignature:
+			result.SignatureItems++
+		case evidence.FidelitySynthetic:
+			result.SyntheticItems++
+		}
+	}
+	for _, limitation := range packet.Limitations {
+		result.GuidanceBytes += serializedStringValueBytes(limitation)
+	}
+	for _, action := range packet.Next {
+		result.GuidanceBytes += serializedStringValueBytes(action.Handle)
+		result.GuidanceBytes += serializedStringValueBytes(action.Relation)
+		result.GuidanceBytes += serializedStringValueBytes(action.Reason)
+	}
+	result.EnvelopeMetadataBytes = result.WireBytes - result.SummaryBytes - result.EvidenceContentBytes - result.GuidanceBytes
+}
+
+func serializedStringValueBytes(value string) int {
+	if value == "" {
+		return 0
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil || len(encoded) < 2 {
+		return 0
+	}
+	return len(encoded) - 2
 }
 
 func missDiagnostics(packet evidence.Packet, benchmarkCase Case) []MissDiagnostic {

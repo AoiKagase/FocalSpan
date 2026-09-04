@@ -44,6 +44,18 @@ func TestDevelopmentEfficiencyIsExcludedFromQualityJSONAndShownInMarkdown(t *tes
 	}
 }
 
+func TestRenderMarkdownIncludesPacketByteAnalysis(t *testing.T) {
+	markdown, err := RenderMarkdown(RunReport{Schema: ReportSchemaV1, Suite: "suite", FocalSpanCommit: "abc", Quality: []QualityResult{{CaseID: "case", Profile: "p", Budget: 100, WireBytes: 80, PacketJSONBytes: 60, SummaryBytes: 20, EvidenceContentBytes: 10, GuidanceBytes: 5, EnvelopeMetadataBytes: 45, SignatureItems: 1}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"## Packet byte analysis", "| wire | 80 |", "| envelope metadata | 45 |", "signature=1"} {
+		if !strings.Contains(markdown, want) {
+			t.Fatalf("markdown missing %q:\n%s", want, markdown)
+		}
+	}
+}
+
 func TestRenderMarkdownRejectsSourceAndAbsolutePaths(t *testing.T) {
 	text, err := RenderMarkdown(RunReport{Schema: ReportSchemaV1, Suite: "suite", FocalSpanCommit: "abc123", Quality: []QualityResult{{CaseID: "case", Profile: "p", Budget: 100, RequiredPathRecall: 1, FailureCodes: []string{"required_symbol_missing"}}}, Performance: []PerformanceResult{{CaseID: "case", Profile: "p", Budget: 100, SnapshotMS: 7, IndexMS: 11, QueryMS: []int64{2, 3, 4}}}})
 	if err != nil {

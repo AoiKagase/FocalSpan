@@ -51,6 +51,14 @@ all profiles and budgets. Retrieval mode remains query-local. There is no
 persistent cross-run cache, so separate invocations always materialize and
 measure fresh snapshots.
 
+Quality JSON also records estimator-independent UTF-8 byte measurements for
+the compact packet JSON plus canonical MCP summary. The Markdown report
+aggregates evidence-content values, guidance values, summary bytes, remaining
+envelope/metadata bytes, and selected fidelity counts. These are development
+measurements only; they are never added to normal MCP responses. Use the byte
+measurements to prevent a TokenEstimator constant change from being mistaken
+for an actual payload reduction.
+
 The development command writes temporary snapshots and generated reports only;
 `.focalspan-bench/` is ignored and should be removed after local verification.
 

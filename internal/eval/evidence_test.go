@@ -72,15 +72,32 @@ func TestEvidenceFixtureDeltaRatioImprovesWithKnownGuidancePruning(t *testing.T)
 		t.Fatal(err)
 	}
 	const baseline = 0.5578351609480015
+	foundDelta, foundLong, foundEmpty := false, false, false
 	for _, result := range report.Cases {
-		if result.Name == "go-stateless-delta" {
+		switch result.Name {
+		case "go-stateless-delta":
 			if result.DeltaTokenRatio <= 0 || result.DeltaTokenRatio >= baseline {
 				t.Fatalf("delta ratio=%v, want less than baseline %v", result.DeltaTokenRatio, baseline)
 			}
-			return
+			foundDelta = true
+		case "go-late-expired-token":
+			if result.ExpectedCoverage != 1 || result.FocusedLateHit != 1 {
+				t.Fatalf("long focused case=%+v", result)
+			}
+			foundLong = true
+		case "no-relevant-source":
+			if result.EmptyPacketCorrect != 0 || result.EvidenceItems == 0 {
+				t.Fatalf("no-result baseline was not measured as an abstention miss: %+v", result)
+			}
+			foundEmpty = true
 		}
 	}
-	t.Fatal("go-stateless-delta case missing")
+	if !foundDelta || !foundLong || !foundEmpty {
+		t.Fatalf("coverage cases delta/long/empty=%t/%t/%t", foundDelta, foundLong, foundEmpty)
+	}
+	if report.EmptyPacketValidity <= 0 || report.EmptyPacketValidity >= 1 {
+		t.Fatalf("empty packet validity=%v", report.EmptyPacketValidity)
+	}
 }
 
 func TestForbiddenEvidenceKeysInspectsObjectKeysOnly(t *testing.T) {

@@ -31,6 +31,7 @@ type EvidenceCase struct {
 	Expected         []EvidenceExpectation `json:"expected"`
 	ForbiddenPaths   []string              `json:"forbidden_paths,omitempty"`
 	FollowUpRelation string                `json:"follow_up_relation,omitempty"`
+	ExpectEmpty      bool                  `json:"expect_empty,omitempty"`
 }
 
 type EvidenceQueryer interface {
@@ -57,6 +58,8 @@ type EvidenceCaseResult struct {
 	ForbiddenPathViolations int     `json:"forbidden_path_violations"`
 	DeltaTokenRatio         float64 `json:"delta_token_ratio,omitempty"`
 	FocusedLateHit          int     `json:"focused_late_hit"`
+	EmptyPacketCorrect      int     `json:"empty_packet_correct"`
+	EvidenceItems           int     `json:"evidence_items"`
 }
 
 type EvidenceReport struct {
@@ -74,6 +77,7 @@ type EvidenceReport struct {
 	MedianDuplicateSourceRatio  float64              `json:"median_duplicate_source_ratio"`
 	MedianEvidenceVsLegacyRatio float64              `json:"median_evidence_vs_legacy_ratio"`
 	MedianDeltaTokenRatio       float64              `json:"median_delta_token_ratio"`
+	EmptyPacketValidity         float64              `json:"empty_packet_validity"`
 }
 
 func LoadEvidenceCases(path string) ([]EvidenceCase, error) {
@@ -151,7 +155,10 @@ func EvaluateEvidence(ctx context.Context, queryer EvidenceQueryer, cases []Evid
 
 func measureEvidenceCase(item EvidenceCase, compiled evidence.CompileResult, payload []byte) EvidenceCaseResult {
 	packet := compiled.Packet
-	result := EvidenceCaseResult{Name: item.Name, WireTokens: compiled.Stats.WireTokens, EvidenceTokens: compiled.Stats.EvidenceTokens}
+	result := EvidenceCaseResult{Name: item.Name, WireTokens: compiled.Stats.WireTokens, EvidenceTokens: compiled.Stats.EvidenceTokens, EvidenceItems: len(packet.Evidence)}
+	if !item.ExpectEmpty || len(packet.Evidence) == 0 {
+		result.EmptyPacketCorrect = 1
+	}
 	if packet.Budget.Used <= packet.Budget.Limit && packet.Budget.Used == compiled.Stats.WireTokens {
 		result.WireBudgetCompliant = 1
 	}
@@ -362,6 +369,7 @@ func aggregateEvidenceReport(report *EvidenceReport) {
 		report.WireBudgetCompliance += float64(item.WireBudgetCompliant)
 		report.DeterministicOutput += float64(item.Deterministic)
 		report.FocusedLateHitPreservation += float64(item.FocusedLateHit)
+		report.EmptyPacketValidity += float64(item.EmptyPacketCorrect)
 		report.ForbiddenPathViolations += item.ForbiddenPathViolations
 		report.KnownResendCount += item.KnownResendCount
 		if item.WireTokens >= 1200 {
@@ -383,6 +391,7 @@ func aggregateEvidenceReport(report *EvidenceReport) {
 	report.WireBudgetCompliance /= count
 	report.DeterministicOutput /= count
 	report.FocusedLateHitPreservation /= count
+	report.EmptyPacketValidity /= count
 	report.MedianMetadataOverheadRatio = medianEvidence(metadata)
 	report.MedianDuplicateSourceRatio = medianEvidence(duplicates)
 	report.MedianEvidenceVsLegacyRatio = medianEvidence(ratios)

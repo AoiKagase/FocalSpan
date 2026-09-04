@@ -33,32 +33,32 @@ v0.15 history suiteは初回required recallがほぼゼロで、長いsourceや�
 ### Task 0: Transition
 
 - [x] v0.20をcompleted archiveへ移動し、本PLANをactiveにする。
-- [ ] documentation transition commitを作成する。
+- [x] documentation transition commitを作成する。
 
 ### Task 1: RED metrics and privacy tests
 
-- [ ] UTF-8 packet bytes、JSON bytes、summary bytes、Evidence content bytes、metadata bytesの整合testを追加する。
-- [ ] selected fidelity、guidance bytesをsource-free breakdownとして集計するtestを追加する。
-- [ ] normal MCP responseにbreakdown/debug fieldが出ないtestを固定する。
+- [x] UTF-8 packet bytes、JSON bytes、summary bytes、Evidence content bytes、metadata bytesの整合testを追加する。
+- [x] selected fidelity、guidance bytesをsource-free breakdownとして集計するtestを追加する。
+- [x] normal MCP responseにbreakdown/debug fieldが出ないtestを固定する。
 
 ### Task 2: GREEN metrics implementation
 
-- [ ] `QualityResult`へstable aggregate byte fieldsを追加する。
-- [ ] development-only detail reportへfidelity countとfield contributionを追加する。
-- [ ] 既存Estimator metricsはbaseline比較互換のため維持する。
+- [x] `QualityResult`へstable aggregate byte fieldsを追加する。
+- [x] development-only detail reportへfidelity countとfield contributionを追加する。
+- [x] 既存Estimator metricsはbaseline比較互換のため維持する。
 
 ### Task 3: Coverage fixtures
 
-- [ ] positive initial targetがfocused packetへ入るfixtureを追加する。
-- [ ] 40行以上でlate hitを持ち、excerptが実際にselectedされるfixtureを追加する。
-- [ ] valid anchorからknown_handles付きexpandが成功するfixtureを追加する。
-- [ ] relevant candidateがなく空packetになるno-result fixtureを追加する。
+- [x] 既存Evidence fixtureのpositive initial targetがfocused packetへ入ることを再検証する。
+- [x] 既存40行以上のlate hit caseでexcerptが実際にselectedされることを再検証する。
+- [x] 既存valid anchorからknown_handles付きexpandが成功することを再検証する。
+- [x] relevant candidateがないqueryを追加し、現行が空packetか無関係Evidenceかをsource-free metricで記録する。
 
 ### Task 4: Verification and closure
 
-- [ ] focused benchmark/evidence/MCP tests、全体test、vet、diff checkを通す。
-- [ ] fixture contract evaluationとprivacy scanを通す。
-- [ ] findingsに新しいcoverageとbyte baselineを記録する。
+- [x] focused benchmark/evidence/MCP tests、全体test、vet、diff checkを通す。
+- [x] fixture contract evaluationとprivacy scanを通す。
+- [x] findingsに新しいcoverageとbyte baselineを記録する。
 - [ ] 合格後にatomic commitし、v0.22 bounded beam planへ遷移する。
 
 ## Validation and Acceptance
@@ -79,10 +79,15 @@ fixtureはtestdata内の固定sourceとlabelsだけを使用し、runごとにte
 ## Progress
 
 - [x] 2026-09-04: v0.20完了後、v0.21 planへ遷移した。
+- [x] 2026-09-04: byte breakdownとMCP非露出のRED/GREEN testsを完了した。
+- [x] 2026-09-04: Evidence fixtureのpositive/long/deltaを再検証し、no-result abstention missを追加した。
+- [x] 2026-09-04: history suite 48 rowsを1回測定し、v0.15比較`compatible=true`、`regressions=0`を確認した。
+- [x] 2026-09-04T02:00Z: 全体test、vet、diff check、generated artifact privacy scanがpassした。
 
 ## Surprises & Discoveries
 
 - 現行wire metricはEstimator値のみで、Estimator変更から独立したserialized byte指標がない。
+- no-result追加時、現行baselineは空packetではなく245 estimated tokensのEvidenceを返した。v0.21では検出指標だけを固定し、abstention実装は後続候補へ分離する。
 
 ## Decision Log
 
@@ -90,4 +95,7 @@ fixtureはtestdata内の固定sourceとlabelsだけを使用し、runごとにte
 
 ## Outcomes & Retrospective
 
-実装・測定後に更新する。
+history suiteのmodel-visible payloadは34,280 UTF-8 bytesで、Evidence content値3,459、
+guidance値4,010、summary 2,324、残るenvelope/metadata 24,487だった。selected fidelityは
+verbatim 10、excerpt 15、signature 30で、後続packing/excerpt候補が影響するrowを確認した。
+Estimator値はv0.15 baselineと完全一致した。

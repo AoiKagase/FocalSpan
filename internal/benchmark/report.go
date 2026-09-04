@@ -34,6 +34,25 @@ func RenderMarkdown(report RunReport) (string, error) {
 		b.WriteString("\n## Development efficiency\n\n| Useful evidence | Estimated wire tokens | Per 1,000 tokens |\n|---:|---:|---:|\n")
 		fmt.Fprintf(&b, "| %d | %d | %.4f |\n", report.Efficiency.UsefulEvidence, report.Efficiency.EstimatedTokens, report.Efficiency.Per1000Tokens)
 	}
+	var wireBytes, jsonBytes, summaryBytes, contentBytes, guidanceBytes, metadataBytes int
+	var verbatimItems, excerptItems, signatureItems, syntheticItems int
+	for _, result := range report.Quality {
+		wireBytes += result.WireBytes
+		jsonBytes += result.PacketJSONBytes
+		summaryBytes += result.SummaryBytes
+		contentBytes += result.EvidenceContentBytes
+		guidanceBytes += result.GuidanceBytes
+		metadataBytes += result.EnvelopeMetadataBytes
+		verbatimItems += result.VerbatimItems
+		excerptItems += result.ExcerptItems
+		signatureItems += result.SignatureItems
+		syntheticItems += result.SyntheticItems
+	}
+	if wireBytes > 0 {
+		b.WriteString("\n## Packet byte analysis\n\n| Component | UTF-8 bytes |\n|---|---:|\n")
+		fmt.Fprintf(&b, "| wire | %d |\n| packet JSON | %d |\n| summary | %d |\n| evidence content | %d |\n| guidance values | %d |\n| envelope metadata | %d |\n", wireBytes, jsonBytes, summaryBytes, contentBytes, guidanceBytes, metadataBytes)
+		fmt.Fprintf(&b, "\nSelected fidelity: verbatim=%d, excerpt=%d, signature=%d, synthetic=%d.\n", verbatimItems, excerptItems, signatureItems, syntheticItems)
+	}
 	return b.String(), nil
 }
 
