@@ -3,12 +3,14 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 
 	"github.com/focalspan/focalspan/internal/app"
 	"github.com/focalspan/focalspan/internal/evidence"
 	"github.com/focalspan/focalspan/internal/model"
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -38,6 +40,8 @@ type CodeImpactInput struct {
 
 type CodeRestartInput struct{}
 
+const contextEncodingExtension = "io.focalspan/context-encoding"
+
 type Server struct {
 	service    *app.Service
 	autoUpdate bool
@@ -48,13 +52,56 @@ type Server struct {
 
 func New(service *app.Service, autoUpdate bool) *Server {
 	s := &Server{service: service, autoUpdate: autoUpdate}
-	s.sdk = mcp.NewServer(&mcp.Implementation{Name: "focalspan", Version: "0.4.0"}, nil)
-	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_context", Description: "Find and return a role-labeled packet of repository evidence for a code question. Call this before broad file reads; use handles and next actions for follow-up expansion."}, s.codeContext)
-	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_expand", Description: "Return new evidence related to stable handles. Pass known_handles to avoid retransmitting context already present in the conversation."}, s.codeExpand)
-	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_impact", Description: "Return syntax-based changed spans, dependents, and related tests for Git changes within a token budget. Results may omit unresolved dynamic relationships."}, s.codeImpact)
+	capabilities := &mcp.ServerCapabilities{Logging: &mcp.LoggingCapabilities{}}
+	capabilities.AddExtension(contextEncodingExtension, map[string]any{
+		"schemas": []string{evidence.SchemaContextV1, evidence.SchemaContextV2},
+		"default": evidence.SchemaContextV1,
+	})
+	s.sdk = mcp.NewServer(&mcp.Implementation{Name: "focalspan", Version: "0.4.0"}, &mcp.ServerOptions{Capabilities: capabilities})
+	outputSchema := contextOutputSchema()
+	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_context", Description: "Find and return a role-labeled packet of repository evidence for a code question. Call this before broad file reads; use handles and next actions for follow-up expansion.", OutputSchema: outputSchema}, s.codeContext)
+	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_expand", Description: "Return new evidence related to stable handles. Pass known_handles to avoid retransmitting context already present in the conversation.", OutputSchema: outputSchema}, s.codeExpand)
+	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_impact", Description: "Return syntax-based changed spans, dependents, and related tests for Git changes within a token budget. Results may omit unresolved dynamic relationships.", OutputSchema: outputSchema}, s.codeImpact)
 	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_restart", Description: "Reload FocalSpan configuration and reopen the repository index."}, s.codeRestart)
 	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_status", Description: "Return read-only index status."}, s.codeStatus)
 	return s
+}
+
+func contextOutputSchema() any {
+	v1, err := jsonschema.ForType(reflect.TypeFor[evidence.Packet](), &jsonschema.ForOptions{})
+	if err != nil {
+		panic(fmt.Sprintf("infer context v1 output schema: %v", err))
+	}
+	row := func(size int) map[string]any {
+		return map[string]any{"type": "array", "minItems": size, "maxItems": size}
+	}
+	v2 := map[string]any{
+		"type":                 "object",
+		"required":             []string{"schema", "m", "b", "e"},
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"schema": map[string]any{"const": evidence.SchemaContextV2},
+			"r":      map[string]any{"type": "string"},
+			"i":      map[string]any{"type": "string"},
+			"m":      map[string]any{"type": "string", "enum": []string{string(evidence.ModeOutline), string(evidence.ModeFocused), string(evidence.ModeSource)}},
+			"b": map[string]any{
+				"type": "array", "minItems": 4, "maxItems": 4,
+				"prefixItems": []any{map[string]any{"type": "integer"}, map[string]any{"type": "integer"}, map[string]any{"type": "boolean"}, map[string]any{"type": "integer"}},
+			},
+			"p": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"e": map[string]any{"type": "array", "items": row(8)},
+			"x": map[string]any{"type": "array", "items": row(4)},
+			"l": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"n": map[string]any{"type": "array", "items": row(3)},
+			"k": map[string]any{"type": "integer", "minimum": 0},
+		},
+	}
+	v1Discriminator := map[string]any{
+		"type":       "object",
+		"required":   []string{"schema"},
+		"properties": map[string]any{"schema": map[string]any{"const": evidence.SchemaContextV1}},
+	}
+	return map[string]any{"oneOf": []any{map[string]any{"allOf": []any{v1, v1Discriminator}}, v2}}
 }
 
 // Restart reloads the repository configuration and replaces the app service.
@@ -118,17 +165,17 @@ func (s *Server) Close() error {
 	return err
 }
 
-func (s *Server) codeContext(ctx context.Context, _ *mcp.CallToolRequest, in CodeContextInput) (*mcp.CallToolResult, evidence.Packet, error) {
+func (s *Server) codeContext(ctx context.Context, request *mcp.CallToolRequest, in CodeContextInput) (*mcp.CallToolResult, any, error) {
 	if strings.TrimSpace(in.Query) == "" {
-		return nil, evidence.Packet{}, fmt.Errorf("query is required")
+		return nil, nil, fmt.Errorf("query is required")
 	}
 	mode, err := normalizeMCPMode(in.Mode)
 	if err != nil {
-		return nil, evidence.Packet{}, err
+		return nil, nil, err
 	}
 	known, err := evidence.NormalizeKnownHandles(in.KnownHandles)
 	if err != nil {
-		return nil, evidence.Packet{}, userError(err)
+		return nil, nil, userError(err)
 	}
 	auto := s.autoUpdate
 	if in.AutoUpdate != nil {
@@ -137,53 +184,100 @@ func (s *Server) codeContext(ctx context.Context, _ *mcp.CallToolRequest, in Cod
 	s.mu.RLock()
 	if s.service == nil {
 		s.mu.RUnlock()
-		return nil, evidence.Packet{}, fmt.Errorf("MCP server is closed")
+		return nil, nil, fmt.Errorf("MCP server is closed")
 	}
 	result, err := s.service.QueryEvidence(ctx, app.EvidenceQueryRequest{Query: in.Query, TokenBudget: in.TokenBudget, Mode: mode, ChangedOnly: in.ChangedOnly, Paths: in.Paths, NoUpdate: !auto, KnownHandles: known})
 	s.mu.RUnlock()
 	if err != nil {
-		return nil, evidence.Packet{}, userError(err)
+		return nil, nil, userError(err)
 	}
-	return summaryResult(evidence.Summary(result.Packet)), result.Packet, nil
+	output, summaryPacket := negotiatedContextOutput(request, result.Packet)
+	return summaryResult(evidence.Summary(summaryPacket)), output, nil
 }
 
-func (s *Server) codeExpand(ctx context.Context, _ *mcp.CallToolRequest, in CodeExpandInput) (*mcp.CallToolResult, evidence.Packet, error) {
+func (s *Server) codeExpand(ctx context.Context, request *mcp.CallToolRequest, in CodeExpandInput) (*mcp.CallToolResult, any, error) {
 	if len(in.Handles) == 0 {
-		return nil, evidence.Packet{}, fmt.Errorf("handles are required")
+		return nil, nil, fmt.Errorf("handles are required")
 	}
 	known, err := evidence.NormalizeKnownHandles(in.KnownHandles)
 	if err != nil {
-		return nil, evidence.Packet{}, userError(err)
+		return nil, nil, userError(err)
 	}
 	s.mu.RLock()
 	if s.service == nil {
 		s.mu.RUnlock()
-		return nil, evidence.Packet{}, fmt.Errorf("MCP server is closed")
+		return nil, nil, fmt.Errorf("MCP server is closed")
 	}
 	result, err := s.service.ExpandEvidence(ctx, app.EvidenceExpandRequest{Handles: in.Handles, Relation: in.Relation, TokenBudget: in.TokenBudget, KnownHandles: known})
 	s.mu.RUnlock()
 	if err != nil {
-		return nil, evidence.Packet{}, userError(err)
+		return nil, nil, userError(err)
 	}
-	return summaryResult(evidence.Summary(result.Packet)), result.Packet, nil
+	output, summaryPacket := negotiatedContextOutput(request, result.Packet)
+	return summaryResult(evidence.Summary(summaryPacket)), output, nil
 }
 
-func (s *Server) codeImpact(ctx context.Context, _ *mcp.CallToolRequest, in CodeImpactInput) (*mcp.CallToolResult, evidence.Packet, error) {
+func (s *Server) codeImpact(ctx context.Context, request *mcp.CallToolRequest, in CodeImpactInput) (*mcp.CallToolResult, any, error) {
 	known, err := evidence.NormalizeKnownHandles(in.KnownHandles)
 	if err != nil {
-		return nil, evidence.Packet{}, userError(err)
+		return nil, nil, userError(err)
 	}
 	s.mu.RLock()
 	if s.service == nil {
 		s.mu.RUnlock()
-		return nil, evidence.Packet{}, fmt.Errorf("MCP server is closed")
+		return nil, nil, fmt.Errorf("MCP server is closed")
 	}
 	result, err := s.service.ImpactEvidence(ctx, app.EvidenceImpactRequest{BaseRef: in.BaseRef, HeadRef: in.HeadRef, TokenBudget: in.TokenBudget, KnownHandles: known})
 	s.mu.RUnlock()
 	if err != nil {
-		return nil, evidence.Packet{}, userError(err)
+		return nil, nil, userError(err)
 	}
-	return summaryResult(evidence.Summary(result.Packet)), result.Packet, nil
+	output, summaryPacket := negotiatedContextOutput(request, result.Packet)
+	return summaryResult(evidence.Summary(summaryPacket)), output, nil
+}
+
+func negotiatedContextOutput(request *mcp.CallToolRequest, packet evidence.Packet) (any, evidence.Packet) {
+	if !acceptsContextV2(request) {
+		return packet, packet
+	}
+	raw, decoded, preferred, err := evidence.PreferContextV2(packet, nil)
+	if err != nil || !preferred {
+		return packet, packet
+	}
+	return raw, decoded
+}
+
+func acceptsContextV2(request *mcp.CallToolRequest) bool {
+	if request == nil || request.ClientCapabilities() == nil {
+		return false
+	}
+	settings, ok := request.ClientCapabilities().Extensions[contextEncodingExtension].(map[string]any)
+	if !ok {
+		return false
+	}
+	values, ok := settings["accept"]
+	if !ok {
+		return false
+	}
+	switch accepted := values.(type) {
+	case []string:
+		for _, value := range accepted {
+			if value == evidence.SchemaContextV2 {
+				return true
+			}
+		}
+	case []any:
+		for _, entry := range accepted {
+			value, ok := entry.(string)
+			if !ok {
+				return false
+			}
+			if value == evidence.SchemaContextV2 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func normalizeMCPMode(value string) (evidence.Mode, error) {

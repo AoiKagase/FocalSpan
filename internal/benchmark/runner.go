@@ -214,7 +214,11 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 							changedPaths = append(changedPaths, changed.NewPath)
 						}
 					}
-					quality := MeasurePacket(benchmarkCase, profile.Name, budget, *run.Packet, run.Deterministic, changedPaths)
+					_, quality, measureErr := measurePacketForProfile(benchmarkCase, profile, budget, *run.Packet, run.Deterministic, changedPaths)
+					if measureErr != nil {
+						_ = engine.Close()
+						return RunReport{}, measureErr
+					}
 					if profile.RunExpansion {
 						for _, expectation := range benchmarkCase.Expand {
 							anchor, anchorErr := FindExpansionAnchor(*run.Packet, expectation.From)
@@ -236,7 +240,22 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 								_ = engine.Close()
 								return RunReport{}, controlErr
 							}
-							metrics := MeasureExpansion(*run.Packet, knownPacket, controlPacket, expectation)
+							initialMeasured, _, _, measureErr := packetForProfile(profile, *run.Packet)
+							if measureErr != nil {
+								_ = engine.Close()
+								return RunReport{}, measureErr
+							}
+							knownMeasured, _, _, measureErr := packetForProfile(profile, knownPacket)
+							if measureErr != nil {
+								_ = engine.Close()
+								return RunReport{}, measureErr
+							}
+							controlMeasured, _, _, measureErr := packetForProfile(profile, controlPacket)
+							if measureErr != nil {
+								_ = engine.Close()
+								return RunReport{}, measureErr
+							}
+							metrics := MeasureExpansion(initialMeasured, knownMeasured, controlMeasured, expectation)
 							quality.ExpandRequiredPathRecall = metrics.RequiredPathRecall
 							quality.ExpandRequiredSymbolRecall = metrics.RequiredSymbolRecall
 							quality.ExpandForbiddenViolations += metrics.ForbiddenViolations

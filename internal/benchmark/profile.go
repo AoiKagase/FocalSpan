@@ -9,12 +9,19 @@ import (
 )
 
 type Profile struct {
-	Name          string
-	RetrievalMode search.RetrievalMode
-	Contract      string
-	EvidenceMode  evidence.Mode
-	Budgets       []int
-	RunExpansion  bool
+	Name            string
+	RetrievalMode   search.RetrievalMode
+	Contract        string
+	EvidenceMode    evidence.Mode
+	ContextEncoding string
+	Budgets         []int
+	RunExpansion    bool
+}
+
+var ContextV2Profiles = []Profile{
+	{Name: "full-evidence-focused-v2", RetrievalMode: search.RetrievalFull, Contract: "evidence", EvidenceMode: evidence.ModeFocused, ContextEncoding: evidence.SchemaContextV2, Budgets: []int{1024, 2048, 4096}, RunExpansion: true},
+	{Name: "fts-evidence-focused-v2", RetrievalMode: search.RetrievalFTSOnly, Contract: "evidence", EvidenceMode: evidence.ModeFocused, ContextEncoding: evidence.SchemaContextV2, Budgets: []int{2048}},
+	{Name: "no-relations-evidence-focused-v2", RetrievalMode: search.RetrievalNoRelations, Contract: "evidence", EvidenceMode: evidence.ModeFocused, ContextEncoding: evidence.SchemaContextV2, Budgets: []int{2048}},
 }
 
 var DefaultProfiles = []Profile{
@@ -29,9 +36,10 @@ func ResolveProfiles(selection string) ([]Profile, error) {
 	if selection == "" || selection == "default" {
 		return cloneProfiles(DefaultProfiles), nil
 	}
-	available := make(map[string]Profile, len(DefaultProfiles))
-	valid := make([]string, 0, len(DefaultProfiles))
-	for _, profile := range DefaultProfiles {
+	allProfiles := append(cloneProfiles(DefaultProfiles), ContextV2Profiles...)
+	available := make(map[string]Profile, len(allProfiles))
+	valid := make([]string, 0, len(allProfiles))
+	for _, profile := range allProfiles {
 		available[profile.Name] = profile
 		valid = append(valid, profile.Name)
 	}

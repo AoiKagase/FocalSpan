@@ -31,12 +31,12 @@ provenanceを失わずmetadata bytesを削減する。v2が個別responseで小�
 ## Plan of Work
 
 - [x] v0.31をarchiveし、本PLANへ遷移する。
-- [ ] documentation transition commitを作成する。
-- [ ] v2 codec、invalid table、determinism、canonical equivalenceのRED testsを作成する。
-- [ ] capability discovery、v1 default、malformed fallback、3 tool negotiationのRED testsを作成する。
-- [ ] compact codecとstrict decoderを実装する。
-- [ ] server extension advertisement、request negotiation、per-response smaller-only fallbackを実装する。
-- [ ] targeted tests、`go test ./...`、`go vet ./...`、cross-build、`git diff --check`を実行する。
+- [x] documentation transition commitを作成する。
+- [x] v2 codec、invalid table、determinism、canonical equivalenceのRED testsを作成する。
+- [x] capability discovery、v1 default、malformed fallback、3 tool negotiationのRED testsを作成する。
+- [x] compact codecとstrict decoderを実装する。
+- [x] server extension advertisement、request negotiation、per-response smaller-only fallbackを実装する。
+- [x] targeted tests、`go test ./...`、`go vet ./...`、cross-build、`git diff --check`を実行する。
 - [ ] candidate commitを作成し、history benchmarkを一度だけ実行する。
 - [ ] gate判定をfindingとPLANへ記録し、採用または通常revertする。
 - [ ] 完了後、latency-only候補をtoken計画から分離して閉じる。
@@ -68,14 +68,19 @@ codecはpure conversion、negotiationはrequest-localでstateを持たない。b
 ## Progress
 
 - [x] 2026-09-04: v0.31 design gateをarchiveし、v0.32実装milestoneへ遷移した。
+- [x] 2026-09-04: codec/MCP REDは未定義APIとcapability定数で失敗し、GREEN後に対象229 testsが通過した。
+- [x] 2026-09-04: default外の明示`*-v2` benchmark profilesとnegotiated wire計測を追加した。
+- [x] 2026-09-04: 全725 tests、vet、通常build、3 OS `CGO_ENABLED=0` cross-build、diff checkが通過した。
 
 ## Surprises & Discoveries
 
-- 調査・実装中。
+- v2の`Budget.Used`はcompact structured contentと既存summaryを合わせて再settleする必要がある。
+- parallel cross-buildの初回確認ではLinux/Darwin成果物を確認できなかったため、個別再実行し両方exit 0を確認した。
 
 ## Decision Log
 
 - 2026-09-04: `docs/benchmarks/findings-v0.31.md`のnegotiationとequivalence契約を採用する。
+- 2026-09-04: default benchmark profilesは不変とし、v2測定は明示`*-v2` profileだけに限定する。
 
 ## Outcomes & Retrospective
 
