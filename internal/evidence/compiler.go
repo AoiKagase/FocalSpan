@@ -155,15 +155,8 @@ func (c *Compiler) Compile(req CompileRequest) (CompileResult, error) {
 		return CompileResult{}, errors.New("empty evidence packet does not fit clamped budget")
 	}
 	omittedCandidates := omittedClassified(prepared, selected)
-	guidanceSelected := make([]GuidanceSelection, 0, len(selected))
-	for _, item := range selected {
-		guidanceSelected = append(guidanceSelected, GuidanceSelection{Candidate: item.prepared.classified, Fidelity: item.variant.Fidelity})
-	}
-	limitations, next := BuildGuidance(GuidanceInput{Plan: req.Plan, Selected: guidanceSelected, Omitted: omittedCandidates, KnownHandles: req.KnownHandles, ExpansionAnchors: req.ExpansionAnchors, Truncated: omitted > 0})
-	limitations, next = pruneKnownDeltaGuidance(packet, req.KnownHandles, limitations, next)
-	applyGuidanceWithinBudget(&packet, limitations, next, c.estimator)
-	prunePacketMetadata(&packet)
-	settleWireUsage(&packet, c.estimator)
+	packet = c.finalizeSelectedPacket(req, mode, limit, selected, omitted, skippedKnown, omittedCandidates)
+	selected, packet = c.tryGuidanceFundedFidelityUpgrade(req, mode, limit, selected, omitted, skippedKnown, omittedCandidates, packet)
 	if err := Validate(packet); err != nil {
 		return CompileResult{}, err
 	}
@@ -174,6 +167,49 @@ func (c *Compiler) Compile(req CompileRequest) (CompileResult, error) {
 		Selected: len(packet.Evidence), Omitted: omitted, SkippedKnown: skippedKnown,
 	}
 	return CompileResult{Packet: packet, Stats: stats}, nil
+}
+
+func (c *Compiler) finalizeSelectedPacket(req CompileRequest, mode Mode, limit int, selected []selectedCandidate, omitted, skippedKnown int, omittedCandidates []ClassifiedCandidate) Packet {
+	packet := buildPacket(req, mode, limit, selected, omitted, skippedKnown, c.estimator)
+	guidanceSelected := make([]GuidanceSelection, 0, len(selected))
+	for _, item := range selected {
+		guidanceSelected = append(guidanceSelected, GuidanceSelection{Candidate: item.prepared.classified, Fidelity: item.variant.Fidelity})
+	}
+	limitations, next := BuildGuidance(GuidanceInput{Plan: req.Plan, Selected: guidanceSelected, Omitted: omittedCandidates, KnownHandles: req.KnownHandles, ExpansionAnchors: req.ExpansionAnchors, Truncated: omitted > 0})
+	limitations, next = pruneKnownDeltaGuidance(packet, req.KnownHandles, limitations, next)
+	applyGuidanceWithinBudget(&packet, limitations, next, c.estimator)
+	prunePacketMetadata(&packet)
+	settleWireUsage(&packet, c.estimator)
+	return packet
+}
+
+func (c *Compiler) tryGuidanceFundedFidelityUpgrade(req CompileRequest, mode Mode, limit int, selected []selectedCandidate, omitted, skippedKnown int, omittedCandidates []ClassifiedCandidate, legacy Packet) ([]selectedCandidate, Packet) {
+	bestSelected := append([]selectedCandidate(nil), selected...)
+	bestPacket := legacy
+	bestEvidenceTokens := selectedEvidenceTokens(selected)
+	for selectedIndex := range selected {
+		currentIndex := selectedVariantIndex(selected[selectedIndex])
+		for variantIndex := 0; variantIndex < currentIndex; variantIndex++ {
+			trial := append([]selectedCandidate(nil), selected...)
+			trial[selectedIndex].variant = trial[selectedIndex].prepared.variants[variantIndex]
+			candidate := c.finalizeSelectedPacket(req, mode, limit, trial, omitted, skippedKnown, omittedCandidates)
+			evidenceTokens := selectedEvidenceTokens(trial)
+			if candidate.Budget.Used > legacy.Budget.Used || candidate.Budget.Used > limit || evidenceTokens <= bestEvidenceTokens {
+				continue
+			}
+			bestSelected, bestPacket, bestEvidenceTokens = trial, candidate, evidenceTokens
+		}
+	}
+	return bestSelected, bestPacket
+}
+
+func selectedVariantIndex(selected selectedCandidate) int {
+	for index, variant := range selected.prepared.variants {
+		if variant.Fidelity == selected.variant.Fidelity {
+			return index
+		}
+	}
+	return 0
 }
 
 func selectionLimit(plan query.Plan) int {
