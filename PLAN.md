@@ -1,100 +1,93 @@
-# FocalSpan v0.20 relation-linker comparator 実装計画
+# FocalSpan v0.21 token benchmark hardening 実装計画
 
-**Goal:** v0.19で未測定だったschema v1対schema v2のwall-clock比率を、同一規模・
-同一内容のfixtureを同一processで直接測定し、`TASKS.md`の10x/5x/2x受入条件を
-事実に基づいて閉じる。
+**Goal:** token改善候補を実装する前に、現行history suiteが十分に測れていないpositive
+initial hit、selected long excerpt、known-handle expansion、no-resultを決定的fixtureで覆い、
+packetのfield・variant・guidance・summary別のUTF-8 byte寄与を開発専用reportへ追加する。
 
-**Architecture:** 製品linkerと公開interfaceは変更しない。`internal/linker`のopt-in
-開発benchmarkに、v0.19直前の全relation・全symbol走査とrelationごとのwriteを再現する
-test-only comparatorを置く。各scenarioは独立した同一fixtureでv1/v2を測定し、最終relation
-rowsの完全一致を確認してから比率を判定する。
+**Architecture:** 公開MCP/Evidence packetは変更しない。`internal/benchmark`のquality resultへ
+estimator非依存のbyte metricsとprivate packet breakdownを追加し、`testdata/benchmark`に
+合成acceptance repository/caseを追加する。通常MCP応答にdebug fieldを露出しない。
 
 ## Purpose / Big Picture
 
-v0.19はunchanged `0s`、small `322.2249ms`、full `101.2515ms`で絶対時間gateを
-満たしたが、v1 comparatorがなく10x/5x/2x比率は未検証だった。本マイルストーンは
-token改善候補へ進む前にその測定負債だけを解消する。
+v0.15 history suiteは初回required recallがほぼゼロで、長いsourceや有効なdelta expansionを
+十分に評価できない。Estimator係数変更による見かけ上の改善を防ぎ、次のpacking候補が実際に
+影響するrowを実装前に判定できる測定基盤を作る。
 
 ## Baseline and Gates
 
-- unchangedはv1比`>=10x`かつv2 `<=250ms`。
-- small related changeはv1比`>=5x`かつv2 `<=1s`。
-- full linkingはv1比`>=2x`かつv2 `<=5s`。
-- 各scenarioのv1/v2 relation rowsはserialized value単位で完全一致する。
-- v0.15 token baseline、MCP/CLI、Evidence、ranking、packingは変更しない。
+- 既存v0.15の48 quality rowsと集計値はbyte-identicalに保持する。
+- 新fixtureはpositive initial hit、long excerpt、known expansion、no-resultを各1件以上含む。
+- packet bytesはcompact JSONとcanonical summaryのUTF-8 bytesを直接測る。
+- breakdown合計はpacket bytesと一致し、通常MCP JSONには新fieldを出さない。
 
 ## Global Constraints
 
-- comparatorはopt-in test-onlyとし、通常`go test ./...`ではskipする。
-- network、外部LLM、repository code実行、新runtime依存を導入しない。
-- timing値はordinary unit testの合否へ混ぜない。
+- benchmark/fixtureだけを変更し、retrieval、ranking、packing、Evidence compilerを変更しない。
+- source本文、絶対path、user名、secretをreportへ出さない。
+- network、外部LLM、repository code実行を行わない。
 - `AGENTS.md`、`.focalspan.json`、`TASKS.md`を変更・stageしない。
-
-## Context and Orientation
-
-- `internal/linker/schema_v2_benchmark_test.go`に現行scale fixtureとv2測定がある。
-- v1 comparatorはv0.19直前の`Linker.Link`動作をtest-only helperとして再現する。
-- `internal/store`の公開read/write APIだけを使い、製品codeへlegacy pathを戻さない。
 
 ## Plan of Work
 
-### Task 0: ExecPlan transition
+### Task 0: Transition
 
-- [x] 完了済みv0.19 PLANをcompleted archiveへbyte-identicalに移動する。
-- [x] 本PLANだけをactive root PLANとしてdocumentation transition commitにする。
+- [x] v0.20をcompleted archiveへ移動し、本PLANをactiveにする。
+- [ ] documentation transition commitを作成する。
 
-### Task 1: RED comparator tests
+### Task 1: RED metrics and privacy tests
 
-- [x] v1/v2のrelation row不一致、gate未達、ゼロdurationを検出するtest helperを先に追加する。
-- [x] ratio計算をduration zeroでも決定的に扱う純粋helper testを追加する。
+- [ ] UTF-8 packet bytes、JSON bytes、summary bytes、Evidence content bytes、metadata bytesの整合testを追加する。
+- [ ] selected fidelity、guidance bytesをsource-free breakdownとして集計するtestを追加する。
+- [ ] normal MCP responseにbreakdown/debug fieldが出ないtestを固定する。
 
-### Task 2: GREEN comparator implementation
+### Task 2: GREEN metrics implementation
 
-- [x] v1全走査・per-relation write comparatorをtest-onlyで実装する。
-- [x] unchanged、small、fullを独立した同一fixture pairで測定する。
-- [x] duration、ratio、candidate relation数、最終relation同値性を一つのsource-free logへ出す。
+- [ ] `QualityResult`へstable aggregate byte fieldsを追加する。
+- [ ] development-only detail reportへfidelity countとfield contributionを追加する。
+- [ ] 既存Estimator metricsはbaseline比較互換のため維持する。
 
-### Task 3: Verification and closure
+### Task 3: Coverage fixtures
 
-- [x] focused linker/store tests、`go test ./... -count=1`、`go vet ./...`を実行する。
-- [x] opt-in comparatorを実行し、全ratio・絶対時間gateを判定する。
-- [x] 結果を新しいfindingsへ記録し、v0.19 archiveは変更しない。
-- [ ] comparatorとfindingsだけをatomic commitし、次のbenchmark-hardening planへ遷移する。
+- [ ] positive initial targetがfocused packetへ入るfixtureを追加する。
+- [ ] 40行以上でlate hitを持ち、excerptが実際にselectedされるfixtureを追加する。
+- [ ] valid anchorからknown_handles付きexpandが成功するfixtureを追加する。
+- [ ] relevant candidateがなく空packetになるno-result fixtureを追加する。
+
+### Task 4: Verification and closure
+
+- [ ] focused benchmark/evidence/MCP tests、全体test、vet、diff checkを通す。
+- [ ] fixture contract evaluationとprivacy scanを通す。
+- [ ] findingsに新しいcoverageとbyte baselineを記録する。
+- [ ] 合格後にatomic commitし、v0.22 bounded beam planへ遷移する。
 
 ## Validation and Acceptance
 
-v1/v2が同じfixtureから同じrelation rowsを生成し、unchanged/small/fullの全ratioと絶対
-時間gateを満たすこと。未達ならv0.19を遡及的に成功扱いせず、未達値をそのまま記録する。
+既存report互換性を壊さず、新fixtureが4つの盲点を実際に通ること。byte breakdownの総計が
+model-visible payload bytesと一致し、debug情報が公開MCPへ出ないこと。
 
 ## Idempotence and Recovery
 
-各scenarioは`t.TempDir()`配下の独立DBを作るため再実行可能で、checkoutや利用中indexを
-変更しない。中断時は一時DBがtest cleanupで破棄される。
+fixtureはtestdata内の固定sourceとlabelsだけを使用し、runごとにtemporary workspaceへ展開する。
+不合格ならbenchmark変更だけを通常revertし、v0.15 baselineを維持する。
 
 ## Interfaces and Dependencies
 
-公開interface変更なし。test-only comparatorは既存`store.Store`、`resolveCandidates`、
-`projectmeta.Fact`だけに依存する。
+公開interface変更なし。変更は`internal/benchmark`、`internal/benchcli`、`testdata/benchmark`
+および開発用reportに限定する。
 
 ## Progress
 
-- [x] 2026-09-04: v0.19 archiveとv0.20 active planを作成した。
-- [x] 2026-09-04T01:45Z: RED helper tests、GREEN comparator、focused/full tests、vetを完了した。
-- [x] 2026-09-04T01:45Z: unchanged `50.6104576s -> 0s`、small `50.6633834s -> 362.3495ms`、full `48.3201814s -> 136.1627ms`を測定し、全gateとrelation同値性がpassした。
+- [x] 2026-09-04: v0.20完了後、v0.21 planへ遷移した。
 
 ## Surprises & Discoveries
 
-- 現行benchmarkはv2だけを測り、ratioを計算するv1 pathを持たない。
-- Windows timer resolutionではunchanged v2が`0s`となるため、ratio helperは正の無限大として扱い、絶対時間と候補数ゼロも併記する。
+- 現行wire metricはEstimator値のみで、Estimator変更から独立したserialized byte指標がない。
 
 ## Decision Log
 
-- 2026-09-04: token候補より先にP0 comparatorを独立マイルストーンとして実施する。
-- 2026-09-04: legacy linkerは製品codeへ戻さず、test-only comparatorへ限定する。
-- 2026-09-04: 初回全scenario runのfull行がcommand-output層でcompactされたため、exact値回収はfull subtestだけを再実行し、その事実をfindingsへ記録する。
+- 2026-09-04: tokenizer oracleを導入せず、まずUTF-8 bytesをEstimator非依存の防止線とする。
 
 ## Outcomes & Retrospective
 
-v1/v2のrelation rowsは全scenarioで完全一致した。unchanged、small、fullはそれぞれ
-10x、5x、2xの比率条件と250ms、1s、5sの絶対条件を満たした。これによりv0.19で
-残っていたcomparative performance gateを閉じた。
+実装・測定後に更新する。
