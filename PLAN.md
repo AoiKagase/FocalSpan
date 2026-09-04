@@ -1,88 +1,82 @@
-# FocalSpan v0.31 `focalspan.context.v2` design gate 計画
+# FocalSpan v0.32 negotiated compact context 実装計画
 
-**Goal:** v1を既定のまま維持し、明示的capability negotiationでのみcompact encodingを
-返せる設計が、現行MCP SDKと公開tool契約の範囲で安全に成立するかを判定する。
+**Goal:** 明示的に`focalspan.context.v2`を受理するMCP clientだけへ、意味同値でv1より小さい
+compact Evidence Packetを返し、既定v1 responseをbyte-identicalに維持する。
 
 ## Purpose / Big Picture
 
-v1のfield名、location、relationをtableまたはdictionary化すればmodel-visible bytesを
-大きく削減できる可能性がある。一方、これは近中期候補のv1互換方針外であり、暗黙の
-schema切替は既存client、source fidelity、relation provenanceを破壊し得る。製品実装前に
-negotiation経路と意味同値性の検証方法を確定し、前提が不足する場合はno-op findingとして
-閉じる。
+accepted baselineのmodel-visible bytesは32,494で、packet JSONが31,090を占める。v2では
+repeated field名、location object、local relation IDを固定位置tableへ変換し、sourceや
+provenanceを失わずmetadata bytesを削減する。v2が個別responseで小さくならない場合はv1へ
+戻し、opt-in自体がwire回帰を生まないようにする。
 
 ## Baseline and Gates
 
-- accepted baseline: history wire 11,693、UTF-8 bytes 32,494、packet JSON 31,090、
-  summary bytes 1,404、useful Evidence 5、効率0.4276。
-- v1は既定かつbyte-identicalのまま維持する。
-- v2はclientの明示的opt-in時だけ返す。
-- v1/v2で意味、source fidelity、relation provenance、orderingが完全一致する検証方法を
-  定義できなければ製品候補を作らない。
-- 公開tool入力の追加やSDK initialize capability利用が必要な場合は、その互換性と
-  discoverabilityをコードとSDK APIから実証する。
+- v1 history wire 11,693、UTF-8 bytes 32,494、useful 5、効率0.4276。
+- v1 default structured contentとsummaryはbyte-identical。
+- negotiated profileはcomparison regression 0、relation validity 1、forbidden violation 0、
+  known resend 0、cumulative wire 11,693以下。
+- negotiated profileのUTF-8 model-visible bytesを少なくとも1 rowかつ累積で厳密に削減する。
+- hard budget、determinism、source fidelityを維持する。
 
 ## Global Constraints
 
+- RED testを製品変更より先に作成する。
+- candidate benchmarkは静的検証後に一度だけ実行する。
 - `AGENTS.md`、`.focalspan.json`、`TASKS.md`を変更・stageしない。
 - network、external LLM、repository-code execution、package restoreを行わない。
-- MCP stdoutをprotocol以外に使用しない。
-- sourceはstructured contentに一度だけ含め、text summaryへ追加しない。
-- field/encoding比較は開発用testまたはbenchmark traceだけに限定する。
+- MCP stdoutはprotocol only、sourceはstructured contentに一度だけとする。
+- 不合格ならcandidate commit後に通常の`git revert`で製品変更だけを戻し、findingを保持する。
 
 ## Plan of Work
 
-- [x] v0.30をarchiveし、本PLANへ遷移する。
-- [x] documentation transition commitを作成する。
-- [x] 現行MCP SDK、tool registration、call input/output型、initialize capabilityの利用可能性を
-  read-onlyで調査する。
-- [x] v1既定維持、v2明示opt-in、意味同値性を満たす最小設計を記録する。
-- [x] 前提が成立する場合だけ、次の独立milestoneで実装可能なacceptance fixtureを定義する。
-- [x] 前提が不足する場合は製品変更なしのdesign-blocked findingを作成する（前提成立のため不要）。
+- [x] v0.31をarchiveし、本PLANへ遷移する。
+- [ ] documentation transition commitを作成する。
+- [ ] v2 codec、invalid table、determinism、canonical equivalenceのRED testsを作成する。
+- [ ] capability discovery、v1 default、malformed fallback、3 tool negotiationのRED testsを作成する。
+- [ ] compact codecとstrict decoderを実装する。
+- [ ] server extension advertisement、request negotiation、per-response smaller-only fallbackを実装する。
+- [ ] targeted tests、`go test ./...`、`go vet ./...`、cross-build、`git diff --check`を実行する。
+- [ ] candidate commitを作成し、history benchmarkを一度だけ実行する。
+- [ ] gate判定をfindingとPLANへ記録し、採用または通常revertする。
 - [ ] 完了後、latency-only候補をtoken計画から分離して閉じる。
 
 ## Validation and Acceptance
 
-このmilestoneは設計ゲートであり、製品encodingは実装しない。採用可能判定には、既存clientが
-入力変更なしでv1を受け取ること、opt-inがtool schemaまたはprotocol capabilityとして明示・
-発見可能であること、同一packetをv1/v2へencode/decodeして意味同値性を自動検証できることが
-必要。いずれかを現行依存で保証できなければdesign-blockedとする。
+REDでは既存v1 testを残したまま、`internal/evidence`へ全fidelityとrelation/guidanceを含む
+round-trip fixtureを追加し、`internal/mcpserver`へcapability有無・malformed・discovery・3 tools
+のintegration fixtureを追加する。GREEN後はlocal cacheを使い、targeted tests、全test、vet、
+Windows amd64/Linux amd64/Darwin arm64の`CGO_ENABLED=0` cross-buildを行う。race testは既知の
+local MinGW制約によりunavailableとして記録する。
 
-文書のみ変更するため、検証はtargeted content inspection、`git diff --check`、明示pathの
-status/diffに限定する。
+benchmarkは既存history suiteにv2 capabilityを明示するprofile/runner経路を追加し、v1 baseline
+と同一caseを比較する。測定は一度だけとし、結果で採否を確定する。
 
 ## Idempotence and Recovery
 
-read-only調査と文書化のみを行う。製品変更やbenchmarkは行わないためrevert候補は生じない。
-途中再開時は本PLANのProgressと直近commitを照合する。
+codecはpure conversion、negotiationはrequest-localでstateを持たない。benchmark生成物と
+`.tmp-go-cache`はmilestone後に削除する。不合格時はexplicit candidate commitをrevertし、
+測定文書だけを別commitで保持する。
 
 ## Interfaces and Dependencies
 
-調査対象は`internal/mcpserver`、`internal/evidence`、`internal/benchmark`、利用中MCP Go SDK。
-公開MCP tools、CLI、`focalspan.context.v1`、`known_handles`は変更しない。
+- 新schema: `focalspan.context.v2`（明示opt-inのみ）。
+- MCP extension: `io.focalspan/context-encoding`。
+- 既存tools、CLI、v1 schema、`known_handles`入力は不変。
+- 実装対象: `internal/evidence`、`internal/mcpserver`、必要最小限の`internal/benchmark`。
 
 ## Progress
 
-- [x] 2026-09-04: v0.30 no-op closureをarchiveし、v0.31 design gateへ遷移した。
-- [x] 2026-09-04: SDK v1.7.0の双方向extensions、request capability参照、明示output schemaを確認した。
-- [x] 2026-09-04: negotiation、compact table、canonical equivalence、fallbackの契約を確定した。
+- [x] 2026-09-04: v0.31 design gateをarchiveし、v0.32実装milestoneへ遷移した。
 
 ## Surprises & Discoveries
 
-- typed `mcp.AddTool`は単一出力型を推論するが、`Out=any`と明示`oneOf` schemaの組合せで
-  v1/v2の両方をmarshal後validationできる。
-- `CallToolRequest.ClientCapabilities()`はsession capabilityだけでなく新protocolのper-request
-  capabilityも吸収するため、transportごとの独自stateは不要。
+- 調査・実装中。
 
 ## Decision Log
 
-- 2026-09-04: v0.31はencoding実装ではなく、negotiationと意味同値性の成立性だけを判定する。
-- 2026-09-04: extension IDを`io.focalspan/context-encoding`とし、missing/malformedは必ずv1へ倒す。
-- 2026-09-04: `Budget.Used`だけをencoding-derived fieldとしてequivalence比較から除外し、他fieldは完全一致させる。
-- 2026-09-04: v2が当該v1 responseより小さい場合だけv2を返すmonotonic fallbackを必須とする。
+- 2026-09-04: `docs/benchmarks/findings-v0.31.md`のnegotiationとequivalence契約を採用する。
 
 ## Outcomes & Retrospective
 
-現行SDKで明示的negotiationと自動意味同値性検証を安全に構成できるためdesign gateはpass。
-製品変更とbenchmarkは行わず、実装に必要なRED fixtureと採用gateを
-`docs/benchmarks/findings-v0.31.md`へ固定した。次milestoneでv2 codecとMCP境界を実装する。
+進行中。
