@@ -114,6 +114,16 @@ repository from the MCP process working directory. A global
 new fixed `focalspan` registration succeeds, FocalSpan removes that root's old
 managed registration. The root path is not stored in the new registration.
 
+After connection, FocalSpan sends MCP server Instructions to the client. They
+ask the model to use `code_context` proactively in focused mode for code
+investigation, changes, reviews, and debugging, then use returned handles with
+`code_expand` or use `code_impact` for Git changes. They also state that
+FocalSpan is not needed for non-code tasks and that direct repository evidence
+should be used if the server is unavailable or returns no usable context.
+Instructions guide model tool selection but cannot force a call. After
+updating the registered FocalSpan binary, reconnect MCP or start a new Codex
+session so the new initialization Instructions are received.
+
 FocalSpan keeps MCP protocol output isolated on stdout and writes diagnostics
 only to stderr. Project-local registrations continue to launch the internal
 `serve --root` entrypoint.

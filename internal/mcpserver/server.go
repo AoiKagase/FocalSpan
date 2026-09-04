@@ -42,6 +42,8 @@ type CodeRestartInput struct{}
 
 const contextEncodingExtension = "io.focalspan/context-encoding"
 
+const serverInstructions = "Use FocalSpan proactively for code-related work without waiting for the user to mention it. For repository investigation, code changes, reviews, and debugging, call code_context early in focused mode, before broad file reads or ad-hoc search. Use code_expand with handles returned by FocalSpan for follow-up context, and use code_impact for Git change impact. Use code_status when index health is relevant. Do not call FocalSpan for non-code tasks. Obey user and higher-priority instructions; if FocalSpan is unavailable, stale, empty, or errors, continue with direct repository evidence and report the limitation."
+
 type Server struct {
 	service    *app.Service
 	autoUpdate bool
@@ -57,7 +59,7 @@ func New(service *app.Service, autoUpdate bool) *Server {
 		"schemas": []string{evidence.SchemaContextV1, evidence.SchemaContextV2},
 		"default": evidence.SchemaContextV1,
 	})
-	s.sdk = mcp.NewServer(&mcp.Implementation{Name: "focalspan", Version: "0.4.0"}, &mcp.ServerOptions{Capabilities: capabilities})
+	s.sdk = mcp.NewServer(&mcp.Implementation{Name: "focalspan", Version: "0.4.0"}, &mcp.ServerOptions{Capabilities: capabilities, Instructions: serverInstructions})
 	outputSchema := contextOutputSchema()
 	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_context", Description: "Find and return a role-labeled packet of repository evidence for a code question. Call this before broad file reads; use handles and next actions for follow-up expansion.", OutputSchema: outputSchema}, s.codeContext)
 	mcp.AddTool(s.sdk, &mcp.Tool{Name: "code_expand", Description: "Return new evidence related to stable handles. Pass known_handles to avoid retransmitting context already present in the conversation.", OutputSchema: outputSchema}, s.codeExpand)

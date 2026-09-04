@@ -407,6 +407,16 @@ migration hint for safely removing the matching legacy managed registration
 after the fixed registration succeeds. Project trust and existing Codex
 session reload state are intentionally not changed or guessed.
 
+At initialization, the MCP server also sends advisory server Instructions. For
+code investigation, changes, reviews, and debugging, the Instructions tell a
+client to use `code_context` early in focused mode, continue with returned
+handles through `code_expand`, and use `code_impact` for Git changes. They
+exclude non-code tasks and require direct repository evidence when FocalSpan
+is unavailable or produces no usable context. This is a model-facing hint,
+not a protocol-level guarantee that a client will call a tool. A new server
+process or MCP reconnection is required for an updated binary's Instructions
+to reach an existing client session.
+
 The MCP server binds one startup root and exposes exactly `code_context`,
 `code_expand`, `code_impact`, `code_restart`, and `code_status`. Handlers
 validate typed input, pass cancellation through the service, and hide internal

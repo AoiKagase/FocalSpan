@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/focalspan/focalspan/internal/app"
@@ -116,6 +117,30 @@ func TestServerAdvertisesContextV2AndDefaultsToV1(t *testing.T) {
 		schema, err := json.Marshal(tool.OutputSchema)
 		if err != nil || !bytesContain(schema, []byte(evidence.SchemaContextV1)) || !bytesContain(schema, []byte(evidence.SchemaContextV2)) || !bytesContain(schema, []byte(`"oneOf"`)) {
 			t.Fatalf("%s output schema=%s err=%v", tool.Name, schema, err)
+		}
+	}
+}
+
+func TestServerProvidesCodeWorkInstructions(t *testing.T) {
+	session, closeSession := newContextV2Session(t, nil)
+	defer closeSession()
+
+	initialize := session.InitializeResult()
+	if initialize == nil {
+		t.Fatal("initialize result is nil")
+	}
+	for _, want := range []string{
+		"Use FocalSpan proactively",
+		"code_context",
+		"focused mode",
+		"code_expand",
+		"handles",
+		"code_impact",
+		"non-code tasks",
+		"unavailable",
+	} {
+		if !strings.Contains(initialize.Instructions, want) {
+			t.Fatalf("instructions=%q, missing %q", initialize.Instructions, want)
 		}
 	}
 }
