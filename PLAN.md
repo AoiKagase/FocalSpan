@@ -37,9 +37,9 @@ provenanceを失わずmetadata bytesを削減する。v2が個別responseで小�
 - [x] compact codecとstrict decoderを実装する。
 - [x] server extension advertisement、request negotiation、per-response smaller-only fallbackを実装する。
 - [x] targeted tests、`go test ./...`、`go vet ./...`、cross-build、`git diff --check`を実行する。
-- [ ] candidate commitを作成し、history benchmarkを一度だけ実行する。
-- [ ] gate判定をfindingとPLANへ記録し、採用または通常revertする。
-- [ ] 完了後、latency-only候補をtoken計画から分離して閉じる。
+- [x] candidate commitを作成し、history benchmarkを一度だけ実行する。
+- [x] gate判定をfindingとPLANへ記録し、採用または通常revertする。
+- [x] 完了後、latency-only候補をtoken計画から分離して閉じる。
 
 ## Validation and Acceptance
 
@@ -71,6 +71,9 @@ codecはpure conversion、negotiationはrequest-localでstateを持たない。b
 - [x] 2026-09-04: codec/MCP REDは未定義APIとcapability定数で失敗し、GREEN後に対象229 testsが通過した。
 - [x] 2026-09-04: default外の明示`*-v2` benchmark profilesとnegotiated wire計測を追加した。
 - [x] 2026-09-04: 全725 tests、vet、通常build、3 OS `CGO_ENABLED=0` cross-build、diff checkが通過した。
+- [x] 2026-09-04: candidate `cd3556f`を作成し、8 cases / 40 rows / repeat 3の候補benchmarkを一度実行した。
+- [x] 2026-09-04: wire 8,652、bytes 23,752、useful 5、効率0.5779で全gateを通過し採用した。
+- [x] 2026-09-04: latency-only候補はmodel-visible token機構と新しい全profile機会がないためtoken roadmap外で閉じた。
 
 ## Surprises & Discoveries
 
@@ -81,7 +84,12 @@ codecはpure conversion、negotiationはrequest-localでstateを持たない。b
 
 - 2026-09-04: `docs/benchmarks/findings-v0.31.md`のnegotiationとequivalence契約を採用する。
 - 2026-09-04: default benchmark profilesは不変とし、v2測定は明示`*-v2` profileだけに限定する。
+- 2026-09-04: v2はwire -26.0%、bytes -26.9%、品質非回帰のため採用する。
+- 2026-09-04: latency-only再最適化は新しい事前証拠がないため別milestoneを作成しない。
 
 ## Outcomes & Retrospective
 
-進行中。
+v0.32を採用した。v1既定と公開tool入力を維持しつつ、明示opt-in clientのmodel-visible
+wireを11,693から8,652へ、UTF-8 bytesを32,494から23,752へ削減した。Evidence内容、
+guidance、fidelity、relation、known handle、determinism、budgetは非回帰。v0.20以降の
+token改善計画は完了し、latency-only候補は根拠不足のためtoken roadmapから分離した。
