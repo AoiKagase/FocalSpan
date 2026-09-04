@@ -41,24 +41,24 @@ token改善候補へ進む前にその測定負債だけを解消する。
 ### Task 0: ExecPlan transition
 
 - [x] 完了済みv0.19 PLANをcompleted archiveへbyte-identicalに移動する。
-- [ ] 本PLANだけをactive root PLANとしてdocumentation transition commitにする。
+- [x] 本PLANだけをactive root PLANとしてdocumentation transition commitにする。
 
 ### Task 1: RED comparator tests
 
-- [ ] v1/v2のrelation row不一致、gate未達、ゼロdurationを検出するtest helperを先に追加する。
-- [ ] ratio計算をduration zeroでも決定的に扱う純粋helper testを追加する。
+- [x] v1/v2のrelation row不一致、gate未達、ゼロdurationを検出するtest helperを先に追加する。
+- [x] ratio計算をduration zeroでも決定的に扱う純粋helper testを追加する。
 
 ### Task 2: GREEN comparator implementation
 
-- [ ] v1全走査・per-relation write comparatorをtest-onlyで実装する。
-- [ ] unchanged、small、fullを独立した同一fixture pairで測定する。
-- [ ] duration、ratio、candidate relation数、最終relation同値性を一つのsource-free logへ出す。
+- [x] v1全走査・per-relation write comparatorをtest-onlyで実装する。
+- [x] unchanged、small、fullを独立した同一fixture pairで測定する。
+- [x] duration、ratio、candidate relation数、最終relation同値性を一つのsource-free logへ出す。
 
 ### Task 3: Verification and closure
 
-- [ ] focused linker/store tests、`go test ./... -count=1`、`go vet ./...`を実行する。
-- [ ] opt-in comparatorを1回実行し、全ratio・絶対時間gateを判定する。
-- [ ] 結果を新しいfindingsへ記録し、v0.19 archiveは変更しない。
+- [x] focused linker/store tests、`go test ./... -count=1`、`go vet ./...`を実行する。
+- [x] opt-in comparatorを実行し、全ratio・絶対時間gateを判定する。
+- [x] 結果を新しいfindingsへ記録し、v0.19 archiveは変更しない。
 - [ ] comparatorとfindingsだけをatomic commitし、次のbenchmark-hardening planへ遷移する。
 
 ## Validation and Acceptance
@@ -79,16 +79,22 @@ v1/v2が同じfixtureから同じrelation rowsを生成し、unchanged/small/ful
 ## Progress
 
 - [x] 2026-09-04: v0.19 archiveとv0.20 active planを作成した。
+- [x] 2026-09-04T01:45Z: RED helper tests、GREEN comparator、focused/full tests、vetを完了した。
+- [x] 2026-09-04T01:45Z: unchanged `50.6104576s -> 0s`、small `50.6633834s -> 362.3495ms`、full `48.3201814s -> 136.1627ms`を測定し、全gateとrelation同値性がpassした。
 
 ## Surprises & Discoveries
 
 - 現行benchmarkはv2だけを測り、ratioを計算するv1 pathを持たない。
+- Windows timer resolutionではunchanged v2が`0s`となるため、ratio helperは正の無限大として扱い、絶対時間と候補数ゼロも併記する。
 
 ## Decision Log
 
 - 2026-09-04: token候補より先にP0 comparatorを独立マイルストーンとして実施する。
 - 2026-09-04: legacy linkerは製品codeへ戻さず、test-only comparatorへ限定する。
+- 2026-09-04: 初回全scenario runのfull行がcommand-output層でcompactされたため、exact値回収はfull subtestだけを再実行し、その事実をfindingsへ記録する。
 
 ## Outcomes & Retrospective
 
-実測後に更新する。
+v1/v2のrelation rowsは全scenarioで完全一致した。unchanged、small、fullはそれぞれ
+10x、5x、2xの比率条件と250ms、1s、5sの絶対条件を満たした。これによりv0.19で
+残っていたcomparative performance gateを閉じた。
