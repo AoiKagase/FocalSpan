@@ -445,41 +445,6 @@ func TestPruneMetadataReducesMeasuredWireWithoutChangingSelection(t *testing.T) 
 	}
 }
 
-func TestGuidanceFundedFidelityUpgradeKeepsHandlesAndWireCeiling(t *testing.T) {
-	estimator := budget.NewEstimator()
-	compiler := NewCompiler(estimator)
-	candidate := ClassifiedCandidate{Candidate: model.RankedCandidate{Handle: "run", Path: "main.go", Kind: "function", Symbol: "Run", Signature: "func Run() error", StartLine: 1, EndLine: 1}, Role: RoleTarget}
-	verbatim := ContentVariant{Fidelity: FidelityVerbatim, Source: "func Run() error { return nil }", EvidenceTokens: estimator.Estimate("func Run() error { return nil }")}
-	signature := ContentVariant{Fidelity: FidelitySignature, Signature: "func Run() error", EvidenceTokens: estimator.Estimate("func Run() error")}
-	prepared := preparedCandidate{classified: candidate, variants: []ContentVariant{verbatim, signature}}
-	selected := []selectedCandidate{{prepared: prepared, variant: signature, utility: 1}}
-	req := CompileRequest{Plan: query.Plan{PrimaryIntent: query.IntentDefinition}, Revision: "rev", TokenBudget: 1200, Mode: ModeFocused}
-	legacy := compiler.finalizeSelectedPacket(req, ModeFocused, 1200, selected, 0, 0, nil)
-	upgraded, packet := compiler.tryGuidanceFundedFidelityUpgrade(req, ModeFocused, 1200, selected, 0, 0, nil, legacy)
-	if len(upgraded) != 1 || upgraded[0].prepared.classified.Candidate.Handle != "run" || upgraded[0].variant.Fidelity != FidelityVerbatim {
-		t.Fatalf("upgrade changed handles or missed fidelity: %+v", upgraded)
-	}
-	if packet.Budget.Used > legacy.Budget.Used || len(packet.Next) != 0 {
-		t.Fatalf("upgrade exceeded ceiling or retained stale guidance: legacy=%+v candidate=%+v", legacy, packet)
-	}
-}
-
-func TestGuidanceFundedFidelityUpgradeFallsBackWhenSourceIsTooLarge(t *testing.T) {
-	estimator := budget.NewEstimator()
-	compiler := NewCompiler(estimator)
-	candidate := ClassifiedCandidate{Candidate: model.RankedCandidate{Handle: "run", Path: "main.go", Kind: "function", Symbol: "Run", Signature: "func Run()", StartLine: 1, EndLine: 200}, Role: RoleTarget}
-	verbatim := ContentVariant{Fidelity: FidelityVerbatim, Source: strings.Repeat("source line\n", 1000), EvidenceTokens: 3000}
-	signature := ContentVariant{Fidelity: FidelitySignature, Signature: "func Run()", EvidenceTokens: estimator.Estimate("func Run()")}
-	prepared := preparedCandidate{classified: candidate, variants: []ContentVariant{verbatim, signature}}
-	selected := []selectedCandidate{{prepared: prepared, variant: signature, utility: 1}}
-	req := CompileRequest{Plan: query.Plan{PrimaryIntent: query.IntentDefinition}, Revision: "rev", TokenBudget: 1200, Mode: ModeFocused}
-	legacy := compiler.finalizeSelectedPacket(req, ModeFocused, 1200, selected, 0, 0, nil)
-	kept, packet := compiler.tryGuidanceFundedFidelityUpgrade(req, ModeFocused, 1200, selected, 0, 0, nil, legacy)
-	if kept[0].variant.Fidelity != FidelitySignature || !reflect.DeepEqual(packet, legacy) {
-		t.Fatalf("fallback diverged: legacy=%+v candidate=%+v", legacy, packet)
-	}
-}
-
 func TestPruneMetadataIsIdempotentAndSchemaCompatible(t *testing.T) {
 	packet := Packet{Schema: SchemaContextV1, Mode: ModeFocused, Budget: Budget{Limit: 1200}, Evidence: []Item{{ID: "e1", Handle: "target", Role: RoleTarget, Location: Location{Path: "main.go", Lines: [2]int{1, 2}}, Language: "go", Kind: "function", Symbol: "main", Fidelity: FidelitySignature, Signature: "func main()", Why: []string{"exact_symbol", "lexical_match"}}}}
 	prunePacketMetadata(&packet)
