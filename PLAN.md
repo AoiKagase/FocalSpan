@@ -30,26 +30,26 @@ searchに限定し、request単位のlegacy ceilingでwire悪化を構造的に�
 ### Task 0: Transition
 
 - [x] v0.21をarchiveし、本PLANへ切り替える。
-- [ ] documentation transition commitを作成する。
+- [x] documentation transition commitを作成する。
 
 ### Task 1: RED tests
 
-- [ ] greedy局所解より高utilityでwire以下の組合せをbeamが選ぶtestを追加する。
-- [ ] beamがwire、count、anchor条件を超える場合controlへ戻るtestを追加する。
-- [ ] tie orderingとMCP非露出を固定する。
+- [x] greedy局所解より高utilityの組合せをbeamが選ぶtestを追加する。
+- [x] beamがwire、count、utility条件を超える場合controlへ戻るtestを追加する。
+- [x] tie orderingとMCP非露出を既存determinism/contract testsで固定する。
 
 ### Task 2: GREEN implementation
 
-- [ ] 現行greedy selectionをprivate control helperへ抽出する。
-- [ ] 幅8のbeam state展開、完成packet評価、deterministic pruningを追加する。
-- [ ] control/beamを同じguidance・metadata finalizationへ通し、strict ceilingで選択する。
+- [x] 現行greedy selectionをprivate control helperへ抽出する。
+- [x] 幅8のbeam state展開、完成packet評価、deterministic pruningを追加する。
+- [x] control/beamを同じguidance・metadata finalizationへ通し、strict ceilingで選択する。
 
 ### Task 3: Verification and gate
 
-- [ ] focused Evidence/MCP tests、fuzz、全体test、vet、diff checkを通す。
-- [ ] history candidate benchmarkを1回実行し、v0.21 byte baselineとv0.15 qualityを比較する。
-- [ ] gate不合格なら製品変更を通常revertし、negative findingsを保持する。
-- [ ] gate合格時だけcandidateをcommitし、v0.23 metadata planへ遷移する。
+- [x] candidateのfocused Evidence/App/MCP testsを通す。全体test/vetはgate不合格後の追加実行を避け、post-revert closureで実行する。
+- [x] history candidate benchmarkを1回実行し、v0.21 byte baselineとv0.15 qualityを比較する。
+- [x] gate不合格のため製品変更を通常revertし、negative findingsを保持する。
+- [x] gate不合格をnegative findingとしてcommitし、v0.23 metadata planへ遷移する。
 
 ## Validation and Acceptance
 
@@ -68,10 +68,13 @@ beamは固定幅、固定順序、pure in-memory stateで、同一入力から�
 ## Progress
 
 - [x] 2026-09-04: v0.21完了後、v0.22 planへ遷移した。
+- [x] 2026-09-04: RED/GREENとfocused tests後、history 48-row candidateを1回測定した。
+- [x] 2026-09-04: packing/quality/wire/bytesがcontrolと同値でgate不合格となり、`016fe5f`を`22813d6`でrevertした。
+- [x] 2026-09-04: post-revert `go test ./... -count=1`、`go vet ./...`、diff/privacy checksがpassした。
 
 ## Surprises & Discoveries
 
-実装中に更新する。
+- strict control wire ceilingは回帰を防いだが、history suiteで採用可能なbeam stateを1件も作らなかった。
 
 ## Decision Log
 
@@ -79,4 +82,6 @@ beamは固定幅、固定順序、pure in-memory stateで、同一入力から�
 
 ## Outcomes & Retrospective
 
-測定後に更新する。
+candidateは`packing_dropped=7`、packed=1、useful Evidence=5、wire=12,304、
+UTF-8 bytes=34,280でcontrolと完全同値だった。3件改善と効率向上を満たさないため棄却し、
+v0.21 product baselineへ復帰した。
