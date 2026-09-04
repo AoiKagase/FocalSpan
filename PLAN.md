@@ -32,19 +32,19 @@ v0.15はknown Evidence resendを0にし、v0.24/v0.25後のmedian delta ratioは
 
 ### Task 1: RED and trace
 
-- [ ] with-known relation packetの残存guidanceをfixtureで固定する。
-- [ ] initial byte identity、known resend 0、relation validityを固定する。
-- [ ] edgeと同一のnext actionだけが削除対象になることを固定する。
+- [x] with-known relation packetの残存guidanceをfixtureで固定する。
+- [x] initial byte identity、known resend 0、relation validityを固定する。
+- [x] edgeと同一のnext actionだけが削除対象になることを固定する。
 
 ### Task 2: GREEN implementation
 
-- [ ] `pruneKnownDeltaGuidance`をrelation-edge重複へ限定拡張する。
-- [ ] safety/actionable limitationは維持する。
+- [x] `pruneKnownDeltaGuidance`をrelation-edge重複へ限定拡張する。
+- [x] safety/actionable limitationは維持する。
 
 ### Task 3: Verification and gate
 
-- [ ] focused/full tests、vet、diff checkを通す。
-- [ ] Evidence evalとhistory candidateを各1回測定し採否を確定する。
+- [x] focused/full tests、vet、diff checkを通す。
+- [x] Evidence evalを1回測定し、no-op gateでhistory candidateを中止して採否を確定する。
 - [ ] 完了後v0.30 TokenEstimator oracle gateへ遷移する。
 
 ## Validation and Acceptance
@@ -62,15 +62,22 @@ pruningはpure/idempotent。不合格時は通常revertし、findingを保持す
 ## Progress
 
 - [x] 2026-09-04: v0.28 rejection後、v0.29へ遷移した。
+- [x] 2026-09-04: RED/GREEN、709 tests、vet、diff checkを通過した。
+- [x] 2026-09-04: Evidence evalのdelta ratio不変を確認し、history測定を中止した。
+- [x] 2026-09-04: candidate `1cbb4a1`を通常revert `0f067c2`で除去した。
 
 ## Surprises & Discoveries
 
-実装中に更新する。
+- unitで追加したrelation edge/action形は実with-known fixtureに存在せず、delta ratioは
+  0.5521958243のまま変化しなかった。
 
 ## Decision Log
 
 - 2026-09-04: relation edgeが同じ情報を保持する場合だけguidanceを重複とみなす。
+- 2026-09-04: strict delta gate不合格のためhistory候補を実行せずreject/revertする。
 
 ## Outcomes & Retrospective
 
-測定後に更新する。
+v0.29は実fixtureに効果対象がなくno-opで不採用。accepted baselineは変わらない。
+次はEstimator校正に必要な承認済みtokenizer oracleが存在するかだけを確認し、存在しない
+場合は係数変更を行わずblocked/no-op findingとして閉じる。
