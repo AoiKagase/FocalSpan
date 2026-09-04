@@ -103,6 +103,9 @@ func (s *Service) queryEvidence(ctx context.Context, req EvidenceQueryRequest, t
 	if err != nil {
 		return AttributedEvidenceResult{}, err
 	}
+	if shouldAbstainEvidenceQuery(req, result.Plan, result.Candidates) {
+		result.Candidates = nil
+	}
 	compiled, err := s.evidenceCompiler.Compile(evidence.CompileRequest{Plan: result.Plan, Revision: result.Revision, TokenBudget: req.TokenBudget, Mode: req.Mode, Candidates: result.Candidates, KnownHandles: known})
 	if err != nil {
 		return AttributedEvidenceResult{}, err
@@ -112,6 +115,29 @@ func (s *Service) queryEvidence(ctx context.Context, req EvidenceQueryRequest, t
 		attributed.Trace = *result.Trace
 	}
 	return attributed, nil
+}
+
+func shouldAbstainEvidenceQuery(req EvidenceQueryRequest, plan query.Plan, candidates []model.RankedCandidate) bool {
+	if len(req.Paths) > 0 || req.ChangedOnly {
+		return false
+	}
+	requiresIdentity := len(plan.Terms.Identifiers) > 0
+	for _, candidate := range candidates {
+		for _, reason := range candidate.Reasons {
+			switch reason.Code {
+			case "symbol-exact", "qualified-symbol", "symbol-prefix", "path", "changed-file":
+				return false
+			case "lexical", "test-pair", "reference-kind":
+				if !requiresIdentity {
+					return false
+				}
+			}
+			if !requiresIdentity && strings.HasPrefix(reason.Code, "relation-") {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (s *Service) ExpandEvidence(ctx context.Context, req EvidenceExpandRequest) (evidence.CompileResult, error) {

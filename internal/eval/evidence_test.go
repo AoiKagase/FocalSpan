@@ -67,6 +67,13 @@ func TestEvidenceFixtureDeltaRatioImprovesWithKnownGuidancePruning(t *testing.T)
 	if _, err := service.Index(context.Background(), true); err != nil {
 		t.Fatal(err)
 	}
+	noResult, err := service.QueryEvidenceAttributed(context.Background(), app.EvidenceQueryRequest{Query: "zzzz_no_such_focalspan_symbol_7f3d", TokenBudget: 700, Mode: evidence.ModeFocused, NoUpdate: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(noResult.Compile.Packet.Evidence) != 0 {
+		t.Fatalf("no-result trace retained Evidence: packet=%+v trace=%+v", noResult.Compile.Packet, noResult.Trace)
+	}
 	report, err := EvaluateEvidence(context.Background(), service, cases, false)
 	if err != nil {
 		t.Fatal(err)
@@ -86,8 +93,8 @@ func TestEvidenceFixtureDeltaRatioImprovesWithKnownGuidancePruning(t *testing.T)
 			}
 			foundLong = true
 		case "no-relevant-source":
-			if result.EmptyPacketCorrect != 0 || result.EvidenceItems == 0 {
-				t.Fatalf("no-result baseline was not measured as an abstention miss: %+v", result)
+			if result.EmptyPacketCorrect != 1 || result.EvidenceItems != 0 {
+				t.Fatalf("no-result query did not abstain: %+v", result)
 			}
 			foundEmpty = true
 		}
@@ -95,7 +102,7 @@ func TestEvidenceFixtureDeltaRatioImprovesWithKnownGuidancePruning(t *testing.T)
 	if !foundDelta || !foundLong || !foundEmpty {
 		t.Fatalf("coverage cases delta/long/empty=%t/%t/%t", foundDelta, foundLong, foundEmpty)
 	}
-	if report.EmptyPacketValidity <= 0 || report.EmptyPacketValidity >= 1 {
+	if report.EmptyPacketValidity != 1 {
 		t.Fatalf("empty packet validity=%v", report.EmptyPacketValidity)
 	}
 }

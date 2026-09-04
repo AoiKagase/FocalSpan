@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/focalspan/focalspan/internal/evidence"
+	"github.com/focalspan/focalspan/internal/model"
+	"github.com/focalspan/focalspan/internal/query"
 )
 
 func TestQueryEvidenceReturnsFocusedPacketAndPreservesLegacyQuery(t *testing.T) {
@@ -53,6 +55,50 @@ func TestQueryEvidenceReturnsFocusedPacketAndPreservesLegacyQuery(t *testing.T) 
 		if strings.Contains(string(normalJSON), forbidden) {
 			t.Fatalf("normal packet exposed %q: %s", forbidden, normalJSON)
 		}
+	}
+}
+
+func TestQueryEvidenceAbstainsWhenCandidatesHaveNoMeaningfulSupport(t *testing.T) {
+	root := t.TempDir()
+	writeAppFile(t, filepath.Join(root, "auth.go"), "package auth\n\nfunc ValidateToken(token string) error { return nil }\n")
+	service, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	if _, err := service.Index(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := service.QueryEvidenceAttributed(context.Background(), EvidenceQueryRequest{Query: "zzzz_no_such_focalspan_symbol_7f3d", TokenBudget: 700, NoUpdate: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Compile.Packet.Evidence) != 0 {
+		t.Fatalf("irrelevant query returned Evidence: packet=%+v trace=%+v", result.Compile.Packet, result.Trace)
+	}
+}
+
+func TestShouldAbstainEvidenceQueryRequiresNoMeaningfulSupport(t *testing.T) {
+	unsupported := []model.RankedCandidate{{Handle: "fallback", Reasons: []model.ScoreReason{{Code: "retrieval-fusion"}}}}
+	lexical := []model.RankedCandidate{{Handle: "lexical", Reasons: []model.ScoreReason{{Code: "lexical"}}}}
+	exact := []model.RankedCandidate{{Handle: "exact", Reasons: []model.ScoreReason{{Code: "symbol-exact"}}}}
+	natural := query.Plan{}
+	identified := query.Plan{Terms: query.Terms{Identifiers: []string{"MissingSymbol"}}}
+	if !shouldAbstainEvidenceQuery(EvidenceQueryRequest{}, natural, unsupported) {
+		t.Fatal("unsupported candidates were accepted")
+	}
+	if shouldAbstainEvidenceQuery(EvidenceQueryRequest{}, natural, lexical) || shouldAbstainEvidenceQuery(EvidenceQueryRequest{}, identified, exact) {
+		t.Fatal("meaningfully supported candidates were rejected")
+	}
+	if !shouldAbstainEvidenceQuery(EvidenceQueryRequest{}, identified, lexical) {
+		t.Fatal("identifier query accepted lexical-only candidates")
+	}
+	if shouldAbstainEvidenceQuery(EvidenceQueryRequest{Paths: []string{"auth.go"}}, identified, unsupported) {
+		t.Fatal("explicit path scope was rejected")
+	}
+	if shouldAbstainEvidenceQuery(EvidenceQueryRequest{ChangedOnly: true}, identified, unsupported) {
+		t.Fatal("changed-only query was rejected")
 	}
 }
 
