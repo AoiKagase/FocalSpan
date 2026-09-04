@@ -32,19 +32,19 @@ v0.13の追加adaptive variantは効果がなく再試行しない。今回はv0
 
 ### Task 1: Trace-only precondition
 
-- [ ] v0.25 resultからexcerpt送信rowとEvidence content bytesを列挙する。
-- [ ] 長文置換に値する対象rowの有無を判定する。
-- [ ] 対象なしの場合は製品変更なしでfindingを作成する。
+- [x] v0.25 resultからexcerpt送信rowとEvidence content bytesを列挙する。
+- [x] 長文置換に値する対象rowの有無を判定する。
+- [x] 対象なしの場合は製品変更なしでfindingを作成する。
 
 ### Task 2: Conditional implementation
 
-- [ ] 対象がある場合だけREDでlate-hit、行番号、source一致を固定する。
-- [ ] 既存excerpt表現を宣言部＋query-hit windowへ置換する。
+- [x] 対象がある場合だけREDでlate-hit、行番号、source一致を固定する（対象なし）。
+- [x] 既存excerpt表現を宣言部＋query-hit windowへ置換する（対象なし）。
 
 ### Task 3: Verification and gate
 
-- [ ] 製品変更時だけfocused/full tests、vet、candidate benchmarkを実行する。
-- [ ] findingと採否を確定する。
+- [x] 製品変更時だけfocused/full tests、vet、candidate benchmarkを実行する（製品変更なし）。
+- [x] findingと採否を確定する。
 - [ ] 完了後v0.27 failure-layer micro-retriever planへ遷移する。
 
 ## Validation and Acceptance
@@ -65,16 +65,26 @@ trace-only調査は既存結果から再実行可能とする。製品候補が�
 ## Progress
 
 - [x] 2026-09-04: v0.25 acceptance後、v0.26へ遷移した。
+- [x] 2026-09-04: v0.25結果の15 excerpt rowをtrace-only集計した。
+- [x] 2026-09-04: 最大Evidence content 228 bytesで対象なしと判定し、no-opで閉じた。
 
 ## Surprises & Discoveries
 
-実装中に更新する。
+- excerpt rowは15件あったが、row全Evidence contentでも228/124/41 bytesに収まり、
+  1 KiBを超える送信はなかった。
+- 現行focused segmentは既に宣言prefixとquery-hit windowを組み合わせており、今回の
+  置換案との構造差も存在しなかった。
 
 ## Decision Log
 
 - 2026-09-04: 「長い」はrow全体のEvidence contentが1 KiB超を最低条件とし、数百byteの
   excerptは置換対象にしない。
+- 2026-09-04: 最大228 bytesのため製品実装、RED/GREEN、候補ベンチを行わず、no-op
+  findingとして閉じる。
 
 ## Outcomes & Retrospective
 
-調査後に更新する。
+v0.26は事前条件を満たさず、製品コードとv0.25 baselineを一切変更しなかった。対象の
+ない最適化を避けられた。今後は実送信excerptが1 KiBを超えるtraceが得られた場合だけ
+再検討する。次はfailure-layer traceを原因別に集計し、同一形式で3 labels以上を改善
+できるmicro-retrieverが存在するかを調査する。
