@@ -170,12 +170,12 @@ func TestKnownHandleDeltaSuppressesOnlyRedundantGuidance(t *testing.T) {
 
 	withRelationAction := []NextAction{{Handle: "target", Relation: "callers", Reason: "more_callers_omitted"}}
 	keptLimitations, keptActions := pruneKnownDeltaGuidance(Packet{SkippedKnown: 1}, known, limitations, withRelationAction)
-	if !containsString(keptLimitations, "known_anchor_not_repeated") || !reflect.DeepEqual(keptActions, withRelationAction) {
-		t.Fatalf("separate relation action changed known guidance: limitations=%v actions=%v", keptLimitations, keptActions)
+	if containsString(keptLimitations, "known_anchor_not_repeated") || !reflect.DeepEqual(keptActions, withRelationAction) {
+		t.Fatalf("relation action lost or redundant limitation retained: limitations=%v actions=%v", keptLimitations, keptActions)
 	}
 	withEdgeLimitations, withEdgeActions := pruneKnownDeltaGuidance(Packet{Relations: []Edge{{From: "e1", To: "e2", Kind: "calls", Certainty: CertaintyExact}}}, known, limitations, actions)
-	if !containsString(withEdgeLimitations, "known_anchor_not_repeated") || !reflect.DeepEqual(withEdgeActions, actions) {
-		t.Fatalf("relation edge changed known guidance: limitations=%v actions=%v", withEdgeLimitations, withEdgeActions)
+	if containsString(withEdgeLimitations, "known_anchor_not_repeated") || containsNextAction(withEdgeActions, actions[0]) || !containsNextAction(withEdgeActions, actions[1]) {
+		t.Fatalf("relation edge blocked safe known pruning: limitations=%v actions=%v", withEdgeLimitations, withEdgeActions)
 	}
 }
 

@@ -182,11 +182,11 @@ func BuildGuidance(input GuidanceInput) ([]string, []NextAction) {
 }
 
 // pruneKnownDeltaGuidance removes envelope text that only explains why an
-// already-known anchor was not repeated. It is intentionally limited to
-// known-handle expansions with no other relation edge or next relation action;
-// actionable and safety-related guidance remains untouched.
+// already-known anchor was not repeated. Relation edges and non-self actions
+// remain untouched; only the known-anchor limitation and a known handle's
+// redundant self action are removed.
 func pruneKnownDeltaGuidance(packet Packet, knownValues []string, limitations []string, actions []NextAction) ([]string, []NextAction) {
-	if len(knownValues) == 0 || len(packet.Relations) > 0 {
+	if len(knownValues) == 0 {
 		return limitations, actions
 	}
 	known := make(map[string]bool, len(knownValues))
@@ -197,11 +197,6 @@ func pruneKnownDeltaGuidance(packet Packet, knownValues []string, limitations []
 	}
 	if len(known) == 0 {
 		return limitations, actions
-	}
-	for _, action := range actions {
-		if action.Relation != "" && action.Relation != "self" {
-			return limitations, actions
-		}
 	}
 	knownOnlyEmpty := len(packet.Evidence) == 0 && packet.SkippedKnown > 0
 	filteredLimitations := make([]string, 0, len(limitations))
