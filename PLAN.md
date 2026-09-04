@@ -24,8 +24,8 @@ Estimator自身で計測したwireだけでは係数変更の実削減を証明�
 
 - [x] v0.29をarchiveし、本PLANへ遷移する。
 - [x] documentation transition commitを作成する。
-- [ ] repositoryと承認済みlocal dependencyにoracleがあるか確認する。
-- [ ] oracle不在ならno-op findingを作成する。
+- [x] repositoryと承認済みlocal dependencyにoracleがあるか確認する。
+- [x] oracle不在ならno-op findingを作成する。
 - [ ] 完了後v0.31 context.v2 design gateへ遷移する。
 
 ## Validation and Acceptance
@@ -43,15 +43,19 @@ read-only調査のみ。製品候補を作らない。
 ## Progress
 
 - [x] 2026-09-04: v0.29 no-op closure後、v0.30へ遷移した。
+- [x] 2026-09-04: oracle不在を確認し、製品変更なしでno-op closureした。
 
 ## Surprises & Discoveries
 
-調査後に更新する。
+- UTF-8 bytesはpayload非増加の防止線だが、token過小見積もりを証明するoracleではない。
 
 ## Decision Log
 
 - 2026-09-04: 明示承認のないmodel tokenizerはoracleとして扱わない。
+- 2026-09-04: prerequisite不成立のため固定1.12を維持し、候補実装を行わない。
 
 ## Outcomes & Retrospective
 
-調査後に更新する。
+v0.30はoracle不在のためno-op。係数を下げただけの見かけ上の改善を避け、accepted
+baselineを維持した。次はcontext.v2に必要なcapability negotiationと意味同値性を
+既存MCP SDKで安全に表現できるかをdesign gateとして確認する。
