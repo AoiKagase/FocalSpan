@@ -260,7 +260,7 @@ func validStageReason(stage, reason string) bool {
 
 func validRetriever(value string) bool {
 	switch value {
-	case "qualified-symbol", "symbol-exact", "symbol-prefix", "fts", "path", "relation", "structural-constructor":
+	case "qualified-symbol", "symbol-exact", "symbol-prefix", "fts", "path", "relation":
 		return true
 	default:
 		return false
