@@ -31,20 +31,20 @@ v0.23時点でsummaryは累積2,324 UTF-8 bytesを占め、structuredContentに�
 
 ### Task 1: RED tests
 
-- [ ] summaryの固定短形式と4つの数値をexact testで固定する。
-- [ ] source、symbol、queryがsummaryへ出ないcontractを維持する。
-- [ ] MCP context/expand/impactが同じstructuredContentと短形式textを返すことを固定する。
+- [x] summaryの固定短形式と4つの数値をexact testで固定する。
+- [x] source、symbol、queryがsummaryへ出ないcontractを維持する。
+- [x] MCP context/expand/impactが同じstructuredContentと短形式textを返すことを固定する。
 
 ### Task 2: GREEN implementation
 
-- [ ] `internal/evidence/wire.go`の`Summary`だけを固定短形式へ変更する。
-- [ ] status/restart summaryとpublic packet schemaは変更しない。
+- [x] `internal/evidence/wire.go`の`Summary`だけを固定短形式へ変更する。
+- [x] status/restart summaryとpublic packet schemaは変更しない。
 
 ### Task 3: Verification and gate
 
-- [ ] focused/full tests、vet、diff checkを通す。
-- [ ] history candidateを1回測定し、v0.23 baselineと比較する。
-- [ ] strict gateで採否を決め、findingsとcommit/revertを確定する。
+- [x] focused/full tests、vet、diff checkを通す。
+- [x] history candidateを1回測定し、v0.23 baselineと比較する。
+- [x] strict gateで採否を決め、findingsとcommit/revertを確定する。
 - [ ] 完了後v0.25 relevance-aware abstention planへ遷移する。
 
 ## Validation and Acceptance
@@ -65,16 +65,26 @@ summary生成はpure/deterministicとする。不合格時は製品候補だけ�
 ## Progress
 
 - [x] 2026-09-04: v0.23 acceptance後、v0.24へ遷移した。
+- [x] 2026-09-04: unit/MCP REDを確認し、`Summary`一行だけでGREENにした。
+- [x] 2026-09-04: focused/full tests、vet、diff checkを通過した。
+- [x] 2026-09-04: candidate benchmarkを1回実行し、strict gate合格により採用した。
 
 ## Surprises & Discoveries
 
-実装中に更新する。
+- 固定短形式だけで40 rowすべてのestimated wireが改善した。
+- packet JSONは31,090 bytesで完全に不変で、model-visible byte削減920はすべて
+  summaryから生じた。
 
 ## Decision Log
 
 - 2026-09-04: `FocalSpan evidence:`等の説明語は削減対象とするが、items、used/limit、
   omittedの4数値はclient可観測情報として残す。
+- 2026-09-04: cumulative wire 11,983から11,693、summary bytes 2,324から1,404、
+  comparison regression 0だったため候補を採用する。
 
 ## Outcomes & Retrospective
 
-測定後に更新する。
+v0.24はpacket JSONとuseful Evidence 5を維持し、summaryを920 bytes、累積estimated
+wireを290削減した。効率は0.4173から0.4276へ改善した。次のrelevance-aware
+abstentionでは、v0.21で追加したno-result fixtureとpositive labelsを用いて、誤abstainを
+防ぐ明示的なconfidence境界を先にREDで固定する。

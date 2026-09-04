@@ -8,7 +8,7 @@ import (
 )
 
 func Summary(packet Packet) string {
-	return fmt.Sprintf("FocalSpan evidence: %d items, %d/%d tokens, %d omitted.", len(packet.Evidence), packet.Budget.Used, packet.Budget.Limit, packet.Budget.Omitted)
+	return fmt.Sprintf("items=%d tokens=%d/%d omitted=%d", len(packet.Evidence), packet.Budget.Used, packet.Budget.Limit, packet.Budget.Omitted)
 }
 
 func MeasureModelVisible(packet Packet, estimator budget.TokenEstimator) int {

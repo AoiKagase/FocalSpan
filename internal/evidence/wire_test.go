@@ -15,7 +15,7 @@ func TestSummaryIsCanonicalAndSourceFree(t *testing.T) {
 		Budget:   Budget{Limit: 1200, Used: 934, Omitted: 2},
 		Evidence: []Item{{ID: "e1", Handle: "secret_handle", Role: RoleTarget, Location: Location{Path: "secret/path.go", Lines: [2]int{1, 1}}, Fidelity: FidelityVerbatim, Source: "SECRET_SOURCE"}},
 	}
-	want := "FocalSpan evidence: 1 items, 934/1200 tokens, 2 omitted."
+	want := "items=1 tokens=934/1200 omitted=2"
 	if got := Summary(packet); got != want {
 		t.Fatalf("Summary() = %q, want %q", got, want)
 	}

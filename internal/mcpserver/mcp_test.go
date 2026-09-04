@@ -193,7 +193,7 @@ func TestServerListsToolsAndHandlesStatusContextAndValidation(t *testing.T) {
 		t.Fatalf("context structured=%s err=%v", structured, err)
 	}
 	summary, err := json.Marshal(contextResult.Content)
-	if err != nil || !strings.Contains(string(summary), "FocalSpan evidence:") || strings.Contains(string(summary), "ValidateToken") {
+	if err != nil || !strings.Contains(string(summary), "items=") || !strings.Contains(string(summary), " tokens=") || !strings.Contains(string(summary), " omitted=") || strings.Contains(string(summary), "FocalSpan evidence:") || strings.Contains(string(summary), "ValidateToken") {
 		t.Fatalf("context summary=%s err=%v", summary, err)
 	}
 	var packet struct {
@@ -212,6 +212,10 @@ func TestServerListsToolsAndHandlesStatusContextAndValidation(t *testing.T) {
 	if !strings.Contains(string(expandedJSON), `"skipped_known":1`) {
 		t.Fatalf("expand structured=%s", expandedJSON)
 	}
+	expandedSummary, err := json.Marshal(expanded.Content)
+	if err != nil || !strings.Contains(string(expandedSummary), "items=") || strings.Contains(string(expandedSummary), "FocalSpan evidence:") {
+		t.Fatalf("expand summary=%s err=%v", expandedSummary, err)
+	}
 	impact, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "code_impact"})
 	if err != nil || impact.IsError || impact.StructuredContent == nil {
 		t.Fatalf("impact=%+v err=%v", impact, err)
@@ -219,6 +223,10 @@ func TestServerListsToolsAndHandlesStatusContextAndValidation(t *testing.T) {
 	impactJSON, _ := json.Marshal(impact.StructuredContent)
 	if !strings.Contains(string(impactJSON), "syntax_only_impact") {
 		t.Fatalf("impact structured=%s", impactJSON)
+	}
+	impactSummary, err := json.Marshal(impact.Content)
+	if err != nil || !strings.Contains(string(impactSummary), "items=") || strings.Contains(string(impactSummary), "FocalSpan evidence:") {
+		t.Fatalf("impact summary=%s err=%v", impactSummary, err)
 	}
 	for _, args := range []map[string]any{
 		{"query": "ValidateToken", "mode": "bad"},
