@@ -34,20 +34,20 @@ symbolだけをprobeする。
 
 ### Task 1: RED tests
 
-- [ ] assembly語彙のpositive/negativeとexplicit path suppressionを固定する。
-- [ ] retrieverが`NewWithConfig`だけを上限8で返すことを固定する。
-- [ ] trace identityとdeterministic fusionを固定する。
+- [x] assembly語彙のpositive/negativeとexplicit path suppressionを固定する。
+- [x] retrieverが`NewWithConfig`だけを上限8で返すことを固定する。
+- [x] trace identityとdeterministic fusionを固定する。
 
 ### Task 2: GREEN implementation
 
-- [ ] private trigger helperとretriever IDを追加する。
-- [ ] 既存`SearchExactSymbols`を一回だけ利用するbounded retrieverを追加する。
-- [ ] abstention helperへprivate strong-support reasonを認識させる。
+- [x] private trigger helperとretriever IDを追加する。
+- [x] 既存`SearchExactSymbols`を一回だけ利用するbounded retrieverを追加する。
+- [x] abstention helperへprivate strong-support reasonを認識させる。
 
 ### Task 3: Verification and gate
 
-- [ ] focused/full tests、vet、diff checkを通す。
-- [ ] history candidateを1回測定しstrict gateで採否を決める。
+- [x] focused/full tests、vet、diff checkを通す。
+- [x] history candidateを1回測定しstrict gateで採否を決める。
 - [ ] 完了後v0.28 guidance/fidelity joint-budget planへ遷移する。
 
 ## Validation and Acceptance
@@ -68,15 +68,25 @@ supportだけを対象とする。
 ## Progress
 
 - [x] 2026-09-04: v0.26 no-op closure後、v0.27へ遷移した。
+- [x] 2026-09-04: RED/GREENとfocused/full静的検証を完了した。
+- [x] 2026-09-04: candidate benchmarkを1回実行し、wire/packing gate不合格を確認した。
+- [x] 2026-09-04: candidate `9ff32b2`を通常revert `c6878a6`で除去した。
 
 ## Surprises & Discoveries
 
-実装中に更新する。
+- path-scope labelsは9から5へ減ったが、C++ 2 labelsはpacking-droppedへ移動し、Rust
+  2 labelsだけがpackedになった。
+- useful Evidenceは5から13へ増えた一方、wireは232、bytesは676増えた。
 
 ## Decision Log
 
 - 2026-09-04: 共通原因は同じ期待path/symbolを持つC++/Rustの4 labelsに限定する。
+- 2026-09-04: `packing_dropped 7→9`とwire 11,693→11,925が明示gate違反のため、
+  efficiency上昇にかかわらず候補をreject/revertする。
 
 ## Outcomes & Retrospective
 
-測定後に更新する。
+v0.27は狭いconstructor probeでもv0.11と同じ「retrieval前進がpacking悪化とwire増加へ
+移る」問題を再現し、不採用となった。accepted baselineはv0.26/v0.25の11,693 wire、
+32,494 bytes、useful 5、効率0.4276のまま。次はEvidence handlesを固定した内部fallback
+だけでguidance削減またはfidelity昇格を試す。
