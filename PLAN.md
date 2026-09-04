@@ -33,12 +33,12 @@ negotiation経路と意味同値性の検証方法を確定し、前提が不足
 ## Plan of Work
 
 - [x] v0.30をarchiveし、本PLANへ遷移する。
-- [ ] documentation transition commitを作成する。
-- [ ] 現行MCP SDK、tool registration、call input/output型、initialize capabilityの利用可能性を
+- [x] documentation transition commitを作成する。
+- [x] 現行MCP SDK、tool registration、call input/output型、initialize capabilityの利用可能性を
   read-onlyで調査する。
-- [ ] v1既定維持、v2明示opt-in、意味同値性を満たす最小設計を記録する。
-- [ ] 前提が成立する場合だけ、次の独立milestoneで実装可能なacceptance fixtureを定義する。
-- [ ] 前提が不足する場合は製品変更なしのdesign-blocked findingを作成する。
+- [x] v1既定維持、v2明示opt-in、意味同値性を満たす最小設計を記録する。
+- [x] 前提が成立する場合だけ、次の独立milestoneで実装可能なacceptance fixtureを定義する。
+- [x] 前提が不足する場合は製品変更なしのdesign-blocked findingを作成する（前提成立のため不要）。
 - [ ] 完了後、latency-only候補をtoken計画から分離して閉じる。
 
 ## Validation and Acceptance
@@ -64,15 +64,25 @@ read-only調査と文書化のみを行う。製品変更やbenchmarkは行わ�
 ## Progress
 
 - [x] 2026-09-04: v0.30 no-op closureをarchiveし、v0.31 design gateへ遷移した。
+- [x] 2026-09-04: SDK v1.7.0の双方向extensions、request capability参照、明示output schemaを確認した。
+- [x] 2026-09-04: negotiation、compact table、canonical equivalence、fallbackの契約を確定した。
 
 ## Surprises & Discoveries
 
-- 調査中。
+- typed `mcp.AddTool`は単一出力型を推論するが、`Out=any`と明示`oneOf` schemaの組合せで
+  v1/v2の両方をmarshal後validationできる。
+- `CallToolRequest.ClientCapabilities()`はsession capabilityだけでなく新protocolのper-request
+  capabilityも吸収するため、transportごとの独自stateは不要。
 
 ## Decision Log
 
 - 2026-09-04: v0.31はencoding実装ではなく、negotiationと意味同値性の成立性だけを判定する。
+- 2026-09-04: extension IDを`io.focalspan/context-encoding`とし、missing/malformedは必ずv1へ倒す。
+- 2026-09-04: `Budget.Used`だけをencoding-derived fieldとしてequivalence比較から除外し、他fieldは完全一致させる。
+- 2026-09-04: v2が当該v1 responseより小さい場合だけv2を返すmonotonic fallbackを必須とする。
 
 ## Outcomes & Retrospective
 
-進行中。
+現行SDKで明示的negotiationと自動意味同値性検証を安全に構成できるためdesign gateはpass。
+製品変更とbenchmarkは行わず、実装に必要なRED fixtureと採用gateを
+`docs/benchmarks/findings-v0.31.md`へ固定した。次milestoneでv2 codecとMCP境界を実装する。
