@@ -1,90 +1,83 @@
-# FocalSpan v0.24 MCP text summary 最小化計画
+# FocalSpan v0.25 relevance-aware abstention 計画
 
-**Goal:** Evidence packetと重複するMCP text summaryを固定短形式へ縮約し、件数、
-budget使用量・上限、omitted件数を維持したままmodel-visible wireを削減する。
+**Goal:** 意味的な支持根拠を持たない初回query候補をEvidenceへ送らず、明示的な
+no-result queryだけを小さい空packetへ変換してmodel-visible wireを削減する。
 
 ## Purpose / Big Picture
 
-v0.23時点でsummaryは累積2,324 UTF-8 bytesを占め、structuredContentに既に存在する
-説明語を繰り返している。`Summary`の数値情報とsource-free contractは維持し、機械的で
-短い一形式だけを返す。
+v0.21で追加した`no-relevant-source` fixtureは、存在しない一意identifierに対して
+無関係なEvidence 1件を返すことを測定済みである。一方、同じfixture suiteには8件の
+positive Evidence、late-hit、relation、known expansionがある。これらを誤って空にせず、
+retrieval-fusionだけで意味的一致理由を持たない候補群に限定してabstainする。
 
 ## Baseline and Gates
 
-- v0.23: wire 11,983、bytes 33,414、summary bytes 2,324、useful 5、効率0.4173。
-- 全rowのpacket JSONとselected handle/role/fidelity/source/relationは不変。
-- 全rowのwire非増加、cumulative wire・UTF-8 bytes・summary bytesを厳密に削減する。
-- comparison regression 0、全MCP client/test互換、source/query非露出を維持する。
+- v0.24: history wire 11,693、bytes 32,494、useful 5、効率0.4276。
+- Evidence evalのpositive 8件でexpected coverage、role、late-hitを非回帰とする。
+- `no-relevant-source`だけはEvidence 0件、valid empty packet、wire減少とする。
+- history comparison regression 0、budget/determinism/relation validity 1、forbidden 0、
+  known resend 0を維持する。
 
 ## Global Constraints
 
-- structuredContent、JSON key、schema、MCP/CLI、known handlesを変更しない。
-- `evidence.Summary`だけを変更し、Evidence compilerとbudget selectionへ影響させない。
+- 公開schema、MCP/CLI、known handles、ranking weight、packingを変更しない。
+- abstentionは初回`QueryEvidence`だけに適用し、expand/impactには適用しない。
+- explicit path scopeまたはchanged-onlyで選ばれた候補は自動abstainしない。
 - `AGENTS.md`、`.focalspan.json`、`TASKS.md`を変更・stageしない。
 
 ## Plan of Work
 
 ### Task 0: Transition
 
-- [x] v0.23をarchiveし、本PLANへ切り替える。
+- [x] v0.24をarchiveし、本PLANへ切り替える。
 - [x] documentation transition commitを作成する。
 
 ### Task 1: RED tests
 
-- [x] summaryの固定短形式と4つの数値をexact testで固定する。
-- [x] source、symbol、queryがsummaryへ出ないcontractを維持する。
-- [x] MCP context/expand/impactが同じstructuredContentと短形式textを返すことを固定する。
+- [ ] no-result fixtureのvalid empty packetをREDで固定する。
+- [ ] positive fixture 8件、explicit paths、changed-onlyの非abstainを固定する。
+- [ ] trace上のcandidate reasonを調査し、共通する最小境界を記録する。
 
 ### Task 2: GREEN implementation
 
-- [x] `internal/evidence/wire.go`の`Summary`だけを固定短形式へ変更する。
-- [x] status/restart summaryとpublic packet schemaは変更しない。
+- [ ] internal helperでmeaningful candidate reasonの有無だけを判定する。
+- [ ] 根拠なしの初回queryだけcandidate sliceを空にして既存compilerへ渡す。
 
 ### Task 3: Verification and gate
 
-- [x] focused/full tests、vet、diff checkを通す。
-- [x] history candidateを1回測定し、v0.23 baselineと比較する。
-- [x] strict gateで採否を決め、findingsとcommit/revertを確定する。
-- [ ] 完了後v0.25 relevance-aware abstention planへ遷移する。
+- [ ] focused/full tests、vet、diff checkを通す。
+- [ ] history candidateを1回測定し、v0.24 baselineと比較する。
+- [ ] strict gateで採否を決め、findingsとcommit/revertを確定する。
+- [ ] 完了後v0.26 emitted-long-excerpt planへ遷移する。
 
 ## Validation and Acceptance
 
-summaryの数値情報とMCP互換性を維持し、packet byte-identicalのまま全row非回帰、
-cumulative estimated wire・UTF-8 bytes・summary bytesがすべて減ること。
+positive/acceptable queryを一件も誤abstainせず、明示的irrelevant fixtureだけを空packetへ
+変え、history品質と全contractを非回帰のまま総wireを削減すること。
 
 ## Idempotence and Recovery
 
-summary生成はpure/deterministicとする。不合格時は製品候補だけを通常revertし、
-測定結果とfindingは保持する。
+判定は候補に既に付与済みの理由だけを使いpure/deterministicとする。不合格時は製品
+候補だけを通常revertし、測定結果とfindingは保持する。
 
 ## Interfaces and Dependencies
 
-公開interface変更なし。`internal/evidence/wire.go`とそのunit/MCP contract testsだけを
-製品対象とする。
+公開interface変更なし。`internal/app`のEvidence query経路と`internal/eval` contract
+testsだけを対象とする。
 
 ## Progress
 
-- [x] 2026-09-04: v0.23 acceptance後、v0.24へ遷移した。
-- [x] 2026-09-04: unit/MCP REDを確認し、`Summary`一行だけでGREENにした。
-- [x] 2026-09-04: focused/full tests、vet、diff checkを通過した。
-- [x] 2026-09-04: candidate benchmarkを1回実行し、strict gate合格により採用した。
+- [x] 2026-09-04: v0.24 acceptance後、v0.25へ遷移した。
 
 ## Surprises & Discoveries
 
-- 固定短形式だけで40 rowすべてのestimated wireが改善した。
-- packet JSONは31,090 bytesで完全に不変で、model-visible byte削減920はすべて
-  summaryから生じた。
+実装中に更新する。
 
 ## Decision Log
 
-- 2026-09-04: `FocalSpan evidence:`等の説明語は削減対象とするが、items、used/limit、
-  omittedの4数値はclient可観測情報として残す。
-- 2026-09-04: cumulative wire 11,983から11,693、summary bytes 2,324から1,404、
-  comparison regression 0だったため候補を採用する。
+- 2026-09-04: v0.21の`expected` casesをacceptable、`expect_empty`をirrelevant labelとして
+  使用し、新しい公開label schemaは追加しない。
 
 ## Outcomes & Retrospective
 
-v0.24はpacket JSONとuseful Evidence 5を維持し、summaryを920 bytes、累積estimated
-wireを290削減した。効率は0.4173から0.4276へ改善した。次のrelevance-aware
-abstentionでは、v0.21で追加したno-result fixtureとpositive labelsを用いて、誤abstainを
-防ぐ明示的なconfidence境界を先にREDで固定する。
+測定後に更新する。
