@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/focalspan/focalspan/internal/indexlock"
 	"github.com/focalspan/focalspan/internal/model"
 	_ "modernc.org/sqlite"
 )
@@ -49,6 +50,8 @@ type Store struct {
 	liveDBPath     string
 	upgradePending bool
 	mu             sync.RWMutex
+	lifecycle      *indexlock.Lock
+	closeMu        sync.Mutex
 }
 
 type FileUpdate struct {
@@ -110,53 +113,7 @@ func open(root, indexDir string, allowUpgrade bool) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create index directory: %w", err)
 	}
-	dbPath := filepath.Join(dir, "index.db")
-	if allowUpgrade {
-		if err := recoverUpgradeArtifacts(dbPath); err != nil {
-			return nil, err
-		}
-	}
-	exists := false
-	if _, statErr := os.Stat(dbPath); statErr == nil {
-		exists = true
-	} else if !errors.Is(statErr, os.ErrNotExist) {
-		return nil, fmt.Errorf("stat index database: %w", statErr)
-	}
-	if allowUpgrade && exists {
-		version, versionErr := readSchemaVersionPath(dbPath)
-		if versionErr != nil && !errors.Is(versionErr, sql.ErrNoRows) {
-			return nil, versionErr
-		}
-		if version == "1" {
-			tempPath := dbPath + ".v2.tmp"
-			if err := removeSQLiteFiles(tempPath); err != nil {
-				return nil, fmt.Errorf("remove stale schema v2 temporary database: %w", err)
-			}
-			s, err := openDatabase(root, tempPath, false)
-			if err != nil {
-				return nil, err
-			}
-			s.liveDBPath = dbPath
-			s.upgradePending = true
-			return s, nil
-		}
-		if version != schemaVersion {
-			return nil, unsupportedSchemaVersionError(dbPath, version)
-		}
-	}
-	if !allowUpgrade && exists {
-		version, versionErr := readSchemaVersionPath(dbPath)
-		if versionErr != nil && !errors.Is(versionErr, sql.ErrNoRows) {
-			return nil, versionErr
-		}
-		if version == "1" {
-			return nil, &SchemaUpgradeRequiredError{Path: dbPath, Version: version}
-		}
-		if version != schemaVersion {
-			return nil, unsupportedSchemaVersionError(dbPath, version)
-		}
-	}
-	return openDatabase(root, dbPath, exists)
+	return openWithLease(context.Background(), root, dir, allowUpgrade)
 }
 
 func unsupportedSchemaVersionError(path, version string) error {
@@ -174,7 +131,7 @@ func openDatabase(root, dbPath string, existing bool) (*Store, error) {
 	db.SetMaxOpenConns(4)
 	db.SetMaxIdleConns(4)
 	s := &Store{db: db, root: root, dbPath: dbPath, liveDBPath: dbPath}
-	if err := s.configureAndMigrate(); err != nil {
+	if err := s.configureAndMigrate(existing); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -198,11 +155,21 @@ func readSchemaVersionPath(path string) (string, error) {
 	return version, nil
 }
 
-func (s *Store) configureAndMigrate() error {
+func (s *Store) configureAndMigrate(existing bool) error {
 	for _, pragma := range []string{"PRAGMA foreign_keys=ON", "PRAGMA busy_timeout=5000", "PRAGMA journal_mode=WAL", "PRAGMA synchronous=NORMAL"} {
 		if _, err := s.db.Exec(pragma); err != nil {
 			return fmt.Errorf("configure sqlite: %w", err)
 		}
+	}
+	if existing {
+		var version string
+		if err := s.db.QueryRow(`SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&version); err != nil {
+			return fmt.Errorf("read schema version: %w", err)
+		}
+		if version != schemaVersion {
+			return unsupportedSchemaVersionError(s.dbPath, version)
+		}
+		return nil
 	}
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -239,15 +206,21 @@ func (s *Store) configureAndMigrate() error {
 }
 
 func (s *Store) Close() error {
-	if s == nil || s.db == nil {
+	if s == nil {
+		return nil
+	}
+	s.closeMu.Lock()
+	defer s.closeMu.Unlock()
+	if s.db == nil {
 		return nil
 	}
 	err := s.db.Close()
+	s.db = nil
 	if s.upgradePending {
-		_ = removeSQLiteFiles(s.dbPath)
+		err = errors.Join(err, removeSQLiteFiles(s.dbPath))
 		s.upgradePending = false
 	}
-	return err
+	return errors.Join(err, s.lifecycle.Close())
 }
 
 func (s *Store) DBPath() string { return s.dbPath }
@@ -255,7 +228,12 @@ func (s *Store) DBPath() string { return s.dbPath }
 // FinalizeUpgrade atomically replaces the legacy database after the temporary
 // v2 database has been fully indexed and integrity-checked.
 func (s *Store) FinalizeUpgrade(ctx context.Context) error {
-	if s == nil || !s.upgradePending {
+	if s == nil {
+		return nil
+	}
+	s.closeMu.Lock()
+	defer s.closeMu.Unlock()
+	if !s.upgradePending {
 		return nil
 	}
 	if err := ctx.Err(); err != nil {
@@ -283,20 +261,21 @@ func (s *Store) FinalizeUpgrade(ctx context.Context) error {
 	if err := removeSQLiteFiles(backupPath); err != nil {
 		return fmt.Errorf("remove legacy database backup: %w", err)
 	}
-	db, err := sql.Open("sqlite", livePath)
-	if err != nil {
-		return fmt.Errorf("reopen schema v2 database: %w", err)
-	}
-	db.SetMaxOpenConns(4)
-	db.SetMaxIdleConns(4)
-	s.db = db
 	s.dbPath = livePath
 	s.liveDBPath = livePath
 	s.upgradePending = false
-	if err := s.configureAndMigrate(); err != nil {
-		_ = db.Close()
+	// The temporary DB is closed and the live files are now complete. Release
+	// exclusive access before acquiring shared access, then revalidate the schema.
+	if err := s.lifecycle.Close(); err != nil {
 		return err
 	}
+	s.lifecycle = nil
+	reopened, err := openWithLease(ctx, s.root, filepath.Dir(livePath), false)
+	if err != nil {
+		return fmt.Errorf("reopen schema v2 database: %w", err)
+	}
+	s.db = reopened.db
+	s.lifecycle = reopened.lifecycle
 	return nil
 }
 

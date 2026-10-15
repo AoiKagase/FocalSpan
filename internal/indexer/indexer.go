@@ -5,12 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/focalspan/focalspan/internal/config"
 	"github.com/focalspan/focalspan/internal/extract"
+	"github.com/focalspan/focalspan/internal/indexlock"
 	"github.com/focalspan/focalspan/internal/linker"
 	"github.com/focalspan/focalspan/internal/model"
 	"github.com/focalspan/focalspan/internal/projectmeta"
@@ -59,6 +61,11 @@ func (i *Indexer) Run(ctx context.Context, full bool) (model.IndexRun, error) {
 }
 
 func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress ProgressFunc) (model.IndexRun, error) {
+	lease, err := indexlock.Acquire(ctx, filepath.Dir(i.store.DBPath()), indexlock.Writer, indexlock.Exclusive)
+	if err != nil {
+		return model.IndexRun{}, err
+	}
+	defer lease.Close()
 	emit := func(event Progress) {
 		if progress != nil {
 			progress(event)

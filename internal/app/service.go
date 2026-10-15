@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/focalspan/focalspan/internal/budget"
 	"github.com/focalspan/focalspan/internal/config"
@@ -29,6 +30,7 @@ import (
 	zigstructural "github.com/focalspan/focalspan/internal/extract/zig"
 	"github.com/focalspan/focalspan/internal/gitx"
 	"github.com/focalspan/focalspan/internal/indexer"
+	"github.com/focalspan/focalspan/internal/indexlock"
 	"github.com/focalspan/focalspan/internal/model"
 	"github.com/focalspan/focalspan/internal/repository"
 	"github.com/focalspan/focalspan/internal/search"
@@ -43,6 +45,7 @@ type Service struct {
 	searcher         *search.Searcher
 	packer           *budget.Packer
 	evidenceCompiler *evidence.Compiler
+	indexGate        chan struct{}
 }
 
 func New(root string) (*Service, error) {
@@ -77,7 +80,7 @@ func newWithConfig(root string, cfg config.Config, allowSchemaUpgrade bool) (*Se
 	}
 	registry := newExtractorRegistry()
 	estimator := budget.NewEstimator()
-	service := &Service{Root: root, Config: cfg, Store: st, packer: budget.NewPacker(estimator), evidenceCompiler: evidence.NewCompiler(estimator)}
+	service := &Service{Root: root, Config: cfg, Store: st, packer: budget.NewPacker(estimator), evidenceCompiler: evidence.NewCompiler(estimator), indexGate: make(chan struct{}, 1)}
 	service.indexer = indexer.New(root, cfg, st, registry)
 	service.searcher = search.New(st)
 	return service, nil
@@ -125,6 +128,23 @@ const (
 )
 
 func (s *Service) IndexWithProgress(ctx context.Context, full bool, progress IndexProgressFunc) (model.IndexRun, error) {
+	// Indexer releases the process writer lock before FinalizeUpgrade reacquires
+	// shared lifecycle access. Keep concurrent calls on this Service out of that
+	// gap, without making callers wait on an uncancellable mutex.
+	ctx = indexlock.WithWaitDeadline(ctx, time.Now().Add(5*time.Second))
+	waitCtx, cancel := indexlock.WaitContext(ctx)
+	select {
+	case s.indexGate <- struct{}{}:
+		cancel()
+	case <-waitCtx.Done():
+		err := waitCtx.Err()
+		cancel()
+		return model.IndexRun{}, &indexlock.BusyError{Path: filepath.Join(s.Root, s.Config.IndexDirectory, ".index-writer.lock"), Kind: indexlock.Writer, Mode: indexlock.Exclusive, Cause: err}
+	}
+	defer func() { <-s.indexGate }()
+	if err := ctx.Err(); err != nil {
+		return model.IndexRun{}, err
+	}
 	run, err := s.indexer.RunWithProgress(ctx, full, progress)
 	if err != nil {
 		return model.IndexRun{}, err
