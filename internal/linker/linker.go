@@ -419,7 +419,7 @@ func factCandidatePaths(fact projectmeta.Fact, target string) []string {
 }
 
 func sameOrChildImport(target, module string) bool {
-	return strings.EqualFold(target, module) || strings.HasPrefix(strings.ToLower(target), strings.ToLower(module)+"/")
+	return target == module || strings.HasPrefix(target, module+"/")
 }
 
 func sourcePathMatches(candidate, target string) bool {
@@ -429,7 +429,7 @@ func sourcePathMatches(candidate, target string) bool {
 		return true
 	}
 	withoutExtension := strings.TrimSuffix(candidate, filepath.Ext(candidate))
-	return sameStorePath(withoutExtension, target) || strings.HasPrefix(strings.ToLower(candidate), strings.ToLower(target)+"/")
+	return sameStorePath(withoutExtension, target) || strings.HasPrefix(candidate, target+"/")
 }
 
 func linkerPathMatch(importer, candidate, target string) bool {
@@ -445,7 +445,7 @@ func linkerPathMatch(importer, candidate, target string) bool {
 	}
 	if filepath.Ext(target) == "" {
 		base := strings.TrimSuffix(filepath.ToSlash(candidate), filepath.Ext(candidate))
-		if sameStorePath(base, target) || strings.HasSuffix(strings.ToLower(base), "/"+strings.ToLower(target)) || strings.EqualFold(filepath.Base(base), target) {
+		if sameStorePath(base, target) || strings.HasSuffix(base, "/"+target) || filepath.Base(base) == target {
 			return true
 		}
 	}
@@ -474,8 +474,8 @@ func rustModulePathMatch(candidate, target string) bool {
 	if len(parts) == 0 {
 		return false
 	}
-	expected := strings.ToLower(strings.Join(parts, "/"))
-	path := strings.ToLower(strings.ReplaceAll(candidate, "\\", "/"))
+	expected := strings.Join(parts, "/")
+	path := strings.ReplaceAll(candidate, "\\", "/")
 	withoutExtension := strings.TrimSuffix(path, filepath.Ext(path))
 	return strings.HasSuffix(withoutExtension, "/"+expected) || strings.HasSuffix(withoutExtension, "/"+expected+"/mod")
 }
@@ -525,5 +525,5 @@ func uniqueSymbols(symbols []model.Symbol) []model.Symbol {
 }
 
 func sameStorePath(left, right string) bool {
-	return strings.EqualFold(strings.TrimPrefix(strings.ReplaceAll(left, "\\", "/"), "./"), strings.TrimPrefix(strings.ReplaceAll(right, "\\", "/"), "./"))
+	return strings.TrimPrefix(strings.ReplaceAll(left, "\\", "/"), "./") == strings.TrimPrefix(strings.ReplaceAll(right, "\\", "/"), "./")
 }

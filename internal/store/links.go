@@ -141,5 +141,5 @@ WHERE dependency.relation_id = r.id AND (
 }
 
 func sameStorePath(left, right string) bool {
-	return strings.EqualFold(strings.TrimPrefix(strings.ReplaceAll(left, "\\", "/"), "./"), strings.TrimPrefix(strings.ReplaceAll(right, "\\", "/"), "./"))
+	return strings.TrimPrefix(strings.ReplaceAll(left, "\\", "/"), "./") == strings.TrimPrefix(strings.ReplaceAll(right, "\\", "/"), "./")
 }

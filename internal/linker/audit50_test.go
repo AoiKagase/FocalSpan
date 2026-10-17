@@ -78,3 +78,40 @@ func TestF18ExtensionlessRelativeImport(t *testing.T) {
 		t.Fatal("extensionless relative import ./dep does not match src/dep.ts")
 	}
 }
+
+func TestF21ImportPathCaseIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		candidate, target string
+		want              bool
+	}{
+		{"src/Foo.ts", "./Foo", true}, {"src/foo.ts", "./Foo", false}, {"src/Foo.ts", "./foo.ts", false},
+		{"src/Foo/index.ts", "./Foo", true}, {"src/foo/index.ts", "./Foo", false},
+	} {
+		if got := linkerPathMatch("src/main.ts", tc.candidate, tc.target); got != tc.want {
+			t.Errorf("%s imports %s: got %v want %v", tc.candidate, tc.target, got, tc.want)
+		}
+	}
+	for _, both := range []bool{false, true} {
+		ctx := context.Background()
+		s, err := store.Open(t.TempDir(), ".focalspan")
+		if err != nil {
+			t.Fatal(err)
+		}
+		fsAuditCoreSeed(t, s, "src/Foo.ts", "upper", "Foo", nil)
+		if both {
+			fsAuditCoreSeed(t, s, "src/foo.ts", "lower", "foo", nil)
+		}
+		fsAuditCoreSeed(t, s, "src/main.ts", "main", "main", []model.Relation{{FromHandle: "main", UnresolvedTo: "./Foo.ts", Kind: "imports", Confidence: 1, Source: "audit"}})
+		if err := (&Linker{Store: s}).Link(ctx, nil); err != nil {
+			t.Fatal(err)
+		}
+		rels, err := s.Relations(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rels) != 1 || rels[0].ToHandle != "upper" {
+			t.Errorf("both=%v: wrong indexed file identity %+v", both, rels)
+		}
+		s.Close()
+	}
+}
