@@ -12,6 +12,7 @@ import (
 )
 
 type CandidateStore interface {
+	ScopedCandidates(model.CandidateScope) model.CandidateReader
 	SearchFTS(ctx context.Context, query string, limit int) ([]model.RankedCandidate, error)
 	SearchQualifiedSymbols(ctx context.Context, values []string, limit int) ([]model.RankedCandidate, error)
 	SearchExactSymbols(ctx context.Context, values []string, limit int) ([]model.RankedCandidate, error)
@@ -30,7 +31,7 @@ func New(store CandidateStore) *Searcher {
 	return &Searcher{store: store, retrievers: &RetrieverSet{store: store}}
 }
 
-type LineRange struct{ Start, End int }
+type LineRange = model.LineRange
 
 type SearchRequest struct {
 	Query       string

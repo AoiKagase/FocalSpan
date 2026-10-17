@@ -734,7 +734,7 @@ func (s *Store) SearchFTS(ctx context.Context, query string, limit int) ([]model
 	limit = retrievalLimit(limit, 100, 500)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	rows, err := s.db.QueryContext(ctx, `SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature, c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash, bm25(chunk_fts) FROM chunk_fts JOIN chunks c ON c.handle = chunk_fts.handle JOIN files f ON f.id = c.file_id WHERE chunk_fts MATCH ? ORDER BY bm25(chunk_fts), f.path, c.start_line, c.handle LIMIT ?`, query, limit)
+	rows, err := s.queryCandidateRows(ctx, `SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature, c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash, bm25(chunk_fts) FROM chunk_fts JOIN chunks c ON c.handle = chunk_fts.handle JOIN files f ON f.id = c.file_id WHERE chunk_fts MATCH ? ORDER BY bm25(chunk_fts), f.path, c.start_line, c.handle LIMIT ?`, query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("FTS search: %w", err)
 	}
@@ -784,7 +784,7 @@ func (s *Store) SearchExactSymbols(ctx context.Context, values []string, limit i
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		rows, err := s.db.QueryContext(ctx, rankedCandidateProjection+`lower(symbol.name) = lower(?) ORDER BY CASE WHEN c.kind LIKE '%-outline' OR c.kind = 'test-suite' THEN 1 ELSE 0 END, symbol.confidence DESC, c.end_line - c.start_line ASC, f.path ASC, c.start_line ASC, c.handle ASC`, value)
+		rows, err := s.queryCandidateRows(ctx, rankedCandidateProjection+`lower(symbol.name) = lower(?) ORDER BY CASE WHEN c.kind LIKE '%-outline' OR c.kind = 'test-suite' THEN 1 ELSE 0 END, symbol.confidence DESC, c.end_line - c.start_line ASC, f.path ASC, c.start_line ASC, c.handle ASC`, value)
 		if err != nil {
 			return nil, fmt.Errorf("exact symbol search: %w", err)
 		}
@@ -823,7 +823,7 @@ func (s *Store) SearchQualifiedSymbols(ctx context.Context, values []string, lim
 			{condition: `lower(symbol.qualified_name) = lower(?)`, args: []any{value}},
 		}
 		for queryIndex, candidateQuery := range queries {
-			rows, err := s.db.QueryContext(ctx, rankedCandidateProjection+candidateQuery.condition+` ORDER BY CASE WHEN c.kind LIKE '%-outline' OR c.kind = 'test-suite' THEN 1 ELSE 0 END, symbol.confidence DESC, c.end_line - c.start_line ASC, f.path ASC, c.start_line ASC, c.handle ASC`, candidateQuery.args...)
+			rows, err := s.queryCandidateRows(ctx, rankedCandidateProjection+candidateQuery.condition+` ORDER BY CASE WHEN c.kind LIKE '%-outline' OR c.kind = 'test-suite' THEN 1 ELSE 0 END, symbol.confidence DESC, c.end_line - c.start_line ASC, f.path ASC, c.start_line ASC, c.handle ASC`, candidateQuery.args...)
 			if err != nil {
 				return nil, fmt.Errorf("qualified symbol search: %w", err)
 			}
@@ -860,7 +860,7 @@ func (s *Store) SearchSymbolPrefixes(ctx context.Context, values []string, limit
 			return nil, err
 		}
 		escaped := escapeLike(strings.ToLower(value))
-		rows, err := s.db.QueryContext(ctx, rankedCandidateProjection+`(lower(symbol.name) LIKE ? || '%' ESCAPE '\' OR lower(symbol.qualified_name) LIKE ? || '%' ESCAPE '\') ORDER BY CASE WHEN lower(symbol.name) = lower(?) THEN 0 ELSE 1 END, symbol.confidence DESC, c.end_line - c.start_line ASC, f.path ASC, c.start_line ASC, c.handle ASC`, escaped, escaped, value)
+		rows, err := s.queryCandidateRows(ctx, rankedCandidateProjection+`(lower(symbol.name) LIKE ? || '%' ESCAPE '\' OR lower(symbol.qualified_name) LIKE ? || '%' ESCAPE '\') ORDER BY CASE WHEN lower(symbol.name) = lower(?) THEN 0 ELSE 1 END, symbol.confidence DESC, c.end_line - c.start_line ASC, f.path ASC, c.start_line ASC, c.handle ASC`, escaped, escaped, value)
 		if err != nil {
 			return nil, fmt.Errorf("symbol prefix search: %w", err)
 		}
@@ -893,7 +893,7 @@ func (s *Store) SearchPaths(ctx context.Context, hints []string, limit int) ([]m
 		}
 		hint = strings.ReplaceAll(hint, "\\", "/")
 		escaped := escapeLike(strings.ToLower(hint))
-		rows, err := s.db.QueryContext(ctx, rankedCandidateProjection+`(lower(f.path) = ? OR lower(f.path) LIKE '%' || '/' || ? ESCAPE '\' OR lower(f.path) LIKE ? || '/%' ESCAPE '\' OR lower(f.path) LIKE '%' || ? || '%' ESCAPE '\') ORDER BY CASE WHEN lower(f.path) = ? THEN 0 WHEN lower(f.path) LIKE '%' || '/' || ? ESCAPE '\' THEN 1 WHEN lower(f.path) LIKE ? || '/%' ESCAPE '\' THEN 2 ELSE 3 END, COALESCE(symbol.confidence, 0) DESC, c.end_line - c.start_line ASC, f.path ASC, c.start_line ASC, c.handle ASC`, escaped, escaped, escaped, escaped, escaped, escaped, escaped)
+		rows, err := s.queryCandidateRows(ctx, rankedCandidateProjection+`(lower(f.path) = ? OR lower(f.path) LIKE '%' || '/' || ? ESCAPE '\' OR lower(f.path) LIKE ? || '/%' ESCAPE '\' OR lower(f.path) LIKE '%' || ? || '%' ESCAPE '\') ORDER BY CASE WHEN lower(f.path) = ? THEN 0 WHEN lower(f.path) LIKE '%' || '/' || ? ESCAPE '\' THEN 1 WHEN lower(f.path) LIKE ? || '/%' ESCAPE '\' THEN 2 ELSE 3 END, COALESCE(symbol.confidence, 0) DESC, c.end_line - c.start_line ASC, f.path ASC, c.start_line ASC, c.handle ASC`, escaped, escaped, escaped, escaped, escaped, escaped, escaped)
 		if err != nil {
 			return nil, fmt.Errorf("path search: %w", err)
 		}
@@ -956,7 +956,7 @@ func appendCandidates(result *[]model.RankedCandidate, seen map[string]bool, ite
 func (s *Store) CandidatesForPath(ctx context.Context, path string) ([]model.RankedCandidate, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	rows, err := s.db.QueryContext(ctx, candidateQuery(`f.path = ?`), path)
+	rows, err := s.queryCandidateRows(ctx, candidateQuery(`f.path = ?`), path)
 	if err != nil {
 		return nil, err
 	}
@@ -970,7 +970,7 @@ func (s *Store) AllCandidates(ctx context.Context, limit int) ([]model.RankedCan
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	rows, err := s.db.QueryContext(ctx, candidateQuery(`1=1`)+` LIMIT ?`, limit)
+	rows, err := s.queryCandidateRows(ctx, candidateQuery(`1=1`)+` LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -1002,7 +1002,7 @@ func (s *Store) RelatedCandidateHits(ctx context.Context, handles []string, rela
 			}
 		}
 		query, args := relatedHitQuery(handle, relation, camelPattern)
-		rows, err := s.db.QueryContext(ctx, query, args...)
+		rows, err := s.queryCandidateRows(ctx, query, args...)
 		if err != nil {
 			return nil, err
 		}
@@ -1321,7 +1321,7 @@ WHERE outline.symbol_handle = c.symbol_handle AND outline.kind = 'template-outli
 ))`)
 			args = []any{relation, handle, handle, handle, handle, relation, handle, handle, relation, handle, handle}
 		}
-		rows, err := s.db.QueryContext(ctx, query, args...)
+		rows, err := s.queryCandidateRows(ctx, query, args...)
 		if err != nil {
 			return nil, err
 		}

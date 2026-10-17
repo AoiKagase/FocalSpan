@@ -8,7 +8,7 @@ Implement the approved five fixes: fail closed on traversal errors; constrain re
 
 - [x] 2026-10-17 UTC: Confirmed master a91128f and preserved dirty user paths; archived completed generic-source plan byte-for-byte; created codex/remaining-five-fixes.
 - [x] 2026-10-17 UTC: Step 1 RED: missing/empty-cancelled walks returned success and unavailable root was accepted by Indexer. GREEN: repository and indexer suites pass; errors now precede all writes.
-- [ ] Step 2: Scoped candidate readers before limits, including external relation anchors; commit.
+- [x] 2026-10-17 UTC: Step 2 RED on path/changed-only late exact match; GREEN across store/search/app suites and explicit 1000+ condition, literal wildcard/path boundary/case/range controls. Outside-scope anchors preserved; Evidence wire/invariants pass.
 - [ ] Step 3: Shared Writer lease around complete Query/Expand/Impact reads; commit.
 - [ ] Step 4: Impact auto-update or explicit stale-index rejection; commit.
 - [ ] Step 5: Status/Health readiness from all completion metadata; commit.
@@ -22,6 +22,7 @@ The prior audit's five temporary overlay tests are in C:/Temp/focalspan_remainin
 
 - 2026-10-17 UTC: User selected consistency over immediate stale snapshots. Index before taking Shared Writer lease; private read helpers must not reacquire it. Health may inspect pending metadata; data reads reject incomplete indexes.
 - 2026-10-17 UTC: Preserve existing relation anchor discovery outside candidate scope. Apply path/range constraints to returned candidates before caps. Bound SQL scope batches and merge before global caps.
+- Ruling: Use fixed-size JSON batches in a parameterized CTE feeding scoped chunk sources before existing ORDER/LIMIT. This preserves each retriever's exact ordering and avoids parameter/expression limits without merging independently truncated batches. SQLite JSON support verified by real-store tests.
 - 2026-10-17 UTC: Auto-update disabled means no indexing; Impact rejects eligible current files whose stored hashes are absent/different. Deleted source is never synthesized.
 - 2026-10-17 UTC: Own only plan/archive and source/test sections required by these five fixes. Preserve user edits in AGENTS.md, README.md, docs/design.md and internal/mcpserver/{server.go,context_v2_test.go}, plus all existing untracked files. Baseline tracked patch hash 481d2c278a820ccfda79ec7bde9bd0ddd35cd68a. No network, restore, analyzed fixture-code execution, push or deployment.
 

@@ -29,6 +29,11 @@ func NewRetrieverSet(store CandidateStore) *RetrieverSet {
 }
 
 func (r *RetrieverSet) Retrieve(ctx context.Context, plan query.Plan, req SearchRequest) ([]RankedList, error) {
+	reader := model.CandidateReader(r.store)
+	scoped := len(req.Paths) > 0 || req.ChangedOnly
+	if scoped {
+		reader = r.store.ScopedCandidates(model.CandidateScope{Paths: req.Paths, ChangedOnly: req.ChangedOnly, Changed: req.Changed})
+	}
 	mode := req.Mode
 	if mode == "" {
 		mode = RetrievalFull
@@ -37,34 +42,34 @@ func (r *RetrieverSet) Retrieve(ctx context.Context, plan query.Plan, req Search
 		return nil, err
 	}
 	if mode == RetrievalFTSOnly {
-		items, err := r.store.SearchFTS(ctx, query.BuildFTS(plan.Terms), ftsLimit)
+		items, err := reader.SearchFTS(ctx, query.BuildFTS(plan.Terms), ftsLimit)
 		if err != nil {
 			return nil, fmt.Errorf("%s retriever: %w", RetrieverFTS, err)
 		}
 		return []RankedList{{Retriever: RetrieverFTS, Items: items}}, nil
 	}
 	lists := make([]RankedList, 0, 6)
-	qualified, err := r.store.SearchQualifiedSymbols(ctx, plan.Terms.Identifiers, qualifiedLimit)
+	qualified, err := reader.SearchQualifiedSymbols(ctx, plan.Terms.Identifiers, qualifiedLimit)
 	if err != nil {
 		return nil, fmt.Errorf("%s retriever: %w", RetrieverQualified, err)
 	}
 	lists = append(lists, RankedList{Retriever: RetrieverQualified, Items: qualified})
-	exact, err := r.store.SearchExactSymbols(ctx, plan.Terms.Identifiers, exactLimit)
+	exact, err := reader.SearchExactSymbols(ctx, plan.Terms.Identifiers, exactLimit)
 	if err != nil {
 		return nil, fmt.Errorf("%s retriever: %w", RetrieverSymbol, err)
 	}
 	lists = append(lists, RankedList{Retriever: RetrieverSymbol, Items: exact})
-	prefix, err := r.store.SearchSymbolPrefixes(ctx, plan.Terms.Identifiers, prefixLimit)
+	prefix, err := reader.SearchSymbolPrefixes(ctx, plan.Terms.Identifiers, prefixLimit)
 	if err != nil {
 		return nil, fmt.Errorf("%s retriever: %w", RetrieverPrefix, err)
 	}
 	lists = append(lists, RankedList{Retriever: RetrieverPrefix, Items: prefix})
-	fts, err := r.store.SearchFTS(ctx, query.BuildFTS(plan.Terms), ftsLimit)
+	fts, err := reader.SearchFTS(ctx, query.BuildFTS(plan.Terms), ftsLimit)
 	if err != nil {
 		return nil, fmt.Errorf("%s retriever: %w", RetrieverFTS, err)
 	}
 	lists = append(lists, RankedList{Retriever: RetrieverFTS, Items: fts})
-	paths, err := r.store.SearchPaths(ctx, plan.Terms.Paths, pathLimit)
+	paths, err := reader.SearchPaths(ctx, plan.Terms.Paths, pathLimit)
 	if err != nil {
 		return nil, fmt.Errorf("%s retriever: %w", RetrieverPath, err)
 	}
@@ -72,7 +77,15 @@ func (r *RetrieverSet) Retrieve(ctx context.Context, plan query.Plan, req Search
 	if mode == RetrievalNoRelations || len(plan.Relations) == 0 {
 		return lists, nil
 	}
-	anchors := retrievalAnchors(plan, lists)
+	anchorLists := lists
+	if scoped {
+		var err error
+		anchorLists, err = r.Retrieve(ctx, plan, SearchRequest{Mode: RetrievalNoRelations})
+		if err != nil {
+			return nil, err
+		}
+	}
+	anchors := retrievalAnchors(plan, anchorLists)
 	if len(anchors) == 0 {
 		return lists, nil
 	}
@@ -86,11 +99,11 @@ func (r *RetrieverSet) Retrieve(ctx context.Context, plan query.Plan, req Search
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		legacyItems, relationErr := r.store.RelatedCandidates(ctx, handles, relation)
+		legacyItems, relationErr := reader.RelatedCandidates(ctx, handles, relation)
 		if relationErr != nil {
 			return nil, fmt.Errorf("%s retriever: %w", RetrieverRelation, relationErr)
 		}
-		hits, relationErr := r.store.RelatedCandidateHits(ctx, handles, relation)
+		hits, relationErr := reader.RelatedCandidateHits(ctx, handles, relation)
 		if relationErr != nil {
 			return nil, fmt.Errorf("%s provenance: %w", RetrieverRelation, relationErr)
 		}
