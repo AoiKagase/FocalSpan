@@ -23,6 +23,8 @@
 
 ## Progress
 
+- 2026-10-17 execution: Task 6完了。A08=24c6626、O03は正式RED→GREEN。履歴headを固定し、old/new hunkで現在行へ変換。挿入/置換/削除/rename/単一ref/現在削除とauto/manualの全関連検査PASS（C:/Temp/fs24-task6.log）。
+
 - 2026-10-17 execution: Task 5完了。A03=911ca20、A13=f987403、A10=4a97e1d/a2829fc、A12=d5770e5、A11は正式RED→GREEN。language/linker/store/indexer/search/extract全体/appの全テストPASS（C:/Temp/fs24-task5.log）。異言語130件の除外もPASS。ExtractorVersion=v15。
 
 - 2026-10-17 execution: Task 4完了。A02=6579a31、A04=c5e8103、A18=8d56050、A19はRED→GREEN。全extractor/evidence/app/mcpserverテストPASS（C:/Temp/fs24-task4.log）。Go分類はファイル・命名・引数/返り値を確認し、aliasにも対応。ExtractorVersion=v10。

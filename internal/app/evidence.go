@@ -229,7 +229,7 @@ func (s *Service) impactCandidates(ctx context.Context, base, head string) (cand
 	var changed []gitx.ChangedFile
 	var err error
 	if base != "" || head != "" {
-		changed, err = gitx.NewClient(s.Root).Diff(ctx, gitx.DiffRequest{Base: base, Head: head})
+		changed, err = gitx.NewClient(s.Root).DiffForImpact(ctx, base, head)
 		if err != nil {
 			return candidateResult{}, fmt.Errorf("read Git changes: %w", err)
 		}
