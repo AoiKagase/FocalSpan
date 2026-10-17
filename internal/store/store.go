@@ -15,7 +15,6 @@ import (
 
 	"github.com/focalspan/focalspan/internal/indexlock"
 	"github.com/focalspan/focalspan/internal/model"
-	_ "modernc.org/sqlite"
 )
 
 //go:embed migrations/*.sql
@@ -124,7 +123,7 @@ func unsupportedSchemaVersionError(path, version string) error {
 }
 
 func openDatabase(root, dbPath string, existing bool) (*Store, error) {
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open(storeDriverName, dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("open index database: %w", err)
 	}
@@ -170,10 +169,10 @@ func readSchemaVersionPath(ctx context.Context, path string) (string, error) {
 }
 
 func (s *Store) configureAndMigrate(existing bool) error {
-	for _, pragma := range []string{"PRAGMA foreign_keys=ON", "PRAGMA busy_timeout=5000", "PRAGMA journal_mode=WAL", "PRAGMA synchronous=NORMAL"} {
-		if _, err := s.db.Exec(pragma); err != nil {
-			return fmt.Errorf("configure sqlite: %w", err)
-		}
+	// WAL persists for the database; connection-local settings are applied by
+	// the Store driver's connection hook, including when the pool grows.
+	if _, err := s.db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		return fmt.Errorf("configure sqlite: %w", err)
 	}
 	if existing {
 		var version string
