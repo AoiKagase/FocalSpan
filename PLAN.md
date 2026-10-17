@@ -7,13 +7,19 @@ After file updates commit, cancellation or failure during linking must remain re
 ## Progress
 
 - [x] 2026-10-17 UTC: Traced file updates, manifest revision and linking across separate transactions; archived the completed extraction-failure plan byte-for-byte.
-- [ ] Reproduce interruption followed by an unchanged incremental update.
-- [ ] Persist pending linking with file updates and retry a full linking pass after interruption.
+- [x] 2026-10-17 UTC: RED on initial and incremental indexing left ValidateToken calls unresolved after reopen; repeated interruption incorrectly returned success on its second attempt.
+- [x] 2026-10-17 UTC: Pending marker committed with file updates; unchanged reopen recovery and repeated cancellation now pass. Full indexer suite passed, including existing pre-write cancellation tests.
+- [x] 2026-10-17 UTC: Full race tests, go vet, native and three cross-builds passed. Independent read-only review found no actionable issues.
+- [x] 2026-10-17 UTC: First normal full suite failed in existing TestSupervisorFailedCandidatesKeepOldWorker with worker EOF. Isolated five-repeat rerun and serial full-suite rerun both passed without source edits.
 - [ ] Full offline verification, independent review, scoped commit, merge and merged branch cleanup.
 
 ## Surprises & Discoveries
 
 File hashes and manifest revision are saved before linking. After interruption the next run has no file delta, so scoped linking skips unresolved work.
+
+Missing recovery metadata conservatively forces one full linking pass for older indexes. Successful completion clears the marker so unchanged updates return to scoped linking; the regression checks this behavior.
+
+Concurrent normal/race verification produced one normal-suite supervisor fixture failure (worker connection closed). The corresponding race package passed, and the isolated test passed five repetitions without source edits. Do not infer a root cause from this alone; rerun the normal suite serially and retain this evidence.
 
 ## Decision Log
 
@@ -22,7 +28,7 @@ File hashes and manifest revision are saved before linking. After interruption t
 
 ## Outcomes & Retrospective
 
-Pending reproduction and implementation.
+Implemented a durable linking_pending marker without schema changes. Initial and incremental indexing recover after store reopen and repeated interruption; successful recovery restores scoped linking. Full normal suite (serial rerun), full race suite, go vet, native and three cross-builds passed. Independent review found no actionable issues. Initial supervisor fixture failure remains documented with isolated five-repeat success; its cause is unconfirmed. User tracked patch hash remains 481d2c278a820ccfda79ec7bde9bd0ddd35cd68a. Artifacts: .build/link-recovery-verification. Commit and local merge remain.
 
 ## Context and Orientation
 

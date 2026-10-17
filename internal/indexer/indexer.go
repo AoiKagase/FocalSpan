@@ -3,7 +3,9 @@ package indexer
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -156,6 +158,12 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 	factsRevision := revisionForFacts(facts)
 	previousFactsRevision, previousFactsErr := i.store.Meta(ctx, "manifest_facts_revision")
 	manifestChanged := previousFactsErr != nil || previousFactsRevision != factsRevision
+	pendingLinks, pendingLinksErr := i.store.Meta(ctx, "linking_pending")
+	if pendingLinksErr != nil && !errors.Is(pendingLinksErr, sql.ErrNoRows) {
+		return model.IndexRun{}, fmt.Errorf("read pending relation linking: %w", pendingLinksErr)
+	}
+	// Missing metadata also triggers one recovery pass for older indexes.
+	recoverLinks := pendingLinks != "0"
 	run.Revision = revision
 	emit(Progress{Phase: PhaseWriting, Total: 1})
 	delta, err := i.store.ApplyIndexWithDelta(ctx, deletions, updates, []store.MetaUpdate{
@@ -163,11 +171,13 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 		{Key: "configuration_hash", Value: i.config.Hash()},
 		{Key: "extractor_version", Value: extractorVersion},
 		{Key: "manifest_facts_revision", Value: factsRevision},
+		// Commit recovery state with file changes: linking commits separately.
+		{Key: "linking_pending", Value: "1"},
 	}, run)
 	if err != nil {
 		return model.IndexRun{}, err
 	}
-	linkScope := store.LinkScope{Full: full || reindexRequired || manifestChanged, ChangedPaths: delta.ChangedPaths, LookupKeys: delta.LookupKeys}
+	linkScope := store.LinkScope{Full: full || reindexRequired || manifestChanged || recoverLinks, ChangedPaths: delta.ChangedPaths, LookupKeys: delta.LookupKeys}
 	if err := (&linker.Linker{Store: i.store}).LinkWithScope(ctx, facts, linkScope, func(completed, total int) {
 		emit(Progress{Phase: PhaseLinking, Completed: completed, Total: total})
 	}); err != nil {
@@ -180,6 +190,9 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 	}
 	if err := i.store.SetMeta(ctx, "last_successful_index", run.CompletedAt); err != nil {
 		return model.IndexRun{}, fmt.Errorf("record successful index time: %w", err)
+	}
+	if err := i.store.SetMeta(ctx, "linking_pending", "0"); err != nil {
+		return model.IndexRun{}, fmt.Errorf("complete pending relation linking: %w", err)
 	}
 	emit(Progress{Phase: PhaseComplete, Completed: 1, Total: 1})
 	return run, nil
