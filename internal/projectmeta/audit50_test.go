@@ -39,3 +39,33 @@ func TestF20ComposerArrayMappings(t *testing.T) {
 		t.Fatalf("array-valued namespace mapping discarded: %+v", facts)
 	}
 }
+
+func TestF19CargoStructuredTables(t *testing.T) {
+	text := "[package]\nname = 'actual' # real package\nversion='1'\n[lib]\npath='src/lib.rs'\n[dependencies]\na={path='../a',version='1'}\nb='1'\n[dev-dependencies.c]\npath='../c'\n[workspace]\nmembers=['member']\n"
+	facts, diags, err := ParseFile(context.Background(), "", model.SourceFile{Path: "Cargo.toml", Content: []byte(text)})
+	if err != nil || len(diags) != 0 {
+		t.Fatalf("%+v %v", diags, err)
+	}
+	want := map[string]bool{"package:actual": false, "lib-path:src/lib.rs": false, "path-dependency:../a": false, "path-dependency:../c": false, "workspace-member:member": false}
+	for _, f := range facts {
+		key := f.Kind + ":" + f.Target
+		if _, ok := want[key]; !ok {
+			t.Errorf("unexpected fact %+v", f)
+		}
+		want[key] = true
+	}
+	for key, found := range want {
+		if !found {
+			t.Errorf("missing %s", key)
+		}
+	}
+}
+func TestF20ComposerAutoloadDevAndInvalidElement(t *testing.T) {
+	facts, diags, err := ParseFile(context.Background(), "", model.SourceFile{Path: "composer.json", Content: []byte(`{"autoload-dev":{"psr-4":{"Demo\\":["tests/",12]}}}`)})
+	if err != nil || len(diags) == 0 {
+		t.Fatalf("invalid entry must be diagnosed: %+v %v", diags, err)
+	}
+	if len(facts) != 1 || facts[0].Target != "tests/" {
+		t.Fatalf("valid entry lost or invalid fact emitted: %+v", facts)
+	}
+}

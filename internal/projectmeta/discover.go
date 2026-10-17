@@ -3,6 +3,8 @@ package projectmeta
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"github.com/pelletier/go-toml/v2"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -72,7 +74,9 @@ func (staticProvider) Parse(ctx context.Context, _ string, file model.SourceFile
 	case base == "go.mod" || base == "go.work":
 		parseGoManifest(text, base, add)
 	case base == "cargo.toml":
-		parseCargo(text, add)
+		if err := parseCargo(text, add); err != nil {
+			return facts, []model.Diagnostic{{FilePath: file.Path, Level: "warning", Code: "metadata_toml_invalid", Message: "metadata TOML could not be parsed"}}, nil
+		}
 	case base == "package.json" || base == "tsconfig.json" || base == "jsconfig.json" || base == "composer.json":
 		if err := parseJSONMetadata(text, base, add); err != nil {
 			return facts, []model.Diagnostic{{FilePath: file.Path, Level: "warning", Code: "metadata_json_invalid", Message: "metadata JSON could not be parsed"}}, nil
@@ -128,29 +132,48 @@ func parseGoManifest(text, base string, add func(string, string, string, float64
 	_ = base
 }
 
-func parseCargo(text string, add func(string, string, string, float64)) {
-	section := ""
-	for _, line := range strings.Split(text, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "[") {
-			section = strings.Trim(trimmed, "[]")
-		}
-		if value := quotedAssignment(trimmed, "name"); value != "" {
-			kind := "package"
-			if section == "lib" || section == "[lib" {
-				kind = "lib-path"
+func parseCargo(text string, add func(string, string, string, float64)) error {
+	var document map[string]any
+	if err := toml.Unmarshal([]byte(text), &document); err != nil {
+		return err
+	}
+	table := func(key string) map[string]any { value, _ := document[key].(map[string]any); return value }
+	if name, ok := table("package")["name"].(string); ok {
+		add("package", "", name, .9)
+	}
+	if path, ok := table("lib")["path"].(string); ok {
+		add("lib-path", "", path, .9)
+	}
+	var walk func(map[string]any)
+	walk = func(values map[string]any) {
+		for key, raw := range values {
+			nested, ok := raw.(map[string]any)
+			if !ok {
+				continue
 			}
-			add(kind, "", value, .9)
-		}
-		if value := quotedAssignment(trimmed, "path"); value != "" {
-			add("path-dependency", "", value, .8)
-		}
-		if strings.Contains(trimmed, "members") {
-			for _, value := range quotedValues(trimmed) {
-				add("workspace-member", "", value, .8)
+			switch key {
+			case "dependencies", "dev-dependencies", "build-dependencies":
+				for name, raw := range nested {
+					if dep, ok := raw.(map[string]any); ok {
+						if path, ok := dep["path"].(string); ok {
+							add("path-dependency", name, path, .8)
+						}
+					}
+				}
+			default:
+				walk(nested)
 			}
 		}
 	}
+	walk(document)
+	if members, ok := table("workspace")["members"].([]any); ok {
+		for _, raw := range members {
+			if member, ok := raw.(string); ok {
+				add("workspace-member", "", member, .8)
+			}
+		}
+	}
+	return nil
 }
 
 func parseJSONMetadata(text, base string, add func(string, string, string, float64)) error {
@@ -211,8 +234,12 @@ func parseJSONMetadata(text, base string, add func(string, string, string, float
 			}
 		}
 	}
-	if autoload, ok := value["autoload"].(map[string]any); ok {
-		parseComposerAutoload(autoload, add)
+	for _, key := range []string{"autoload", "autoload-dev"} {
+		if autoload, ok := value[key].(map[string]any); ok {
+			if err := parseComposerAutoload(autoload, add); err != nil {
+				return err
+			}
+		}
 	}
 	if exports, ok := value["exports"].(map[string]any); ok {
 		for name, raw := range exports {
@@ -224,32 +251,40 @@ func parseJSONMetadata(text, base string, add func(string, string, string, float
 	return nil
 }
 
-func parseComposerAutoload(value map[string]any, add func(string, string, string, float64)) {
+func parseComposerAutoload(value map[string]any, add func(string, string, string, float64)) error {
+	invalid := false
+	var paths func(string, string, any, float64)
+	paths = func(kind, name string, raw any, confidence float64) {
+		switch v := raw.(type) {
+		case string:
+			add(kind, name, v, confidence)
+		case []any:
+			for _, item := range v {
+				if path, ok := item.(string); ok {
+					add(kind, name, path, confidence)
+				} else {
+					invalid = true
+				}
+			}
+		default:
+			invalid = true
+		}
+	}
 	for _, key := range []string{"psr-4", "psr-0", "classmap", "files"} {
 		if raw, ok := value[key]; ok {
-			switch item := raw.(type) {
-			case map[string]any:
-				for name, target := range item {
-					switch target := target.(type) {
-					case string:
-						add(key, name, target, .9)
-					case []any:
-						for _, value := range target {
-							if path, ok := value.(string); ok {
-								add(key, name, path, .9)
-							}
-						}
-					}
+			if mapping, ok := raw.(map[string]any); ok {
+				for name, targets := range mapping {
+					paths(key, name, targets, .9)
 				}
-			case []any:
-				for _, target := range item {
-					if target, ok := target.(string); ok {
-						add(key, "", target, .8)
-					}
-				}
+			} else {
+				paths(key, "", raw, .8)
 			}
 		}
 	}
+	if invalid {
+		return fmt.Errorf("invalid composer autoload path")
+	}
+	return nil
 }
 
 func parseDotNetManifest(text string, add func(string, string, string, float64)) {
