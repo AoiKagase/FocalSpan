@@ -196,11 +196,32 @@ func addPythonRelation(result *model.Extraction, relation model.Relation) {
 
 func parsePythonDeclarations(lines []pyLine) []*pyDeclaration {
 	declarations := make([]*pyDeclaration, 0)
+	active := make([]*pyDeclaration, 0)
+	statements := make([]bool, len(lines))
+	depth := 0
 	decorators := make([]string, 0)
 	for index, line := range lines {
 		text := strings.TrimSpace(line.Text)
 		if text == "" || strings.HasPrefix(text, "#") {
 			continue
+		}
+		continuation := depth > 0
+		for _, ch := range text {
+			switch ch {
+			case '(', '[', '{':
+				depth++
+			case ')', ']', '}':
+				if depth > 0 {
+					depth--
+				}
+			}
+		}
+		if continuation {
+			continue
+		}
+		statements[index] = true
+		for len(active) > 0 && active[len(active)-1].Indent >= line.Indent {
+			active = active[:len(active)-1]
 		}
 		if strings.HasPrefix(text, "@") {
 			decorator := strings.TrimSpace(line.Original)
@@ -228,7 +249,7 @@ func parsePythonDeclarations(lines []pyLine) []*pyDeclaration {
 			if containsDecorator(decorators, "pytest.fixture") {
 				kind = "fixture"
 			}
-			parent := nearestPythonParent(declarations, line.Indent, index+1)
+			parent := nearestPythonParent(active, line.Indent, index+1)
 			if parent != nil && (parent.Kind == "class" || parent.Kind == "protocol") {
 				kind = "method"
 				if match[1] == "async" {
@@ -247,23 +268,32 @@ func parsePythonDeclarations(lines []pyLine) []*pyDeclaration {
 		} else if line.Indent == 0 && pyAliasPattern.MatchString(text) && !strings.Contains(text, "(") {
 			match := pyAliasPattern.FindStringSubmatch(text)
 			decl = &pyDeclaration{Kind: "type_alias", Name: match[1], StartLine: index + 1, Indent: line.Indent, Header: text, Decorators: decorators}
-		} else if parent := nearestPythonParent(declarations, line.Indent, index+1); parent != nil && (parent.Kind == "class" || parent.Kind == "protocol") && pyClassVarPattern.MatchString(text) {
+		} else if parent := nearestPythonParent(active, line.Indent, index+1); parent != nil && (parent.Kind == "class" || parent.Kind == "protocol") && pyClassVarPattern.MatchString(text) {
 			match := pyClassVarPattern.FindStringSubmatch(text)
 			decl = &pyDeclaration{Kind: "class_variable", Name: match[1], StartLine: index + 1, Indent: line.Indent, Header: text, Parent: parent, Decorators: decorators}
 		}
 		if decl != nil {
+			if decl.Parent == nil && (decl.Kind == "class" || decl.Kind == "protocol") {
+				decl.Parent = nearestPythonParent(active, line.Indent, index+1)
+			}
 			if decl.Parent != nil {
 				decl.Qualified = decl.Parent.Qualified + "." + decl.Name
 			} else {
 				decl.Qualified = decl.Name
 			}
 			declarations = append(declarations, decl)
+			if decl.Kind != "type_alias" && decl.Kind != "class_variable" {
+				active = append(active, decl)
+			}
 			decorators = nil
 		}
 	}
 	for index, decl := range declarations {
 		end := len(lines)
 		for line := decl.StartLine; line < len(lines); line++ {
+			if !statements[line] {
+				continue
+			}
 			if strings.TrimSpace(lines[line].Text) == "" || strings.HasPrefix(strings.TrimSpace(lines[line].Text), "#") {
 				continue
 			}
