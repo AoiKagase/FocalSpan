@@ -116,3 +116,13 @@ func TestF31OnlyLiteralRequireArgumentImports(t *testing.T) {
 		t.Fatalf("literal require imports=%v", targets)
 	}
 }
+
+func TestF37ReviewInlineElseif(t *testing.T) {
+	source := "function f()\n if a then x() elseif b then x() elseif c then x() end\nend\nfunction g()\nend\n"
+	got := wholeAuditExtract(t, lua.NewExtractor(), "x.lua", "lua", source)
+	f := wholeAuditSymbol(t, got, "f")
+	g := wholeAuditSymbol(t, got, "g")
+	if f.EndLine != 3 || g.ParentHandle == f.Handle {
+		t.Fatalf("inline branch scope f=%+v g=%+v", f, g)
+	}
+}

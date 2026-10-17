@@ -21,7 +21,7 @@ var (
 	luaFunctionValue = regexp.MustCompile(`^\s*(?:local\s+)?([A-Za-z_]\w*(?:[.:][A-Za-z_]\w*)*)\s*=\s*function\b`)
 	luaTable         = regexp.MustCompile(`^\s*(?:local\s+)?([A-Za-z_]\w*)\s*=\s*\{`)
 	luaBustedTest    = regexp.MustCompile(`^\s*(?:it|specify)\s*(?:\(\s*)?["']([^"']+)["']`)
-	luaBlockWord     = regexp.MustCompile(`\b(function|do|then|repeat|end|until)\b`)
+	luaBlockWord     = regexp.MustCompile(`\b(function|do|then|repeat|end|until|elseif)\b`)
 	luaCall          = regexp.MustCompile(`\b([A-Za-z_]\w*(?:[.:][A-Za-z_]\w*)?)\s*\(`)
 )
 
@@ -139,12 +139,12 @@ func luaFunctionDeclaration(qualified, header string, line, depth int) *luaDecla
 
 func luaOpeningBlocks(code string) int {
 	count := 0
-	if trimmed := strings.TrimSpace(code); strings.HasPrefix(trimmed, "elseif") && (len(trimmed) == 6 || !isLuaNameByte(trimmed[6])) {
-		count--
-	}
 	for _, word := range luaBlockWord.FindAllStringSubmatch(code, -1) {
 		if word[1] == "function" || word[1] == "do" || word[1] == "repeat" || word[1] == "then" {
 			count++
+		}
+		if word[1] == "elseif" {
+			count--
 		}
 	}
 	return count
