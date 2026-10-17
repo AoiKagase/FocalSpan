@@ -193,6 +193,9 @@ func runUpdate(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if fs.NArg() != 0 {
+		return fmt.Errorf("unexpected argument %q", fs.Arg(0))
+	}
 	root, isGit, err := resolveRoot(ctx, *rootArg)
 	if err != nil {
 		return err
@@ -436,6 +439,9 @@ func runServe(ctx context.Context, args []string) error {
 	legacyNoAutoUpdate := fs.Bool("no-auto-update", false, "disable auto update")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if fs.NArg() != 0 {
+		return fmt.Errorf("unexpected argument %q", fs.Arg(0))
 	}
 	root, _, err := resolveRoot(ctx, *rootArg)
 	if err != nil {
@@ -685,13 +691,25 @@ func ensureGitignore(root string) error {
 		return err
 	}
 	text := string(b)
-	if strings.Contains(text, ".focalspan/") {
+	cfg, _, err := config.Load(root)
+	if err != nil {
+		return err
+	}
+	directory := filepath.ToSlash(filepath.Clean(cfg.IndexDirectory))
+	replacer := strings.NewReplacer("\\", "\\\\", "*", "\\*", "?", "\\?", "[", "\\[", "]", "\\]", " ", "\\ ", "#", "\\#", "!", "\\!")
+	rule := "/" + replacer.Replace(directory) + "/"
+	normalized := strings.TrimSuffix(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	if normalized == rule || strings.HasSuffix(normalized, "\n"+rule) {
 		return nil
 	}
-	if text != "" && !strings.HasSuffix(text, "\n") {
-		text += "\n"
+	ending := "\n"
+	if strings.Contains(text, "\r\n") {
+		ending = "\r\n"
 	}
-	text += ".focalspan/\n"
+	if text != "" && !strings.HasSuffix(text, "\n") {
+		text += ending
+	}
+	text += rule + ending
 	return os.WriteFile(path, []byte(text), 0o600)
 }
 
