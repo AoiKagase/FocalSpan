@@ -109,3 +109,17 @@ func TestF29ReviewArgumentHeredoc(t *testing.T) {
 		}
 	}
 }
+
+func TestF29ReviewQuotedHeredocMarkers(t *testing.T) {
+	for _, marker := range []string{"END-TEXT", "END TEXT"} {
+		for _, opener := range []string{"text = <<~'" + marker + "'", "puts(<<~'" + marker + "')"} {
+			source := opener + "\ndef fake\nend\n" + marker + "\ndef real\nend\n"
+			got := wholeAuditExtract(t, ruby.NewExtractor(), "x.rb", "ruby", source)
+			wholeAuditNoSymbol(t, got, "fake")
+			real := wholeAuditSymbol(t, got, "real")
+			if real.StartLine != 5 || real.EndLine != 6 {
+				t.Fatalf("quoted heredoc following declaration: %+v", real)
+			}
+		}
+	}
+}

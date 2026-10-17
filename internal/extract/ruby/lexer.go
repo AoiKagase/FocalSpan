@@ -146,16 +146,22 @@ func heredocEnd(source []byte, start int) (int, bool) {
 		at++
 	}
 	markerStart := at
-	if at >= start+lineEnd || !isRubyIdent(source[at]) {
-		return 0, false
-	}
-	for at < start+lineEnd && (isRubyIdent(source[at]) || source[at] >= '0' && source[at] <= '9') {
-		at++
+	if quote != 0 {
+		for at < start+lineEnd && source[at] != quote {
+			at++
+		}
+		if at == markerStart || at >= start+lineEnd {
+			return 0, false
+		}
+	} else {
+		if at >= start+lineEnd || !isRubyIdent(source[at]) {
+			return 0, false
+		}
+		for at < start+lineEnd && (isRubyIdent(source[at]) || source[at] >= '0' && source[at] <= '9') {
+			at++
+		}
 	}
 	marker := string(source[markerStart:at])
-	if quote != 0 && (at >= start+lineEnd || source[at] != quote) {
-		return 0, false
-	}
 	rest := source[start+lineEnd+1:]
 	for offset := 0; offset < len(rest); {
 		next := bytesLineEnd(rest, offset)
