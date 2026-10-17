@@ -10,13 +10,13 @@
 
 **Spec:** `docs/audits/2026-10-17-whole-repository-50.json`。元監査のF01〜F50を変更せず対応付ける。
 
-**Plan ID:** `whole-audit-50-20261017`。状態は**実装中**。本書がactive ExecPlan。前PLANを`docs/superpowers/plans/completed/2026-10-18-additional-19-before-audit50.md`へbyte-for-byte保存した。
+**Plan ID:** `whole-audit-50-20261017`。状態は**検証済み・統合待ち**。本書がactive ExecPlan。前PLANを`docs/superpowers/plans/completed/2026-10-18-additional-19-before-audit50.md`へbyte-for-byte保存した。
 
 ## Purpose / Big Picture
 
 2026-10-18のユーザー指示によりF02（秘密ファイルの除外迂回）・F03（DBへのアクセス境界）をサイバーセキュリティ項目として除外する。残り48件を対象とする。既存の当該2コミットは履歴を残して逆変更し、今回の統合結果に含めない。監査の44件は単体・補助関数を含む再現済み、6件（F02/F03/F04/F13/F14/F21）は静的確認であり、実装前に該当経路でREDを確認する。再現結果が監査と異なる場合は原因・契約・代替テストを記録し、根拠なく修正したりIDを別の問題に差し替えたりしない。
 
-今回の到達点は50件の正式テスト、修正、最終検証、独立レビュー、承認済みのローカル統合手順まで。件数を満たすための変更は行わない。監査外の追加候補は別のbacklogに記録し、本計画の完了条件を暗黙に拡大しない。
+今回の到達点は対象48件の正式テスト、修正、最終検証、独立レビュー、承認済みのローカル統合手順まで。件数を満たすための変更は行わない。監査外の追加候補は別のbacklogに記録し、本計画の完了条件を暗黙に拡大しない。
 
 ## Global Constraints
 
@@ -31,7 +31,7 @@
 - [x] 監査50 ID、現行の関連API、master基準と既存差分を確認した。
 - [x] 50件を5段階の実装順と正式テストへ対応付けた。製品コードの変更・検証はまだ行っていない。
 - [x] 実装開始時の状態保存、専用branch、active PLAN切替の文書コミット（5e175b6）。
-- [ ] A〜Eの対象48件をRED→GREENで修正し、IDごとにコミット／証拠を記録。
+- [x] A〜Eの対象48件をRED→GREENで修正し、IDごとにコミット／証拠を記録。
 - [ ] 通常→raceを直列実行し、vet・各ビルド・独立レビュー・FF統合を完了。
 
 実装時はUTC時刻でProgressを追記し、各IDにREDコマンド／実際の失敗、GREENコマンド／結果、commit SHA、review結果を対応付ける。未実行の検証を成功扱いしない。
@@ -132,7 +132,7 @@
 
 ## Review Focus
 
-1. **link・秘密ファイル・DB副ファイル:** 無害な別名、DBの葉、WAL／journal／migration一時ファイルを使って境界を迂回できないことをF02/F03で検査する。
+1. **対象範囲:** F02/F03は除外し、残る入力解析・索引整合性・保存・評価の48件を修正する。
 2. **設定保存の中断・競合:** add失敗だけでなく、保存直前キャンセル・外部編集・別process待機で旧内容と無関係設定が保持されることをF05/F06/F10で検査する。
 3. **有効コードと非コード:** EOF、CRLF、BOM、escaped quote、CDATA、heredoc、PHP境界の両側をF01/F25〜F39/F43/F46で検査する。
 4. **既存索引との一致:** 新規シンボル・削除・大文字小文字・大量条件・相対importで、増分更新と全再構築の関係集合が一致することをF07/F08/F15〜F23で検査する。
@@ -274,7 +274,7 @@ F06のno-clobber helperはGo標準APIと既存x/sysだけを使う。Unixは同�
 1. `go test ./...`を完了させてから、`go test -race ./...`を実行する。通常とraceを同時に走らせない。race用C compilerは既知の利用可能な環境を明示する。
 2. `go vet ./...`、`go build ./cmd/focalspan`を実行する。benchmark/evalも含むnative buildは`go build -o <temporary-output-directory> ./cmd/...`で確認し、稼働binaryを上書きしない。
 3. `CGO_ENABLED=0`でWindows amd64、Windows arm64、Linux amd64、Darwin arm64について、`./cmd/focalspan`、`./cmd/focalspan-bench`、`./cmd/focalspan-eval`を各々一時保存先へbuildする。cross-buildはOS runtime testの代わりにしない。
-4. F02/F03/F21はWSL-Ubuntuの実symlink／大小文字受入れとWindows native通常回帰／既存junction受入れで検査し、設定の別process lockテストも実行する（Decision Logのユーザー指定によるOS代替）。スキップや未実行は明示し、必須OS受入れが残る間は統合しない。benchmark/evalは解析対象コードを実行せず、F04のCLI比較まで検証する。
+4. F21はWSL-Ubuntuの実大小文字受入れとWindows native通常回帰／既存junction受入れで検査し、設定の別process lockテストも実行する（Decision Logのユーザー指定によるOS代替）。スキップや未実行は明示し、必須OS受入れが残る間は統合しない。benchmark/evalは解析対象コードを実行せず、F04のCLI比較まで検証する。
 5. 50 IDのテスト／commit対応、Evidence契約、設定喪失、境界、増分整合性を独立レビューする。指摘修正後は影響検証を再実行し、最終sourceで全通常→全raceを再確認する。`git diff --check`と既存ユーザー変更の保持も確認する。
 
 開始済みの確認を同じsourceで理由なく繰り返さない。追加修正・未解決の懸念があれば、その影響に応じて再検証する。すべてのGateは実行したcommit SHAとlogをPLANへ記録する。
@@ -291,6 +291,13 @@ F06のno-clobber helperはGo標準APIと既存x/sysだけを使う。Unixは同�
 
 ## Outcomes & Retrospective
 
-現時点の対象修正コミットは28/48。各件の状態・実測証拠はProgressの台帳に記載。最終検証・独立レビュー・統合は未完了。実装完了時に50件の主テスト／関連受入れ／commit SHA、旧索引の更新結果、全Gate、review修正、未解決項目の有無、FF統合先と既存変更保持の証拠を記入する。
+対象48件の実装・全Go gate・WSL受入れ・独立レビューが完了。F02/F03は除外。検証ソースと結果は `docs/audits/2026-10-18-audit48-verification.md`。masterへのfast-forward統合と今回branchの削除は承認済みで、この記録のコミット後に実行する。
 
 本書作成時の検証は文書のID完全性・参照先・`git diff --check`のみ。計画作成のためにビルド・通常テスト・race・vet・restore・生成を実行しない。
+
+### 最終検証・レビュー記録
+
+- 全48件を修正し、20 Go gates・WSL-Ubuntu受入れがPASS。全て最終source fingerprintで照合。
+- 独立レビュー3担当でブロッカーなし。レビューの原本再現と正式テストを突き合わせて修正・再承認した。
+- F11 scanner→Indexの受入れもPASS。設定patternは既存契約の`**/*.go`を使用（`.go`単体はglobではない）。
+- 製品ソースの最終commit: ae800042cef19263a9a60197616e0fafe740f8e1。詳細は検証記録を参照。
