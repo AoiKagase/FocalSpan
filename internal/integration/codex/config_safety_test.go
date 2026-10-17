@@ -2,6 +2,7 @@ package codex
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -47,6 +48,38 @@ func containsAudit(s, w string) bool {
 		}
 	}
 	return false
+}
+
+func TestConfigConflictPreservesExternalEditOnBothOperations(t *testing.T) {
+	for _, uninstall := range []bool{false, true} {
+		t.Run(map[bool]string{false: "install", true: "uninstall"}[uninstall], func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.toml")
+			spec := RegistrationSpec{Command: "focalspan.exe", Args: []string{"mcp"}, Enabled: true, StartupTimeoutSec: 30, ToolTimeoutSec: 60, EnabledTools: append([]string(nil), EnabledTools...)}
+			if _, err := InstallProject(context.Background(), path, "focalspan", spec, false); err != nil {
+				t.Fatal(err)
+			}
+			ctx := &auditConcurrentEditContext{Context: context.Background(), path: path}
+			var err error
+			if uninstall {
+				_, err = UninstallProject(ctx, path, "focalspan", false)
+			} else {
+				spec.Args = []string{"mcp", "--no-auto-update"}
+				_, err = InstallProject(ctx, path, "focalspan", spec, false)
+			}
+			var conflict *ConfigConflictError
+			if !errors.As(err, &conflict) {
+				t.Fatalf("expected typed conflict, got %v", err)
+			}
+			data, readErr := os.ReadFile(path)
+			if readErr != nil || string(data) != "user_setting = \"concurrent edit\"\n" {
+				t.Fatalf("external edit lost: %s %v", data, readErr)
+			}
+			leftovers, _ := filepath.Glob(filepath.Join(filepath.Dir(path), ".config.toml.focalspan-*"))
+			if len(leftovers) > 0 {
+				t.Fatalf("temp left: %+v", leftovers)
+			}
+		})
+	}
 }
 
 type pausedConfigContext struct {
