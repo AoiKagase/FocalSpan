@@ -241,6 +241,7 @@ func vbNameFromAttribute(lines []vbLine) string {
 
 type vbDecl struct {
 	Kind      string
+	BlockKind string
 	Name      string
 	Qualified string
 	Header    string

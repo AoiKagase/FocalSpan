@@ -8,6 +8,7 @@ import (
 )
 
 var (
+	vbStringPattern    = regexp.MustCompile(`"(?:[^"]|"")*"`)
 	vbNamespacePattern = regexp.MustCompile(`(?i)^namespace\s+([a-z_][a-z0-9_.]*)`)
 	vbTypePattern      = regexp.MustCompile(`(?i)\b(class|module|structure|interface|enum)\s+([a-z_][a-z0-9_]*)`)
 	vbDelegatePattern  = regexp.MustCompile(`(?i)\bdelegate\s+(sub|function)\s+([a-z_][a-z0-9_]*)`)
@@ -28,7 +29,14 @@ func parseVBNet(file model.SourceFile) vbParseResult {
 		if text == "" || strings.HasPrefix(text, "'") || strings.HasPrefix(text, "#") {
 			continue
 		}
-		if len(stack) > 0 && vbNetCloses(stack[len(stack)-1].Kind, text) {
+		closingKind := ""
+		if len(stack) > 0 {
+			closingKind = stack[len(stack)-1].BlockKind
+			if closingKind == "" {
+				closingKind = stack[len(stack)-1].Kind
+			}
+		}
+		if len(stack) > 0 && vbNetCloses(closingKind, text) {
 			stack[len(stack)-1].EndLine = lineNumber
 			stack = stack[:len(stack)-1]
 			continue
@@ -57,19 +65,20 @@ func parseVBNet(file model.SourceFile) vbParseResult {
 
 func parseVBNetDeclaration(text string, line int, stack []*vbDecl) *vbDecl {
 	parent := vbDeclParent(stack)
-	if match := vbNamespacePattern.FindStringSubmatch(text); len(match) == 2 {
+	code := vbStringPattern.ReplaceAllString(text, `""`)
+	if match := vbNamespacePattern.FindStringSubmatch(code); len(match) == 2 {
 		return newVBDecl("namespace", match[1], text, line, true, parent)
 	}
-	if match := vbDelegatePattern.FindStringSubmatch(text); len(match) == 3 {
+	if match := vbDelegatePattern.FindStringSubmatch(code); len(match) == 3 {
 		return newVBDecl("delegate", match[2], text, line, false, parent)
 	}
-	if match := vbTypePattern.FindStringSubmatch(text); len(match) == 3 && !strings.HasPrefix(strings.ToLower(text), "end ") {
+	if match := vbTypePattern.FindStringSubmatch(code); len(match) == 3 && !strings.HasPrefix(strings.ToLower(text), "end ") {
 		return newVBDecl(strings.ToLower(match[1]), match[2], text, line, true, parent)
 	}
-	if match := vbOperatorPattern.FindStringSubmatch(text); len(match) == 2 {
+	if match := vbOperatorPattern.FindStringSubmatch(code); len(match) == 2 {
 		return newVBDecl("operator", match[1], text, line, true, parent)
 	}
-	if match := vbMethodPattern.FindStringSubmatch(text); len(match) == 3 {
+	if match := vbMethodPattern.FindStringSubmatch(code); len(match) == 3 {
 		name := match[2]
 		kind := strings.ToLower(match[1])
 		if strings.EqualFold(name, "new") {
@@ -92,13 +101,15 @@ func parseVBNetDeclaration(text string, line int, stack []*vbDecl) *vbDecl {
 		if strings.HasPrefix(strings.ToLower(name), "test") || parent != nil && strings.Contains(strings.ToLower(parent.Name), "test") {
 			kind = "test"
 		}
-		return newVBDecl(kind, name, text, line, block, parent)
+		decl := newVBDecl(kind, name, text, line, block, parent)
+		decl.BlockKind = strings.ToLower(match[1])
+		return decl
 	}
-	if match := vbPropertyPattern.FindStringSubmatch(text); len(match) == 2 {
+	if match := vbPropertyPattern.FindStringSubmatch(code); len(match) == 2 {
 		block := strings.Contains(strings.ToLower(text), " get") || strings.HasSuffix(strings.ToLower(text), " get")
 		return newVBDecl("property", match[1], text, line, block, parent)
 	}
-	if match := vbEventPattern.FindStringSubmatch(text); len(match) == 2 {
+	if match := vbEventPattern.FindStringSubmatch(code); len(match) == 2 {
 		return newVBDecl("event", match[1], text, line, false, parent)
 	}
 	return nil
@@ -123,9 +134,9 @@ func vbNetCloses(kind, text string) bool {
 		return ending == "interface"
 	case "enum":
 		return ending == "enum"
-	case "sub", "event-handler", "test":
+	case "sub", "constructor", "event-handler", "test":
 		return ending == "sub"
-	case "function", "constructor", "declare":
+	case "function", "declare":
 		return ending == "function"
 	case "property":
 		return ending == "property"

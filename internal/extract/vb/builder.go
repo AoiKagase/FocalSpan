@@ -110,7 +110,7 @@ func buildVBRelations(result *model.Extraction, file model.SourceFile, parsed vb
 	}
 	index := vbIndex(symbols)
 	for lineIndex, line := range parsed.Lines {
-		text := strings.TrimSpace(vbCode(line.Text))
+		text := strings.TrimSpace(vbStringPattern.ReplaceAllString(vbCode(line.Text), `""`))
 		if text == "" || strings.HasPrefix(text, "'") {
 			continue
 		}
