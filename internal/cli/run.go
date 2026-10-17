@@ -300,6 +300,15 @@ func runQuery(ctx context.Context, args []string, stdout io.Writer) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	queryWasSet := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "query" {
+			queryWasSet = true
+		}
+	})
+	if queryWasSet && strings.TrimSpace(*query) == "" {
+		return errors.New("query must not be blank")
+	}
 	if strings.TrimSpace(*query) == "" {
 		remaining := fs.Args()
 		if len(remaining) == 1 {
@@ -380,10 +389,15 @@ func runQuery(ctx context.Context, args []string, stdout io.Writer) error {
 
 func normalizeQueryArgs(args []string) []string {
 	valueFlags := map[string]bool{"--root": true, "-root": true, "--token-budget": true, "-token-budget": true, "--format": true, "-format": true, "--mode": true, "-mode": true, "--path": true, "-path": true, "--known-handle": true, "-known-handle": true}
+	valueFlags["--query"], valueFlags["-query"] = true, true
 	options := make([]string, 0, len(args))
 	question := make([]string, 0, len(args))
+	hasExplicitQuery := false
 	for index := 0; index < len(args); index++ {
 		arg := args[index]
+		if arg == "--query" || arg == "-query" || strings.HasPrefix(arg, "--query=") || strings.HasPrefix(arg, "-query=") {
+			hasExplicitQuery = true
+		}
 		if arg == "--" {
 			question = append(question, args[index+1:]...)
 			break
@@ -404,6 +418,9 @@ func normalizeQueryArgs(args []string) []string {
 	}
 	if len(question) == 0 {
 		return options
+	}
+	if hasExplicitQuery {
+		return append(append(options, "--"), question...)
 	}
 	normalized := make([]string, 0, len(options)+2)
 	normalized = append(normalized, options...)
