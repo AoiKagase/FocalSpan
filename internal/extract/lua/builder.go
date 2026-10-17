@@ -47,13 +47,13 @@ func buildLua(ctx context.Context, file model.SourceFile, tokens []Token, diagno
 		result.Chunks = append(result.Chunks, luaSourceChunk(file, symbol, chunkKind, start, chunkEnd, decl.StartLine, decl.EndLine))
 	}
 
-	for lineIndex, line := range lines {
-		trimmed := strings.TrimSpace(line.Raw)
-		if luaRequireTarget(trimmed) != "" {
-			result.Chunks = append(result.Chunks, luaSourceChunk(file, owner, "import", line.Start, line.End, lineIndex+1, lineIndex+1))
-			addLuaRelation(&result, model.Relation{FromHandle: owner.Handle, UnresolvedTo: luaRequireTarget(trimmed), Kind: "imports", Confidence: .9, Source: "lua-require"})
-		}
-		if target := luaSetmetatableTarget(trimmed); target != "" {
+	for _, imported := range luaRequireCalls(tokens) {
+		line := lines[imported.line-1]
+		result.Chunks = append(result.Chunks, luaSourceChunk(file, owner, "import", line.Start, line.End, imported.line, imported.line))
+		addLuaRelation(&result, model.Relation{FromHandle: owner.Handle, UnresolvedTo: imported.target, Kind: "imports", Confidence: .9, Source: "lua-require"})
+	}
+	for _, line := range lines {
+		if target := luaSetmetatableTarget(line.Code); target != "" {
 			addLuaRelation(&result, model.Relation{FromHandle: owner.Handle, UnresolvedTo: target, Kind: "references", Confidence: .35, Source: "lua-setmetatable"})
 		}
 	}
@@ -82,21 +82,52 @@ func buildLua(ctx context.Context, file model.SourceFile, tokens []Token, diagno
 	return result, nil
 }
 
-func luaRequireTarget(line string) string {
-	marker := strings.Index(line, "require")
-	if marker < 0 || (marker > 0 && isLuaNameByte(line[marker-1])) || marker+len("require") < len(line) && isLuaNameByte(line[marker+len("require")]) {
-		return ""
+type luaImport struct {
+	target string
+	line   int
+}
+
+func luaRequireCalls(tokens []Token) []luaImport {
+	sig := make([]Token, 0, len(tokens))
+	for _, token := range tokens {
+		if token.Kind == Comment || token.Kind == LongComment || token.Kind == Punctuation && strings.TrimSpace(token.Text) == "" {
+			continue
+		}
+		sig = append(sig, token)
 	}
-	start := strings.IndexAny(line[marker+len("require"):], "\"'")
-	if start < 0 {
-		return ""
+	imports := make([]luaImport, 0)
+	for at, token := range sig {
+		if token.Kind != Identifier || token.Text != "require" || at+1 >= len(sig) {
+			continue
+		}
+		if at > 0 && (sig[at-1].Text == "." || sig[at-1].Text == ":") {
+			continue
+		}
+		argument := at + 1
+		parenthesized := sig[argument].Text == "("
+		if parenthesized {
+			argument++
+		}
+		if argument >= len(sig) {
+			continue
+		}
+		literal := sig[argument]
+		if parenthesized && (argument+1 >= len(sig) || sig[argument+1].Text != ")") {
+			continue
+		}
+		target := ""
+		if literal.Kind == String && len(literal.Text) >= 2 && literal.Text[len(literal.Text)-1] == literal.Text[0] {
+			target = literal.Text[1 : len(literal.Text)-1]
+		} else if literal.Kind == LongString {
+			if open, ok := luaLongBracketStart([]byte(literal.Text), 0); ok && len(literal.Text) >= 2*open {
+				target = literal.Text[open : len(literal.Text)-open]
+			}
+		}
+		if target != "" {
+			imports = append(imports, luaImport{target: target, line: token.StartLine})
+		}
 	}
-	start += marker + len("require")
-	rest := line[start+1:]
-	if end := strings.IndexAny(rest, "\"'"); end >= 0 {
-		return rest[:end]
-	}
-	return ""
+	return imports
 }
 
 func luaSetmetatableTarget(line string) string {

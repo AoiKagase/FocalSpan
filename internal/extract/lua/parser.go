@@ -139,6 +139,9 @@ func luaFunctionDeclaration(qualified, header string, line, depth int) *luaDecla
 
 func luaOpeningBlocks(code string) int {
 	count := 0
+	if trimmed := strings.TrimSpace(code); strings.HasPrefix(trimmed, "elseif") && (len(trimmed) == 6 || !isLuaNameByte(trimmed[6])) {
+		count--
+	}
 	for _, word := range luaBlockWord.FindAllStringSubmatch(code, -1) {
 		if word[1] == "function" || word[1] == "do" || word[1] == "repeat" || word[1] == "then" {
 			count++
