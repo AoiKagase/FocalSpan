@@ -27,11 +27,12 @@ type nimDecl struct {
 }
 
 type nimParseResult struct {
-	Owner       *nimDecl
-	Decls       []*nimDecl
-	Lines       []nimLine
-	CodeLines   []nimLine
-	Diagnostics []model.Diagnostic
+	Owner         *nimDecl
+	Decls         []*nimDecl
+	Lines         []nimLine
+	CodeLines     []nimLine
+	RelationLines []nimLine
+	Diagnostics   []model.Diagnostic
 }
 
 var (
@@ -55,7 +56,17 @@ func parseNim(file model.SourceFile, tokens []Token) nimParseResult {
 		}
 	}
 	codeLines := nimSourceLines(code)
-	result := nimParseResult{Lines: lines, CodeLines: codeLines}
+	relationCode := append([]byte(nil), code...)
+	for _, token := range tokens {
+		if token.Kind == String || token.Kind == RawString {
+			for at := token.StartByte; at < token.EndByte; at++ {
+				if relationCode[at] != '\n' && relationCode[at] != '\r' {
+					relationCode[at] = ' '
+				}
+			}
+		}
+	}
+	result := nimParseResult{Lines: lines, CodeLines: codeLines, RelationLines: nimSourceLines(relationCode)}
 	name := filepath.Base(file.Path)
 	result.Owner = &nimDecl{Kind: "module", Name: name, Qualified: name, Header: "module " + name, StartLine: 1, EndLine: len(lines), Indent: -1}
 	stack := make([]*nimDecl, 0, 8)

@@ -5,6 +5,7 @@ import (
 	"github.com/focalspan/focalspan/internal/extract"
 	"github.com/focalspan/focalspan/internal/extract/nim"
 	"github.com/focalspan/focalspan/internal/model"
+	"os"
 	"strings"
 	"testing"
 )
@@ -47,7 +48,7 @@ func wholeAuditNoSymbol(t *testing.T, got model.Extraction, name string) {
 }
 
 func TestF28NimTripleStringIsNotDeclaration(t *testing.T) {
-	got := wholeAuditExtract(t, nim.NewExtractor(), "x.nim", "nim", "let doc = \"\"\"\nproc fake() = discard\n\"\"\"\nproc real() = discard\n")
+	got := wholeAuditExtract(t, nim.NewExtractor(), "x.nim", "nim", audit50Fixture(t, "F28/nim-1.nim"))
 	wholeAuditNoSymbol(t, got, "fake")
 	wholeAuditSymbol(t, got, "real")
 }
@@ -89,5 +90,43 @@ func TestF28MultilineNonCodeDoesNotCreateDeclarationsOrRelations(t *testing.T) {
 				t.Fatalf("non-code relation: %+v", r)
 			}
 		}
+	}
+}
+
+func audit50Fixture(t *testing.T, name string) string {
+	t.Helper()
+	data, err := os.ReadFile("../../../testdata/audit50/" + name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func TestReviewF28Regression(t *testing.T) {
+	got := wholeAuditExtract(t, nim.NewExtractor(), "x.nim", "nim", audit50Fixture(t, "F28/review-x.nim"))
+	for _, r := range got.Relations {
+		if r.Kind == "calls" {
+			t.Errorf("literal call: %+v", r)
+		}
+	}
+}
+
+func TestReviewF28LiteralAndRealCall(t *testing.T) {
+	got := wholeAuditExtract(t, nim.NewExtractor(), "x.nim", "nim", `proc target() = discard
+proc real() =
+  let text = r"target()"
+  target()
+`)
+	count := 0
+	for _, r := range got.Relations {
+		if r.Kind == "calls" {
+			count++
+			if r.ToHandle == "" {
+				t.Errorf("lost resolved real call: %+v", r)
+			}
+		}
+	}
+	if count != 1 {
+		t.Fatalf("calls=%d %+v", count, got.Relations)
 	}
 }

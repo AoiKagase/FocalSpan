@@ -105,6 +105,7 @@ func buildNimRelations(result *model.Extraction, file model.SourceFile, parsed n
 		if match := nimFromPattern.FindStringSubmatch(text); len(match) == 3 {
 			addNimRelation(result, model.Relation{FromHandle: from.Handle, UnresolvedTo: match[1], Kind: "imports", Confidence: .9, Source: "nim-from"})
 		}
+		text = strings.TrimSpace(nimCode(parsed.RelationLines[lineIndex].Text))
 		if match := nimObjectParentPattern.FindStringSubmatch(text); len(match) == 2 {
 			addNimRelation(result, model.Relation{FromHandle: from.Handle, UnresolvedTo: match[1], Kind: "references", Confidence: .85, Source: "nim-inheritance"})
 		}
