@@ -118,6 +118,7 @@ SELECT 1 FROM relation_lookup dependency
 WHERE dependency.relation_id = r.id AND (
   EXISTS (SELECT 1 FROM symbol_lookup symbol_key WHERE symbol_key.lookup_key = dependency.lookup_key)
   OR EXISTS (SELECT 1 FROM file_lookup file_key WHERE file_key.lookup_key = dependency.lookup_key)
+ OR r.kind IN ('imports','exports','includes','requires')
 ))`
 	} else {
 		query += ` WHERE r.to_handle IS NULL AND r.unresolved_to IS NOT NULL`
