@@ -40,6 +40,19 @@ func (s *Service) installUser(ctx context.Context, req Request, spec Registratio
 	}
 	if req.DryRun {
 		result.Action, result.State = "create", StateAbsent
+		if req.Force {
+			obs, err := inspectProject(configPath, req.Name)
+			if err != nil {
+				return OperationResult{}, err
+			}
+			if obs.serverFound {
+				block, err := buildUserBlock(req.Name, spec)
+				if err != nil {
+					return OperationResult{}, err
+				}
+				result.Action, result.State, result.Block, result.Argv = "update", StateManagedDrift, block, nil
+			}
+		}
 		if req.MigrationRoot != "" {
 			result.Diagnostics = append(result.Diagnostics, fmt.Sprintf("would remove managed legacy Codex MCP server %q after installing %q", LegacyUserServerName(req.MigrationRoot), req.Name))
 		}
@@ -50,7 +63,16 @@ func (s *Service) installUser(ctx context.Context, req Request, spec Registratio
 		}
 		return result, nil
 	}
+	var expectedConfig *projectObservation
+	if req.Force {
+		obs, err := inspectProject(configPath, req.Name)
+		if err != nil {
+			return OperationResult{}, err
+		}
+		expectedConfig = &obs
+	}
 	current, found, resolvedCodex, err := s.userGet(ctx, req, req.Name)
+	current.observedConfig = expectedConfig
 	if errors.Is(err, ErrCodexNotFound) {
 		return OperationResult{}, fmt.Errorf("%w; expected argv: %s", ErrCodexNotFound, formatArgv(result.Argv))
 	}
@@ -66,11 +88,12 @@ func (s *Service) installUser(ctx context.Context, req Request, spec Registratio
 		return OperationResult{}, fmt.Errorf("Codex MCP server %q already has a different registration; use --force to replace it", req.Name)
 	}
 	if found {
-		if err := s.userRemove(ctx, req, req.Name, resolvedCodex); err != nil {
+		updated, err := replaceUserRegistration(ctx, configPath, req.Name, spec, current)
+		if err != nil {
 			return OperationResult{}, err
 		}
-	}
-	if err := s.userAdd(ctx, req, req.Name, spec, resolvedCodex); err != nil {
+		result.Block, result.Argv = updated.Block, nil
+	} else if err := s.userAdd(ctx, req, req.Name, spec, resolvedCodex); err != nil {
 		return OperationResult{}, err
 	}
 	result.Action, result.State = "updated", StateManagedMatch

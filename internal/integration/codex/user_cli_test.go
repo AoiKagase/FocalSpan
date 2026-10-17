@@ -208,51 +208,26 @@ func TestUserInstallUsesSeparatedCodexArgv(t *testing.T) {
 	}
 }
 
-func TestUserForceRemovesBeforeAddingAndRemoveFailurePreventsAdd(t *testing.T) {
-	command := testExecutable(t, "focalspan")
-	t.Run("force", func(t *testing.T) {
-		fake := &fakeCommandRunner{}
-		fake.fn = func(_ context.Context, _ string, args []string) (CommandResult, error) {
-			switch args[1] {
-			case "get":
-				return CommandResult{Stdout: currentCodexRegistrationJSON(t, "other", []string{"serve"})}, nil
-			case "remove":
-				return CommandResult{}, nil
-			default:
-				return CommandResult{}, nil
-			}
-		}
-		service := NewService(fake)
-		req := Request{Scope: ScopeUser, Root: "/repo", Name: "focalspan-test", Command: command, Force: true}
-		if _, err := service.Install(context.Background(), req); err != nil {
-			t.Fatal(err)
-		}
-		if len(fake.calls) != 3 || fake.calls[1].Args[1] != "remove" || fake.calls[2].Args[1] != "add" {
-			t.Fatalf("calls=%+v", fake.calls)
-		}
-	})
-
-	t.Run("remove failure", func(t *testing.T) {
-		fake := &fakeCommandRunner{}
-		fake.fn = func(_ context.Context, _ string, args []string) (CommandResult, error) {
-			switch args[1] {
-			case "get":
-				return CommandResult{Stdout: currentCodexRegistrationJSON(t, "other", []string{"serve"})}, nil
-			case "remove":
-				return CommandResult{ExitCode: 1}, errors.New("remove failed")
-			default:
-				return CommandResult{}, nil
-			}
-		}
-		service := NewService(fake)
-		req := Request{Scope: ScopeUser, Root: "/repo", Name: "focalspan-test", Command: command, Force: true}
-		if _, err := service.Install(context.Background(), req); err == nil {
-			t.Fatal("remove failure was ignored")
-		}
-		if len(fake.calls) != 2 {
-			t.Fatalf("add ran after remove failure: %+v", fake.calls)
-		}
-	})
+func TestUserForceRequiresMatchingLocalConfiguration(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	path := filepath.Join(home, "config.toml")
+	original := []byte("unrelated = true\n")
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	fake := &fakeCommandRunner{fn: func(_ context.Context, _ string, args []string) (CommandResult, error) {
+		return CommandResult{Stdout: currentCodexRegistrationJSON(t, "other", []string{"serve"})}, nil
+	}}
+	_, err := NewService(fake).Install(context.Background(), Request{Scope: ScopeUser, Name: "focalspan-test", Command: testExecutable(t, "focalspan.exe"), Force: true})
+	var conflict *ConfigConflictError
+	if !errors.As(err, &conflict) {
+		t.Fatalf("unowned registration should conflict: %v", err)
+	}
+	got, readErr := os.ReadFile(path)
+	if readErr != nil || string(got) != string(original) {
+		t.Fatalf("unrelated content changed: %q %v", got, readErr)
+	}
 }
 
 func TestUserInstallIdenticalIsNoOpAndConflictNeedsForce(t *testing.T) {

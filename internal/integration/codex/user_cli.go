@@ -34,8 +34,9 @@ func (execRunner) Run(ctx context.Context, name string, args ...string) (Command
 }
 
 type userRegistration struct {
-	Command string
-	Args    []string
+	observedConfig *projectObservation
+	Command        string
+	Args           []string
 }
 
 func (s *Service) codexRunner(req Request) (CommandRunner, string, error) {

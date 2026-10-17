@@ -38,7 +38,7 @@
 
 ### 実装台帳
 
-更新UTC: 2026-10-17T15:33:15.429981+00:00。実装済み 5/50。RED/GREEN logは専用worktreeの`.superpowers/sdd/PLAN/`に保存。
+更新UTC: 2026-10-17T15:35:48.001809+00:00。実装済み 6/50。RED/GREEN logは専用worktreeの`.superpowers/sdd/PLAN/`に保存。
 
 | ID | 状態 | RED | GREEN | commit |
 |---|---|---|---|---|
@@ -47,6 +47,7 @@
 | F03 | complete | F03-linux-red.log | F03-linux-green.log | afe9737d4192 |
 | F09 | complete | F09-red.log | F09-green.log | ceffd75bc652 |
 | F11 | complete | F11-red.log | F11-app-green.log | 0339a074ca28 |
+| F06 | complete | F06-red.log | F06-windows-green.log | dff6a2bca1f9 |
 
 ## Surprises & Discoveries
 
