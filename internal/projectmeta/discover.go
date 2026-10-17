@@ -60,7 +60,7 @@ func (staticProvider) Parse(ctx context.Context, _ string, file model.SourceFile
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
-	text := string(file.Content)
+	text := strings.TrimPrefix(string(file.Content), "\uFEFF")
 	base := strings.ToLower(filepath.Base(file.Path))
 	facts := make([]Fact, 0)
 	add := func(kind, name, target string, confidence float64) {

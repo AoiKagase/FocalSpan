@@ -66,15 +66,16 @@ func (s *Scanner) Scan(ctx context.Context) ([]model.SourceFile, []model.Diagnos
 			diagnostics = append(diagnostics, model.Diagnostic{FilePath: rel, Level: "info", Code: "binary_skipped", Message: "binary file skipped"})
 			continue
 		}
-		if bytesHasBOM(content) {
-			content = content[3:]
-		}
 		if !utf8.Valid(content) {
 			diagnostics = append(diagnostics, model.Diagnostic{FilePath: rel, Level: "warning", Code: "invalid_utf8", Message: "invalid UTF-8 file skipped"})
 			continue
 		}
 		digest := sha256.Sum256(content)
-		files = append(files, model.SourceFile{Path: rel, Language: language.Detect(rel, content, s.Config.LanguageOverrides).Language, Content: content, SHA256: hex.EncodeToString(digest[:]), SizeBytes: int64(len(content))})
+		detectionContent := content
+		if bytesHasBOM(detectionContent) {
+			detectionContent = detectionContent[3:]
+		}
+		files = append(files, model.SourceFile{Path: rel, Language: language.Detect(rel, detectionContent, s.Config.LanguageOverrides).Language, Content: content, SHA256: hex.EncodeToString(digest[:]), SizeBytes: int64(len(content))})
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	return files, diagnostics, nil

@@ -7,22 +7,28 @@ Scanned file content, SHA-256 and size must describe the original bytes, includi
 ## Progress
 
 - [x] 2026-10-17 UTC: Found scanner removes BOM before hashing, sizing and extraction. Archived the completed linking-recovery plan byte-for-byte.
-- [ ] Observe failing scanner, registry and incremental/service regressions.
-- [ ] Preserve raw scan bytes and translate BOM-free parser offsets back to raw positions.
+- [x] 2026-10-17 UTC: RED showed scanner stripping original bytes/identity, BOM-only updates treated unchanged, and several first-line declaration/offset failures.
+- [x] 2026-10-17 UTC: Preserve raw scanner identity and language detection's BOM-free view; registry adjusts positive symbol/chunk ranges after extraction. Focused scanner, six-language registry and service Evidence regressions passed.
+- [x] 2026-10-17 UTC: Added metadata parser-view normalization after RED for package.json/go.mod; focused metadata regression passes. Independent read-only review of final production scope found no actionable issues.
 - [ ] Full offline verification, independent review, scoped commit, merge and merged branch cleanup.
+
+- [x] 2026-10-17 UTC: Final full go test ./..., go test -race ./..., go vet ./..., native build and all three CGO-disabled cross-builds passed. Evidence regression explicitly checks wire usage and invariants. Archived predecessor hash matches master:PLAN.md; independent review found no actionable issues.
 
 ## Surprises & Discoveries
 
 All extractors previously received BOM-free content from the scanner. Simply passing BOM through risks losing first-line symbols in language-specific parsers. Normalize only the extraction view and translate resulting symbol/chunk byte ranges by the BOM length.
 
+Synthetic outlines deliberately use zero/zero byte ranges and are not raw source; retain these sentinels. The generic extractor already has approximate end-range conventions, so its test asserts restored first-line recognition and raw start position. Structured chunk ranges receive exact raw-slice assertions. A mistaken Python fixture for the generic extractor was replaced with its supported PowerShell indentation extraction before final verification.
+
 ## Decision Log
 
 - 2026-10-17 UTC: Keep raw identity in SourceFile; centralize BOM handling in Registry.Extract so existing parsers keep their prior input. Do not change packet schemas or line numbers.
-- 2026-10-17 UTC: Own PLAN.md, predecessor archive, scanner and registry production sections plus new regression files. Preserve user dirty changes. No network, dependency restore, fixture code execution or deployment.
+- 2026-10-17 UTC: Own PLAN.md, predecessor archive, scanner, registry and projectmeta parser-view sections plus new regression files. Preserve user dirty changes. No network, dependency restore, fixture code execution or deployment.
+- 2026-10-17 UTC: Consumer inspection found projectmeta receives raw SourceFile directly. RED showed BOM breaks JSON metadata and go.mod first declaration. Keep its parsing text BOM-free too; restart final verification after this adjustment.
 
 ## Outcomes & Retrospective
 
-Pending implementation and verification.
+Final regressions and full offline verification pass. BOM-bearing files retain original Content/SHA256/SizeBytes; adding and removing BOM updates revision and stored ranges. Six-language declarations and JSON/Go-module metadata remain discoverable. Evidence retains verbatim source and line numbers with explicit wire measurement/invariants. Independent review found no actionable issues. Artifacts: .build/bom-fidelity-verification. Commit and local merge remain.
 
 ## Context and Orientation
 
