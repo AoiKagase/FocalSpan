@@ -1059,6 +1059,36 @@ func (s *Store) RelatedCandidateHits(ctx context.Context, handles []string, rela
 }
 
 func (s *Store) RelatedCandidates(ctx context.Context, handles []string, relation string) ([]model.RankedCandidate, error) {
+	switch relation {
+	case "callers", "callees", "tests", "imports", "exports", "references":
+		var result []model.RankedCandidate
+		for _, handle := range handles {
+			hits, err := s.RelatedCandidateHits(ctx, []string{handle}, relation)
+			if err != nil {
+				return nil, err
+			}
+			items := make([]model.RankedCandidate, 0, len(hits))
+			seen := make(map[string]bool)
+			for _, hit := range hits {
+				if !seen[hit.Candidate.Handle] {
+					seen[hit.Candidate.Handle] = true
+					items = append(items, hit.Candidate)
+				}
+			}
+			sort.SliceStable(items, func(i, j int) bool {
+				a, b := items[i], items[j]
+				if a.Path != b.Path {
+					return a.Path < b.Path
+				}
+				if a.StartLine != b.StartLine {
+					return a.StartLine < b.StartLine
+				}
+				return a.Handle < b.Handle
+			})
+			result = append(result, items...)
+		}
+		return result, nil
+	}
 	return s.relatedCandidatesLegacy(ctx, handles, relation)
 }
 
@@ -1143,11 +1173,11 @@ WHERE r.kind = '%s' AND r.from_handle = a.handle AND r.to_handle IS NULL AND (%s
 func callAnchorMatch(anchor, relation string, camel bool) string {
 	match := fmt.Sprintf(`lower(%[2]s.unresolved_to) = lower(%[1]s.name)
 OR lower(%[2]s.unresolved_to) = lower(%[1]s.qualified_name)
-OR lower(%[2]s.unresolved_to) LIKE '%%.' || lower(%[1]s.name)
-OR lower(%[2]s.unresolved_to) LIKE '%%::' || lower(%[1]s.name)
-OR lower(%[2]s.unresolved_to) LIKE '%%->' || lower(%[1]s.name)`, anchor, relation)
+OR substr(lower(%[2]s.unresolved_to), -length('.' || %[1]s.name)) = '.' || lower(%[1]s.name)
+OR substr(lower(%[2]s.unresolved_to), -length('::' || %[1]s.name)) = '::' || lower(%[1]s.name)
+OR substr(lower(%[2]s.unresolved_to), -length('->' || %[1]s.name)) = '->' || lower(%[1]s.name)`, anchor, relation)
 	if camel {
-		match += fmt.Sprintf(` OR lower(%s.unresolved_to) LIKE ?`, relation)
+		match += fmt.Sprintf(` OR lower(%s.unresolved_to) LIKE ? ESCAPE '\'`, relation)
 	}
 	return match
 }
@@ -1160,20 +1190,20 @@ func importAnchorMatch(anchor, relation string) string {
 	return fmt.Sprintf(`lower(%[2]s.unresolved_to) = lower(%[1]s.name)
 OR lower(%[2]s.unresolved_to) = lower(%[1]s.qualified_name)
 OR lower(%[2]s.unresolved_to) = lower(%[1]s.path)
-OR lower(%[1]s.path) LIKE '%%/' || lower(%[2]s.unresolved_to)
-OR lower(%[2]s.unresolved_to) LIKE '%%::' || lower(%[1]s.name) || '::%%'
-OR lower(%[2]s.unresolved_to) LIKE '%%.' || lower(%[1]s.name) || '.%%'
-OR lower(%[2]s.unresolved_to) LIKE '%%.' || lower(%[1]s.name)`, anchor, relation)
+OR substr(lower(%[1]s.path), -length('/' || %[2]s.unresolved_to)) = '/' || lower(%[2]s.unresolved_to)
+OR instr(lower(%[2]s.unresolved_to), '::' || lower(%[1]s.name) || '::') > 0
+OR instr(lower(%[2]s.unresolved_to), '.' || lower(%[1]s.name) || '.') > 0
+OR substr(lower(%[2]s.unresolved_to), -length('.' || %[1]s.name)) = '.' || lower(%[1]s.name)`, anchor, relation)
 }
 
 func importTargetMatch(target, targetFile, relation string) string {
 	return fmt.Sprintf(`lower(%[3]s.unresolved_to) = lower(%[1]s.name)
 OR lower(%[3]s.unresolved_to) = lower(%[1]s.qualified_name)
 OR lower(%[3]s.unresolved_to) = lower(%[2]s.path)
-OR lower(%[2]s.path) LIKE '%%/' || lower(%[3]s.unresolved_to)
-OR lower(%[3]s.unresolved_to) LIKE '%%::' || lower(%[1]s.name) || '::%%'
-OR lower(%[3]s.unresolved_to) LIKE '%%.' || lower(%[1]s.name) || '.%%'
-OR lower(%[3]s.unresolved_to) LIKE '%%.' || lower(%[1]s.name)`, target, targetFile, relation)
+OR substr(lower(%[2]s.path), -length('/' || %[3]s.unresolved_to)) = '/' || lower(%[3]s.unresolved_to)
+OR instr(lower(%[3]s.unresolved_to), '::' || lower(%[1]s.name) || '::') > 0
+OR instr(lower(%[3]s.unresolved_to), '.' || lower(%[1]s.name) || '.') > 0
+OR substr(lower(%[3]s.unresolved_to), -length('.' || %[1]s.name)) = '.' || lower(%[1]s.name)`, target, targetFile, relation)
 }
 
 func scanRelationHits(rows *sql.Rows, anchorHandle, relation string) ([]model.RelationHit, error) {
@@ -1367,7 +1397,7 @@ func camelCaseLikePattern(value string) string {
 	var pattern strings.Builder
 	pattern.WriteByte('%')
 	for _, part := range parts {
-		pattern.WriteString(strings.ToLower(part))
+		pattern.WriteString(escapeLike(strings.ToLower(part)))
 		pattern.WriteByte('%')
 	}
 	return pattern.String()
