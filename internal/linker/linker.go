@@ -397,11 +397,19 @@ func factCandidatePaths(fact projectmeta.Fact, target string) []string {
 		return []string{mapped, mapped + ".php"}
 	case "path-alias":
 		alias := strings.ReplaceAll(fact.Name, "\\", "/")
-		aliasPrefix := strings.TrimSuffix(alias, "*")
-		if aliasPrefix != "" && !strings.HasPrefix(normalizedTarget, aliasPrefix) {
-			return nil
+		remainder := ""
+		star := strings.IndexByte(alias, '*')
+		if star < 0 {
+			if normalizedTarget != alias {
+				return nil
+			}
+		} else {
+			prefix, suffix := alias[:star], alias[star+1:]
+			if len(normalizedTarget) < len(prefix)+len(suffix) || !strings.HasPrefix(normalizedTarget, prefix) || !strings.HasSuffix(normalizedTarget, suffix) {
+				return nil
+			}
+			remainder = normalizedTarget[len(prefix) : len(normalizedTarget)-len(suffix)]
 		}
-		remainder := strings.TrimPrefix(normalizedTarget, aliasPrefix)
 		base := strings.ReplaceAll(fact.Target, "\\", "/")
 		mapped := strings.ReplaceAll(base, "*", remainder)
 		return []string{filepath.ToSlash(filepath.Join(manifestDir, mapped))}
