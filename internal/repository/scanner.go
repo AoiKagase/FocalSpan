@@ -58,6 +58,9 @@ func (s *Scanner) Scan(ctx context.Context) ([]model.SourceFile, []model.Diagnos
 		if err != nil {
 			return nil, diagnostics, fmt.Errorf("stat source %s: %w", rel, err)
 		}
+		if !info.Mode().IsRegular() {
+			continue // Gitlinks and other non-source entries are not readable files.
+		}
 		if info.Size() > s.maxFileBytes() {
 			diagnostics = append(diagnostics, model.Diagnostic{FilePath: rel, Level: "info", Code: "file_too_large", Message: "file exceeds configured maximum size"})
 			continue
