@@ -202,8 +202,8 @@ func (b *builder) buildRelations() {
 		if symbol.Handle == b.owner.Handle {
 			continue
 		}
-		index.byQualified[strings.ToLower(symbol.QualifiedName)] = append(index.byQualified[strings.ToLower(symbol.QualifiedName)], symbol)
-		index.byName[strings.ToLower(symbol.Name)] = append(index.byName[strings.ToLower(symbol.Name)], symbol)
+		index.byQualified[symbol.QualifiedName] = append(index.byQualified[symbol.QualifiedName], symbol)
+		index.byName[symbol.Name] = append(index.byName[symbol.Name], symbol)
 	}
 	for _, item := range b.parsed.Includes {
 		target := item.Target
@@ -316,7 +316,7 @@ func (b *builder) buildReferences(index symbolIndex, decl *declaration, from mod
 }
 
 func declarationKey(decl *declaration) string {
-	return decl.Kind + "\x00" + strings.ToLower(decl.Qualified) + "\x00" + model.NormalizeSignature(decl.Name) + "\x00" + model.NormalizeSignature(decl.SignatureKey)
+	return decl.Kind + "\x00" + decl.Qualified + "\x00" + model.NormalizeSignature(decl.Name) + "\x00" + model.NormalizeSignature(decl.SignatureKey)
 }
 
 func preferredDeclarations(declarations []*declaration) map[*declaration]bool {
@@ -422,7 +422,7 @@ func (b *builder) addCallbackReferences(index symbolIndex, from model.Symbol, op
 			continue
 		}
 		seen[token.Text] = struct{}{}
-		target, ok := unique(index.byName, strings.ToLower(token.Text))
+		target, ok := unique(index.byName, token.Text)
 		if !ok || !isCallableKind(target.Kind) || target.Handle == from.Handle {
 			continue
 		}
@@ -469,33 +469,33 @@ func isCallableKind(kind string) bool {
 
 func (b *builder) resolveCall(index symbolIndex, decl *declaration, name, qualified string) (model.Symbol, bool) {
 	if qualified != "" {
-		if target, ok := unique(index.byQualified, strings.ToLower(qualified)); ok {
+		if target, ok := unique(index.byQualified, qualified); ok {
 			return target, true
 		}
-		if target, ok := unique(index.byQualified, strings.ToLower(joinQualified(decl.Namespace, qualified))); ok {
+		if target, ok := unique(index.byQualified, joinQualified(decl.Namespace, qualified)); ok {
 			return target, true
 		}
 	}
 	if parent := decl.Parent; parent != nil && (parent.Kind == "class" || parent.Kind == "struct") {
-		if target, ok := unique(index.byQualified, strings.ToLower(parent.Qualified+"::"+name)); ok {
+		if target, ok := unique(index.byQualified, parent.Qualified+"::"+name); ok {
 			return target, true
 		}
 	}
-	if target, ok := unique(index.byQualified, strings.ToLower(joinQualified(decl.Namespace, name))); ok {
+	if target, ok := unique(index.byQualified, joinQualified(decl.Namespace, name)); ok {
 		return target, true
 	}
-	if target, ok := unique(index.byName, strings.ToLower(name)); ok {
+	if target, ok := unique(index.byName, name); ok {
 		return target, true
 	}
 	return model.Symbol{}, false
 }
 
 func (b *builder) addResolvedOrUnresolved(index symbolIndex, from model.Symbol, name, kind, source string) {
-	if target, ok := unique(index.byQualified, strings.ToLower(name)); ok {
+	if target, ok := unique(index.byQualified, name); ok {
 		b.addRelation(model.Relation{FromHandle: from.Handle, ToHandle: target.Handle, Kind: kind, Confidence: .9, Source: source})
 		return
 	}
-	if target, ok := unique(index.byName, strings.ToLower(name)); ok {
+	if target, ok := unique(index.byName, name); ok {
 		b.addRelation(model.Relation{FromHandle: from.Handle, ToHandle: target.Handle, Kind: kind, Confidence: .8, Source: source})
 		return
 	}
@@ -609,7 +609,7 @@ func looksLikeTypeReference(value string) bool {
 }
 
 func hasSymbol(index symbolIndex, name string) bool {
-	return len(index.byName[strings.ToLower(name)]) > 0
+	return len(index.byName[name]) > 0
 }
 
 func unique(values map[string][]model.Symbol, key string) (model.Symbol, bool) {

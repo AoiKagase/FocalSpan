@@ -134,13 +134,13 @@ func zigBuiltinType(name string) bool {
 func zigIndex(symbols []model.Symbol) map[string][]model.Symbol {
 	result := make(map[string][]model.Symbol)
 	for _, symbol := range symbols {
-		result[strings.ToLower(symbol.Name)] = append(result[strings.ToLower(symbol.Name)], symbol)
+		result[symbol.Name] = append(result[symbol.Name], symbol)
 	}
 	return result
 }
 
 func zigUnique(index map[string][]model.Symbol, name string) (model.Symbol, bool) {
-	items := index[strings.ToLower(name)]
+	items := index[name]
 	if len(items) != 1 {
 		return model.Symbol{}, false
 	}

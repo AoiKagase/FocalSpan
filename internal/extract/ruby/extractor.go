@@ -321,13 +321,13 @@ func rubyIndex(symbols []model.Symbol) map[string][]model.Symbol {
 	index := make(map[string][]model.Symbol)
 	for _, symbol := range symbols {
 		if symbol.Kind != "module" || strings.Contains(symbol.Name, ".rb") {
-			index[strings.ToLower(symbol.Name)] = append(index[strings.ToLower(symbol.Name)], symbol)
+			index[symbol.Name] = append(index[symbol.Name], symbol)
 		}
 	}
 	return index
 }
 func uniqueRuby(index map[string][]model.Symbol, name string) (model.Symbol, bool) {
-	items := index[strings.ToLower(strings.TrimPrefix(name, "self."))]
+	items := index[strings.TrimPrefix(name, "self.")]
 	if len(items) != 1 {
 		return model.Symbol{}, false
 	}

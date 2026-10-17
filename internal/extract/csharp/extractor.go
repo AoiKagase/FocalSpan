@@ -160,8 +160,8 @@ func (b *builder) buildRelations() {
 		if symbol.Handle == b.owner.Handle {
 			continue
 		}
-		index.byQualified[strings.ToLower(symbol.QualifiedName)] = append(index.byQualified[strings.ToLower(symbol.QualifiedName)], symbol)
-		index.byName[strings.ToLower(symbol.Name)] = append(index.byName[strings.ToLower(symbol.Name)], symbol)
+		index.byQualified[symbol.QualifiedName] = append(index.byQualified[symbol.QualifiedName], symbol)
+		index.byName[symbol.Name] = append(index.byName[symbol.Name], symbol)
 	}
 	for _, item := range b.parsed.Imports {
 		target := normalizeImport(item.Target)
@@ -188,7 +188,7 @@ func (b *builder) buildReferences(index symbolIndex, decl *declaration, from mod
 		if name == decl.Name || primitiveType[name] || controlWords[name] || strings.HasPrefix(name, "@") {
 			continue
 		}
-		if len(index.byName[strings.ToLower(name)]) > 0 || looksLikeType(name) {
+		if len(index.byName[name]) > 0 || looksLikeType(name) {
 			b.addResolvedOrUnresolved(index, from, name, "references", "type")
 		}
 	}
@@ -243,29 +243,29 @@ func (b *builder) buildBodyRelations(index symbolIndex, decl *declaration, from 
 }
 
 func (b *builder) resolveCall(index symbolIndex, decl *declaration, name, qualified string) (model.Symbol, bool) {
-	if target, ok := unique(index.byQualified, strings.ToLower(qualified)); ok {
+	if target, ok := unique(index.byQualified, qualified); ok {
 		return target, true
 	}
 	if decl.Parent != nil && strings.Contains(decl.Parent.Qualified, ".") {
-		if target, ok := unique(index.byQualified, strings.ToLower(decl.Parent.Qualified+"."+name)); ok {
+		if target, ok := unique(index.byQualified, decl.Parent.Qualified+"."+name); ok {
 			return target, true
 		}
 	}
-	if target, ok := unique(index.byQualified, strings.ToLower(joinQualified(decl.Namespace, name))); ok {
+	if target, ok := unique(index.byQualified, joinQualified(decl.Namespace, name)); ok {
 		return target, true
 	}
-	if target, ok := unique(index.byName, strings.ToLower(name)); ok {
+	if target, ok := unique(index.byName, name); ok {
 		return target, true
 	}
 	return model.Symbol{}, false
 }
 
 func (b *builder) addResolvedOrUnresolved(index symbolIndex, from model.Symbol, name, kind, source string) {
-	if target, ok := unique(index.byQualified, strings.ToLower(name)); ok {
+	if target, ok := unique(index.byQualified, name); ok {
 		b.addRelation(model.Relation{FromHandle: from.Handle, ToHandle: target.Handle, Kind: kind, Confidence: .9, Source: source})
 		return
 	}
-	if target, ok := unique(index.byName, strings.ToLower(name)); ok {
+	if target, ok := unique(index.byName, name); ok {
 		b.addRelation(model.Relation{FromHandle: from.Handle, ToHandle: target.Handle, Kind: kind, Confidence: .8, Source: source})
 		return
 	}
@@ -325,7 +325,7 @@ func (b *builder) sortResult() {
 }
 
 func declarationKey(decl *declaration) string {
-	return decl.Kind + "\x00" + strings.ToLower(decl.Qualified) + "\x00" + model.NormalizeSignature(decl.Name) + "\x00" + model.NormalizeSignature(decl.SignatureKey)
+	return decl.Kind + "\x00" + decl.Qualified + "\x00" + model.NormalizeSignature(decl.Name) + "\x00" + model.NormalizeSignature(decl.SignatureKey)
 }
 func preferredDeclarations(declarations []*declaration) map[string]*declaration {
 	result := make(map[string]*declaration)

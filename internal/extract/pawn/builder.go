@@ -35,7 +35,7 @@ func buildPawn(ctx context.Context, file model.SourceFile, tokens []Token, diagn
 		byDecl[decl] = symbol
 		result.Symbols = append(result.Symbols, symbol)
 		if decl.Kind != "forward" && decl.Kind != "native" {
-			byName[strings.ToLower(symbol.Name)] = append(byName[strings.ToLower(symbol.Name)], symbol)
+			byName[symbol.Name] = append(byName[symbol.Name], symbol)
 		}
 		result.Chunks = append(result.Chunks, pawnSourceChunk(file, symbol, decl.Kind, start, end, decl.StartLine, decl.EndLine))
 	}
@@ -89,7 +89,7 @@ func pawnIncludeTarget(line string) string {
 }
 
 func pawnUnique(index map[string][]model.Symbol, name string) (model.Symbol, bool) {
-	items := index[strings.ToLower(name)]
+	items := index[name]
 	if len(items) != 1 {
 		return model.Symbol{}, false
 	}

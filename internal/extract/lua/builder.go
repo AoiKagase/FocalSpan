@@ -37,7 +37,7 @@ func buildLua(ctx context.Context, file model.SourceFile, tokens []Token, diagno
 		}
 		byDecl[decl] = symbol
 		result.Symbols = append(result.Symbols, symbol)
-		byName[strings.ToLower(symbol.Name)] = append(byName[strings.ToLower(symbol.Name)], symbol)
+		byName[symbol.Name] = append(byName[symbol.Name], symbol)
 		chunkEnd := end
 		chunkKind := decl.Kind
 		if decl.Kind == "table" {
@@ -136,7 +136,7 @@ func luaUnique(index map[string][]model.Symbol, name string) (model.Symbol, bool
 	if at := strings.LastIndexAny(name, ".:"); at >= 0 {
 		name = name[at+1:]
 	}
-	items := index[strings.ToLower(name)]
+	items := index[name]
 	if len(items) != 1 {
 		return model.Symbol{}, false
 	}
