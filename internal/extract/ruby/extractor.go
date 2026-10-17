@@ -52,28 +52,38 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 	if err := ctx.Err(); err != nil {
 		return model.Extraction{}, err
 	}
-	_, diagnostics, err := Lex(ctx, file.Content)
+	tokens, diagnostics, err := Lex(ctx, file.Content)
 	if err != nil {
 		return model.Extraction{}, err
 	}
 	for index := range diagnostics {
 		diagnostics[index].FilePath = file.Path
 	}
-	result := buildRuby(ctx, file, diagnostics)
+	result := buildRuby(ctx, file, tokens, diagnostics)
 	if err := ctx.Err(); err != nil {
 		return model.Extraction{}, err
 	}
 	return result, nil
 }
 
-func buildRuby(ctx context.Context, file model.SourceFile, diagnostics []model.Diagnostic) model.Extraction {
+func buildRuby(ctx context.Context, file model.SourceFile, tokens []Token, diagnostics []model.Diagnostic) model.Extraction {
 	result := model.Extraction{Diagnostics: diagnostics}
 	allocator := model.NewHandleAllocator()
 	ownerName := filepath.Base(filepath.ToSlash(file.Path))
 	owner := model.Symbol{Handle: allocator.Allocate("sym", file.Path, "ruby", "module", ownerName), FilePath: file.Path, Language: file.Language, Kind: "module", Name: ownerName, QualifiedName: ownerName, Signature: "module " + ownerName, StartLine: 1, EndLine: rubyLineCount(file.Content), StartByte: 0, EndByte: len(file.Content), Confidence: .9}
 	result.Symbols = append(result.Symbols, owner)
 	result.Chunks = append(result.Chunks, rubySyntheticChunk(file, owner, "module-outline", "module "+ownerName))
-	lines := rubyLines(file.Content)
+	code := append([]byte(nil), file.Content...)
+	for _, token := range tokens {
+		if token.Kind == Heredoc || token.Kind == BlockComment {
+			for at := token.StartByte; at < token.EndByte; at++ {
+				if code[at] != '\n' && code[at] != '\r' {
+					code[at] = ' '
+				}
+			}
+		}
+	}
+	lines := rubyLines(code)
 	declarations := parseRuby(lines)
 	byDecl := make(map[*rubyDeclaration]model.Symbol)
 	for _, decl := range declarations {
