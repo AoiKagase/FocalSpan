@@ -17,6 +17,7 @@ type Mode string
 const (
 	Lifecycle     Kind = "lifecycle"
 	Writer        Kind = "writer"
+	Configuration Kind = "configuration"
 	Shared        Mode = "shared"
 	Exclusive     Mode = "exclusive"
 	waitLimit          = 5 * time.Second
@@ -58,6 +59,9 @@ func (e *BusyError) Error() string {
 	if e.Kind == Lifecycle {
 		guidance = "close other FocalSpan sessions and restart before creating or migrating the index"
 	}
+	if e.Kind == Configuration {
+		guidance = "retry after the current configuration update completes"
+	}
 	return fmt.Sprintf("%s: %s %s lock at %s: %v; %s", ErrBusy, e.Mode, e.Kind, e.Path, e.Cause, guidance)
 }
 func (e *BusyError) Unwrap() error        { return e.Cause }
@@ -84,6 +88,19 @@ func Acquire(ctx context.Context, directory string, kind Kind, mode Mode) (*Lock
 		return nil, fmt.Errorf("create lock directory: %w", err)
 	}
 	path := filepath.Join(directory, ".index-"+string(kind)+".lock")
+	return acquireFile(ctx, path, kind, mode)
+}
+
+// AcquireConfiguration locks a persistent per-configuration lock file.
+// The caller owns creating its parent; the lock file must never be removed.
+func AcquireConfiguration(ctx context.Context, path string) (*Lock, error) {
+	return acquireFile(ctx, path, Configuration, Exclusive)
+}
+
+func acquireFile(ctx context.Context, path string, kind Kind, mode Mode) (*Lock, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("open index lock: %w", err)

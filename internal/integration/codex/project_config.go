@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/focalspan/focalspan/internal/indexlock"
 	"github.com/pelletier/go-toml/v2"
 )
 
@@ -23,6 +24,27 @@ type projectObservation struct {
 }
 
 func InstallProject(ctx context.Context, configPath, name string, spec RegistrationSpec, dryRun bool) (OperationResult, error) {
+	if err := ctx.Err(); err != nil {
+		return OperationResult{}, err
+	}
+	if _, err := BuildManagedBlock(name, spec); err != nil {
+		return OperationResult{}, err
+	}
+	if dryRun {
+		return installProject(ctx, configPath, name, spec, true)
+	}
+	if err := ensureConfigDirectory(filepath.Dir(configPath)); err != nil {
+		return OperationResult{}, err
+	}
+	lease, err := indexlock.AcquireConfiguration(ctx, configPath+".focalspan.lock")
+	if err != nil {
+		return OperationResult{}, err
+	}
+	defer lease.Close()
+	return installProject(ctx, configPath, name, spec, false)
+}
+
+func installProject(ctx context.Context, configPath, name string, spec RegistrationSpec, dryRun bool) (OperationResult, error) {
 	if err := ctx.Err(); err != nil {
 		return OperationResult{}, err
 	}
@@ -81,7 +103,7 @@ func InstallProject(ctx context.Context, configPath, name string, spec Registrat
 		}
 		mode = info.Mode().Perm()
 	}
-	if err := atomicWrite(ctx, configPath, newContent, mode); err != nil {
+	if err := atomicWrite(ctx, configPath, newContent, mode, obs); err != nil {
 		return OperationResult{}, fmt.Errorf("write Codex config: %w", err)
 	}
 	return result, nil
@@ -126,6 +148,29 @@ func UninstallProject(ctx context.Context, configPath, name string, dryRun bool)
 	if err := ValidateName(name); err != nil {
 		return OperationResult{}, err
 	}
+	if dryRun {
+		return uninstallProject(ctx, configPath, name, true)
+	}
+	if _, err := os.Stat(filepath.Dir(configPath)); errors.Is(err, os.ErrNotExist) {
+		return uninstallProject(ctx, configPath, name, false)
+	} else if err != nil {
+		return OperationResult{}, err
+	}
+	lease, err := indexlock.AcquireConfiguration(ctx, configPath+".focalspan.lock")
+	if err != nil {
+		return OperationResult{}, err
+	}
+	defer lease.Close()
+	return uninstallProject(ctx, configPath, name, false)
+}
+
+func uninstallProject(ctx context.Context, configPath, name string, dryRun bool) (OperationResult, error) {
+	if err := ctx.Err(); err != nil {
+		return OperationResult{}, err
+	}
+	if err := ValidateName(name); err != nil {
+		return OperationResult{}, err
+	}
 	obs, err := inspectProject(configPath, name)
 	if err != nil {
 		return OperationResult{}, err
@@ -152,7 +197,7 @@ func UninstallProject(ctx context.Context, configPath, name string, dryRun bool)
 	if err != nil {
 		return OperationResult{}, fmt.Errorf("stat Codex config: %w", err)
 	}
-	if err := atomicWrite(ctx, configPath, newContent, info.Mode().Perm()); err != nil {
+	if err := atomicWrite(ctx, configPath, newContent, info.Mode().Perm(), obs); err != nil {
 		return OperationResult{}, fmt.Errorf("write Codex config: %w", err)
 	}
 	return result, nil
@@ -337,7 +382,13 @@ func ensureConfigDirectory(dir string) error {
 	return nil
 }
 
-func atomicWrite(ctx context.Context, path string, content []byte, mode os.FileMode) error {
+type ConfigConflictError struct{ Path string }
+
+func (e *ConfigConflictError) Error() string {
+	return fmt.Sprintf("Codex configuration changed at %s; retry the operation", e.Path)
+}
+
+func atomicWrite(ctx context.Context, path string, content []byte, mode os.FileMode, expected ...projectObservation) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -365,6 +416,16 @@ func atomicWrite(ctx context.Context, path string, content []byte, mode os.FileM
 	}
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if len(expected) > 0 {
+		current, readErr := os.ReadFile(path)
+		exists := readErr == nil
+		if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+			return readErr
+		}
+		if exists != expected[0].exists || exists && !bytes.Equal(current, expected[0].content) {
+			return &ConfigConflictError{Path: path}
+		}
 	}
 	return os.Rename(tempPath, path)
 }
