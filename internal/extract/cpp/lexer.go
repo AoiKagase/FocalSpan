@@ -161,7 +161,7 @@ func makeToken(kind TokenKind, content []byte, mapa sourceutil.SourceMap, start,
 type conditionalFrame struct{ parent, taken bool }
 
 func applyDirective(text string, active bool, stack []conditionalFrame) (bool, []conditionalFrame) {
-	fields := strings.Fields(strings.TrimPrefix(strings.TrimSpace(strings.SplitN(text, "//", 2)[0]), "#"))
+	fields := cppDirectiveFields(text)
 	if len(fields) == 0 {
 		return active, stack
 	}
@@ -312,4 +312,27 @@ func operatorAt(content []byte) string {
 		return string(content[0])
 	}
 	return ""
+}
+
+// Comments are whitespace in a preprocessor expression. A supported literal
+// must cover the complete expression after comments have been removed.
+func cppDirectiveFields(text string) []string {
+	var code strings.Builder
+	for at := 0; at < len(text); {
+		if strings.HasPrefix(text[at:], "//") {
+			break
+		}
+		if strings.HasPrefix(text[at:], "/*") {
+			code.WriteByte(' ')
+			end := strings.Index(text[at+2:], "*/")
+			if end < 0 {
+				break
+			}
+			at += end + 4
+			continue
+		}
+		code.WriteByte(text[at])
+		at++
+	}
+	return strings.Fields(strings.TrimPrefix(strings.TrimSpace(code.String()), "#"))
 }

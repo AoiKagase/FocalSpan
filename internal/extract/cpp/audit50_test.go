@@ -165,3 +165,16 @@ func TestReviewF43UnknownExpression(t *testing.T) {
 	wholeAuditSymbol(t, got, "Maybe")
 	wholeAuditSymbol(t, got, "Alternate")
 }
+
+func TestReviewF43CommentedLiterals(t *testing.T) {
+	for _, source := range []string{
+		"#if 0 /* disabled branch */\nvoid Fake(){}\n#else\nvoid Real(){}\n#endif\n",
+		"#if 0\nvoid Fake(){}\n#elif 0/* disabled */\nvoid AlsoFake(){}\n#else\nvoid Real(){}\n#endif\n",
+		"#if 1/* true */\nvoid Real(){}\n#else\nvoid Fake(){}\n#endif\n",
+	} {
+		got := wholeAuditExtract(t, cpp.NewExtractor(), "x.cpp", "cpp", source)
+		wholeAuditSymbol(t, got, "Real")
+		wholeAuditNoSymbol(t, got, "Fake")
+		wholeAuditNoSymbol(t, got, "AlsoFake")
+	}
+}
