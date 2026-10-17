@@ -277,11 +277,13 @@ func buildDeclSymbols(file model.SourceFile, fset *token.FileSet, decl *ast.GenD
 		if s.Assign.IsValid() {
 			kind = "type_alias"
 		}
-		switch s.Type.(type) {
-		case *ast.StructType:
-			kind = "struct"
-		case *ast.InterfaceType:
-			kind = "interface"
+		if !s.Assign.IsValid() {
+			switch s.Type.(type) {
+			case *ast.StructType:
+				kind = "struct"
+			case *ast.InterfaceType:
+				kind = "interface"
+			}
 		}
 	case *ast.ValueSpec:
 		for _, name := range s.Names {
