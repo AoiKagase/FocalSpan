@@ -2,9 +2,11 @@ package store_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/focalspan/focalspan/internal/model"
 	"github.com/focalspan/focalspan/internal/store"
+	"reflect"
 	"testing"
 )
 
@@ -21,6 +23,30 @@ func TestF08LargeRelinkScope(t *testing.T) {
 	if _, err := s.RelationsForLink(context.Background(), store.LinkScope{LookupKeys: keys}); err != nil {
 		t.Fatalf("large scope fails: %v", err)
 	}
+	ctx := context.Background()
+	symbol := model.Symbol{Handle: "caller", FilePath: "caller.go", Name: "Caller", Language: "go", Kind: "function", StartLine: 1, EndLine: 1}
+	if err := s.ReplaceFile(ctx, model.SourceFile{Path: "caller.go", Language: "go", SHA256: "x"}, model.Extraction{Symbols: []model.Symbol{symbol}, Relations: []model.Relation{{FromHandle: "caller", UnresolvedTo: "Target", Kind: "calls", Confidence: 1}}}); err != nil {
+		t.Fatal(err)
+	}
+	small, err := s.RelationsForLink(ctx, store.LinkScope{ChangedPaths: []string{"caller.go"}})
+	if err != nil || len(small) != 1 {
+		t.Fatalf("small control: %+v %v", small, err)
+	}
+	paths := append(append([]string(nil), keys...), "caller.go", "caller.go")
+	large, err := s.RelationsForLink(ctx, store.LinkScope{ChangedPaths: paths, LookupKeys: keys})
+	if err != nil || !reflect.DeepEqual(small, large) {
+		t.Fatalf("mixed large scope differs: %+v %v", large, err)
+	}
+	empty, err := s.RelationsForLink(ctx, store.LinkScope{})
+	if err != nil || len(empty) != 0 {
+		t.Fatalf("empty=%+v %v", empty, err)
+	}
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := s.RelationsForLink(canceled, store.LinkScope{LookupKeys: keys}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancellation=%v", err)
+	}
+
 }
 func TestF23NoSearchableTerms(t *testing.T) {
 	s, err := store.Open(t.TempDir(), ".focalspan")
@@ -58,4 +84,33 @@ func TestF22EstimatedTokensRoundTrip(t *testing.T) {
 	if got[0].EstimatedTokens != 5001 {
 		t.Fatalf("persisted tokens=5001, retrieved=%d; large-span ranking penalty cannot run", got[0].EstimatedTokens)
 	}
+	for _, scoped := range []bool{false, true} {
+		var reader model.CandidateReader = s
+		if scoped {
+			reader = s.ScopedCandidates(model.CandidateScope{Paths: []string{"large.go"}})
+		}
+		calls := []struct {
+			name string
+			fn   func() ([]model.RankedCandidate, error)
+		}{
+			{"FTS", func() ([]model.RankedCandidate, error) { return reader.SearchFTS(ctx, "LargeFunction", 10) }},
+			{"qualified", func() ([]model.RankedCandidate, error) {
+				return reader.SearchQualifiedSymbols(ctx, []string{"p.LargeFunction"}, 10)
+			}},
+			{"prefix", func() ([]model.RankedCandidate, error) {
+				return reader.SearchSymbolPrefixes(ctx, []string{"Large"}, 10)
+			}},
+			{"path", func() ([]model.RankedCandidate, error) { return reader.SearchPaths(ctx, []string{"large.go"}, 10) }},
+			{"related", func() ([]model.RankedCandidate, error) {
+				return reader.RelatedCandidates(ctx, []string{symbol.Handle}, "self")
+			}},
+		}
+		for _, call := range calls {
+			got, err := call.fn()
+			if err != nil || len(got) != 1 || got[0].EstimatedTokens != 5001 {
+				t.Errorf("scoped=%v %s: %+v %v", scoped, call.name, got, err)
+			}
+		}
+	}
+
 }
