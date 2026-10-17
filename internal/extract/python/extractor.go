@@ -251,9 +251,11 @@ func parsePythonDeclarations(lines []pyLine) []*pyDeclaration {
 			}
 			parent := nearestPythonParent(active, line.Indent, index+1)
 			if parent != nil && (parent.Kind == "class" || parent.Kind == "protocol") {
-				kind = "method"
-				if match[1] == "async" {
-					kind = "async_method"
+				if kind != "test" {
+					kind = "method"
+					if match[1] == "async" {
+						kind = "async_method"
+					}
 				}
 				if containsDecorator(decorators, "@property") {
 					kind = "property"
