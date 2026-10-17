@@ -561,6 +561,11 @@ func deduplicateRelations(result *model.Extraction) {
 func callName(expr ast.Expr) (string, float64) {
 	switch e := unwrapCall(expr).(type) {
 	case *ast.Ident:
+		// The parser binds local variables/parameters and type conversions.
+		// Their calls cannot be resolved to a same-named package function.
+		if e.Obj != nil && e.Obj.Kind != ast.Fun {
+			return "", 0
+		}
 		return e.Name, .45
 	case *ast.SelectorExpr:
 		return e.Sel.Name, .3
