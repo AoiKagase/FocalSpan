@@ -38,7 +38,7 @@ type DiffRequest struct {
 }
 
 func (c *Client) Diff(ctx context.Context, req DiffRequest) ([]ChangedFile, error) {
-	args := []string{"-C", c.Root, "diff", "--no-color", "--unified=0", "--no-ext-diff", "--no-textconv"}
+	args := []string{"-C", c.Root, "diff", "--no-color", "--src-prefix=a/", "--dst-prefix=b/", "--unified=0", "--no-ext-diff", "--no-textconv"}
 	if req.Base != "" || req.Head != "" {
 		if req.Base != "" {
 			base, err := c.resolveCommit(ctx, req.Base)
@@ -69,7 +69,7 @@ func (c *Client) Diff(ctx context.Context, req DiffRequest) ([]ChangedFile, erro
 		return files, nil
 	}
 	if req.Base == "" && req.Head == "" && req.Staged {
-		cmd = exec.CommandContext(ctx, "git", "-C", c.Root, "diff", "--no-color", "--cached", "--unified=0", "--no-ext-diff", "--no-textconv", "--")
+		cmd = exec.CommandContext(ctx, "git", "-C", c.Root, "diff", "--no-color", "--src-prefix=a/", "--dst-prefix=b/", "--cached", "--unified=0", "--no-ext-diff", "--no-textconv", "--")
 		out, err = cmd.Output()
 		if err != nil {
 			return nil, fmt.Errorf("git staged diff: %w", err)

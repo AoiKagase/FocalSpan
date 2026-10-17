@@ -45,7 +45,7 @@ func (c *Client) MapRangesToWorktree(ctx context.Context, head string, changed [
 	if err != nil {
 		return nil, err
 	}
-	out, err := exec.CommandContext(ctx, "git", "-C", c.Root, "diff", "--no-color", "--unified=0", "--no-ext-diff", "--no-textconv", "--find-renames", headID, "--").Output()
+	out, err := exec.CommandContext(ctx, "git", "-C", c.Root, "diff", "--no-color", "--src-prefix=a/", "--dst-prefix=b/", "--unified=0", "--no-ext-diff", "--no-textconv", "--find-renames", headID, "--").Output()
 	if err != nil {
 		return nil, fmt.Errorf("align Git impact source: %w", err)
 	}
