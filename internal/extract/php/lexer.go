@@ -85,7 +85,7 @@ func (l *lexer) scanPHP() {
 		} else {
 			l.offset++
 		}
-		for l.offset < len(l.content) && l.content[l.offset] != '\n' {
+		for l.offset < len(l.content) && l.content[l.offset] != '\n' && !l.hasPrefix(l.offset, "?>") {
 			if l.ctx.Err() != nil {
 				return
 			}
@@ -355,4 +355,26 @@ var phpOperators = []string{
 
 var phpKeywords = map[string]bool{
 	"abstract": true, "and": true, "array": true, "as": true, "break": true, "callable": true, "case": true, "catch": true, "class": true, "clone": true, "const": true, "continue": true, "declare": true, "default": true, "die": true, "do": true, "echo": true, "else": true, "elseif": true, "empty": true, "enddeclare": true, "endfor": true, "endforeach": true, "endif": true, "endswitch": true, "endwhile": true, "enum": true, "eval": true, "exit": true, "extends": true, "final": true, "finally": true, "fn": true, "for": true, "foreach": true, "function": true, "global": true, "goto": true, "if": true, "implements": true, "include": true, "include_once": true, "instanceof": true, "insteadof": true, "interface": true, "isset": true, "list": true, "match": true, "namespace": true, "new": true, "or": true, "print": true, "private": true, "protected": true, "public": true, "readonly": true, "require": true, "require_once": true, "return": true, "static": true, "switch": true, "throw": true, "trait": true, "try": true, "unset": true, "use": true, "var": true, "while": true, "xor": true, "yield": true, "null": true, "true": true, "false": true,
+}
+
+// BlockEnd returns the first lexical PHP closing tag, with an exclusive end.
+// The content must begin at a PHP opening tag. Strings, heredocs and block
+// comments are consumed by the same lexer used by Extract.
+func BlockEnd(ctx context.Context, content []byte) (int, bool, error) {
+	l := &lexer{ctx: ctx, content: content, line: 1}
+	end, ok := l.openTagAt(0)
+	if !ok {
+		return 0, false, nil
+	}
+	l.offset, l.inPHP = end, true
+	for l.offset < len(content) {
+		if err := ctx.Err(); err != nil {
+			return 0, false, err
+		}
+		l.scanPHP()
+		if !l.inPHP {
+			return l.offset, true, nil
+		}
+	}
+	return len(content), false, ctx.Err()
 }
