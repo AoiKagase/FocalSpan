@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/focalspan/focalspan/internal/app"
@@ -12,7 +14,7 @@ import (
 )
 
 func TestAppEngineBuildAndQueryEvidence(t *testing.T) {
-	root := filepath.Join("..", "..", "testdata", "repos", "authsample")
+	root := isolatedFixture(t, "authsample")
 	engine, err := NewAppEngineFactory().Open(root)
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +46,7 @@ func TestAppEngineBuildAndQueryEvidence(t *testing.T) {
 }
 
 func TestAppEnginePropagatesCancellation(t *testing.T) {
-	root := filepath.Join("..", "..", "testdata", "repos", "authsample")
+	root := isolatedFixture(t, "authsample")
 	engine, err := NewAppEngineFactory().Open(root)
 	if err != nil {
 		t.Fatal(err)
@@ -55,4 +57,34 @@ func TestAppEnginePropagatesCancellation(t *testing.T) {
 	if _, err := engine.Build(ctx); err == nil {
 		t.Fatal("expected cancellation")
 	}
+}
+
+func isolatedFixture(t *testing.T, name string) string {
+	t.Helper()
+	source := filepath.Join("..", "..", "testdata", "repos", name)
+	target := t.TempDir()
+	entries, err := os.ReadDir(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".focalspan") {
+			continue
+		}
+		from, to := filepath.Join(source, entry.Name()), filepath.Join(target, entry.Name())
+		if entry.IsDir() {
+			if err := os.CopyFS(to, os.DirFS(from)); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			data, err := os.ReadFile(from)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(to, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	return target
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/focalspan/focalspan/internal/app"
@@ -91,10 +92,7 @@ func TestEvaluateGroupsPrimaryIntentMetricsByOriginalCase(t *testing.T) {
 }
 
 func TestEvaluateRetrievalModesImproveJapaneseRelationRecall(t *testing.T) {
-	root, err := filepath.Abs(filepath.Join("..", "..", "testdata", "repos", "authsample"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	root := isolatedFixture(t, "authsample")
 	cfg := config.Default()
 	cfg.IndexDirectory = ".focalspan-eval-test"
 	service, err := app.NewWithConfig(root, cfg)
@@ -128,10 +126,7 @@ func TestEvaluateRetrievalModesImproveJapaneseRelationRecall(t *testing.T) {
 }
 
 func TestEvaluateJapaneseJSTSFixtureAcrossRetrievalModes(t *testing.T) {
-	root, err := filepath.Abs(filepath.Join("..", "..", "testdata", "repos", "jstssample"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	root := isolatedFixture(t, "jstssample")
 	casesPath := filepath.Join("..", "..", "testdata", "eval", "ja-jsts-cases.jsonl")
 	cases, err := LoadCases(casesPath)
 	if err != nil {
@@ -166,4 +161,34 @@ func TestEvaluateJapaneseJSTSFixtureAcrossRetrievalModes(t *testing.T) {
 	if full.HitAt3 < ftsOnly.HitAt3 || full.RelationRecall <= ftsOnly.RelationRecall || noRelations.RelationRecall != 0 {
 		t.Fatalf("full=%+v fts-only=%+v no-relations=%+v", full, ftsOnly, noRelations)
 	}
+}
+
+func isolatedFixture(t *testing.T, name string) string {
+	t.Helper()
+	source := filepath.Join("..", "..", "testdata", "repos", name)
+	target := t.TempDir()
+	entries, err := os.ReadDir(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".focalspan") {
+			continue
+		}
+		from, to := filepath.Join(source, entry.Name()), filepath.Join(target, entry.Name())
+		if entry.IsDir() {
+			if err := os.CopyFS(to, os.DirFS(from)); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			data, err := os.ReadFile(from)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(to, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	return target
 }
