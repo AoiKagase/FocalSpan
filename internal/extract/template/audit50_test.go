@@ -109,3 +109,31 @@ func audit50Fixture(t *testing.T, id, name string) string {
 	}
 	return string(content)
 }
+
+func TestF39ReviewHeredocSuffix(t *testing.T) {
+	source := "<?php echo <<<TEXT\n?> {include file='fake.tpl'}\nTEXT; ?>\n{include file='real.tpl'}"
+	got := wholeAuditExtract(t, templateextract.NewExtractor(), "x.tpl", "smarty", source)
+	found := false
+	for _, relation := range got.Relations {
+		if relation.Kind == "imports" {
+			if relation.UnresolvedTo == "fake.tpl" {
+				t.Fatalf("PHP payload became import: %+v", relation)
+			}
+			if relation.UnresolvedTo == "real.tpl" {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Fatal("following Smarty import missing")
+	}
+	regions, err := templateextract.Scan(context.Background(), []byte(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, region := range regions {
+		if region.Kind == templateextract.KindPHPBlock && region.EndByte != strings.Index(source, "TEXT; ?>")+len("TEXT; ?>") {
+			t.Fatalf("PHP region has wrong end: %+v", region)
+		}
+	}
+}
