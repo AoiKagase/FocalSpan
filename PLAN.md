@@ -10,7 +10,7 @@ Scanned file content, SHA-256 and size must describe the original bytes, includi
 - [x] 2026-10-17 UTC: RED showed scanner stripping original bytes/identity, BOM-only updates treated unchanged, and several first-line declaration/offset failures.
 - [x] 2026-10-17 UTC: Preserve raw scanner identity and language detection's BOM-free view; registry adjusts positive symbol/chunk ranges after extraction. Focused scanner, six-language registry and service Evidence regressions passed.
 - [x] 2026-10-17 UTC: Added metadata parser-view normalization after RED for package.json/go.mod; focused metadata regression passes. Independent read-only review of final production scope found no actionable issues.
-- [ ] Full offline verification, independent review, scoped commit, merge and merged branch cleanup.
+- [x] 2026-10-17 UTC: Full offline verification and independent review passed; scoped fix db67dc1 fast-forward merged into master and merged task branch removed.
 
 - [x] 2026-10-17 UTC: Final full go test ./..., go test -race ./..., go vet ./..., native build and all three CGO-disabled cross-builds passed. Evidence regression explicitly checks wire usage and invariants. Archived predecessor hash matches master:PLAN.md; independent review found no actionable issues.
 
@@ -28,7 +28,7 @@ Synthetic outlines deliberately use zero/zero byte ranges and are not raw source
 
 ## Outcomes & Retrospective
 
-Final regressions and full offline verification pass. BOM-bearing files retain original Content/SHA256/SizeBytes; adding and removing BOM updates revision and stored ranges. Six-language declarations and JSON/Go-module metadata remain discoverable. Evidence retains verbatim source and line numbers with explicit wire measurement/invariants. Independent review found no actionable issues. Artifacts: .build/bom-fidelity-verification. Commit and local merge remain.
+Final regressions and full offline verification pass. BOM-bearing files retain original Content/SHA256/SizeBytes; adding and removing BOM updates revision and stored ranges. Six-language declarations and JSON/Go-module metadata remain discoverable. Evidence retains verbatim source and line numbers with explicit wire measurement/invariants. Independent review found no actionable issues. Artifacts: .build/bom-fidelity-verification. Fix db67dc1 fast-forward merged into master with the verified code tree. Only local master remains; user changes retain patch hash 481d2c278a820ccfda79ec7bde9bd0ddd35cd68a. No push or runtime deployment performed. Final completion update is documentation-only.
 
 ## Context and Orientation
 
