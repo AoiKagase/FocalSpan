@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/focalspan/focalspan/internal/model"
 )
@@ -72,8 +73,12 @@ func Lex(ctx context.Context, source []byte) ([]Token, []model.Diagnostic, error
 				tokens = append(tokens, pythonToken(kind, source, start, at))
 			case source[at] == '@':
 				at++
-				for at < contentEnd && (isIdentifier(source[at]) || source[at] == '.' || source[at] == '[' || source[at] == ']' || source[at] == '(' || source[at] == ')' || source[at] == ',') {
-					at++
+				for at < contentEnd {
+					r, size := utf8.DecodeRune(source[at:])
+					if !pythonIdentifierContinue(r) && !strings.ContainsRune(".[](),", r) {
+						break
+					}
+					at += size
 				}
 				tokens = append(tokens, pythonToken(Decorator, source, start, at))
 			case stringPrefixLength(source, at) > 0:
@@ -117,10 +122,15 @@ func Lex(ctx context.Context, source []byte) ([]Token, []model.Diagnostic, error
 					diagnostics = append(diagnostics, model.Diagnostic{Level: "warning", Code: "python_unclosed_string", Message: "string is not closed"})
 				}
 				tokens = append(tokens, pythonToken(kind, source, start, end))
-			case isIdentifier(source[at]):
-				at++
-				for at < contentEnd && (isIdentifier(source[at]) || source[at] >= '0' && source[at] <= '9') {
-					at++
+			case pythonIdentifierStart(source[at:]):
+				_, size := utf8.DecodeRune(source[at:])
+				at += size
+				for at < contentEnd {
+					r, size := utf8.DecodeRune(source[at:])
+					if !pythonIdentifierContinue(r) {
+						break
+					}
+					at += size
 				}
 				tokens = append(tokens, pythonToken(Identifier, source, start, at))
 			case source[at] >= '0' && source[at] <= '9':
@@ -165,8 +175,13 @@ func minPython(left, right int) int {
 	}
 	return right
 }
-func isIdentifier(value byte) bool {
-	return value == '_' || value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z' || value >= 0x80 && unicode.IsLetter(rune(value))
+func pythonIdentifierStart(value []byte) bool {
+	r, _ := utf8.DecodeRune(value)
+	return r == '_' || unicode.IsLetter(r) || unicode.Is(unicode.Nl, r) || unicode.Is(unicode.Other_ID_Start, r)
+}
+
+func pythonIdentifierContinue(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || unicode.IsNumber(r) || unicode.IsMark(r) || unicode.Is(unicode.Pc, r) || unicode.Is(unicode.Other_ID_Start, r) || unicode.Is(unicode.Other_ID_Continue, r)
 }
 
 func stringPrefixLength(source []byte, at int) int {

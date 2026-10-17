@@ -33,12 +33,14 @@ type pyDeclaration struct {
 	Decorators []string
 }
 
+const pyIdentifier = `[\p{L}\p{Nl}_\x{1885}\x{1886}\x{2118}\x{212e}\x{309b}\x{309c}][\p{L}\p{N}\p{M}\p{Pc}_\x{00b7}\x{0387}\x{1369}-\x{1371}\x{19da}\x{2118}\x{212e}]*`
+
 var (
-	pyClassPattern    = regexp.MustCompile(`^class\s+([A-Za-z_]\w*)`)
-	pyFunctionPattern = regexp.MustCompile(`^(?:(async)\s+)?def\s+([A-Za-z_]\w*)\s*\(`)
-	pyAliasPattern    = regexp.MustCompile(`^([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*)\b`)
-	pyClassVarPattern = regexp.MustCompile(`^([A-Za-z_]\w*)\s*=`)
-	pyCallPattern     = regexp.MustCompile(`\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)\s*\(`)
+	pyClassPattern    = regexp.MustCompile(`^class\s+(` + pyIdentifier + `)`)
+	pyFunctionPattern = regexp.MustCompile(`^(?:(async)\s+)?def\s+(` + pyIdentifier + `)\s*\(`)
+	pyAliasPattern    = regexp.MustCompile(`^(` + pyIdentifier + `)\s*=\s*(` + pyIdentifier + `)`)
+	pyClassVarPattern = regexp.MustCompile(`^(` + pyIdentifier + `)\s*=`)
+	pyCallPattern     = regexp.MustCompile(`(` + pyIdentifier + `(?:\.` + pyIdentifier + `)*)\s*\(`)
 )
 
 type pyLine struct {
