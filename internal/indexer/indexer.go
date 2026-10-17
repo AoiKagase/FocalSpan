@@ -183,6 +183,65 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 	if err := ctx.Err(); err != nil {
 		return model.IndexRun{}, err
 	}
+
+	if !full && !reindexRequired {
+		parsed := make(map[string]bool, len(results))
+		fileByPath := make(map[string]model.SourceFile, len(files))
+		for _, file := range files {
+			fileByPath[file.Path] = file
+		}
+		keys := make([]string, 0)
+		for _, result := range results {
+			parsed[result.file.Path] = true
+			if result.err == nil {
+				keys = append(keys, store.ExtractionLookupKeys(result.file, result.extraction)...)
+			}
+		}
+		for len(keys) > 0 {
+			dependents, err := i.store.DependentSourcePaths(ctx, keys)
+			if err != nil {
+				return model.IndexRun{}, fmt.Errorf("read newly competing relation targets: %w", err)
+			}
+			pending := append([]string(nil), dependents...)
+			var next []model.SourceFile
+			for len(pending) > 0 {
+				var frontier []string
+				for _, path := range pending {
+					if parsed[path] {
+						continue
+					}
+					parsed[path] = true
+					if file, ok := fileByPath[path]; ok {
+						next = append(next, file)
+						frontier = append(frontier, path)
+						run.FilesUnchanged--
+						run.FilesChanged++
+					}
+				}
+				if len(frontier) == 0 {
+					break
+				}
+				pending, err = i.store.IncomingRelationPaths(ctx, frontier)
+				if err != nil {
+					return model.IndexRun{}, fmt.Errorf("read invalidated relation sources: %w", err)
+				}
+			}
+			if len(next) == 0 {
+				break
+			}
+			more := i.parse(ctx, next, nil)
+			if err := ctx.Err(); err != nil {
+				return model.IndexRun{}, err
+			}
+			results = append(results, more...)
+			keys = nil
+			for _, result := range more {
+				if result.err == nil {
+					keys = append(keys, store.ExtractionLookupKeys(result.file, result.extraction)...)
+				}
+			}
+		}
+	}
 	sort.Slice(results, func(a, b int) bool { return results[a].file.Path < results[b].file.Path })
 	updates := make([]store.FileUpdate, 0, len(results))
 	for _, result := range results {

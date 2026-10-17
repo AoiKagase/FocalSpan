@@ -1541,3 +1541,10 @@ func (s *Store) Status(ctx context.Context, root string) (model.Status, error) {
 	}
 	return status, nil
 }
+
+// ExtractionLookupKeys uses the same normalization as persisted lookup rows.
+func ExtractionLookupKeys(file model.SourceFile, extraction model.Extraction) []string {
+	keys := extractionLookupKeys(file, extraction)
+	sort.Strings(keys)
+	return keys
+}
