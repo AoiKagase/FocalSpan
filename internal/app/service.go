@@ -206,6 +206,7 @@ func (s *Service) statusRead(ctx context.Context) (model.Status, error) {
 	}
 	checks := []struct{ key, want string }{
 		{"configuration_hash", s.Config.Hash()},
+		{"extraction_configuration_hash", s.Config.ExtractionHash()},
 		{"extractor_version", indexer.ExtractorVersion},
 		{"linking_pending", "0"},
 		{"last_successful_index", ""},

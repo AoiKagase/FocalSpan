@@ -105,6 +105,18 @@ func (c Config) Hash() string {
 	return hex.EncodeToString(h[:])
 }
 
+// ExtractionHash excludes presentation and worker settings that cannot change
+// the extracted symbols/chunks for an otherwise unchanged source file.
+func (c Config) ExtractionHash() string {
+	b, _ := json.Marshal(struct {
+		Overrides map[string]string
+		Lines     int
+		Overlap   int
+	}{c.LanguageOverrides, c.GenericChunkLines, c.GenericChunkOverlap})
+	h := sha256.Sum256(b)
+	return hex.EncodeToString(h[:])
+}
+
 func (c Config) WorkerCount() int {
 	if c.Workers > 0 {
 		return c.Workers

@@ -88,7 +88,17 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 	reindexRequired := full
 	if !reindexRequired {
 		version, versionErr := i.store.Meta(ctx, "extractor_version")
+		if versionErr != nil && !errors.Is(versionErr, sql.ErrNoRows) {
+			return model.IndexRun{}, versionErr
+		}
 		reindexRequired = versionErr != nil || version != extractorVersion
+	}
+	if !reindexRequired {
+		stored, hashErr := i.store.Meta(ctx, "extraction_configuration_hash")
+		if hashErr != nil && !errors.Is(hashErr, sql.ErrNoRows) {
+			return model.IndexRun{}, hashErr
+		}
+		reindexRequired = hashErr != nil || stored != i.config.ExtractionHash()
 	}
 	current := make(map[string]bool, len(files))
 	toParse := make([]model.SourceFile, 0, len(files))
@@ -171,6 +181,7 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 	delta, err := i.store.ApplyIndexWithDelta(ctx, deletions, updates, []store.MetaUpdate{
 		{Key: "last_revision", Value: revision},
 		{Key: "configuration_hash", Value: i.config.Hash()},
+		{Key: "extraction_configuration_hash", Value: i.config.ExtractionHash()},
 		{Key: "extractor_version", Value: extractorVersion},
 		{Key: "manifest_facts_revision", Value: factsRevision},
 		// Commit recovery state with file changes: linking commits separately.
