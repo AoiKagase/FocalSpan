@@ -13,6 +13,9 @@ type Extractor struct{}
 func NewExtractor() Extractor  { return Extractor{} }
 func (Extractor) Name() string { return "zig-structural" }
 func (Extractor) Supports(path, language string) bool {
+	if language != "" {
+		return language == "zig"
+	}
 	return strings.EqualFold(filepath.Ext(path), ".zig") || language == "zig" && strings.EqualFold(filepath.Ext(path), ".zig")
 }
 

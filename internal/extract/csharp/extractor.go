@@ -18,6 +18,9 @@ type Extractor struct{}
 func NewExtractor() Extractor  { return Extractor{} }
 func (Extractor) Name() string { return "csharp-structural" }
 func (Extractor) Supports(path, language string) bool {
+	if language != "" {
+		return language == "csharp"
+	}
 	ext := strings.ToLower(filepath.Ext(path))
 	return language == "csharp" || ext == ".cs" || ext == ".csx"
 }

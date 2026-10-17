@@ -19,6 +19,9 @@ func NewExtractor() Extractor  { return Extractor{} }
 func (Extractor) Name() string { return "cpp-structural" }
 
 func (Extractor) Supports(path, language string) bool {
+	if language != "" {
+		return language == "c" || language == "cpp"
+	}
 	if language == "c" || language == "cpp" {
 		return true
 	}

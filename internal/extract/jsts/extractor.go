@@ -18,6 +18,9 @@ type Extractor struct{}
 func NewExtractor() Extractor  { return Extractor{} }
 func (Extractor) Name() string { return "jsts-structural" }
 func (Extractor) Supports(path, language string) bool {
+	if language != "" {
+		return language == "javascript" || language == "typescript"
+	}
 	if language == "javascript" || language == "typescript" {
 		return true
 	}

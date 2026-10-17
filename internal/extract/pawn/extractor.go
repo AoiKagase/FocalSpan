@@ -14,6 +14,9 @@ func NewExtractor() Extractor  { return Extractor{} }
 func (Extractor) Name() string { return "pawn-structural" }
 
 func (Extractor) Supports(path, language string) bool {
+	if language != "" {
+		return language == "pawn"
+	}
 	return language == "pawn" || strings.EqualFold(filepath.Ext(path), ".sma") || strings.EqualFold(filepath.Ext(path), ".pwn") || strings.EqualFold(filepath.Ext(path), ".inc")
 }
 

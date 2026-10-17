@@ -13,6 +13,9 @@ type Extractor struct{}
 func NewExtractor() Extractor  { return Extractor{} }
 func (Extractor) Name() string { return "xaml-structural" }
 func (Extractor) Supports(path, language string) bool {
+	if language != "" {
+		return language == "xaml"
+	}
 	return language == "xaml" || strings.EqualFold(filepath.Ext(path), ".xaml")
 }
 

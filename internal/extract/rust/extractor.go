@@ -17,6 +17,9 @@ type Extractor struct{}
 func NewExtractor() Extractor  { return Extractor{} }
 func (Extractor) Name() string { return "rust-structural" }
 func (Extractor) Supports(path, language string) bool {
+	if language != "" {
+		return language == "rust"
+	}
 	return language == "rust" || strings.EqualFold(filepath.Ext(path), ".rs")
 }
 

@@ -33,6 +33,9 @@ func NewExtractorWithOptions(lines, overlap int) Extractor {
 func (Extractor) Name() string { return "generic-structural" }
 
 func (Extractor) Supports(path, language string) bool {
+	if language != "" {
+		return language != "go"
+	}
 	if language == "go" || strings.EqualFold(filepath.Ext(path), ".go") {
 		return false
 	}

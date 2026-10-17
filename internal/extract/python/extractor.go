@@ -18,6 +18,9 @@ type Extractor struct{}
 func NewExtractor() Extractor  { return Extractor{} }
 func (Extractor) Name() string { return "python-structural" }
 func (Extractor) Supports(path, language string) bool {
+	if language != "" {
+		return language == "python"
+	}
 	return language == "python" || strings.EqualFold(filepath.Ext(path), ".py") || strings.EqualFold(filepath.Ext(path), ".pyw") || strings.EqualFold(filepath.Ext(path), ".pyi")
 }
 

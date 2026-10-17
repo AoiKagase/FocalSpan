@@ -13,6 +13,9 @@ type Extractor struct{}
 func NewExtractor() Extractor  { return Extractor{} }
 func (Extractor) Name() string { return "resx-structural" }
 func (Extractor) Supports(path, language string) bool {
+	if language != "" {
+		return language == "dotnet-resource"
+	}
 	if language == "dotnet-resource" {
 		ext := strings.ToLower(filepath.Ext(path))
 		return ext == ".resx" || ext == ".settings"

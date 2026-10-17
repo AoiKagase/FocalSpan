@@ -20,6 +20,9 @@ func NewRegistry(extractors ...Extractor) *Registry {
 }
 
 func (r *Registry) For(path, language string) (Extractor, bool) {
+	if language != "" {
+		path = ""
+	}
 	for _, extractor := range r.extractors {
 		if extractor.Supports(path, language) {
 			return extractor, true

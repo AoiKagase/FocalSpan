@@ -13,6 +13,9 @@ type Extractor struct{}
 func NewExtractor() Extractor  { return Extractor{} }
 func (Extractor) Name() string { return "nim-structural" }
 func (Extractor) Supports(path, language string) bool {
+	if language != "" {
+		return language == "nim"
+	}
 	ext := strings.ToLower(filepath.Ext(path))
 	if language == "nim" {
 		return ext == ".nim" || ext == ".nims"

@@ -18,6 +18,9 @@ type Extractor struct{}
 func NewExtractor() Extractor  { return Extractor{} }
 func (Extractor) Name() string { return "ruby-structural" }
 func (Extractor) Supports(path, language string) bool {
+	if language != "" {
+		return language == "ruby"
+	}
 	base := strings.ToLower(filepath.Base(path))
 	return language == "ruby" || strings.EqualFold(filepath.Ext(path), ".rb") || strings.EqualFold(filepath.Ext(path), ".rake") || strings.HasSuffix(strings.ToLower(path), ".gemspec") || base == "rakefile" || base == "gemfile"
 }
