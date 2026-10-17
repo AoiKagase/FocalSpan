@@ -345,12 +345,18 @@ func focusedLateHit(item EvidenceCase, packet evidence.Packet) int {
 		return 1
 	}
 	for _, expected := range item.Expected {
-		for _, contains := range expected.Contains {
-			for _, value := range packet.Evidence {
-				if value.Location.Path == expected.Path && containsEvidenceText(value, []string{contains}) {
-					return 1
-				}
+		if len(expected.Contains) == 0 {
+			continue
+		}
+		matched := false
+		for _, value := range packet.Evidence {
+			if value.Location.Path == expected.Path && (expected.Symbol == "" || value.Symbol == expected.Symbol) && containsEvidenceText(value, expected.Contains) {
+				matched = true
+				break
 			}
+		}
+		if !matched {
+			return 0
 		}
 	}
 	return 1
