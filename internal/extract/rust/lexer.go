@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/focalspan/focalspan/internal/model"
 )
@@ -221,6 +222,18 @@ func quotedEnd(source []byte, start int, quote byte) int {
 }
 
 func lifetimeOrChar(source []byte, start int) (int, bool) {
+	if start+1 < len(source) && source[start+1] != '\\' {
+		_, size := utf8.DecodeRune(source[start+1:])
+		if end := start + 1 + size; end < len(source) && source[end] == '\'' {
+			return end + 1, true
+		}
+	}
+	if start+1 < len(source) && source[start+1] == '\\' {
+		end := quotedEnd(source, start, '\'')
+		if end > start+2 && source[end-1] == '\'' {
+			return end, true
+		}
+	}
 	if start+1 >= len(source) || !isIdentStart(source[start+1]) {
 		return 0, false
 	}
