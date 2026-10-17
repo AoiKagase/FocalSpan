@@ -99,7 +99,16 @@ func (p *parser) parseModules() {
 				}
 				continue
 			}
-			end := statementEnd(p, position+1)
+			end := -1
+			for cursor := position + 1; cursor < len(p.sig); cursor++ {
+				if p.tokens[p.sig[cursor]].Kind == StringLiteral {
+					end = cursor
+					break
+				}
+				if p.tokens[p.sig[cursor]].Text == ";" {
+					break
+				}
+			}
 			if end < 0 {
 				continue
 			}
@@ -269,7 +278,7 @@ func (p *parser) parseType(position, hi int, parent *declaration, namespace stri
 			return nil, position, false
 		}
 		name := p.tokens[p.sig[namePos]].Text
-		semi := p.findUntil(namePos+1, hi, ";")
+		semi := p.typeAliasEnd(namePos+1, hi)
 		if semi < 0 {
 			return nil, position, false
 		}
@@ -400,20 +409,18 @@ func (p *parser) parseVariableFunction(position, hi int, parent *declaration, na
 		return decl, close, true
 	}
 	open := value
-	if open >= hi || p.tokens[p.sig[open]].Text != "(" {
-		if open >= hi || p.tokens[p.sig[open]].Kind != Identifier {
+	close := value
+	signatureStart := value
+	if value < hi && p.tokens[p.sig[value]].Text == "(" {
+		closeRaw, ok := p.matching[p.sig[value]]
+		if !ok {
 			return nil, position, false
 		}
-		open = value + 1
-	}
-	if open >= hi || p.tokens[p.sig[open]].Text != "(" {
+		close = p.positionOf(closeRaw)
+		signatureStart = open + 1
+	} else if value >= hi || p.tokens[p.sig[value]].Kind != Identifier {
 		return nil, position, false
 	}
-	closeRaw := p.matching[p.sig[open]]
-	if closeRaw == 0 {
-		return nil, position, false
-	}
-	close := p.positionOf(closeRaw)
 	if close+1 >= hi || p.tokens[p.sig[close+1]].Text != "=>" {
 		return nil, position, false
 	}
@@ -429,7 +436,7 @@ func (p *parser) parseVariableFunction(position, hi int, parent *declaration, na
 		end = semi
 		headerEnd = p.tokens[p.sig[semi]].EndByte
 	}
-	return &declaration{Kind: "arrow_function", Name: name, Qualified: joinQualified(namespace, name), Start: p.sig[position], HeaderEnd: headerEnd, End: p.endAfter(p.sig[end], hi), BodyOpen: bodyOpen, BodyClose: bodyClose, Parent: parent, Namespace: namespace, SignatureKey: joinTokens(p.tokens, p.sig[open+1:close])}, end, true
+	return &declaration{Kind: "arrow_function", Name: name, Qualified: joinQualified(namespace, name), Start: p.sig[position], HeaderEnd: headerEnd, End: p.endAfter(p.sig[end], hi), BodyOpen: bodyOpen, BodyClose: bodyClose, Parent: parent, Namespace: namespace, SignatureKey: joinTokens(p.tokens, p.sig[signatureStart:close+1])}, end, true
 }
 
 func (p *parser) parseTest(position, hi int, parent *declaration, namespace string) (*declaration, int, bool) {
@@ -714,4 +721,31 @@ func normalizeModule(filePath, target string) []string {
 		}
 	}
 	return uniqueStrings(result)
+}
+
+func (p *parser) typeAliasEnd(start, hi int) int {
+	for cursor := start; cursor < hi; cursor++ {
+		token := p.tokens[p.sig[cursor]]
+		if token.Text == ";" {
+			return cursor
+		}
+		if token.Text == "{" || token.Text == "[" || token.Text == "(" {
+			close, ok := p.matching[p.sig[cursor]]
+			if !ok {
+				return -1
+			}
+			cursor = p.positionOf(close)
+		}
+		if cursor+1 == hi || p.tokens[p.sig[cursor+1]].StartLine > p.tokens[p.sig[cursor]].EndLine && isTypeAliasBoundary(p.tokens[p.sig[cursor+1]].Text) {
+			return cursor
+		}
+	}
+	return -1
+}
+func isTypeAliasBoundary(text string) bool {
+	switch text {
+	case "function", "const", "let", "var", "class", "interface", "type", "export":
+		return true
+	}
+	return false
 }
