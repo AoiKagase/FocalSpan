@@ -192,11 +192,21 @@ func parseSmartyAttributes(words []string) (map[string]string, []string) {
 		if equal := strings.IndexByte(word, '='); equal >= 0 {
 			key := strings.ToLower(strings.TrimSpace(word[:equal]))
 			if key != "" {
-				attributes[key] = unquoteSmartyValue(word[equal+1:])
+				value := word[equal+1:]
+				if value == "" && index+1 < len(words) {
+					index++
+					value = words[index]
+				}
+				attributes[key] = unquoteSmartyValue(value)
 			}
 			continue
 		}
-		if index+1 < len(words) && words[index+1] == "=" {
+		if index+1 < len(words) && strings.HasPrefix(words[index+1], "=") {
+			if words[index+1] != "=" {
+				attributes[strings.ToLower(word)] = unquoteSmartyValue(words[index+1][1:])
+				index++
+				continue
+			}
 			if index+2 < len(words) {
 				attributes[strings.ToLower(word)] = unquoteSmartyValue(words[index+2])
 				index += 2

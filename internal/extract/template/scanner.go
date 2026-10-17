@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"strings"
+
+	"github.com/focalspan/focalspan/internal/extract/php"
 )
 
 // Scan returns lexical regions without interpreting Smarty semantics.
@@ -73,13 +75,13 @@ func scan(ctx context.Context, source []byte) ([]Region, []string, error) {
 			i, staticStart = end, end
 		case isPHPOpen(source, i):
 			flushStatic(i)
-			end := bytes.Index(source[i+2:], []byte("?>"))
-			if end < 0 {
-				end = len(source)
+			localEnd, closed, err := php.BlockEnd(ctx, source[i:])
+			if err != nil {
+				return regions, diagnostics, err
+			}
+			end := i + localEnd
+			if !closed {
 				diagnostics = append(diagnostics, "template_unclosed_php")
-			} else {
-				end += i + 2
-				end += 2
 			}
 			regions = append(regions, makeRegion(source, KindPHPBlock, i, end))
 			i, staticStart = end, end
