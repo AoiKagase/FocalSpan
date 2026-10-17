@@ -45,7 +45,7 @@ const (
 	PhaseLinking  = "linking"
 	PhaseComplete = "complete"
 
-	extractorVersion = "extractors-v10-go-test-declarations"
+	extractorVersion = "extractors-v11-incoming-relations"
 	// ExtractorVersion is the version required for a readable, current index.
 	ExtractorVersion = extractorVersion
 )
@@ -128,6 +128,39 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 		if !current[path] {
 			deletions = append(deletions, path)
 			run.FilesDeleted++
+		}
+	}
+	// Replacing a target removes incoming resolved edges. Reextract their
+	// sources transitively, because replacing a source also removes its inedges.
+	if !full && !reindexRequired {
+		fileByPath := make(map[string]model.SourceFile, len(files))
+		for _, file := range files {
+			fileByPath[file.Path] = file
+		}
+		queued := make(map[string]bool)
+		pending := append([]string(nil), deletions...)
+		for _, file := range toParse {
+			pending = append(pending, file.Path)
+		}
+		for _, path := range pending {
+			queued[path] = true
+		}
+		for len(pending) > 0 {
+			dependents, err := i.store.IncomingRelationPaths(ctx, pending)
+			if err != nil {
+				return model.IndexRun{}, fmt.Errorf("read relation dependents: %w", err)
+			}
+			pending = nil
+			for _, path := range dependents {
+				if queued[path] {
+					continue
+				}
+				queued[path] = true
+				pending = append(pending, path)
+				if file, ok := fileByPath[path]; ok {
+					toParse = append(toParse, file)
+				}
+			}
 		}
 	}
 	emit(Progress{Phase: PhaseParsing, Total: len(toParse)})
