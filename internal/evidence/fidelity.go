@@ -45,6 +45,12 @@ func BuildVariants(candidate ClassifiedCandidate, plan query.Plan, mode Mode, es
 		lineCount = candidate.Candidate.EndLine - candidate.Candidate.StartLine + 1
 	}
 	isSynthetic := syntheticCandidate(candidate)
+	if isSynthetic {
+		if synthetic.Outline == "" {
+			return nil
+		}
+		return []ContentVariant{synthetic}
+	}
 
 	variants := make([]ContentVariant, 0, 3)
 	switch mode {
