@@ -1,0 +1,1332 @@
+{
+    "schema":  "focalspan.whole-repository-audit.v1",
+    "baseline":  "master@9400ffb55e11d65de773a48df49db69eb7f2e067",
+    "tracked_files":  641,
+    "adopted_count":  50,
+    "reproduced_findings":  44,
+    "static_not_runtime_reproduced":  6,
+    "scope":  "Current tracked working tree, including preserved dirty MCP server. Product code was not changed. No fix/commit/merge/push/deployment.",
+    "coverage_file":  "C:/Temp/fs-whole-audit-coverage.json",
+    "coverage_summary":  {
+                             "sql_migrations_reviewed":  2,
+                             "documentation":  90,
+                             "fixtures":  180,
+                             "support":  11,
+                             "production_go":  167,
+                             "test_go":  193
+                         },
+    "runtime_limitations":  [
+                                "Only targeted temporary-overlay reproductions were executed; no full normal/race/vet/cross-build run in this audit.",
+                                "No Linux/Darwin runtime, actual global Codex CLI, real CI execution, network filesystems or symlink boundary acceptance.",
+                                "Reproduced includes direct component/helper tests; it does not assert end-to-end MCP reproduction for every issue.",
+                                "No claim of zero remaining defects: historical documents, unrelated tests/fixtures and dependency vulnerability validation are not individually complete.",
+                                "Supervisor unexplained EOF remains unproven and is excluded."
+                            ],
+    "findings":  [
+                     {
+                         "id":  "F01",
+                         "source_id":  "X01",
+                         "severity":  "P1",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "未終端文字列末尾のバックスラッシュで6言語のlexerがpanicする",
+                         "path":  "internal/extract/cpp/lexer.go",
+                         "line":  223,
+                         "details":  {
+                                         "id":  "X01",
+                                         "severity":  "P1",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Trailing escape in unterminated literal panics",
+                                         "path":  "internal/extract/cpp/lexer.go",
+                                         "line":  223,
+                                         "exact_trigger":  "Lex/Extract with bytes [34,92], no final newline; same for csharp,jsts,lua,pawn,zig",
+                                         "wrong_behavior":  "Escaping final byte increments cursor to len+1; later source slice/index panics instead of returning malformed-source diagnostic.",
+                                         "expected_behavior":  "Clamp escape advances or return len(source) on unterminated input.",
+                                         "root_cause":  "Escaping final byte increments cursor to len+1; later source slice/index panics instead of returning malformed-source diagnostic.",
+                                         "test_recipe":  "Call each lexer with exact two bytes and assert no panic and diagnostic; add backtick variant for JS.",
+                                         "relation_to_prior_fix":  "Distinct from N11 Python masking; affects six other lexer implementations.",
+                                         "related_locations":  [
+                                                                   "internal/extract/csharp/lexer.go:251",
+                                                                   "internal/extract/jsts/lexer.go:128",
+                                                                   "internal/extract/jsts/lexer.go:144",
+                                                                   "internal/extract/lua/lexer.go:50",
+                                                                   "internal/extract/pawn/lexer.go:60",
+                                                                   "internal/extract/zig/lexer.go:32"
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F02",
+                         "source_id":  "CORE-02",
+                         "severity":  "P1",
+                         "verification":  "static_not_runtime_reproduced",
+                         "title_ja":  "root内のsymlink別名から除外対象の秘密ファイルを読み取れる",
+                         "path":  "internal/repository/scanner.go",
+                         "line":  51,
+                         "details":  {
+                                         "id":  "CORE-02",
+                                         "severity":  "P1",
+                                         "certainty":  "static_high_runtime_unconfirmed",
+                                         "title":  "Inside-root source alias bypasses secret exclusions",
+                                         "path":  "internal/repository/scanner.go",
+                                         "line":  51,
+                                         "reproducer":  "Git repository contains excluded .env with TOKEN=secret and tracked public.txt symlink to .env. SecretExcludesEnabled=true, no Include override. Scan.",
+                                         "observed_static_wrong_branch":  "excluded checks public.txt only; ContainedPath resolves .env inside root; ReadFile reads secret bytes and SourceFile.Path remains public.txt.",
+                                         "expected":  "Default secret policy should not be bypassed by alias to excluded source.",
+                                         "root_cause":  "Policy checks lexical alias before physical resolution, never checks physical target\u0027s relative path.",
+                                         "test_recipe":  "Use an OS-supported inside-root symlink fixture; ensure neither secret file nor alias content enters scanner/index. Windows link prerequisites may require junction/file-symlink variant.",
+                                         "prior_fix_relationship":  "A05 fixed filename case; N01 fixed outside-root physical containment. Archive explicitly left a symlink-alias scenario skipped."
+                                     }
+                     },
+                     {
+                         "id":  "F03",
+                         "source_id":  "CORE-03",
+                         "severity":  "P1",
+                         "verification":  "static_not_runtime_reproduced",
+                         "title_ja":  "index.db自体のsymlinkでroot外のDBを更新できる",
+                         "path":  "internal/store/lifecycle.go",
+                         "line":  27,
+                         "details":  {
+                                         "id":  "CORE-03",
+                                         "severity":  "P1",
+                                         "certainty":  "static_high_runtime_unconfirmed",
+                                         "title":  "index.db leaf symlink bypasses index directory containment",
+                                         "path":  "internal/store/lifecycle.go",
+                                         "line":  27,
+                                         "reproducer":  "Create contained .focalspan directory and index.db symlink to a valid schema-v2 FocalSpan database outside repository. Open service and run index.",
+                                         "observed_static_wrong_branch":  "PrepareIndexDirectory validates only directory. openWithLease constructs directory/index.db and os.Stat/readSchemaVersionPath/openDatabase follow the leaf symlink; ApplyIndex writes external target.",
+                                         "expected":  "Store should reject a physical DB file outside the allowed repository boundary before opening/mutating it.",
+                                         "root_cause":  "Directory containment does not cover DB leaf and SQLite sidecar files.",
+                                         "test_recipe":  "Create external valid v2 DB fixture, link contained index.db to it, hash external files, attempt Open/Index, assert rejection and no external mutation.",
+                                         "prior_fix_relationship":  "Residual distinct from A06/N01 index directory and source junction fixes; no directory escape required."
+                                     }
+                     },
+                     {
+                         "id":  "F04",
+                         "source_id":  "P-CI",
+                         "severity":  "P1",
+                         "verification":  "static_not_runtime_reproduced",
+                         "title_ja":  "CIがv2生成レポートをv1固定baselineと比較して失敗する",
+                         "path":  ".github/workflows/ci.yml",
+                         "line":  105,
+                         "details":  {
+                                         "id":  "P-CI",
+                                         "trigger":  "Every smoke/full benchmark job generates ReportSchemaV2, then compares docs/benchmarks/results-v0.5.json whose schema is v1.",
+                                         "evidence":  [
+                                                          "internal/benchmark/runner.go:60",
+                                                          "internal/benchmark/compare.go:27",
+                                                          "internal/benchcli/run.go:344",
+                                                          "docs/benchmarks/results-v0.5.json:2",
+                                                          ".github/workflows/ci.yml:127"
+                                                      ],
+                                         "severity":  "P1",
+                                         "line":  105,
+                                         "verification":  "static",
+                                         "wrong_behavior":  "CompareReports rejects mixed versions and CLI exits 3, blocking quality comparison.",
+                                         "test_recipe":  "Run the CI benchmark compare step against its newly generated candidate; schema guard behavior is intentional, workflow baseline must migrate.",
+                                         "path":  ".github/workflows/ci.yml",
+                                         "title":  "Benchmark CI compares v2 candidates with a fixed v1 baseline"
+                                     }
+                     },
+                     {
+                         "id":  "F05",
+                         "source_id":  "PC01",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "global登録の強制置換で追加失敗時に旧登録を失う",
+                         "path":  "internal/integration/codex/service.go",
+                         "line":  68,
+                         "details":  {
+                                         "id":  "PC01",
+                                         "severity":  "P2",
+                                         "certainty":  "static",
+                                         "path":  "internal/integration/codex/service.go",
+                                         "lines":  "68-75",
+                                         "title":  "Forced global registration replacement destroys old registration when add fails",
+                                         "trigger":  "Existing differing global registration; Install with Force=true; userRemove succeeds and userAdd fails or its context is cancelled.",
+                                         "wrong":  "Old command, args and any extra registration settings have already been removed; operation returns an error with no restoration.",
+                                         "expected":  "Failure should preserve or restore the previously installed registration, or use an update mechanism without a destructive gap.",
+                                         "rootcause":  "Remove and add are separate subprocesses and only identity fields of the previous registration are retained; there is no transaction/rollback.",
+                                         "testrecipe":  "Extend fakeCommandRunner test TestUserForceRemovesBeforeAddingAndRemoveFailurePreventsAdd: return old registration from get, successful remove, error from add; model registration state and require original remains. Repeat cancellation between remove and add.",
+                                         "previousfix":  "Not N04: its lock/CAS applies project config. Not A16 state comparison."
+                                     }
+                     },
+                     {
+                         "id":  "F06",
+                         "source_id":  "PC02",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "benchmark出力が既存の同名.tmpファイルを上書き・移動する",
+                         "path":  "internal/benchcli/run.go",
+                         "line":  374,
+                         "details":  {
+                                         "id":  "PC02",
+                                         "severity":  "P2",
+                                         "certainty":  "static",
+                                         "path":  "internal/benchcli/run.go",
+                                         "lines":  "374-378",
+                                         "title":  "Benchmark report writer truncates an existing unrelated .tmp file",
+                                         "trigger":  "Output report path R is absent and R+\u0027.tmp\u0027 already contains user data; call writeOutput(R,data,false).",
+                                         "wrong":  "os.WriteFile truncates R.tmp and then Rename removes it into R. With R.tmp a symlink, the pointed-to target is truncated on platforms permitting symlinks.",
+                                         "expected":  "Create a unique owned temporary file in the destination directory, clean up only that file, and preserve pre-existing files.",
+                                         "rootcause":  "Fixed temporary filename plus nonexclusive/truncating WriteFile.",
+                                         "testrecipe":  "Package benchcli test precreate report.json.tmp=\u0027sentinel\u0027; writeOutput(report.json,...,false); require sentinel unchanged. Test two writers separately if needed.",
+                                         "previousfix":  "Distinct from N03 snapshot ownership; same ownership principle but a different output path and helper."
+                                     }
+                     },
+                     {
+                         "id":  "F07",
+                         "source_id":  "CORE-01",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "同名シンボル追加後の増分索引が古い確定関係を残す",
+                         "path":  "internal/store/links.go",
+                         "line":  113,
+                         "details":  {
+                                         "id":  "CORE-01",
+                                         "severity":  "P2",
+                                         "certainty":  "static_high",
+                                         "title":  "Adding an ambiguous target preserves an obsolete resolved relation",
+                                         "path":  "internal/store/links.go",
+                                         "line":  113,
+                                         "reproducer":  "Index Go caller.go: package p; func Caller(){ Foo() }; a.go: package p; func Foo(){}. Then add b.go declaring another Foo without modifying caller.go or a.go and run incremental index.",
+                                         "observed_static_wrong_branch":  "RelationsForLink selects only to_handle IS NULL. IncomingRelationPaths is computed from newly added b.go, which has no previously resolved incoming edge, so caller.go is not reextracted. Its original edge to a.go survives while a full rebuild sees two Foo targets and leaves it ambiguous.",
+                                         "expected":  "Incremental and full rebuild must agree; addition of competing symbol should invalidate affected resolved relation.",
+                                         "root_cause":  "Resolved edges lose unresolved_to and affected lookup-key invalidation only selects unresolved rows.",
+                                         "test_recipe":  "Index initial two-file fixture, add duplicate target, compare sorted relation sets from incremental vs full rebuild.",
+                                         "prior_fix_relationship":  "Distinct from A03/N08: existing-target mutation and manifest mutation are fixed; new competing target is not."
+                                     }
+                     },
+                     {
+                         "id":  "F08",
+                         "source_id":  "CORE-08",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "大量の再リンク条件がSQLiteの変数上限を超える",
+                         "path":  "internal/store/links.go",
+                         "line":  97,
+                         "details":  {
+                                         "id":  "CORE-08",
+                                         "severity":  "P2",
+                                         "certainty":  "static_high_limit_runtime_unconfirmed",
+                                         "title":  "Large incremental relinking exceeds SQLite bound-parameter limit",
+                                         "path":  "internal/store/links.go",
+                                         "line":  97,
+                                         "reproducer":  "Call RelationsForLink with non-full LinkScope containing more than 32766 total ChangedPaths and LookupKeys, or incrementally update enough files to generate that many distinct lookup keys.",
+                                         "observed_static_wrong_branch":  "One ? is appended per path/key without batching, and all parameters are passed to a single QueryContext.",
+                                         "expected":  "Supported repository/update size should not be limited by SQLite variable cap; batch/JSON scopes like candidate retrieval.",
+                                         "root_cause":  "Unbounded IN lists in relation linking.",
+                                         "test_recipe":  "Construct deterministic LinkScope above driver SQLITE_LIMIT_VARIABLE_NUMBER, assert lookup succeeds and returns expected relation. Then add scaled incremental integration case.",
+                                         "prior_fix_relationship":  "Scoped candidate retrieval batches already exist; relation-link scope remains unbatched."
+                                     }
+                     },
+                     {
+                         "id":  "F09",
+                         "source_id":  "X28",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "9言語の抽出途中のキャンセルを空の正常結果として返す",
+                         "path":  "internal/extract/nim/extractor.go",
+                         "line":  38,
+                         "details":  {
+                                         "id":  "X28",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Late cancellation inside builder is returned as extraction success",
+                                         "path":  "internal/extract/nim/extractor.go",
+                                         "line":  38,
+                                         "exact_trigger":  "Sweep deterministic context.Err gate across every check while extracting one valid function; cancellation after Lex/parse reaches builder cancellation branch.",
+                                         "wrong_behavior":  "buildNim (and CPP/C#/JS/Python/Ruby/Rust/Zig/XAML/RESX builders) returns empty model.Extraction on ctx.Err, but Extract wrapper returns that result with nil error.",
+                                         "expected_behavior":  "Canceled public extraction returns context cancellation rather than success/empty result.",
+                                         "root_cause":  "Builder API omits error return; wrappers do not check ctx.Err after builder return.",
+                                         "test_recipe":  "TestWholeAuditX28BuilderCancellationMustReturnError in C:/Temp/fs-audit-extract-repro_test.go; runs sweep across ten languages with genuine cancellable context.",
+                                         "relation_to_prior_fix":  "O04/A17 covered service/config cancellation. This is independently observable extractor API behavior; indexer may have defense in depth.",
+                                         "related_locations":  [
+                                                                   "internal/extract/nim/builder.go:35",
+                                                                   "internal/extract/python/extractor.go:84",
+                                                                   "internal/extract/ruby/extractor.go:73",
+                                                                   "internal/extract/rust/extractor.go:533",
+                                                                   "internal/extract/zig/builder.go:29",
+                                                                   "internal/extract/xaml/builder.go:39",
+                                                                   "internal/extract/resx/builder.go:29",
+                                                                   "internal/extract/csharp/extractor.go:72",
+                                                                   "internal/extract/jsts/extractor.go:81",
+                                                                   "internal/extract/cpp/extractor.go:84"
+                                                               ]
+                                     },
+                         "reproduction_scope":  "9 languages reproduced: csharp,javascript,python,ruby,rust,nim,zig,xaml,dotnet-resource. CPP cancellation subtest PASS; CPP is excluded from this finding."
+                     },
+                     {
+                         "id":  "F10",
+                         "source_id":  "PCC01",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "global登録の無効化・固定cwdを設定ドリフトとして検出しない",
+                         "path":  "internal/integration/codex/user_cli.go",
+                         "line":  83,
+                         "details":  {
+                                         "id":  "PCC01",
+                                         "severity":  "P2",
+                                         "certainty":  "static",
+                                         "status":  "residual_prior_fix",
+                                         "path":  "internal/integration/codex/user_cli.go",
+                                         "lines":  "83-111,198-210",
+                                         "related":  "internal/integration/codex/service.go:60-62,145-150",
+                                         "title":  "Global registration parser still drops enabled and transport execution context",
+                                         "trigger":  "codex mcp get returns enabled=false or transport.cwd=\u0027/other\u0027 with same command/args as expected.",
+                                         "wrong":  "Install returns unchanged; Status managed_match and root_mode runtime_cwd even though disabled or bound to a fixed cwd. env/env_vars/timeouts/tool restrictions are likewise discarded.",
+                                         "expected":  "Classify execution-affecting settings as drift; do not claim current usable runtime_cwd registration.",
+                                         "rootcause":  "userRegistration stores only Command/Args, unlike project tableMatches.",
+                                         "testrecipe":  "Modify currentCodexRegistrationJSON fake response with enabled=false and separately cwd; require Status not managed_match and Install not unchanged.",
+                                         "previousfix":  "Residual A16 global boundary, not a new unrelated finding. Completed plan Task8/line179 and tests214 explicitly cover StatusProject only. Parent should deduplicate or label incomplete fix."
+                                     }
+                     },
+                     {
+                         "id":  "F11",
+                         "source_id":  "X22",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "拡張子の優先判定が明示した言語overrideを無視する",
+                         "path":  "internal/extract/extract.go",
+                         "line":  24,
+                         "details":  {
+                                         "id":  "X22",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Registry extension fallback overrides explicit language override",
+                                         "path":  "internal/extract/extract.go",
+                                         "line":  24,
+                                         "exact_trigger":  "newExtractorRegistry plus SourceFile Path=\u0027logic.go\u0027, Language=\u0027python\u0027, Content=\u0027def real():\\n    pass\\n\u0027, where Language came from override **/*.go=python",
+                                         "wrong_behavior":  "Registry chooses Go first because goast.Supports accepts .go regardless of nonempty language. Detector override is honored then silently undone, leading to Go parse errors instead of Python extraction. Plain text .inc also gets Pawn despite text detection.",
+                                         "expected_behavior":  "When detected/overridden language is nonempty, language selects extractor; use extension fallback only when language absent.",
+                                         "root_cause":  "Registry chooses Go first because goast.Supports accepts .go regardless of nonempty language. Detector override is honored then silently undone, leading to Go parse errors instead of Python extraction. Plain text .inc also gets Pawn despite text detection.",
+                                         "test_recipe":  "Test registry end-to-end with **/*.go=python, *.cs=text, and unknown extension=nim/zig/resource; expect requested language extractor or generic.",
+                                         "relation_to_prior_fix":  "Residual O02 override rebuild contract; A11 fixed relation language boundaries, not Registry dispatch.",
+                                         "related_locations":  [
+                                                                   "internal/extract/goast/go.go:30",
+                                                                   "internal/extract/nim/extractor.go:15",
+                                                                   "internal/extract/zig/extractor.go:15",
+                                                                   "internal/extract/resx/extractor.go:15",
+                                                                   "internal/app/service.go:96",
+                                                                   "internal/language/override_test.go:7"
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F12",
+                         "source_id":  "PC03",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "setupが.gitignoreのコメント・否定ルールを除外設定と誤認する",
+                         "path":  "internal/cli/run.go",
+                         "line":  687,
+                         "details":  {
+                                         "id":  "PC03",
+                                         "severity":  "P2",
+                                         "certainty":  "static",
+                                         "path":  "internal/cli/run.go",
+                                         "lines":  "687-689",
+                                         "title":  "Setup mistakes comments or negated gitignore rules for an index exclusion",
+                                         "trigger":  "Existing .gitignore contains \u0027# cache at .focalspan/\u0027 or \u0027!.focalspan/\u0027 and no effective positive exclusion; run setup.",
+                                         "wrong":  "ensureGitignore returns without adding an exclusion; index database and locks remain eligible for git add.",
+                                         "expected":  "Ensure an actual effective rule excludes the index directory, respecting negation/order.",
+                                         "rootcause":  "strings.Contains matches any occurrence instead of a real ignore entry.",
+                                         "testrecipe":  "Unit-test ensureGitignore on the two texts; require appended positive .focalspan/ rule after existing negations. Parent may use git check-ignore for end-to-end proof.",
+                                         "previousfix":  "Distinct from O01 Git detection: Git can be detected successfully here."
+                                     }
+                     },
+                     {
+                         "id":  "F13",
+                         "source_id":  "PC04",
+                         "severity":  "P2",
+                         "verification":  "static_not_runtime_reproduced",
+                         "title_ja":  "update/serveが余分な位置引数と後続フラグを黙って無視する",
+                         "path":  "internal/cli/run.go",
+                         "line":  193,
+                         "details":  {
+                                         "id":  "PC04",
+                                         "severity":  "P2",
+                                         "certainty":  "static",
+                                         "path":  "internal/cli/run.go",
+                                         "lines":  "193-196,437-440",
+                                         "title":  "Update and serve silently ignore positional arguments and flags after them",
+                                         "trigger":  "\u0027focalspan update typo --root PATH\u0027 or \u0027focalspan serve typo --root PATH\u0027. flag.Parse stops at typo.",
+                                         "wrong":  "No fs.Args validation occurs; flags after typo are ignored and update operates on cwd or serve pins the wrong repository.",
+                                         "expected":  "Reject unexpected positional arguments before opening/updating an index or starting a server, matching setup/status/mcp.",
+                                         "rootcause":  "Missing remaining-argument validation after fs.Parse in both commands.",
+                                         "testrecipe":  "Call Run with update/serve plus typo and --root in a context that cannot start real work; require an unexpected-argument error before repository/service/worker access.",
+                                         "previousfix":  "Distinct from A15 and subsequent query normalization: these are update/serve dispatch paths."
+                                     }
+                     },
+                     {
+                         "id":  "F14",
+                         "source_id":  "PC06",
+                         "severity":  "P2",
+                         "verification":  "static_not_runtime_reproduced",
+                         "title_ja":  "evalの引数エラーとusageがstdoutへ混入する",
+                         "path":  "internal/evalcli/run.go",
+                         "line":  25,
+                         "details":  {
+                                         "id":  "PC06",
+                                         "severity":  "P2",
+                                         "certainty":  "static",
+                                         "path":  "internal/evalcli/run.go",
+                                         "lines":  "25-34",
+                                         "title":  "Evaluator emits invalid-flag diagnostics into stdout",
+                                         "trigger":  "focalspan-eval --json --unknown-option.",
+                                         "wrong":  "flag.FlagSet writes diagnostic and usage to stdout before Run writes error on stderr, contaminating machine-readable output.",
+                                         "expected":  "CLI error/usage diagnostics belong to stderr; stdout should stay empty on argument errors.",
+                                         "rootcause":  "fs.SetOutput(stdout), and run does not receive stderr.",
+                                         "testrecipe":  "Run with invalid flag and bytes.Buffer outputs; require nonzero, empty stdout, diagnostic in stderr.",
+                                         "previousfix":  "No overlap with prior behavior fixes; explicit repository CLI stream contract."
+                                     }
+                     },
+                     {
+                         "id":  "F15",
+                         "source_id":  "CORE-04",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "完全一致のTypeScript aliasが長い別名にも一致する",
+                         "path":  "internal/linker/linker.go",
+                         "line":  398,
+                         "details":  {
+                                         "id":  "CORE-04",
+                                         "severity":  "P2",
+                                         "certainty":  "static_high",
+                                         "title":  "Exact TypeScript aliases match longer nonexistent import names",
+                                         "path":  "internal/linker/linker.go",
+                                         "line":  398,
+                                         "reproducer":  "Fact path-alias Name=@cfg Target=src/config.ts; source import target @cfgExtra; only compatible target symbol lives src/config.ts.",
+                                         "observed_static_wrong_branch":  "aliasPrefix=@cfg; HasPrefix(@cfgExtra,@cfg) succeeds. remainder=Extra, but base has no wildcard, so mapped remains src/config.ts and import is resolved there.",
+                                         "expected":  "Alias with no wildcard should match the complete import string only.",
+                                         "root_cause":  "All path aliases are interpreted as prefixes regardless of wildcard presence.",
+                                         "test_recipe":  "Direct Linker fixture with exact alias, positive @cfg and negative @cfgExtra relations; only positive resolves.",
+                                         "prior_fix_relationship":  "N09 fixed compilerOptions/baseUrl discovery; this is linker matching semantics."
+                                     },
+                         "reproduction_scope":  "Direct linker helper reproduction; full application end-to-end not exercised."
+                     },
+                     {
+                         "id":  "F16",
+                         "source_id":  "CORE-05",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "無関係なmanifestのmain等を使って存在しないimportを解決する",
+                         "path":  "internal/linker/linker.go",
+                         "line":  408,
+                         "details":  {
+                                         "id":  "CORE-05",
+                                         "severity":  "P2",
+                                         "certainty":  "static_high",
+                                         "title":  "Unrelated path-valued manifest facts can resolve nonexistent imports",
+                                         "path":  "internal/linker/linker.go",
+                                         "line":  408,
+                                         "reproducer":  "package.json fact Kind=main Target=src/main.js; importer imports missing-package; one compatible target symbol lives src/main.js.",
+                                         "observed_static_wrong_branch":  "symbolIndex.candidates adds paths from every fact. factPathCandidates calls default branch, which returns src/main.js without checking target missing-package against fact identity. Sole symbol resolves unrelated import.",
+                                         "expected":  "Manifest entry points/project references must only contribute for imports that identify their package/export/reference.",
+                                         "root_cause":  "Default fact path mapping is independent of queried relation target.",
+                                         "test_recipe":  "Direct Linker fixture with main/module/project-reference fact and an unrelated missing import; require relation to remain unresolved.",
+                                         "prior_fix_relationship":  "Distinct from manifest-change reextraction N08; faithfully reextracting still applies wrong resolution rule."
+                                     },
+                         "reproduction_scope":  "Direct linker helper reproduction; full application end-to-end not exercised."
+                     },
+                     {
+                         "id":  "F17",
+                         "source_id":  "CORE-06",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "全リンクのprojectionが通常の相対importを候補から落とす",
+                         "path":  "internal/store/links.go",
+                         "line":  115,
+                         "details":  {
+                                         "id":  "CORE-06",
+                                         "severity":  "P2",
+                                         "certainty":  "static_high",
+                                         "title":  "Full-link projection omits ordinary relative imports without manifest facts",
+                                         "path":  "internal/store/links.go",
+                                         "line":  115,
+                                         "reproducer":  "No manifest facts. src/main.ts imports ./dep.ts; src/dep.ts contains one compatible module symbol named dep. Invoke Linker.Link (full).",
+                                         "observed_static_wrong_branch":  "Full link enables UseProjection. relationLookupKeys(\u0027./dep.ts\u0027) yields \u0027./dep.ts\u0027 and \u0027/dep/ts\u0027; file lookup keys contain src/dep.ts, src/dep, dep.ts, dep, src. No key intersection, so relation never reaches linkerPathMatch, which resolves this explicit source-relative path when scoped linking selects the source.",
+                                         "expected":  "Projection optimization must preserve the same eligible relations as unprojected linking.",
+                                         "root_cause":  "Projection keys do not encode source-relative normalized paths.",
+                                         "test_recipe":  "Seed store with source/target symbols and relation. Compare full projected linking against scoped ChangedPaths=[\u0027src/main.ts\u0027] linking.",
+                                         "prior_fix_relationship":  "Distinct from A03 incoming reconstruction and retrieval scope caps; concerns full relation selection."
+                                     }
+                     },
+                     {
+                         "id":  "F18",
+                         "source_id":  "CORE-15",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "拡張子を省略した相対importを実ファイルへ解決できない",
+                         "path":  "internal/linker/linker.go",
+                         "line":  449,
+                         "details":  {
+                                         "id":  "CORE-15",
+                                         "severity":  "P2",
+                                         "certainty":  "static_high_runtime_unconfirmed",
+                                         "title":  "Extensionless source-relative imports do not match extensionful target files",
+                                         "path":  "internal/linker/linker.go",
+                                         "line":  449,
+                                         "reproducer":  "linkerPathMatch(src/main.ts, src/dep.ts, ./dep)",
+                                         "observed_static_wrong_branch":  "Extensionless candidate base src/dep is compared against unnormalized target ./dep, then source-relative joined path src/dep is compared against extensionful candidate src/dep.ts. Both fail; ./dep.ts positive control succeeds.",
+                                         "expected":  "Resolve a supported extensionless relative import against source-relative target files.",
+                                         "root_cause":  "No extensionless comparison after joining importer directory to relative target.",
+                                         "test_recipe":  "TestWholeAuditCore15ExtensionlessRelativeImportMatchesTarget in C:/Temp/fs-audit-core-linker_test.go",
+                                         "prior_fix_relationship":  "Separate from CORE-06 projection: fails even in direct linkerPathMatch after projection is bypassed."
+                                     },
+                         "reproduction_scope":  "Direct linker helper reproduction; full application end-to-end not exercised."
+                     },
+                     {
+                         "id":  "F19",
+                         "source_id":  "CORE-09",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "Cargoのversion等をpackage名・path依存として誤登録する",
+                         "path":  "internal/projectmeta/discover.go",
+                         "line":  381,
+                         "details":  {
+                                         "id":  "CORE-09",
+                                         "severity":  "P2",
+                                         "certainty":  "static_high",
+                                         "title":  "Cargo metadata parser creates name/path facts from every quoted line",
+                                         "path":  "internal/projectmeta/discover.go",
+                                         "line":  381,
+                                         "reproducer":  "Cargo.toml: [package]\\nname = \"actual\"\\nversion = \"1.0.0\". ParseFile.",
+                                         "observed_static_wrong_branch":  "quotedAssignment(line,\u0027name\u0027) and quotedAssignment(line,\u0027path\u0027) return firstQuoted(line) after failing requested-key regex. version line therefore creates package=1.0.0 and path-dependency=1.0.0; name line also creates path-dependency=actual.",
+                                         "expected":  "Only requested assignment key contributes its corresponding metadata fact.",
+                                         "root_cause":  "Unconditional fallback to firstQuoted when keyed lookup misses.",
+                                         "test_recipe":  "Parse minimal Cargo fixture; compare exact expected fact set and exclude version-derived/package-as-path facts.",
+                                         "prior_fix_relationship":  "Distinct from JSONC/compilerOptions fixes; affects TOML path."
+                                     }
+                     },
+                     {
+                         "id":  "F20",
+                         "source_id":  "CORE-14",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "Composerの配列形式PSRパスマッピングを読み落とす",
+                         "path":  "internal/projectmeta/discover.go",
+                         "line":  230,
+                         "details":  {
+                                         "id":  "CORE-14",
+                                         "severity":  "P2",
+                                         "certainty":  "static_high_semantic_acceptance_unconfirmed",
+                                         "title":  "Composer PSR namespace mappings to arrays are silently discarded",
+                                         "path":  "internal/projectmeta/discover.go",
+                                         "line":  230,
+                                         "reproducer":  "composer.json {\"autoload\":{\"psr-4\":{\"Demo\\\\\":[\"src/\",\"generated/\"]}}}. ParseFile.",
+                                         "observed_static_wrong_branch":  "Map entry target has type []any, but map branch accepts only string. Neither mapping is added; top-level []any handling does not cover map values.",
+                                         "expected":  "Array-valued PSR-4/PSR-0 directory mappings should produce facts for their directories.",
+                                         "root_cause":  "Only top-level list and map-of-string representations are supported.",
+                                         "test_recipe":  "Add metadata fixture using array-valued namespace mapping and compare expected facts to equivalent individual string mappings.",
+                                         "prior_fix_relationship":  "Distinct from strict JSON/JSONC and manifest refresh fixes."
+                                     }
+                     },
+                     {
+                         "id":  "F21",
+                         "source_id":  "CORE-11",
+                         "severity":  "P2",
+                         "verification":  "static_not_runtime_reproduced",
+                         "title_ja":  "大小文字を区別するOSでもimportパスを大小文字同一視する",
+                         "path":  "internal/linker/linker.go",
+                         "line":  522,
+                         "details":  {
+                                         "id":  "CORE-11",
+                                         "severity":  "P2",
+                                         "certainty":  "static_high_case_sensitive_os_unconfirmed",
+                                         "title":  "Import paths are case-folded on case-sensitive filesystems",
+                                         "path":  "internal/linker/linker.go",
+                                         "line":  522,
+                                         "reproducer":  "On Linux create src/Foo.ts and src/foo.ts with different module symbols; src/main.ts imports ./Foo. Use scoped link so projection is bypassed.",
+                                         "observed_static_wrong_branch":  "File keys and sameStorePath always lowercase/EqualFold; linkerPathMatch treats both paths as matching and yields ambiguity (or resolves wrong-case file if only lower exists).",
+                                         "expected":  "Filesystem path identity on case-sensitive systems must preserve case.",
+                                         "root_cause":  "Cross-platform path comparison uses unconditional case folding.",
+                                         "test_recipe":  "Direct Linker fixture with both paths plus a Linux filesystem acceptance fixture; require only Foo.ts to be considered.",
+                                         "prior_fix_relationship":  "A10 addressed symbol-name case, not file-path identity. This is a residual distinct scenario."
+                                     }
+                     },
+                     {
+                         "id":  "F22",
+                         "source_id":  "CORE-12",
+                         "severity":  "P3",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "保存済み推定トークン数が取得時に失われ、大きなchunkの順位補正が働かない",
+                         "path":  "internal/store/store.go",
+                         "line":  773,
+                         "details":  {
+                                         "id":  "CORE-12",
+                                         "severity":  "P3",
+                                         "certainty":  "static_high",
+                                         "title":  "Persisted estimated token sizes are never read for ranking",
+                                         "path":  "internal/store/store.go",
+                                         "line":  773,
+                                         "reproducer":  "Store a candidate chunk with EstimatedTokens=5001, retrieve through SearchExactSymbols/SearchFTS/CandidatesForPath, then RankWithPlan.",
+                                         "observed_static_wrong_branch":  "All candidate projections/scanners omit chunks.estimated_tokens, so RankedCandidate.EstimatedTokens remains zero and rank.go:102 never applies large-span penalty in production search.",
+                                         "expected":  "Ranking should observe persisted chunk size for configured large-span utility penalty.",
+                                         "root_cause":  "Projection/model field mismatch.",
+                                         "test_recipe":  "Store-and-retrieve integration test checks EstimatedTokens=5001 and large-span reason after ranking.",
+                                         "prior_fix_relationship":  "No overlap with previous fixed issues."
+                                     }
+                     },
+                     {
+                         "id":  "F23",
+                         "source_id":  "CORE-13",
+                         "severity":  "P3",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "検索語に正規化できない入力が、索引済みDBでFTS構文エラーになる",
+                         "path":  "internal/search/retrieval.go",
+                         "line":  67,
+                         "details":  {
+                                         "id":  "CORE-13",
+                                         "severity":  "P3",
+                                         "certainty":  "static_high_sqlite_runtime_unconfirmed",
+                                         "title":  "Punctuation-only nonblank queries reach FTS with an empty expression",
+                                         "path":  "internal/search/retrieval.go",
+                                         "line":  67,
+                                         "reproducer":  "QueryEvidence query=\u0027!!!\u0027 (or SearchDetailed SearchRequest.Query=\u0027!!!\u0027).",
+                                         "observed_static_wrong_branch":  "Blank check accepts raw query, Normalize creates no terms, BuildFTS returns empty string, SearchFTS executes MATCH \u0027\u0027 which is an invalid FTS5 expression instead of clean no-match/validation.",
+                                         "expected":  "Return a clear invalid-query response or empty/abstained results without database syntax error.",
+                                         "root_cause":  "Raw nonblank validation does not ensure searchable normalized terms.",
+                                         "test_recipe":  "Search integration fixture with punctuation-only input; require clean validation/no-match result rather than FTS syntax error.",
+                                         "prior_fix_relationship":  "Distinct from earlier CLI argument normalization fix."
+                                     },
+                         "reproduction_scope":  "FTS must have an indexed chunk. Empty DB control PASS; populated DB fails with fts5 syntax error near empty expression."
+                     },
+                     {
+                         "id":  "F24",
+                         "source_id":  "X02",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "VB.NETコンストラクタがEnd Subで閉じず、後続メソッドを取り込む",
+                         "path":  "internal/extract/vb/vbnet.go",
+                         "line":  128,
+                         "details":  {
+                                         "id":  "X02",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "VB.NET constructor never closes at End Sub",
+                                         "path":  "internal/extract/vb/vbnet.go",
+                                         "line":  128,
+                                         "exact_trigger":  "Class A\\nSub New()\\nEnd Sub\\nSub After()\\nEnd Sub\\nEnd Class",
+                                         "wrong_behavior":  "constructor is closed only by End Function, leaving New active through EOF, assigning After to A.New and emitting false unclosed block warnings.",
+                                         "expected_behavior":  "Preserve original Sub/Function terminator independently of semantic kind.",
+                                         "root_cause":  "constructor is closed only by End Function, leaving New active through EOF, assigning After to A.New and emitting false unclosed block warnings.",
+                                         "test_recipe":  "Extract fixture; assert New ends at line 3, After parent is class A, no unclosed-block diagnostic.",
+                                         "relation_to_prior_fix":  "No prior fix overlap.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F25",
+                         "source_id":  "X03",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "Rustの文字リテラル内の波括弧をコードとして扱い、関数範囲を壊す",
+                         "path":  "internal/extract/rust/lexer.go",
+                         "line":  223,
+                         "details":  {
+                                         "id":  "X03",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Rust punctuation and escaped characters leak into delimiter matching",
+                                         "path":  "internal/extract/rust/lexer.go",
+                                         "line":  223,
+                                         "exact_trigger":  "fn f(){ let x = \u0027{\u0027; }\\nfn g(){}",
+                                         "wrong_behavior":  "lifetimeOrChar accepts only identifier-start after quote; \u0027{\u0027 and escaped quote chars are emitted as structural punctuation. Unmatched literal brace corrupts f/g body bounds and hierarchy.",
+                                         "expected_behavior":  "Lex all valid char literals before lifetime recognition.",
+                                         "root_cause":  "lifetimeOrChar accepts only identifier-start after quote; \u0027{\u0027 and escaped quote chars are emitted as structural punctuation. Unmatched literal brace corrupts f/g body bounds and hierarchy.",
+                                         "test_recipe":  "Extract fixture and assert f/g are separate siblings and f ends before g; add \u0027\\\\n\u0027, \u0027\\\\\u0027\u0027, \u0027}\u0027 cases.",
+                                         "relation_to_prior_fix":  "No overlap with A18 test-attribute path fix.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F26",
+                         "source_id":  "X04",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "C++の前方宣言が後続関数の本体を取り込む",
+                         "path":  "internal/extract/cpp/parser.go",
+                         "line":  187,
+                         "details":  {
+                                         "id":  "X04",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Forward type declaration swallows next function body",
+                                         "path":  "internal/extract/cpp/parser.go",
+                                         "line":  187,
+                                         "exact_trigger":  "struct A;\\nvoid f() {}\\n",
+                                         "wrong_behavior":  "parseType searches for \u0027{\u0027 without considering earlier \u0027;\u0027; it binds A to f\u0027s braces, consumes f, and omits its callable symbol.",
+                                         "expected_behavior":  "Stop at first declaration delimiter and distinguish forward declarations.",
+                                         "root_cause":  "parseType searches for \u0027{\u0027 without considering earlier \u0027;\u0027; it binds A to f\u0027s braces, consumes f, and omits its callable symbol.",
+                                         "test_recipe":  "Extract; assert A byte range ends at its semicolon and f is present as function.",
+                                         "relation_to_prior_fix":  "No prior fix overlap.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F27",
+                         "source_id":  "X05",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "C#のverbatim文字列の末尾バックスラッシュが後続メソッドを隠す",
+                         "path":  "internal/extract/csharp/lexer.go",
+                         "line":  237,
+                         "details":  {
+                                         "id":  "X05",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "C# verbatim and character literals use incorrect escape rules",
+                                         "path":  "internal/extract/csharp/lexer.go",
+                                         "line":  237,
+                                         "exact_trigger":  "class A { string p = @\"C:\\\\\"; void F() {} } (source must have exactly one backslash before verbatim closing quote); also escaped single quote character",
+                                         "wrong_behavior":  "stringEnd detects verbatim but calls quotedEnd that treats backslash as escape. A valid verbatim path ending in backslash masks following F. quotedEnd also ignores escapes for char literals, so \u0027\\\\\u0027\u0027 closes early.",
+                                         "expected_behavior":  "Use literal-kind-specific quoting rules.",
+                                         "root_cause":  "stringEnd detects verbatim but calls quotedEnd that treats backslash as escape. A valid verbatim path ending in backslash masks following F. quotedEnd also ignores escapes for char literals, so \u0027\\\\\u0027\u0027 closes early.",
+                                         "test_recipe":  "Exact C# fixture with @\"C:\\\"; assert F survives. Add escaped apostrophe/backslash char token coverage.",
+                                         "relation_to_prior_fix":  "Separate from EOF escape panic X01.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F28",
+                         "source_id":  "X06",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "Nimの複数行文字列内に偽の宣言を生成する",
+                         "path":  "internal/extract/nim/extractor.go",
+                         "line":  27,
+                         "details":  {
+                                         "id":  "X06",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Nim lexer masks are discarded before declaration parsing",
+                                         "path":  "internal/extract/nim/extractor.go",
+                                         "line":  27,
+                                         "exact_trigger":  "let doc = \"\"\"\\nproc fake() = discard\\n\"\"\"\\nproc real() = discard",
+                                         "wrong_behavior":  "Lex returns TripleString/LongComment positions, but Extract discards tokens and parseNim sees raw lines. fake becomes a high-confidence proc. Body call regex also reads strings.",
+                                         "expected_behavior":  "Pass lexer code view into declaration/relation analysis.",
+                                         "root_cause":  "Lex returns TripleString/LongComment positions, but Extract discards tokens and parseNim sees raw lines. fake becomes a high-confidence proc. Body call regex also reads strings.",
+                                         "test_recipe":  "Assert fake absent for triple string and nested #[ ... ]# comment; real remains.",
+                                         "relation_to_prior_fix":  "N11 corrected Python only; this is independent Nim parser.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F29",
+                         "source_id":  "X07",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "Rubyのheredoc本文内に偽の宣言を生成する",
+                         "path":  "internal/extract/ruby/extractor.go",
+                         "line":  52,
+                         "details":  {
+                                         "id":  "X07",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Ruby heredoc/block-comment payload becomes code",
+                                         "path":  "internal/extract/ruby/extractor.go",
+                                         "line":  52,
+                                         "exact_trigger":  "text = \u003c\u003c~TEXT\\ndef fake\\nend\\nTEXT\\ndef real\\nend; equivalent =begin/def fake/=end block",
+                                         "wrong_behavior":  "Extract discards lexer tokens, parseRuby only skips marker line, and raw payload creates fake declarations and relationships at .95 confidence.",
+                                         "expected_behavior":  "Use lexer regions in structural and relationship passes.",
+                                         "root_cause":  "Extract discards lexer tokens, parseRuby only skips marker line, and raw payload creates fake declarations and relationships at .95 confidence.",
+                                         "test_recipe":  "Extract valid heredoc and block-comment fixtures; assert fake absent, real remains.",
+                                         "relation_to_prior_fix":  "N11 Python fix does not cover Ruby.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F30",
+                         "source_id":  "X08",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "VBの通常文字列内に偽の型宣言を生成する",
+                         "path":  "internal/extract/vb/vbnet.go",
+                         "line":  66,
+                         "details":  {
+                                         "id":  "X08",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "VB strings are parsed as declarations and calls",
+                                         "path":  "internal/extract/vb/vbnet.go",
+                                         "line":  66,
+                                         "exact_trigger":  "Class A\\nSub F()\\nDim s As String = \"Class Fake\"\\nEnd Sub\\nEnd Class",
+                                         "wrong_behavior":  "vbCode removes comments but retains strings; unanchored vbTypePattern matches Class Fake inside string, corrupting hierarchy and recovery. VB6 unanchored method patterns have same exposure.",
+                                         "expected_behavior":  "Keep separate raw signature/string-aware code view.",
+                                         "root_cause":  "vbCode removes comments but retains strings; unanchored vbTypePattern matches Class Fake inside string, corrupting hierarchy and recovery. VB6 unanchored method patterns have same exposure.",
+                                         "test_recipe":  "Assert no Fake symbol from string and no target calls from literal text.",
+                                         "relation_to_prior_fix":  "N11 only covered Python; separate VB implementations.",
+                                         "related_locations":  [
+                                                                   "internal/extract/vb/common.go:199",
+                                                                   "internal/extract/vb/vb6.go:98",
+                                                                   "internal/extract/vb/builder.go:157"
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F31",
+                         "source_id":  "X09",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "Luaの文字列・コメント内のrequireをimportとして扱う",
+                         "path":  "internal/extract/lua/builder.go",
+                         "line":  50,
+                         "details":  {
+                                         "id":  "X09",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Lua comments/strings create require imports",
+                                         "path":  "internal/extract/lua/builder.go",
+                                         "line":  50,
+                                         "exact_trigger":  "-- require(\u0027fake\u0027)\\nlocal note = \"require(\u0027also_fake\u0027)\"\\nfunction real() end",
+                                         "wrong_behavior":  "Builder calls luaRequireTarget on every raw line, ignoring already computed token mask; non-code creates confident imports and import chunks.",
+                                         "expected_behavior":  "Identify require tokens/calls in code while reading string argument through tokens.",
+                                         "root_cause":  "Builder calls luaRequireTarget on every raw line, ignoring already computed token mask; non-code creates confident imports and import chunks.",
+                                         "test_recipe":  "Assert imports fake/also_fake absent and real require(\u0027real\u0027) remains.",
+                                         "relation_to_prior_fix":  "Independent of N11 Python and earlier boundary fixes.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F32",
+                         "source_id":  "X10",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "RESXのXMLコメント・CDATA内に偽のリソースを生成する",
+                         "path":  "internal/extract/resx/scanner.go",
+                         "line":  37,
+                         "details":  {
+                                         "id":  "X10",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "RESX comments and CDATA create resource symbols",
+                                         "path":  "internal/extract/resx/scanner.go",
+                                         "line":  37,
+                                         "exact_trigger":  "\u003croot\u003e\u003c!-- \u003cdata name=\"Fake\"\u003e\u003cvalue\u003ex\u003c/value\u003e\u003c/data\u003e --\u003e\u003c![CDATA[\u003cdata name=\"AlsoFake\"\u003e]]\u003e\u003cdata name=\"Real\"/\u003e\u003c/root\u003e",
+                                         "wrong_behavior":  "Regex scans whole file without XML region tracking, so commented/CDATA markup becomes resource keys and relations.",
+                                         "expected_behavior":  "Ignore XML comments/CDATA before matching resource elements.",
+                                         "root_cause":  "Regex scans whole file without XML region tracking, so commented/CDATA markup becomes resource keys and relations.",
+                                         "test_recipe":  "Assert only Real extracted; preserve exact source coordinates for actual attributes.",
+                                         "relation_to_prior_fix":  "No prior fix overlap.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F33",
+                         "source_id":  "X11",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "標準形式のResXFileRefによるファイル依存を抽出しない",
+                         "path":  "internal/extract/resx/scanner.go",
+                         "line":  33,
+                         "details":  {
+                                         "id":  "X11",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Standard ResXFileRef representation is never imported",
+                                         "path":  "internal/extract/resx/scanner.go",
+                                         "line":  33,
+                                         "exact_trigger":  "\u003croot\u003e\u003cdata name=\"Logo\" type=\"System.Resources.ResXFileRef, System.Windows.Forms\"\u003e\u003cvalue\u003e../Resources/logo.png;System.Drawing.Bitmap, System.Drawing\u003c/value\u003e\u003c/data\u003e\u003c/root\u003e",
+                                         "wrong_behavior":  "fileRefPattern expects invented \u003cResXFileRef\u003e element; ordinary RESX encodes file-ref type on data and path in value. Valid resource file dependency is lost.",
+                                         "expected_behavior":  "Recognize data type=System.Resources.ResXFileRef and parse its value.",
+                                         "root_cause":  "fileRefPattern expects invented \u003cResXFileRef\u003e element; ordinary RESX encodes file-ref type on data and path in value. Valid resource file dependency is lost.",
+                                         "test_recipe":  "Use standard RESX fixture; assert imports contains ../Resources/logo.png. Existing test uses custom nested ResXFileRef element.",
+                                         "relation_to_prior_fix":  "No prior fix overlap.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F34",
+                         "source_id":  "X12",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "JSのセミコロン省略importが次の文の文字列までimportする",
+                         "path":  "internal/extract/jsts/parser.go",
+                         "line":  102,
+                         "details":  {
+                                         "id":  "X12",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Semicolonless JS imports absorb unrelated string literals",
+                                         "path":  "internal/extract/jsts/parser.go",
+                                         "line":  102,
+                                         "exact_trigger":  "import { f } from \u0027./a\u0027\\nconst message = \u0027not-a-module\u0027;\\nfunction g(){ f(); }",
+                                         "wrong_behavior":  "statementEnd finds next \u0027;\u0027 globally, stringLiterals treats message literal as second import target, importedNames can examine unrelated following code.",
+                                         "expected_behavior":  "Respect statement boundaries/ASI in module scanning.",
+                                         "root_cause":  "statementEnd finds next \u0027;\u0027 globally, stringLiterals treats message literal as second import target, importedNames can examine unrelated following code.",
+                                         "test_recipe":  "Assert only ./a module import and f imported alias; no not-a-module import.",
+                                         "relation_to_prior_fix":  "Separate from N15 Python multi-import.",
+                                         "related_locations":  [
+                                                                   "internal/extract/jsts/parser.go:582"
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F35",
+                         "source_id":  "X13",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "TypeScriptのobject型aliasを抽出しない",
+                         "path":  "internal/extract/jsts/parser.go",
+                         "line":  272,
+                         "details":  {
+                                         "id":  "X13",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Object TypeScript type aliases are omitted",
+                                         "path":  "internal/extract/jsts/parser.go",
+                                         "line":  272,
+                                         "exact_trigger":  "type User = { name: string };\\nfunction f() {}",
+                                         "wrong_behavior":  "parseType\u0027s type branch findUntil(\u0027;\u0027) returns -1 on \u0027{\u0027; parser fails to create User while supporting type aliases generally.",
+                                         "expected_behavior":  "Consume balanced alias type expressions up to statement boundary.",
+                                         "root_cause":  "parseType\u0027s type branch findUntil(\u0027;\u0027) returns -1 on \u0027{\u0027; parser fails to create User while supporting type aliases generally.",
+                                         "test_recipe":  "Assert User kind type exists with source span through semicolon.",
+                                         "relation_to_prior_fix":  "No prior fix overlap; syntax-approximate parser but common explicitly supported type alias form.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F36",
+                         "source_id":  "X14",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "単一引数を括弧なしで書いたarrow functionを抽出しない",
+                         "path":  "internal/extract/jsts/parser.go",
+                         "line":  403,
+                         "details":  {
+                                         "id":  "X14",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Single-parameter arrow functions are not recognized",
+                                         "path":  "internal/extract/jsts/parser.go",
+                                         "line":  403,
+                                         "exact_trigger":  "const double = value =\u003e value * 2;",
+                                         "wrong_behavior":  "After seeing bare Identifier parameter, parser advances open=value+1 then still requires \u0027(\u0027; ordinary single-parameter arrows cannot enter arrow declaration path.",
+                                         "expected_behavior":  "Handle bare identifier parameter separately.",
+                                         "root_cause":  "After seeing bare Identifier parameter, parser advances open=value+1 then still requires \u0027(\u0027; ordinary single-parameter arrows cannot enter arrow declaration path.",
+                                         "test_recipe":  "Assert double kind arrow_function and complete source chunk.",
+                                         "relation_to_prior_fix":  "No prior fix overlap.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F37",
+                         "source_id":  "X16",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "Luaのelseifで余分なブロックを開き、後続関数を取り込む",
+                         "path":  "internal/extract/lua/parser.go",
+                         "line":  143,
+                         "details":  {
+                                         "id":  "X16",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Lua elseif adds an unmatched nesting depth",
+                                         "path":  "internal/extract/lua/parser.go",
+                                         "line":  143,
+                                         "exact_trigger":  "function f()\\n if a then\\n elseif b then\\n end\\nend\\nfunction g()\\nend",
+                                         "wrong_behavior":  "Every then increments depth including elseif\u0027s then, which does not open another block; f remains open and g becomes a child of f or extends f span through EOF.",
+                                         "expected_behavior":  "Track branch replacements separately from block opens.",
+                                         "root_cause":  "Every then increments depth including elseif\u0027s then, which does not open another block; f remains open and g becomes a child of f or extends f span through EOF.",
+                                         "test_recipe":  "Assert f ends at its own end and g has no ParentHandle=f.",
+                                         "relation_to_prior_fix":  "No prior fix overlap; ordinary supported function/if syntax.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F38",
+                         "source_id":  "X17",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "PHPの行コメント中の終了タグを無視し、後続HTMLをPHPとして解析する",
+                         "path":  "internal/extract/php/lexer.go",
+                         "line":  88,
+                         "details":  {
+                                         "id":  "X17",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "PHP line-comment scanner misses closing PHP tag",
+                                         "path":  "internal/extract/php/lexer.go",
+                                         "line":  88,
+                                         "exact_trigger":  "\u003c?php // comment ?\u003e\\nfunction fake() {}",
+                                         "wrong_behavior":  "PHP ?\u003e ends PHP mode even in // or # line comments; scanner consumes through newline and remains inPHP, creating fake PHP declaration from following HTML.",
+                                         "expected_behavior":  "Stop line comment at close tag and let main loop transition mode.",
+                                         "root_cause":  "PHP ?\u003e ends PHP mode even in // or # line comments; scanner consumes through newline and remains inPHP, creating fake PHP declaration from following HTML.",
+                                         "test_recipe":  "Assert trailing HTML function text creates no PHP function. Include # variant and real later \u003c?php block.",
+                                         "relation_to_prior_fix":  "No prior fix overlap.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F39",
+                         "source_id":  "X18",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "template内PHPの文字列中の終了タグでPHP領域を早期終了する",
+                         "path":  "internal/extract/template/scanner.go",
+                         "line":  76,
+                         "details":  {
+                                         "id":  "X18",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Template PHP region closes on tag text inside string",
+                                         "path":  "internal/extract/template/scanner.go",
+                                         "line":  76,
+                                         "exact_trigger":  "\u003c?php $text = \"?\u003e{block name=\u0027fake\u0027}{/block}\"; ?\u003e\\n{block name=\u0027real\u0027}ok{/block}",
+                                         "wrong_behavior":  "Scanner picks first raw ?\u003e without PHP string/comment state. It exposes remainder of PHP string as Smarty code, creating fake block symbols.",
+                                         "expected_behavior":  "Use PHP lexical end-tag state when bounding embedded PHP.",
+                                         "root_cause":  "Scanner picks first raw ?\u003e without PHP string/comment state. It exposes remainder of PHP string as Smarty code, creating fake block symbols.",
+                                         "test_recipe":  "Assert fake absent and real present; region ends only after actual PHP close tag.",
+                                         "relation_to_prior_fix":  "N11 Python string masking does not cover template PHP boundaries.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F40",
+                         "source_id":  "X19",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "Pythonの引数に遮蔽された呼出しを同名の大域関数へ誤接続する",
+                         "path":  "internal/extract/python/extractor.go",
+                         "line":  143,
+                         "details":  {
+                                         "id":  "X19",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Python calls resolve through shadowed parameters and explicit receiver to unrelated local function",
+                                         "path":  "internal/extract/python/extractor.go",
+                                         "line":  143,
+                                         "exact_trigger":  "def target(): pass\\ndef caller(target):\\n    target()\\n; also other.target() with a top-level target",
+                                         "wrong_behavior":  "Call resolution strips receiver then resolves unique short name, ignoring binding scope. Emits .9-confidence caller calls top-level target even when callable is parameter or unrelated object\u0027s method.",
+                                         "expected_behavior":  "Respect lexical binding and preserve receiver qualification; leave uncertain calls unresolved.",
+                                         "root_cause":  "Call resolution strips receiver then resolves unique short name, ignoring binding scope. Emits .9-confidence caller calls top-level target even when callable is parameter or unrelated object\u0027s method.",
+                                         "test_recipe":  "Assert no resolved caller-\u003etop-level target for parameter and receiver examples; ordinary target() control still resolves.",
+                                         "relation_to_prior_fix":  "Residual same semantic hazard as N17 but N17 fixed Go only; Python N12 fixed declaration parent lifetime, not binding.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F41",
+                         "source_id":  "X20",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "Goのstruct/interfaceへのtype aliasを通常の型として分類する",
+                         "path":  "internal/extract/goast/go.go",
+                         "line":  278,
+                         "details":  {
+                                         "id":  "X20",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Go struct/interface aliases lose alias classification",
+                                         "path":  "internal/extract/goast/go.go",
+                                         "line":  278,
+                                         "exact_trigger":  "package p\\ntype Original struct{}\\ntype Alias = struct{}\\ntype IAlias = interface{}",
+                                         "wrong_behavior":  "buildDeclSymbols sets type_alias for Assign then overwrites it with struct/interface based on RHS. Valid aliases have false declaration kind.",
+                                         "expected_behavior":  "Preserve alias kind before inspecting concrete RHS.",
+                                         "root_cause":  "buildDeclSymbols sets type_alias for Assign then overwrites it with struct/interface based on RHS. Valid aliases have false declaration kind.",
+                                         "test_recipe":  "Assert Alias/IAlias kind type_alias; non-alias named structs/interfaces retain types.",
+                                         "relation_to_prior_fix":  "No overlap with N16-N18 or A19.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F42",
+                         "source_id":  "X21",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "C++のnamespace内の自由関数をmethodとして分類する",
+                         "path":  "internal/extract/cpp/parser.go",
+                         "line":  312,
+                         "details":  {
+                                         "id":  "X21",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Namespace-qualified free functions are classified as methods",
+                                         "path":  "internal/extract/cpp/parser.go",
+                                         "line":  312,
+                                         "exact_trigger":  "namespace demo { void f() {} }",
+                                         "wrong_behavior":  "Qualified name contains :: solely due to namespace; kind becomes method even without class/struct receiver. Downstream method_of/declaration behavior and kind-scoped retrieval become wrong.",
+                                         "expected_behavior":  "Determine method status from class ownership or qualified receiver rather than any namespace separator.",
+                                         "root_cause":  "Qualified name contains :: solely due to namespace; kind becomes method even without class/struct receiver. Downstream method_of/declaration behavior and kind-scoped retrieval become wrong.",
+                                         "test_recipe":  "Assert demo::f kind function; actual struct A::f remains method.",
+                                         "relation_to_prior_fix":  "No prior fix overlap.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F43",
+                         "source_id":  "X24",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "C++/C#の定数falseのelif分岐を有効コードとして抽出する",
+                         "path":  "internal/extract/cpp/lexer.go",
+                         "line":  177,
+                         "details":  {
+                                         "id":  "X24",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Constant-false elif branch is incorrectly active",
+                                         "path":  "internal/extract/cpp/lexer.go",
+                                         "line":  177,
+                                         "exact_trigger":  "C++ #if 0\\nvoid a(){}\\n#elif 0\\nvoid fake(){}\\n#endif\\nvoid real(){} ; C# #if false/#elif false analogue",
+                                         "wrong_behavior":  "applyDirective treats every elif exactly as else, restores parent active unconditionally, and ignores constant false branch condition. fake becomes active despite explicitly false condition.",
+                                         "expected_behavior":  "Respect known false elif branches while retaining documented approximation for unknown symbols.",
+                                         "root_cause":  "applyDirective treats every elif exactly as else, restores parent active unconditionally, and ignores constant false branch condition. fake becomes active despite explicitly false condition.",
+                                         "test_recipe":  "Assert Fake inactive/absent for repeated literal false branches and true/else controls work.",
+                                         "relation_to_prior_fix":  "No macro/CFG expansion requested; current lexers explicitly promise inactive literal-false masking.",
+                                         "related_locations":  [
+                                                                   "internal/extract/csharp/lexer.go:185"
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F44",
+                         "source_id":  "X25",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "C++のreceiver型所有者を大小文字を無視して選ぶ",
+                         "path":  "internal/extract/cpp/extractor.go",
+                         "line":  539,
+                         "details":  {
+                                         "id":  "X25",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "C++ receiver ownership still case-folds class names",
+                                         "path":  "internal/extract/cpp/extractor.go",
+                                         "line":  539,
+                                         "exact_trigger":  "class A {};\\nclass a {};\\nvoid a::f() {}",
+                                         "wrong_behavior":  "receiverParent scans declarations using EqualFold; it picks A for a::f when uppercase declaration occurs first. Method ParentHandle points at different case-sensitive type despite correct qualified spelling.",
+                                         "expected_behavior":  "Use case-sensitive receiver ownership in C++ and C.",
+                                         "root_cause":  "receiverParent scans declarations using EqualFold; it picks A for a::f when uppercase declaration occurs first. Method ParentHandle points at different case-sensitive type despite correct qualified spelling.",
+                                         "test_recipe":  "Assert f ParentHandle belongs to lowercase a, with both A and a present.",
+                                         "relation_to_prior_fix":  "Residual of A10 case-sensitive local relations: parent ownership path was not corrected.",
+                                         "related_locations":  [
+                                                                   "internal/extract/cpp/extractor.go:525"
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F45",
+                         "source_id":  "X26",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "C#の入れ子型・メソッドの修飾名から外側の型名が抜ける",
+                         "path":  "internal/extract/csharp/parser.go",
+                         "line":  236,
+                         "details":  {
+                                         "id":  "X26",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Nested C# types/methods omit outer type from qualified name",
+                                         "path":  "internal/extract/csharp/parser.go",
+                                         "line":  236,
+                                         "exact_trigger":  "namespace N { class Outer { class Inner { void F() {} } } }",
+                                         "wrong_behavior":  "parseType joins only namespace+name and recursion retains namespace, so Inner becomes N.Inner and F becomes N.Inner.F despite ParentHandle Outer. Same-named nested types across outers collide in preferred declaration grouping, dropping symbols.",
+                                         "expected_behavior":  "Include enclosing type qualification independently from namespace.",
+                                         "root_cause":  "parseType joins only namespace+name and recursion retains namespace, so Inner becomes N.Inner and F becomes N.Inner.F despite ParentHandle Outer. Same-named nested types across outers collide in preferred declaration grouping, dropping symbols.",
+                                         "test_recipe":  "Extract two outer classes each with Inner/F; assert N.First.Inner/N.Second.Inner and both methods remain.",
+                                         "relation_to_prior_fix":  "No prior fix overlap.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F46",
+                         "source_id":  "X27",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "Smarty属性の等号前だけに空白があるとimport先を誤る",
+                         "path":  "internal/extract/template/parser.go",
+                         "line":  199,
+                         "details":  {
+                                         "id":  "X27",
+                                         "severity":  "P2",
+                                         "certainty":  "needs_repro",
+                                         "title":  "Smarty attribute spacing silently changes include target",
+                                         "path":  "internal/extract/template/parser.go",
+                                         "line":  199,
+                                         "exact_trigger":  "{include file =\u0027partials/header.tpl\u0027}",
+                                         "wrong_behavior":  "splitSmartyWords returns [include,file,=\u0027partials/header.tpl\u0027]; parseSmartyAttributes accepts word=\u0027=\u0027 only as separate token or no spaces before \u0027=\u0027, then skips =\u0027...\u0027; file becomes positional target \u0027file\u0027. Wrong imports are emitted.",
+                                         "expected_behavior":  "Support whitespace independently around \u0027=\u0027.",
+                                         "root_cause":  "splitSmartyWords returns [include,file,=\u0027partials/header.tpl\u0027]; parseSmartyAttributes accepts word=\u0027=\u0027 only as separate token or no spaces before \u0027=\u0027, then skips =\u0027...\u0027; file becomes positional target \u0027file\u0027. Wrong imports are emitted.",
+                                         "test_recipe":  "Assert file=\u0027...\u0027, file = \u0027...\u0027, file= \u0027...\u0027, file =\u0027...\u0027 all import same target and preserve source.",
+                                         "relation_to_prior_fix":  "No prior fix overlap.",
+                                         "related_locations":  [
+
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F47",
+                         "source_id":  "P-RANK",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "benchmark比較がTargetRank/MRRの悪化を検出しない",
+                         "path":  "internal/benchmark/compare.go",
+                         "line":  54,
+                         "details":  {
+                                         "id":  "P-RANK",
+                                         "test":  "TestAuditRankingRegressionIsDetected",
+                                         "trigger":  "Same required recall, target rank changes 1 to 5 and reciprocal rank 1 to .2.",
+                                         "severity":  "P2",
+                                         "line":  54,
+                                         "verification":  "reproduced",
+                                         "wrong_behavior":  "Compatible reports have no regression.",
+                                         "path":  "internal/benchmark/compare.go",
+                                         "title":  "Benchmark comparison misses target-rank and reciprocal-rank regressions",
+                                         "log":  "C:/Temp/fs-audit-parent-tests.log"
+                                     }
+                     },
+                     {
+                         "id":  "F48",
+                         "source_id":  "P-EXPAND",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "benchmark比較が展開結果の欠落・禁止パス混入を検出しない",
+                         "path":  "internal/benchmark/compare.go",
+                         "line":  54,
+                         "details":  {
+                                         "id":  "P-EXPAND",
+                                         "test":  "TestAuditExpansionRegressionIsDetected",
+                                         "trigger":  "Expansion required recall 1 to 0, valid relations 1 to 0, forbidden violations 0 to 1.",
+                                         "severity":  "P2",
+                                         "line":  54,
+                                         "verification":  "reproduced",
+                                         "wrong_behavior":  "Compatible reports have no regression.",
+                                         "path":  "internal/benchmark/compare.go",
+                                         "title":  "Benchmark comparison ignores expansion quality and forbidden-source regressions",
+                                         "log":  "C:/Temp/fs-audit-parent-tests.log"
+                                     }
+                     },
+                     {
+                         "id":  "F49",
+                         "source_id":  "P-FAIL",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "展開anchor不在や展開結果全欠落がfailure codesに残らない",
+                         "path":  "internal/benchmark/failure.go",
+                         "line":  3,
+                         "details":  {
+                                         "id":  "P-FAIL",
+                                         "test":  [
+                                                      "TestAuditExpansionAnchorFailureSurvives",
+                                                      "TestAuditMissingExpansionIsFailure"
+                                                  ],
+                                         "trigger":  "Missing expansion anchor appends expansion_anchor_missing; FailureCodes is then regenerated. Complete expansion recall loss is zero.",
+                                         "severity":  "P2",
+                                         "line":  3,
+                                         "verification":  "reproduced",
+                                         "wrong_behavior":  "Anchor failure is erased; zero recall has no expansion_required_missing code, unlike partial recall.",
+                                         "path":  "internal/benchmark/failure.go",
+                                         "title":  "Expansion failures disappear from failure codes",
+                                         "log":  "C:/Temp/fs-audit-parent-tests.log",
+                                         "related_locations":  [
+                                                                   "internal/benchmark/runner.go:232",
+                                                                   "internal/benchmark/runner.go:279",
+                                                                   "internal/benchmark/failure.go:39"
+                                                               ]
+                                     }
+                     },
+                     {
+                         "id":  "F50",
+                         "source_id":  "P-LATE",
+                         "severity":  "P2",
+                         "verification":  "reproduced_by_overlay",
+                         "title_ja":  "late-hit保持率が期待文字列の欠落時も成功になる",
+                         "path":  "internal/eval/evidence.go",
+                         "line":  343,
+                         "details":  {
+                                         "id":  "P-LATE",
+                                         "test":  "TestAuditLateHitMustDetectMissing",
+                                         "trigger":  "Focused case expects late_branch in a.go; packet contains no evidence.",
+                                         "severity":  "P2",
+                                         "line":  343,
+                                         "verification":  "reproduced",
+                                         "wrong_behavior":  "focusedLateHit returns 1 even after all searches fail.",
+                                         "path":  "internal/eval/evidence.go",
+                                         "title":  "Focused late-hit preservation always reports success",
+                                         "log":  "C:/Temp/fs-audit-parent-tests.log"
+                                     }
+                     }
+                 ],
+    "logs":  [
+                 "C:/Temp/fs-audit-parent-tests.log",
+                 "C:/Temp/fs-audit-protocol-tests.log",
+                 "C:/Temp/fs-audit-extract-tests.log",
+                 "C:/Temp/fs-audit-core-tests.log",
+                 "C:/Temp/fs-audit-cancellation-tests.log",
+                 "C:/Temp/fs-audit-store-boundary-tests.log",
+                 "C:/Temp/fs-audit-store-fts-tests.log"
+             ],
+    "overlay":  "C:/Temp/fs-audit-overlay.json",
+    "excluded_or_deferred":  [
+                                 {
+                                     "source_id":  "X15",
+                                     "reason":  "Zig string-call reproducer passed; not adopted."
+                                 },
+                                 {
+                                     "source_id":  "X23",
+                                     "reason":  "Synthetic outline Location may intentionally refer to full symbol; contract decision pending."
+                                 },
+                                 {
+                                     "source_id":  "CORE-07",
+                                     "reason":  "Explicit public self-edge restriction; internal recursion policy not established."
+                                 },
+                                 {
+                                     "source_id":  "CORE-10",
+                                     "reason":  "Module/package import target identity contract needs clarification; not used to meet count."
+                                 },
+                                 {
+                                     "source_id":  "PC05",
+                                     "reason":  "Delimiter help routing reproduced, but lower impact; not included in selected 50."
+                                 },
+                                 {
+                                     "source_id":  "PCC02/PCC03/PCC04",
+                                     "reason":  "Separate output-alias/concurrent creation/CLI compatibility candidates retained in raw protocol report, not adopted."
+                                 },
+                                 {
+                                     "source_id":  "extra_evidence_validator_tests",
+                                     "reason":  "Parent-path, line count, overlapping-segment and invalid-UTF8 validators failed defensive tests, but are retained as follow-up candidates rather than counted as independently proven production faults."
+                                 }
+                             ],
+    "raw_reports":  [
+                        "C:/Temp/fs-whole-audit-extract.json",
+                        "C:/Temp/fs-whole-audit-core.json",
+                        "C:/Temp/fs-whole-audit-protocol.json"
+                    ]
+}
