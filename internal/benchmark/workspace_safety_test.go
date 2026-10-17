@@ -1,6 +1,27 @@
 package benchmark
 
-import "testing"
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"testing"
+)
+
+func TestSnapshotDestinationRejectsOutsideParentJunction(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows junction")
+	}
+	root, outside := t.TempDir(), t.TempDir()
+	link := filepath.Join(root, "snapshots")
+	if out, err := exec.Command("cmd", "/c", "mklink", "/J", link, outside).CombinedOutput(); err != nil {
+		t.Skipf("junction: %v %s", err, out)
+	}
+	defer os.Remove(link)
+	if path, err := SnapshotDestination(root, "snapshots", "repo", "case"); err == nil {
+		t.Fatalf("physical destination escapes workspace: %s", path)
+	}
+}
 
 func TestWorkspaceIDRejectsUnsafeComponents(t *testing.T) {
 	for _, id := range []string{".", "..", "../outside", "a/b", `a\b`, "C:drive", "CON", "con.txt", "LPT1", "COM9.log", "trailing.", "trailing "} {

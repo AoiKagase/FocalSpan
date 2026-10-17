@@ -13,6 +13,7 @@ import (
 	"github.com/focalspan/focalspan/internal/app"
 	"github.com/focalspan/focalspan/internal/evidence"
 	"github.com/focalspan/focalspan/internal/model"
+	"github.com/focalspan/focalspan/internal/repository"
 )
 
 type RunRequest struct {
@@ -370,6 +371,22 @@ func SnapshotDestination(workspace string, components ...string) (string, error)
 	rel, err := filepath.Rel(root, destination)
 	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("snapshot destination outside workspace")
+	}
+	parent := destination
+	for {
+		if _, statErr := os.Stat(parent); statErr == nil {
+			break
+		} else if !os.IsNotExist(statErr) {
+			return "", statErr
+		}
+		next := filepath.Dir(parent)
+		if next == parent {
+			return "", fmt.Errorf("snapshot workspace does not exist")
+		}
+		parent = next
+	}
+	if _, err := repository.ContainedPath(root, parent); err != nil {
+		return "", fmt.Errorf("snapshot destination outside physical workspace: %w", err)
 	}
 	return destination, nil
 }
