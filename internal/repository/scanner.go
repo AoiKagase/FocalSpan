@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -44,13 +45,18 @@ func (s *Scanner) Scan(ctx context.Context) ([]model.SourceFile, []model.Diagnos
 		full := filepath.Join(s.Root, filepath.FromSlash(rel))
 		contained, err := ContainedPath(s.Root, full)
 		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				continue // Git can list tracked files already deleted on disk.
+			}
+			if !errors.Is(err, errOutsideRoot) {
+				return nil, diagnostics, fmt.Errorf("resolve source %s: %w", rel, err)
+			}
 			diagnostics = append(diagnostics, model.Diagnostic{FilePath: rel, Level: "warning", Code: "path_escape", Message: "file resolved outside repository root"})
 			continue
 		}
 		info, err := os.Stat(contained)
 		if err != nil {
-			diagnostics = append(diagnostics, model.Diagnostic{FilePath: rel, Level: "warning", Code: "stat_failed", Message: "unable to stat file"})
-			continue
+			return nil, diagnostics, fmt.Errorf("stat source %s: %w", rel, err)
 		}
 		if info.Size() > s.maxFileBytes() {
 			diagnostics = append(diagnostics, model.Diagnostic{FilePath: rel, Level: "info", Code: "file_too_large", Message: "file exceeds configured maximum size"})
@@ -58,8 +64,7 @@ func (s *Scanner) Scan(ctx context.Context) ([]model.SourceFile, []model.Diagnos
 		}
 		content, err := os.ReadFile(contained)
 		if err != nil {
-			diagnostics = append(diagnostics, model.Diagnostic{FilePath: rel, Level: "warning", Code: "read_failed", Message: "unable to read file"})
-			continue
+			return nil, diagnostics, fmt.Errorf("read source %s: %w", rel, err)
 		}
 		if hasNUL(content) {
 			diagnostics = append(diagnostics, model.Diagnostic{FilePath: rel, Level: "info", Code: "binary_skipped", Message: "binary file skipped"})
@@ -81,6 +86,16 @@ func (s *Scanner) Scan(ctx context.Context) ([]model.SourceFile, []model.Diagnos
 }
 
 func (s *Scanner) paths(ctx context.Context) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	info, err := os.Stat(s.Root)
+	if err != nil {
+		return nil, fmt.Errorf("stat repository root: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("repository root is not a directory: %s", s.Root)
+	}
 	if IsGitRepository(ctx, s.Root) {
 		cmd := exec.CommandContext(ctx, "git", "-C", s.Root, "ls-files", "-co", "--exclude-standard", "-z")
 		out, err := cmd.Output()
@@ -97,7 +112,7 @@ func (s *Scanner) paths(ctx context.Context) ([]string, error) {
 		return paths, nil
 	}
 	paths := make([]string, 0)
-	err := filepath.WalkDir(s.Root, func(path string, entry fs.DirEntry, walkErr error) error {
+	err = filepath.WalkDir(s.Root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -142,6 +157,16 @@ func (s *Scanner) excluded(path string) bool {
 	p := filepath.ToSlash(strings.TrimSuffix(path, "/"))
 	if p == "" {
 		return false
+	}
+	indexDir := s.Config.IndexDirectory
+	if filepath.IsAbs(indexDir) {
+		if relative, err := filepath.Rel(s.Root, indexDir); err == nil {
+			indexDir = relative
+		}
+	}
+	indexDir = filepath.ToSlash(filepath.Clean(indexDir))
+	if indexDir != "." && (p == indexDir || strings.HasPrefix(p, indexDir+"/")) {
+		return true
 	}
 	for _, part := range strings.Split(p, "/") {
 		switch part {
