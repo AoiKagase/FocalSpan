@@ -5,6 +5,7 @@ import (
 	"github.com/focalspan/focalspan/internal/model"
 	"github.com/focalspan/focalspan/internal/projectmeta"
 	"github.com/focalspan/focalspan/internal/store"
+	"reflect"
 	"testing"
 )
 
@@ -113,5 +114,42 @@ func TestF21ImportPathCaseIdentity(t *testing.T) {
 			t.Errorf("both=%v: wrong indexed file identity %+v", both, rels)
 		}
 		s.Close()
+	}
+}
+
+func TestF16SelfPackageEntryOnly(t *testing.T) {
+	symbols := []model.Symbol{{Handle: "entry", FilePath: "src/main.ts", Language: "typescript", Kind: "module", Name: "entry"}}
+	facts := []projectmeta.Fact{{SourcePath: "package.json", Kind: "package", Target: "@demo/lib"}, {SourcePath: "package.json", Kind: "main", Target: "src/main.ts"}}
+	if got := factPathCandidates("@demo/lib", symbols, facts); len(got) != 1 || got[0].Handle != "entry" {
+		t.Fatalf("self package entry missing: %+v", got)
+	}
+	if got := factPathCandidates("missing-package", symbols, facts); len(got) != 0 {
+		t.Fatalf("unrelated package falsely resolves: %+v", got)
+	}
+}
+func TestF15WildcardSuffixAndStore(t *testing.T) {
+	fact := projectmeta.Fact{SourcePath: "config/tsconfig.json", Kind: "path-alias", Name: "@x/*/tail", Target: "../src/*/entry.ts"}
+	if got := factCandidatePaths(fact, "@x/foo/tail"); !reflect.DeepEqual(got, []string{"src/foo/entry.ts"}) {
+		t.Fatalf("wildcard suffix mapping=%v", got)
+	}
+	for _, target := range []string{"@x/foo/no", "@x/tail", "@xx/foo/tail"} {
+		if got := factCandidatePaths(fact, target); len(got) != 0 {
+			t.Errorf("%s falsely mapped %v", target, got)
+		}
+	}
+	ctx := context.Background()
+	s, err := store.Open(t.TempDir(), ".focalspan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	fsAuditCoreSeed(t, s, "src/foo/entry.ts", "dep", "entry", nil)
+	fsAuditCoreSeed(t, s, "src/main.ts", "main", "main", []model.Relation{{FromHandle: "main", UnresolvedTo: "@x/foo/tail", Kind: "imports", Confidence: 1, Source: "audit"}})
+	if err := (&Linker{Store: s}).Link(ctx, []projectmeta.Fact{fact}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Relations(ctx)
+	if err != nil || len(got) != 1 || got[0].ToHandle != "dep" {
+		t.Fatalf("store alias resolution=%+v %v", got, err)
 	}
 }

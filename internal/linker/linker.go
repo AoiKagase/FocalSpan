@@ -137,7 +137,7 @@ func (i symbolIndex) candidates(from model.Symbol, target string, facts []projec
 		}
 	}
 	for _, fact := range facts {
-		for _, path := range factCandidatePaths(fact, target) {
+		for _, path := range contextualFactPaths(fact, target, facts) {
 			for _, key := range linkerFileKeys(path) {
 				add(i.byFileKey[key])
 			}
@@ -347,7 +347,7 @@ func narrowPathCandidates(target string, candidates []model.Symbol) []model.Symb
 func factPathCandidates(target string, symbols []model.Symbol, facts []projectmeta.Fact) []model.Symbol {
 	candidates := make([]model.Symbol, 0)
 	for _, fact := range facts {
-		for _, expected := range factCandidatePaths(fact, target) {
+		for _, expected := range contextualFactPaths(fact, target, facts) {
 			for _, symbol := range symbols {
 				if sourcePathMatches(symbol.FilePath, expected) {
 					candidates = append(candidates, symbol)
@@ -356,6 +356,37 @@ func factPathCandidates(target string, symbols []model.Symbol, facts []projectme
 		}
 	}
 	return uniqueSymbols(candidates)
+}
+
+// Entry-point fields only apply to their own package identity.
+func contextualFactPaths(fact projectmeta.Fact, target string, facts []projectmeta.Fact) []string {
+	if fact.Kind == "module" && filepath.Base(fact.SourcePath) != "package.json" {
+		return factCandidatePaths(fact, target)
+	}
+	if fact.Kind != "main" && fact.Kind != "module" && fact.Kind != "types" && fact.Kind != "export" {
+		return factCandidatePaths(fact, target)
+	}
+	for _, identity := range facts {
+		if identity.SourcePath != fact.SourcePath || identity.Kind != "package" || identity.Target == "" {
+			continue
+		}
+		matched := target == identity.Target
+		if fact.Kind == "export" {
+			name := strings.TrimPrefix(fact.Name, "./")
+			if fact.Name == "." || fact.Name == "" {
+				name = ""
+			}
+			expected := identity.Target
+			if name != "" {
+				expected += "/" + name
+			}
+			matched = target == expected
+		}
+		if matched {
+			return []string{filepath.ToSlash(filepath.Join(filepath.Dir(fact.SourcePath), fact.Target))}
+		}
+	}
+	return nil
 }
 
 func factCandidatePaths(fact projectmeta.Fact, target string) []string {
