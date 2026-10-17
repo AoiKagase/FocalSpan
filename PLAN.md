@@ -1,51 +1,47 @@
-# Evict stale source after extraction failure
+# Recover interrupted relation linking
 
 ## Purpose / Big Picture
 
-Successful indexing must not expose old source from changed files whose extraction failed. Preserve per-file failure isolation and retry on subsequent updates.
+After file updates commit, cancellation or failure during linking must remain recoverable on an unchanged subsequent incremental update. Cross-file calls must eventually resolve without forcing a full reindex.
 
 ## Progress
 
-- [x] 2026-10-17 UTC: Found failed extraction skips replacement but retains old rows. Archived the completed deletion-only plan byte-for-byte.
-- [x] 2026-10-17 UTC: Injected hard extractor failure; RED returned stale OldToken source after a successful new-revision run.
-- [x] 2026-10-17 UTC: Evict failed paths transactionally. Focused indexer tests passed, including retry, repair, unaffected source and existing cancellation rollback.
-- [x] 2026-10-17 UTC: Full verification and independent review passed; scoped fix cbe8cba fast-forward merged into master and merged task branch removed.
-
-- [x] 2026-10-17 UTC: Full go test ./..., go test -race ./..., go vet ./..., native and all three cross-builds passed. Independent read-only review found no actionable issues. git diff --check passed; unrelated tracked patch hash remains 481d2c278a820ccfda79ec7bde9bd0ddd35cd68a.
+- [x] 2026-10-17 UTC: Traced file updates, manifest revision and linking across separate transactions; archived the completed extraction-failure plan byte-for-byte.
+- [ ] Reproduce interruption followed by an unchanged incremental update.
+- [ ] Persist pending linking with file updates and retry a full linking pass after interruption.
+- [ ] Full offline verification, independent review, scoped commit, merge and merged branch cleanup.
 
 ## Surprises & Discoveries
 
-Paths absent from the store are retried on the next scan. Eviction avoids stale source without artificial hashes. Partial extraction returning no error remains usable.
-
-Ordinary malformed Go returns a partial AST rather than a hard failure; the regression uses a wrapper extractor injecting a deterministic error while delegating successful extraction to the real Go extractor.
+File hashes and manifest revision are saved before linking. After interruption the next run has no file delta, so scoped linking skips unresolved work.
 
 ## Decision Log
 
-- 2026-10-17 UTC: Preserve failure isolation and ParseFailures. Use existing transactional deletion for failed indexed paths, without counting them as filesystem deletions.
-- 2026-10-17 UTC: Preserve user changes and packet schemas; no network, dependency restore, fixture code execution or runtime deployment.
+- 2026-10-17 UTC: Keep a durable pending-link marker in the existing file-update transaction. Clear only after successful run finalization; a surviving marker forces full relation linking next run. No schema migration or public packet change.
+- 2026-10-17 UTC: Own only PLAN.md, its predecessor archive, internal/indexer/indexer.go and a new indexer recovery test. Preserve user-owned dirty files and existing worktrees; no network, dependency restore, fixture code execution or deployment.
 
 ## Outcomes & Retrospective
 
-Hard extraction errors now evict only the failed file's old rows using the existing update transaction. Repeated failure retries and repair recovery pass alongside unaffected-file and cancellation controls. Ordinary partial Go extraction is unchanged. Full offline verification and independent review passed. Build artifacts are under .build/extraction-failure-verification. Fix cbe8cba is merged into master with the same verified code tree; only local master remains. User-owned changes are preserved. No push or runtime deployment was performed. This final completion update is documentation-only.
+Pending reproduction and implementation.
 
 ## Context and Orientation
 
-internal/indexer/indexer.go gathers extraction results before Store.ApplyIndexWithDelta. Errors currently skip updates. Store deletion cascades per-file data and supplies relation invalidation. Tests use temporary fixtures in internal/indexer.
+Indexer.RunWithProgress applies file updates, calls LinkWithScope, finalizes the run and records last_successful_index. File updates and relation linking commit separately. Store meta can persist recovery state atomically with ApplyIndexWithDelta without new APIs.
 
 ## Plan of Work
 
-1. Reproduce valid source becoming unextractable; assert stale source eviction, repeated retry, unrelated file preservation and repair recovery.
-2. Append failed existing paths to transactional deletions and sort deterministically. Preserve cancellation before writes.
-3. Run verification and independent review; commit explicit paths, fast-forward merge master, remove merged task branch and record outcomes.
+1. Cancel deterministically at initial linking progress after file writes; reopen the store and run incremental update with unchanged files. Verify actual calls resolve.
+2. Read pending-link metadata before writes, set the marker in the file transaction and force full linking if pending. Clear only after success; test normal incremental behavior and repeated interruption.
+3. Run repository verification and read-only review. Commit explicit paths, fast-forward master, remove task branch and record evidence.
 
 ## Validation and Acceptance
 
-Observe RED before production edits. Run focused tests, go test ./..., go test -race ./..., go vet ./..., native build and CGO-disabled Windows amd64/Linux amd64/Darwin arm64 cross-builds. Use offline Go environment and C:/msys64/ucrt64/bin/gcc.exe for race. Run git diff --check and preserve unrelated patch hash 481d2c278a820ccfda79ec7bde9bd0ddd35cd68a. Final docs-only changes use scoped checks.
+Observe RED before product edits. Use focused indexer regressions plus go test ./..., go test -race ./..., go vet ./..., native build and CGO-disabled windows/amd64, linux/amd64 and darwin/arm64 builds. Set GOPROXY=off, GOSUMDB=off and GOTOOLCHAIN=local. Race compiler C:/msys64/ucrt64/bin/gcc.exe. Verify git diff --check and unrelated tracked patch hash 481d2c278a820ccfda79ec7bde9bd0ddd35cd68a. Final documentation-only changes use scoped checks.
 
 ## Idempotence and Recovery
 
-Failed paths retry until repaired. Cancellation before writes retains prior index. Removal uses the existing transaction. Revert only task commits if needed; retain user files and detached worktrees.
+The writer lease serializes marker and linking operations. Pending full relinking is safe to retry; failed/cancelled runs retain the marker, including after process/store restart. An interrupted marker clear may cause an extra full linking pass, never skipped recovery. Existing pre-write cancellation must remain unchanged. Revert only scoped task commits if needed.
 
 ## Interfaces and Dependencies
 
-Existing Indexer, registry, Store.ApplyIndexWithDelta and candidate APIs. No new dependencies or packet fields.
+Existing Store.Meta/SetMeta, ApplyIndexWithDelta metadata, LinkScope.Full and progress callback. No new dependencies, schema versions or packet fields.
