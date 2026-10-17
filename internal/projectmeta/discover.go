@@ -230,8 +230,15 @@ func parseComposerAutoload(value map[string]any, add func(string, string, string
 			switch item := raw.(type) {
 			case map[string]any:
 				for name, target := range item {
-					if target, ok := target.(string); ok {
+					switch target := target.(type) {
+					case string:
 						add(key, name, target, .9)
+					case []any:
+						for _, value := range target {
+							if path, ok := value.(string); ok {
+								add(key, name, path, .9)
+							}
+						}
 					}
 				}
 			case []any:
