@@ -126,6 +126,10 @@ func quotedEnd(content []byte, index int, quote byte) int {
 	index++
 	for index < len(content) {
 		if content[index] == '\\' {
+			if index+1 >= len(content) {
+				index = len(content)
+				break
+			}
 			index += 2
 			continue
 		}
@@ -142,6 +146,10 @@ func templateEnd(content []byte, index int) int {
 	depth := 0
 	for index < len(content) {
 		if content[index] == '\\' {
+			if index+1 >= len(content) {
+				index = len(content)
+				break
+			}
 			index += 2
 			continue
 		}
@@ -177,6 +185,10 @@ func regexEnd(content []byte, index int) (int, bool) {
 	class := false
 	for index < len(content) {
 		if content[index] == '\\' {
+			if index+1 >= len(content) {
+				index = len(content)
+				break
+			}
 			index += 2
 			continue
 		}

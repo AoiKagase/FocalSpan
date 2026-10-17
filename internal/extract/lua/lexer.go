@@ -48,6 +48,10 @@ func Lex(ctx context.Context, source []byte) ([]Token, []model.Diagnostic, error
 			closed := false
 			for at < len(source) {
 				if source[at] == '\\' {
+					if at+1 >= len(source) {
+						at = len(source)
+						break
+					}
 					at += 2
 					continue
 				}

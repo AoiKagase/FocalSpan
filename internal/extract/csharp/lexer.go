@@ -249,6 +249,10 @@ func quotedEnd(content []byte, index int, quote byte) int {
 	index++
 	for index < len(content) {
 		if content[index] == '\\' && quote == '"' {
+			if index+1 >= len(content) {
+				index = len(content)
+				break
+			}
 			index += 2
 			continue
 		}

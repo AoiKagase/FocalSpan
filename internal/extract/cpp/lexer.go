@@ -221,6 +221,10 @@ func consumeQuoted(content []byte, index int) int {
 	index++
 	for index < len(content) {
 		if content[index] == '\\' {
+			if index+1 >= len(content) {
+				index = len(content)
+				break
+			}
 			index += 2
 			continue
 		}

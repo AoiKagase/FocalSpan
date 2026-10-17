@@ -10,7 +10,7 @@
 
 **Spec:** `docs/audits/2026-10-17-whole-repository-50.json`。元監査のF01〜F50を変更せず対応付ける。
 
-**Plan ID:** `whole-audit-50-20261017`。状態は**提案・未実装**。本書はまだactive ExecPlanではない。実装開始時に、完了済みルート`PLAN.md`をbyte-for-byteでarchiveし、本書をルートへ移す。現在の完了記録は今回書き換えない。
+**Plan ID:** `whole-audit-50-20261017`。状態は**実装中**。本書がactive ExecPlan。前PLANを`docs/superpowers/plans/completed/2026-10-18-additional-19-before-audit50.md`へbyte-for-byte保存した。
 
 ## Purpose / Big Picture
 
