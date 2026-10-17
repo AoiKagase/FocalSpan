@@ -500,7 +500,7 @@ func functionRelations(symbol model.Symbol, decl *ast.FuncDecl, file model.Sourc
 			name, confidence := callName(n.Fun)
 			if name != "" {
 				source := "go-ast"
-				if _, ok := n.Fun.(*ast.SelectorExpr); ok {
+				if _, ok := unwrapCall(n.Fun).(*ast.SelectorExpr); ok {
 					source = "go-ast:selector-call"
 				}
 				result = append(result, model.Relation{FromHandle: symbol.Handle, UnresolvedTo: name, Kind: "calls", Confidence: confidence, Source: source})
@@ -559,13 +559,28 @@ func deduplicateRelations(result *model.Extraction) {
 }
 
 func callName(expr ast.Expr) (string, float64) {
-	switch e := expr.(type) {
+	switch e := unwrapCall(expr).(type) {
 	case *ast.Ident:
 		return e.Name, .45
 	case *ast.SelectorExpr:
 		return e.Sel.Name, .3
 	default:
 		return "", 0
+	}
+}
+
+func unwrapCall(expr ast.Expr) ast.Expr {
+	for {
+		switch e := expr.(type) {
+		case *ast.IndexExpr:
+			expr = e.X
+		case *ast.IndexListExpr:
+			expr = e.X
+		case *ast.ParenExpr:
+			expr = e.X
+		default:
+			return expr
+		}
 	}
 }
 
