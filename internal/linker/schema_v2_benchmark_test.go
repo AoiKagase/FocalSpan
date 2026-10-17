@@ -183,7 +183,7 @@ func legacyLinkAll(ctx context.Context, s *store.Store) error {
 			continue
 		}
 		from := byHandle[relation.FromHandle]
-		candidates := resolveCandidates(from, relation.UnresolvedTo, symbols, nil)
+		candidates := resolveCandidates(from, relation.UnresolvedTo, symbols, nil, relation.Kind)
 		if len(candidates) != 1 {
 			continue
 		}

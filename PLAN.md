@@ -194,6 +194,8 @@ Task 1→2/6、Task 3→4/5の索引再抽出、Task 4→5の正しいsymbol位�
 
 ## Decision Log
 
+- Task 5 ruling: 既存polyglot受け入れテストはsrc/js_authのような明示module pathをcallsとして保持する。A12では裸のsymbol名の呼び出しをsymbol-onlyにし、/または\を含む明示pathの既存解決は保持する。module pathを裸の関数名と同じ禁止規則へ入れない。
+
 - 2026-10-17: 対象はO01〜O05とA01〜A19の24件。追加の不確定候補とsupervisorの原因未確定EOFは含めない。
 - 2026-10-17: DB schema/public fieldsは変更せず、既存metaに抽出設定hashを保存する。抽出器/解決ルール変更はExtractorVersionで既存派生索引を更新する。
 - 2026-10-17: 履歴Impactは現在ソースを返す既存方針を維持し、行範囲を対応付ける。対応不能時は成功結果を捏造せずエラーにする。

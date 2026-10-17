@@ -73,7 +73,7 @@ func (l *Linker) LinkWithScope(ctx context.Context, facts []projectmeta.Fact, sc
 			}
 			continue
 		}
-		candidates := resolveCandidates(from, relation.UnresolvedTo, candidatePool, orderedFacts)
+		candidates := resolveCandidates(from, relation.UnresolvedTo, candidatePool, orderedFacts, relation.Kind)
 		if len(candidates) != 1 {
 			if progress != nil {
 				progress(indexRelation+1, len(relations))
@@ -249,10 +249,28 @@ func linkerPythonPaths(importer, target string) []string {
 	return []string{filepath.ToSlash(filepath.Join(base, module))}
 }
 
-func resolveCandidates(from model.Symbol, target string, symbols []model.Symbol, facts []projectmeta.Fact) []model.Symbol {
+func resolveCandidates(from model.Symbol, target string, symbols []model.Symbol, facts []projectmeta.Fact, relationKind string) []model.Symbol {
 	target = strings.TrimSpace(target)
 	if target == "" {
 		return nil
+	}
+	if (relationKind == "calls" || relationKind == "tests") && !strings.ContainsAny(target, `/\`) {
+		qualified, names := []model.Symbol{}, []model.Symbol{}
+		for _, symbol := range symbols {
+			if symbol.Handle == from.Handle || symbol.Kind == "package" || symbol.Kind == "module" {
+				continue
+			}
+			if language.SymbolNamesEqual(symbol.Language, symbol.Kind, symbol.QualifiedName, target) {
+				qualified = append(qualified, symbol)
+			}
+			if language.SymbolNamesEqual(symbol.Language, symbol.Kind, symbol.Name, target) {
+				names = append(names, symbol)
+			}
+		}
+		if len(qualified) > 0 {
+			return uniqueSymbols(qualified)
+		}
+		return uniqueSymbols(names)
 	}
 	pathCandidates := make([]model.Symbol, 0)
 	for _, symbol := range symbols {
