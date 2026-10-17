@@ -4,6 +4,7 @@
 N01〜N19を修正し、範囲外参照・データ消失・古い関係・抽出誤り・評価指標の誤判定を防ぐ。ユーザー承認済み。executing-plans/TDDで①〜⑤を順に実装し、問題単位でコミットする。
 
 ## Progress
+- 2026-10-17 12:09 UTC: masterを6bd4259からa1f6930へfast-forward統合し、branch到達と既存7ファイルの内容保持を再確認。codex/additional-19-fixesを削除済み。検証済み9d1869cからcmd/internal/go.mod/go.sum/testdataの変更はなく、最後の変更は完了記録のみ。push/稼働binary置換なし。
 - 2026-10-17 12:08 UTC: 最終9d1869cで全通常・全race（UCRT64 GCC）を直列に完了、いずれもexit 0。go vet、native、CGO_ENABLED=0のWindows amd64/Linux amd64/Darwin arm64で3 commandsすべてbuild成功（C:/Temp/fs19-build-gates.log）。19 ID/正式テスト照合・archive byte同一性・既存7ファイルSHA256・git diff --checkもPASS。master=6bd4259を確認して承認済みFF統合へ進む。
 - 2026-10-17 12:07 UTC: 最終9d1869cで全通常テストPASS（C:/Temp/fs19-all-normal-final.log、exit 0）。その完了後に全raceを開始。既存user変更7ファイルのSHA256は開始時と全一致。独立reviewのP2解消確認済み。
 - 2026-10-17 12:05 UTC: 独立reviewの唯一のP2（Python継続文字列/escaped triple delimiter）を正式RED→GREENで修正し9d1869cへcommit。修正差分の独立確認は追加P1/P2なし。最終sourceで全通常テストを再実行中。19 IDと全正式テスト参照、前PLAN archiveのbyte同一性を確認済み。
@@ -14,7 +15,7 @@ N01〜N19を修正し、範囲外参照・データ消失・古い関係・抽�
 - [x] ③ N06〜N10: Git形式固定・manifest再抽出・JSONC。
 - [x] ④ N11〜N18: Python/Go抽出。
 - [x] ⑤ N19: 正解順位とreport v2。
-- [ ] 全通常→race、vet、native/cross-build、独立レビュー、FF統合・作業branch削除。
+- [x] 全通常→race、vet、native/cross-build、独立レビュー、FF統合・作業branch削除。
 
 ## Context and Orientation
 監査証拠: C:/Temp/focalspan-additional-audit-20261017.json、fs50-overlay.json、fs50-all-repro.jsonl。20本の失敗を正式化し同一原因を19 IDで管理。一時overlayを実行依存にしない。
@@ -95,4 +96,4 @@ MCP公開field・Evidence v1/v2・DB schema維持。設定lock/競合errorは内
 前PLAN archive変更禁止。再開時にbranch/HEAD・dirty paths・commit・最終テスト結果を照合し、完了済み修正を再実装しない。reset/clean/stashや無関係branch/worktree/lock削除なし。最終検証後masterへFFし今回のbranchだけ削除。
 
 ## Outcomes & Retrospective
-全19件の実装と個別RED/GREENを完了。独立reviewのP2を修正し、追補reviewで未解決のP1/P2なし。最終sourceの通常/race/vet/native・3環境cross-buildはすべて成功。master統合と作業branch削除の結果は完了後に追記する。
+全19件の実装と個別RED/GREENを完了。独立reviewのP2を修正し、追補reviewで未解決のP1/P2なし。最終sourceの通常/race/vet/native・3環境cross-buildはすべて成功。masterへa1f6930までfast-forward統合し、作業branchを削除した。既存user変更7ファイルの内容は開始時と一致。MCP/Evidence/DB形式は維持し、benchmark reportだけ評価定義を示すv2へ更新した。build成功は対象OS上の実行確認ではなく、push・稼働binary置換も行っていない。
