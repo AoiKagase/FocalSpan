@@ -1,0 +1,2734 @@
+{
+  "schema": "focalspan.benchmark-report.v2",
+  "suite": "focalspan-history-v0.5",
+  "focalspan_commit": "9400ffb55e11d65de773a48df49db69eb7f2e067",
+  "quality": [
+    {
+      "case_id": "php-extractor-integration",
+      "profile": "full-evidence-focused",
+      "budget": 1024,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 241,
+      "evidence_tokens": 15,
+      "metadata_overhead_ratio": 0.9377593360995851,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0.058823529411764705,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing",
+        "expansion_anchor_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/indexer/indexer.go",
+          "selected": [
+            {
+              "path": "internal/extract/php/lexer.go",
+              "symbol": "phpKeywords",
+              "role": "context"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/indexer/indexer.go",
+          "expected_symbol": "Run",
+          "selected": [
+            {
+              "path": "internal/extract/php/lexer.go",
+              "symbol": "phpKeywords",
+              "role": "context"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 665,
+      "packet_json_bytes": 629,
+      "summary_bytes": 36,
+      "evidence_content_bytes": 30,
+      "guidance_bytes": 110,
+      "envelope_metadata_bytes": 489,
+      "signature_items": 1
+    },
+    {
+      "case_id": "php-extractor-integration",
+      "profile": "full-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 241,
+      "evidence_tokens": 15,
+      "metadata_overhead_ratio": 0.9377593360995851,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0.058823529411764705,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing",
+        "expansion_anchor_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/indexer/indexer.go",
+          "selected": [
+            {
+              "path": "internal/extract/php/lexer.go",
+              "symbol": "phpKeywords",
+              "role": "context"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/indexer/indexer.go",
+          "expected_symbol": "Run",
+          "selected": [
+            {
+              "path": "internal/extract/php/lexer.go",
+              "symbol": "phpKeywords",
+              "role": "context"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 665,
+      "packet_json_bytes": 629,
+      "summary_bytes": 36,
+      "evidence_content_bytes": 30,
+      "guidance_bytes": 110,
+      "envelope_metadata_bytes": 489,
+      "signature_items": 1
+    },
+    {
+      "case_id": "php-extractor-integration",
+      "profile": "full-evidence-focused",
+      "budget": 4096,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 241,
+      "evidence_tokens": 15,
+      "metadata_overhead_ratio": 0.9377593360995851,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0.058823529411764705,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing",
+        "expansion_anchor_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/indexer/indexer.go",
+          "selected": [
+            {
+              "path": "internal/extract/php/lexer.go",
+              "symbol": "phpKeywords",
+              "role": "context"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/indexer/indexer.go",
+          "expected_symbol": "Run",
+          "selected": [
+            {
+              "path": "internal/extract/php/lexer.go",
+              "symbol": "phpKeywords",
+              "role": "context"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 665,
+      "packet_json_bytes": 629,
+      "summary_bytes": 36,
+      "evidence_content_bytes": 30,
+      "guidance_bytes": 110,
+      "envelope_metadata_bytes": 489,
+      "signature_items": 1
+    },
+    {
+      "case_id": "php-extractor-integration",
+      "profile": "fts-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 275,
+      "evidence_tokens": 48,
+      "metadata_overhead_ratio": 0.8254545454545454,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0.058823529411764705,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/indexer/indexer.go",
+          "selected": [
+            {
+              "path": "internal/extract/php/parser.go",
+              "symbol": "parsePHP",
+              "role": "implementation"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/indexer/indexer.go",
+          "expected_symbol": "Run",
+          "selected": [
+            {
+              "path": "internal/extract/php/parser.go",
+              "symbol": "parsePHP",
+              "role": "implementation"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 767,
+      "packet_json_bytes": 732,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 126,
+      "guidance_bytes": 110,
+      "envelope_metadata_bytes": 496,
+      "signature_items": 1
+    },
+    {
+      "case_id": "php-extractor-integration",
+      "profile": "no-relations-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 241,
+      "evidence_tokens": 15,
+      "metadata_overhead_ratio": 0.9377593360995851,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0.058823529411764705,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/indexer/indexer.go",
+          "selected": [
+            {
+              "path": "internal/extract/php/lexer.go",
+              "symbol": "phpKeywords",
+              "role": "context"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/indexer/indexer.go",
+          "expected_symbol": "Run",
+          "selected": [
+            {
+              "path": "internal/extract/php/lexer.go",
+              "symbol": "phpKeywords",
+              "role": "context"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 665,
+      "packet_json_bytes": 629,
+      "summary_bytes": 36,
+      "evidence_content_bytes": 30,
+      "guidance_bytes": 110,
+      "envelope_metadata_bytes": 489,
+      "signature_items": 1
+    },
+    {
+      "case_id": "php-extractor-integration",
+      "profile": "full-legacy-source",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 0,
+      "required_symbol_recall": 0,
+      "intent_correct": 0,
+      "role_accuracy": 0,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 0,
+      "evidence_tokens": 0,
+      "metadata_overhead_ratio": 0,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0
+    },
+    {
+      "case_id": "cpp-extractor-registry",
+      "profile": "full-evidence-focused",
+      "budget": 1024,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 224,
+      "evidence_tokens": 19,
+      "metadata_overhead_ratio": 0.9151785714285714,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/app/service.go",
+          "selected": [
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "Registry",
+              "role": "type"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/app/service.go",
+          "expected_symbol": "NewWithConfig",
+          "selected": [
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "Registry",
+              "role": "type"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 611,
+      "packet_json_bytes": 576,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 41,
+      "guidance_bytes": 63,
+      "envelope_metadata_bytes": 472,
+      "excerpt_items": 1
+    },
+    {
+      "case_id": "cpp-extractor-registry",
+      "profile": "full-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 224,
+      "evidence_tokens": 19,
+      "metadata_overhead_ratio": 0.9151785714285714,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/app/service.go",
+          "selected": [
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "Registry",
+              "role": "type"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/app/service.go",
+          "expected_symbol": "NewWithConfig",
+          "selected": [
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "Registry",
+              "role": "type"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 611,
+      "packet_json_bytes": 576,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 41,
+      "guidance_bytes": 63,
+      "envelope_metadata_bytes": 472,
+      "excerpt_items": 1
+    },
+    {
+      "case_id": "cpp-extractor-registry",
+      "profile": "full-evidence-focused",
+      "budget": 4096,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 224,
+      "evidence_tokens": 19,
+      "metadata_overhead_ratio": 0.9151785714285714,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/app/service.go",
+          "selected": [
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "Registry",
+              "role": "type"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/app/service.go",
+          "expected_symbol": "NewWithConfig",
+          "selected": [
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "Registry",
+              "role": "type"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 611,
+      "packet_json_bytes": 576,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 41,
+      "guidance_bytes": 63,
+      "envelope_metadata_bytes": 472,
+      "excerpt_items": 1
+    },
+    {
+      "case_id": "cpp-extractor-registry",
+      "profile": "fts-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 224,
+      "evidence_tokens": 19,
+      "metadata_overhead_ratio": 0.9151785714285714,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/app/service.go",
+          "selected": [
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "Registry",
+              "role": "type"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/app/service.go",
+          "expected_symbol": "NewWithConfig",
+          "selected": [
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "Registry",
+              "role": "type"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 611,
+      "packet_json_bytes": 576,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 41,
+      "guidance_bytes": 63,
+      "envelope_metadata_bytes": 472,
+      "excerpt_items": 1
+    },
+    {
+      "case_id": "cpp-extractor-registry",
+      "profile": "no-relations-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 224,
+      "evidence_tokens": 19,
+      "metadata_overhead_ratio": 0.9151785714285714,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/app/service.go",
+          "selected": [
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "Registry",
+              "role": "type"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/app/service.go",
+          "expected_symbol": "NewWithConfig",
+          "selected": [
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "Registry",
+              "role": "type"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 611,
+      "packet_json_bytes": 576,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 41,
+      "guidance_bytes": 63,
+      "envelope_metadata_bytes": 472,
+      "excerpt_items": 1
+    },
+    {
+      "case_id": "cpp-extractor-registry",
+      "profile": "full-legacy-source",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 0,
+      "required_symbol_recall": 0,
+      "intent_correct": 0,
+      "role_accuracy": 0,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 0,
+      "evidence_tokens": 0,
+      "metadata_overhead_ratio": 0,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0
+    },
+    {
+      "case_id": "jsts-search-integration",
+      "profile": "full-evidence-focused",
+      "budget": 1024,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 261,
+      "evidence_tokens": 51,
+      "metadata_overhead_ratio": 0.8045977011494253,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing",
+        "expansion_anchor_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/search/search.go",
+          "selected": [
+            {
+              "path": "internal/extract/generic/generic.go",
+              "symbol": "javascriptTypeAliasPattern",
+              "role": "context"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/search/search.go",
+          "expected_symbol": "Search",
+          "selected": [
+            {
+              "path": "internal/extract/generic/generic.go",
+              "symbol": "javascriptTypeAliasPattern",
+              "role": "context"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 707,
+      "packet_json_bytes": 672,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 124,
+      "guidance_bytes": 63,
+      "envelope_metadata_bytes": 485,
+      "excerpt_items": 1
+    },
+    {
+      "case_id": "jsts-search-integration",
+      "profile": "full-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 261,
+      "evidence_tokens": 51,
+      "metadata_overhead_ratio": 0.8045977011494253,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing",
+        "expansion_anchor_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/search/search.go",
+          "selected": [
+            {
+              "path": "internal/extract/generic/generic.go",
+              "symbol": "javascriptTypeAliasPattern",
+              "role": "context"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/search/search.go",
+          "expected_symbol": "Search",
+          "selected": [
+            {
+              "path": "internal/extract/generic/generic.go",
+              "symbol": "javascriptTypeAliasPattern",
+              "role": "context"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 707,
+      "packet_json_bytes": 672,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 124,
+      "guidance_bytes": 63,
+      "envelope_metadata_bytes": 485,
+      "excerpt_items": 1
+    },
+    {
+      "case_id": "jsts-search-integration",
+      "profile": "full-evidence-focused",
+      "budget": 4096,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 261,
+      "evidence_tokens": 51,
+      "metadata_overhead_ratio": 0.8045977011494253,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing",
+        "expansion_anchor_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/search/search.go",
+          "selected": [
+            {
+              "path": "internal/extract/generic/generic.go",
+              "symbol": "javascriptTypeAliasPattern",
+              "role": "context"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/search/search.go",
+          "expected_symbol": "Search",
+          "selected": [
+            {
+              "path": "internal/extract/generic/generic.go",
+              "symbol": "javascriptTypeAliasPattern",
+              "role": "context"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 707,
+      "packet_json_bytes": 672,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 124,
+      "guidance_bytes": 63,
+      "envelope_metadata_bytes": 485,
+      "excerpt_items": 1
+    },
+    {
+      "case_id": "jsts-search-integration",
+      "profile": "fts-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 261,
+      "evidence_tokens": 51,
+      "metadata_overhead_ratio": 0.8045977011494253,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/search/search.go",
+          "selected": [
+            {
+              "path": "internal/extract/generic/generic.go",
+              "symbol": "javascriptTypeAliasPattern",
+              "role": "context"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/search/search.go",
+          "expected_symbol": "Search",
+          "selected": [
+            {
+              "path": "internal/extract/generic/generic.go",
+              "symbol": "javascriptTypeAliasPattern",
+              "role": "context"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 707,
+      "packet_json_bytes": 672,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 124,
+      "guidance_bytes": 63,
+      "envelope_metadata_bytes": 485,
+      "excerpt_items": 1
+    },
+    {
+      "case_id": "jsts-search-integration",
+      "profile": "no-relations-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 261,
+      "evidence_tokens": 51,
+      "metadata_overhead_ratio": 0.8045977011494253,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/search/search.go",
+          "selected": [
+            {
+              "path": "internal/extract/generic/generic.go",
+              "symbol": "javascriptTypeAliasPattern",
+              "role": "context"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/search/search.go",
+          "expected_symbol": "Search",
+          "selected": [
+            {
+              "path": "internal/extract/generic/generic.go",
+              "symbol": "javascriptTypeAliasPattern",
+              "role": "context"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 707,
+      "packet_json_bytes": 672,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 124,
+      "guidance_bytes": 63,
+      "envelope_metadata_bytes": 485,
+      "excerpt_items": 1
+    },
+    {
+      "case_id": "jsts-search-integration",
+      "profile": "full-legacy-source",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 0,
+      "required_symbol_recall": 0,
+      "intent_correct": 0,
+      "role_accuracy": 0,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 0,
+      "evidence_tokens": 0,
+      "metadata_overhead_ratio": 0,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0
+    },
+    {
+      "case_id": "rust-registry-integration",
+      "profile": "full-evidence-focused",
+      "budget": 1024,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 188,
+      "evidence_tokens": 10,
+      "metadata_overhead_ratio": 0.9468085106382979,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/app/service.go",
+          "selected": [
+            {
+              "path": "testdata/repos/authsample/auth/service.go",
+              "symbol": "Service",
+              "role": "test"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/app/service.go",
+          "expected_symbol": "NewWithConfig",
+          "selected": [
+            {
+              "path": "testdata/repos/authsample/auth/service.go",
+              "symbol": "Service",
+              "role": "test"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 511,
+      "packet_json_bytes": 476,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 16,
+      "guidance_bytes": 38,
+      "envelope_metadata_bytes": 422,
+      "verbatim_items": 1
+    },
+    {
+      "case_id": "rust-registry-integration",
+      "profile": "full-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 188,
+      "evidence_tokens": 10,
+      "metadata_overhead_ratio": 0.9468085106382979,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/app/service.go",
+          "selected": [
+            {
+              "path": "testdata/repos/authsample/auth/service.go",
+              "symbol": "Service",
+              "role": "test"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/app/service.go",
+          "expected_symbol": "NewWithConfig",
+          "selected": [
+            {
+              "path": "testdata/repos/authsample/auth/service.go",
+              "symbol": "Service",
+              "role": "test"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 511,
+      "packet_json_bytes": 476,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 16,
+      "guidance_bytes": 38,
+      "envelope_metadata_bytes": 422,
+      "verbatim_items": 1
+    },
+    {
+      "case_id": "rust-registry-integration",
+      "profile": "full-evidence-focused",
+      "budget": 4096,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 188,
+      "evidence_tokens": 10,
+      "metadata_overhead_ratio": 0.9468085106382979,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/app/service.go",
+          "selected": [
+            {
+              "path": "testdata/repos/authsample/auth/service.go",
+              "symbol": "Service",
+              "role": "test"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/app/service.go",
+          "expected_symbol": "NewWithConfig",
+          "selected": [
+            {
+              "path": "testdata/repos/authsample/auth/service.go",
+              "symbol": "Service",
+              "role": "test"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 511,
+      "packet_json_bytes": 476,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 16,
+      "guidance_bytes": 38,
+      "envelope_metadata_bytes": 422,
+      "verbatim_items": 1
+    },
+    {
+      "case_id": "rust-registry-integration",
+      "profile": "fts-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 188,
+      "evidence_tokens": 10,
+      "metadata_overhead_ratio": 0.9468085106382979,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/app/service.go",
+          "selected": [
+            {
+              "path": "testdata/repos/authsample/auth/service.go",
+              "symbol": "Service",
+              "role": "test"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/app/service.go",
+          "expected_symbol": "NewWithConfig",
+          "selected": [
+            {
+              "path": "testdata/repos/authsample/auth/service.go",
+              "symbol": "Service",
+              "role": "test"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 511,
+      "packet_json_bytes": 476,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 16,
+      "guidance_bytes": 38,
+      "envelope_metadata_bytes": 422,
+      "verbatim_items": 1
+    },
+    {
+      "case_id": "rust-registry-integration",
+      "profile": "no-relations-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 188,
+      "evidence_tokens": 10,
+      "metadata_overhead_ratio": 0.9468085106382979,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/app/service.go",
+          "selected": [
+            {
+              "path": "testdata/repos/authsample/auth/service.go",
+              "symbol": "Service",
+              "role": "test"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/app/service.go",
+          "expected_symbol": "NewWithConfig",
+          "selected": [
+            {
+              "path": "testdata/repos/authsample/auth/service.go",
+              "symbol": "Service",
+              "role": "test"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 511,
+      "packet_json_bytes": 476,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 16,
+      "guidance_bytes": 38,
+      "envelope_metadata_bytes": 422,
+      "verbatim_items": 1
+    },
+    {
+      "case_id": "rust-registry-integration",
+      "profile": "full-legacy-source",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 0,
+      "required_symbol_recall": 0,
+      "intent_correct": 0,
+      "role_accuracy": 0,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 0,
+      "evidence_tokens": 0,
+      "metadata_overhead_ratio": 0,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0
+    },
+    {
+      "case_id": "dotnet-structural-registry",
+      "profile": "full-evidence-focused",
+      "budget": 1024,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 0,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 666,
+      "evidence_tokens": 77,
+      "metadata_overhead_ratio": 0.8843843843843844,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0.14285714285714285,
+      "failure_codes": [
+        "intent_mismatch",
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/app/service.go",
+          "selected": [
+            {
+              "path": "internal/language/detect_test.go",
+              "symbol": "TestDetectKnownProfilesAndAmbiguousContent",
+              "role": "test"
+            },
+            {
+              "path": "internal/app/service_test.go",
+              "symbol": "TestNewExtractorRegistrySelectsDedicatedExtractors",
+              "role": "test"
+            },
+            {
+              "path": "internal/integration/codex/project_config_test.go",
+              "symbol": "TestProjectInstallRejectsUnmanagedCollisionAndInvalidTOML",
+              "role": "test"
+            },
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "extractors",
+              "role": "context"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/app/service.go",
+          "expected_symbol": "NewWithConfig",
+          "selected": [
+            {
+              "path": "internal/language/detect_test.go",
+              "symbol": "TestDetectKnownProfilesAndAmbiguousContent",
+              "role": "test"
+            },
+            {
+              "path": "internal/app/service_test.go",
+              "symbol": "TestNewExtractorRegistrySelectsDedicatedExtractors",
+              "role": "test"
+            },
+            {
+              "path": "internal/integration/codex/project_config_test.go",
+              "symbol": "TestProjectInstallRejectsUnmanagedCollisionAndInvalidTOML",
+              "role": "test"
+            },
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "extractors",
+              "role": "context"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 1904,
+      "packet_json_bytes": 1869,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 228,
+      "guidance_bytes": 225,
+      "envelope_metadata_bytes": 1416,
+      "excerpt_items": 1,
+      "signature_items": 3
+    },
+    {
+      "case_id": "dotnet-structural-registry",
+      "profile": "full-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 0,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 666,
+      "evidence_tokens": 77,
+      "metadata_overhead_ratio": 0.8843843843843844,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0.14285714285714285,
+      "failure_codes": [
+        "intent_mismatch",
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/app/service.go",
+          "selected": [
+            {
+              "path": "internal/language/detect_test.go",
+              "symbol": "TestDetectKnownProfilesAndAmbiguousContent",
+              "role": "test"
+            },
+            {
+              "path": "internal/app/service_test.go",
+              "symbol": "TestNewExtractorRegistrySelectsDedicatedExtractors",
+              "role": "test"
+            },
+            {
+              "path": "internal/integration/codex/project_config_test.go",
+              "symbol": "TestProjectInstallRejectsUnmanagedCollisionAndInvalidTOML",
+              "role": "test"
+            },
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "extractors",
+              "role": "context"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/app/service.go",
+          "expected_symbol": "NewWithConfig",
+          "selected": [
+            {
+              "path": "internal/language/detect_test.go",
+              "symbol": "TestDetectKnownProfilesAndAmbiguousContent",
+              "role": "test"
+            },
+            {
+              "path": "internal/app/service_test.go",
+              "symbol": "TestNewExtractorRegistrySelectsDedicatedExtractors",
+              "role": "test"
+            },
+            {
+              "path": "internal/integration/codex/project_config_test.go",
+              "symbol": "TestProjectInstallRejectsUnmanagedCollisionAndInvalidTOML",
+              "role": "test"
+            },
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "extractors",
+              "role": "context"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 1904,
+      "packet_json_bytes": 1869,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 228,
+      "guidance_bytes": 225,
+      "envelope_metadata_bytes": 1416,
+      "excerpt_items": 1,
+      "signature_items": 3
+    },
+    {
+      "case_id": "dotnet-structural-registry",
+      "profile": "full-evidence-focused",
+      "budget": 4096,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 0,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 666,
+      "evidence_tokens": 77,
+      "metadata_overhead_ratio": 0.8843843843843844,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0.14285714285714285,
+      "failure_codes": [
+        "intent_mismatch",
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/app/service.go",
+          "selected": [
+            {
+              "path": "internal/language/detect_test.go",
+              "symbol": "TestDetectKnownProfilesAndAmbiguousContent",
+              "role": "test"
+            },
+            {
+              "path": "internal/app/service_test.go",
+              "symbol": "TestNewExtractorRegistrySelectsDedicatedExtractors",
+              "role": "test"
+            },
+            {
+              "path": "internal/integration/codex/project_config_test.go",
+              "symbol": "TestProjectInstallRejectsUnmanagedCollisionAndInvalidTOML",
+              "role": "test"
+            },
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "extractors",
+              "role": "context"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/app/service.go",
+          "expected_symbol": "NewWithConfig",
+          "selected": [
+            {
+              "path": "internal/language/detect_test.go",
+              "symbol": "TestDetectKnownProfilesAndAmbiguousContent",
+              "role": "test"
+            },
+            {
+              "path": "internal/app/service_test.go",
+              "symbol": "TestNewExtractorRegistrySelectsDedicatedExtractors",
+              "role": "test"
+            },
+            {
+              "path": "internal/integration/codex/project_config_test.go",
+              "symbol": "TestProjectInstallRejectsUnmanagedCollisionAndInvalidTOML",
+              "role": "test"
+            },
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "extractors",
+              "role": "context"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 1904,
+      "packet_json_bytes": 1869,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 228,
+      "guidance_bytes": 225,
+      "envelope_metadata_bytes": 1416,
+      "excerpt_items": 1,
+      "signature_items": 3
+    },
+    {
+      "case_id": "dotnet-structural-registry",
+      "profile": "fts-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 0,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 666,
+      "evidence_tokens": 77,
+      "metadata_overhead_ratio": 0.8843843843843844,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0.14285714285714285,
+      "failure_codes": [
+        "intent_mismatch",
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/app/service.go",
+          "selected": [
+            {
+              "path": "internal/language/detect_test.go",
+              "symbol": "TestDetectKnownProfilesAndAmbiguousContent",
+              "role": "test"
+            },
+            {
+              "path": "internal/app/service_test.go",
+              "symbol": "TestNewExtractorRegistrySelectsDedicatedExtractors",
+              "role": "test"
+            },
+            {
+              "path": "internal/integration/codex/project_config_test.go",
+              "symbol": "TestProjectInstallRejectsUnmanagedCollisionAndInvalidTOML",
+              "role": "test"
+            },
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "extractors",
+              "role": "context"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/app/service.go",
+          "expected_symbol": "NewWithConfig",
+          "selected": [
+            {
+              "path": "internal/language/detect_test.go",
+              "symbol": "TestDetectKnownProfilesAndAmbiguousContent",
+              "role": "test"
+            },
+            {
+              "path": "internal/app/service_test.go",
+              "symbol": "TestNewExtractorRegistrySelectsDedicatedExtractors",
+              "role": "test"
+            },
+            {
+              "path": "internal/integration/codex/project_config_test.go",
+              "symbol": "TestProjectInstallRejectsUnmanagedCollisionAndInvalidTOML",
+              "role": "test"
+            },
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "extractors",
+              "role": "context"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 1904,
+      "packet_json_bytes": 1869,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 228,
+      "guidance_bytes": 225,
+      "envelope_metadata_bytes": 1416,
+      "excerpt_items": 1,
+      "signature_items": 3
+    },
+    {
+      "case_id": "dotnet-structural-registry",
+      "profile": "no-relations-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 0,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 666,
+      "evidence_tokens": 77,
+      "metadata_overhead_ratio": 0.8843843843843844,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0.14285714285714285,
+      "failure_codes": [
+        "intent_mismatch",
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/app/service.go",
+          "selected": [
+            {
+              "path": "internal/language/detect_test.go",
+              "symbol": "TestDetectKnownProfilesAndAmbiguousContent",
+              "role": "test"
+            },
+            {
+              "path": "internal/app/service_test.go",
+              "symbol": "TestNewExtractorRegistrySelectsDedicatedExtractors",
+              "role": "test"
+            },
+            {
+              "path": "internal/integration/codex/project_config_test.go",
+              "symbol": "TestProjectInstallRejectsUnmanagedCollisionAndInvalidTOML",
+              "role": "test"
+            },
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "extractors",
+              "role": "context"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/app/service.go",
+          "expected_symbol": "NewWithConfig",
+          "selected": [
+            {
+              "path": "internal/language/detect_test.go",
+              "symbol": "TestDetectKnownProfilesAndAmbiguousContent",
+              "role": "test"
+            },
+            {
+              "path": "internal/app/service_test.go",
+              "symbol": "TestNewExtractorRegistrySelectsDedicatedExtractors",
+              "role": "test"
+            },
+            {
+              "path": "internal/integration/codex/project_config_test.go",
+              "symbol": "TestProjectInstallRejectsUnmanagedCollisionAndInvalidTOML",
+              "role": "test"
+            },
+            {
+              "path": "internal/extract/extract.go",
+              "symbol": "extractors",
+              "role": "context"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 1904,
+      "packet_json_bytes": 1869,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 228,
+      "guidance_bytes": 225,
+      "envelope_metadata_bytes": 1416,
+      "excerpt_items": 1,
+      "signature_items": 3
+    },
+    {
+      "case_id": "dotnet-structural-registry",
+      "profile": "full-legacy-source",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 0,
+      "required_symbol_recall": 0,
+      "intent_correct": 0,
+      "role_accuracy": 0,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 0,
+      "evidence_tokens": 0,
+      "metadata_overhead_ratio": 0,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0
+    },
+    {
+      "case_id": "japanese-query-normalization",
+      "profile": "full-evidence-focused",
+      "budget": 1024,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 292,
+      "evidence_tokens": 67,
+      "metadata_overhead_ratio": 0.7705479452054794,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/search/query.go",
+          "selected": [
+            {
+              "path": "testdata/repos/jstssample/src/auth/token-validator.ts",
+              "symbol": "validateToken",
+              "role": "target"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/search/query.go",
+          "expected_symbol": "NormalizeQuery",
+          "selected": [
+            {
+              "path": "testdata/repos/jstssample/src/auth/token-validator.ts",
+              "symbol": "validateToken",
+              "role": "target"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 805,
+      "packet_json_bytes": 770,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 207,
+      "guidance_bytes": 83,
+      "envelope_metadata_bytes": 480,
+      "verbatim_items": 1
+    },
+    {
+      "case_id": "japanese-query-normalization",
+      "profile": "full-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 292,
+      "evidence_tokens": 67,
+      "metadata_overhead_ratio": 0.7705479452054794,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/search/query.go",
+          "selected": [
+            {
+              "path": "testdata/repos/jstssample/src/auth/token-validator.ts",
+              "symbol": "validateToken",
+              "role": "target"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/search/query.go",
+          "expected_symbol": "NormalizeQuery",
+          "selected": [
+            {
+              "path": "testdata/repos/jstssample/src/auth/token-validator.ts",
+              "symbol": "validateToken",
+              "role": "target"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 805,
+      "packet_json_bytes": 770,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 207,
+      "guidance_bytes": 83,
+      "envelope_metadata_bytes": 480,
+      "verbatim_items": 1
+    },
+    {
+      "case_id": "japanese-query-normalization",
+      "profile": "full-evidence-focused",
+      "budget": 4096,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 292,
+      "evidence_tokens": 67,
+      "metadata_overhead_ratio": 0.7705479452054794,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/search/query.go",
+          "selected": [
+            {
+              "path": "testdata/repos/jstssample/src/auth/token-validator.ts",
+              "symbol": "validateToken",
+              "role": "target"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/search/query.go",
+          "expected_symbol": "NormalizeQuery",
+          "selected": [
+            {
+              "path": "testdata/repos/jstssample/src/auth/token-validator.ts",
+              "symbol": "validateToken",
+              "role": "target"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 805,
+      "packet_json_bytes": 770,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 207,
+      "guidance_bytes": 83,
+      "envelope_metadata_bytes": 480,
+      "verbatim_items": 1
+    },
+    {
+      "case_id": "japanese-query-normalization",
+      "profile": "fts-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 241,
+      "evidence_tokens": 22,
+      "metadata_overhead_ratio": 0.9087136929460581,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/search/query.go",
+          "selected": [
+            {
+              "path": "testdata/repos/phpsample/src/Auth/TokenService.php",
+              "symbol": "validateToken",
+              "role": "target"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/search/query.go",
+          "expected_symbol": "NormalizeQuery",
+          "selected": [
+            {
+              "path": "testdata/repos/phpsample/src/Auth/TokenService.php",
+              "symbol": "validateToken",
+              "role": "target"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 662,
+      "packet_json_bytes": 627,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 50,
+      "guidance_bytes": 83,
+      "envelope_metadata_bytes": 494,
+      "verbatim_items": 1
+    },
+    {
+      "case_id": "japanese-query-normalization",
+      "profile": "no-relations-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 292,
+      "evidence_tokens": 67,
+      "metadata_overhead_ratio": 0.7705479452054794,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/search/query.go",
+          "selected": [
+            {
+              "path": "testdata/repos/jstssample/src/auth/token-validator.ts",
+              "symbol": "validateToken",
+              "role": "target"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/search/query.go",
+          "expected_symbol": "NormalizeQuery",
+          "selected": [
+            {
+              "path": "testdata/repos/jstssample/src/auth/token-validator.ts",
+              "symbol": "validateToken",
+              "role": "target"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 805,
+      "packet_json_bytes": 770,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 207,
+      "guidance_bytes": 83,
+      "envelope_metadata_bytes": 480,
+      "verbatim_items": 1
+    },
+    {
+      "case_id": "japanese-query-normalization",
+      "profile": "full-legacy-source",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 0,
+      "required_symbol_recall": 0,
+      "intent_correct": 0,
+      "role_accuracy": 0,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 0,
+      "evidence_tokens": 0,
+      "metadata_overhead_ratio": 0,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0
+    },
+    {
+      "case_id": "project-metadata-indexing",
+      "profile": "full-evidence-focused",
+      "budget": 1024,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 1,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 232,
+      "evidence_tokens": 10,
+      "metadata_overhead_ratio": 0.9568965517241379,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0.3333333333333333,
+      "failure_codes": [
+        "target_not_selected",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/indexer/indexer.go",
+          "expected_symbol": "Run",
+          "selected": [
+            {
+              "path": "internal/indexer/indexer.go",
+              "symbol": "Indexer",
+              "role": "type"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 641,
+      "packet_json_bytes": 606,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 16,
+      "guidance_bytes": 110,
+      "envelope_metadata_bytes": 480,
+      "signature_items": 1
+    },
+    {
+      "case_id": "project-metadata-indexing",
+      "profile": "full-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 1,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 232,
+      "evidence_tokens": 10,
+      "metadata_overhead_ratio": 0.9568965517241379,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0.3333333333333333,
+      "failure_codes": [
+        "target_not_selected",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/indexer/indexer.go",
+          "expected_symbol": "Run",
+          "selected": [
+            {
+              "path": "internal/indexer/indexer.go",
+              "symbol": "Indexer",
+              "role": "type"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 641,
+      "packet_json_bytes": 606,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 16,
+      "guidance_bytes": 110,
+      "envelope_metadata_bytes": 480,
+      "signature_items": 1
+    },
+    {
+      "case_id": "project-metadata-indexing",
+      "profile": "full-evidence-focused",
+      "budget": 4096,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 1,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 232,
+      "evidence_tokens": 10,
+      "metadata_overhead_ratio": 0.9568965517241379,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0.3333333333333333,
+      "failure_codes": [
+        "target_not_selected",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/indexer/indexer.go",
+          "expected_symbol": "Run",
+          "selected": [
+            {
+              "path": "internal/indexer/indexer.go",
+              "symbol": "Indexer",
+              "role": "type"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 641,
+      "packet_json_bytes": 606,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 16,
+      "guidance_bytes": 110,
+      "envelope_metadata_bytes": 480,
+      "signature_items": 1
+    },
+    {
+      "case_id": "project-metadata-indexing",
+      "profile": "fts-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 1,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 232,
+      "evidence_tokens": 10,
+      "metadata_overhead_ratio": 0.9568965517241379,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0.3333333333333333,
+      "failure_codes": [
+        "target_not_selected",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/indexer/indexer.go",
+          "expected_symbol": "Run",
+          "selected": [
+            {
+              "path": "internal/indexer/indexer.go",
+              "symbol": "Indexer",
+              "role": "type"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 641,
+      "packet_json_bytes": 606,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 16,
+      "guidance_bytes": 110,
+      "envelope_metadata_bytes": 480,
+      "signature_items": 1
+    },
+    {
+      "case_id": "project-metadata-indexing",
+      "profile": "no-relations-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 1,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 232,
+      "evidence_tokens": 10,
+      "metadata_overhead_ratio": 0.9568965517241379,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0.3333333333333333,
+      "failure_codes": [
+        "target_not_selected",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/indexer/indexer.go",
+          "expected_symbol": "Run",
+          "selected": [
+            {
+              "path": "internal/indexer/indexer.go",
+              "symbol": "Indexer",
+              "role": "type"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 641,
+      "packet_json_bytes": 606,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 16,
+      "guidance_bytes": 110,
+      "envelope_metadata_bytes": 480,
+      "signature_items": 1
+    },
+    {
+      "case_id": "project-metadata-indexing",
+      "profile": "full-legacy-source",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 0,
+      "required_symbol_recall": 0,
+      "intent_correct": 0,
+      "role_accuracy": 0,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 0,
+      "evidence_tokens": 0,
+      "metadata_overhead_ratio": 0,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0
+    },
+    {
+      "case_id": "mcp-evidence-output",
+      "profile": "full-evidence-focused",
+      "budget": 1024,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 238,
+      "evidence_tokens": 19,
+      "metadata_overhead_ratio": 0.9201680672268907,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing",
+        "expansion_anchor_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/mcpserver/server.go",
+          "selected": [
+            {
+              "path": "internal/query/planner.go",
+              "symbol": "isJapaneseParticle",
+              "role": "implementation"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/mcpserver/server.go",
+          "expected_symbol": "codeContext",
+          "selected": [
+            {
+              "path": "internal/query/planner.go",
+              "symbol": "isJapaneseParticle",
+              "role": "implementation"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 663,
+      "packet_json_bytes": 628,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 42,
+      "guidance_bytes": 110,
+      "envelope_metadata_bytes": 476,
+      "signature_items": 1
+    },
+    {
+      "case_id": "mcp-evidence-output",
+      "profile": "full-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 238,
+      "evidence_tokens": 19,
+      "metadata_overhead_ratio": 0.9201680672268907,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing",
+        "expansion_anchor_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/mcpserver/server.go",
+          "selected": [
+            {
+              "path": "internal/query/planner.go",
+              "symbol": "isJapaneseParticle",
+              "role": "implementation"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/mcpserver/server.go",
+          "expected_symbol": "codeContext",
+          "selected": [
+            {
+              "path": "internal/query/planner.go",
+              "symbol": "isJapaneseParticle",
+              "role": "implementation"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 663,
+      "packet_json_bytes": 628,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 42,
+      "guidance_bytes": 110,
+      "envelope_metadata_bytes": 476,
+      "signature_items": 1
+    },
+    {
+      "case_id": "mcp-evidence-output",
+      "profile": "full-evidence-focused",
+      "budget": 4096,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 238,
+      "evidence_tokens": 19,
+      "metadata_overhead_ratio": 0.9201680672268907,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing",
+        "expansion_anchor_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/mcpserver/server.go",
+          "selected": [
+            {
+              "path": "internal/query/planner.go",
+              "symbol": "isJapaneseParticle",
+              "role": "implementation"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/mcpserver/server.go",
+          "expected_symbol": "codeContext",
+          "selected": [
+            {
+              "path": "internal/query/planner.go",
+              "symbol": "isJapaneseParticle",
+              "role": "implementation"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 663,
+      "packet_json_bytes": 628,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 42,
+      "guidance_bytes": 110,
+      "envelope_metadata_bytes": 476,
+      "signature_items": 1
+    },
+    {
+      "case_id": "mcp-evidence-output",
+      "profile": "fts-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 238,
+      "evidence_tokens": 19,
+      "metadata_overhead_ratio": 0.9201680672268907,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/mcpserver/server.go",
+          "selected": [
+            {
+              "path": "internal/query/planner.go",
+              "symbol": "isJapaneseParticle",
+              "role": "implementation"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/mcpserver/server.go",
+          "expected_symbol": "codeContext",
+          "selected": [
+            {
+              "path": "internal/query/planner.go",
+              "symbol": "isJapaneseParticle",
+              "role": "implementation"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 663,
+      "packet_json_bytes": 628,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 42,
+      "guidance_bytes": 110,
+      "envelope_metadata_bytes": 476,
+      "signature_items": 1
+    },
+    {
+      "case_id": "mcp-evidence-output",
+      "profile": "no-relations-evidence-focused",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 1,
+      "required_symbol_recall": 0,
+      "intent_correct": 1,
+      "role_accuracy": 1,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 238,
+      "evidence_tokens": 19,
+      "metadata_overhead_ratio": 0.9201680672268907,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0,
+      "failure_codes": [
+        "target_not_selected",
+        "required_path_missing",
+        "required_symbol_missing"
+      ],
+      "misses": [
+        {
+          "code": "required_path_missing",
+          "expected_path": "internal/mcpserver/server.go",
+          "selected": [
+            {
+              "path": "internal/query/planner.go",
+              "symbol": "isJapaneseParticle",
+              "role": "implementation"
+            }
+          ]
+        },
+        {
+          "code": "required_symbol_missing",
+          "expected_path": "internal/mcpserver/server.go",
+          "expected_symbol": "codeContext",
+          "selected": [
+            {
+              "path": "internal/query/planner.go",
+              "symbol": "isJapaneseParticle",
+              "role": "implementation"
+            }
+          ]
+        }
+      ],
+      "wire_bytes": 663,
+      "packet_json_bytes": 628,
+      "summary_bytes": 35,
+      "evidence_content_bytes": 42,
+      "guidance_bytes": 110,
+      "envelope_metadata_bytes": 476,
+      "signature_items": 1
+    },
+    {
+      "case_id": "mcp-evidence-output",
+      "profile": "full-legacy-source",
+      "budget": 2048,
+      "target_rank": 0,
+      "reciprocal_rank": 0,
+      "required_path_recall": 0,
+      "optional_path_recall": 0,
+      "required_symbol_recall": 0,
+      "intent_correct": 0,
+      "role_accuracy": 0,
+      "relation_valid": 1,
+      "budget_compliant": 1,
+      "deterministic": 1,
+      "forbidden_violations": 0,
+      "wire_tokens": 0,
+      "evidence_tokens": 0,
+      "metadata_overhead_ratio": 0,
+      "duplicate_source_ratio": 0,
+      "changed_path_recall": 0
+    }
+  ],
+  "aggregate": {
+    "groups": [
+      {
+        "profile": "fts-evidence-focused",
+        "budget": 2048,
+        "cases": 8,
+        "invalid_cases": 0,
+        "hit_at_1": 0,
+        "hit_at_3": 0,
+        "hit_at_5": 0,
+        "mean_reciprocal_rank": 0,
+        "median_required_path_recall": 0,
+        "median_required_symbol_recall": 0,
+        "intent_accuracy": 0.875,
+        "role_accuracy": 1,
+        "budget_compliance": 1,
+        "deterministic_output": 1,
+        "forbidden_violations": 0,
+        "median_wire_tokens": 239,
+        "median_metadata_overhead": 0.9119461321873148,
+        "median_duplicate_source_ratio": 0,
+        "median_changed_path_recall": 0
+      },
+      {
+        "profile": "full-evidence-focused",
+        "budget": 1024,
+        "cases": 8,
+        "invalid_cases": 0,
+        "hit_at_1": 0,
+        "hit_at_3": 0,
+        "hit_at_5": 0,
+        "mean_reciprocal_rank": 0,
+        "median_required_path_recall": 0,
+        "median_required_symbol_recall": 0,
+        "intent_accuracy": 0.875,
+        "role_accuracy": 1,
+        "budget_compliance": 1,
+        "deterministic_output": 1,
+        "forbidden_violations": 0,
+        "median_wire_tokens": 239,
+        "median_metadata_overhead": 0.9176733193277311,
+        "median_duplicate_source_ratio": 0,
+        "median_changed_path_recall": 0
+      },
+      {
+        "profile": "full-evidence-focused",
+        "budget": 2048,
+        "cases": 8,
+        "invalid_cases": 0,
+        "hit_at_1": 0,
+        "hit_at_3": 0,
+        "hit_at_5": 0,
+        "mean_reciprocal_rank": 0,
+        "median_required_path_recall": 0,
+        "median_required_symbol_recall": 0,
+        "intent_accuracy": 0.875,
+        "role_accuracy": 1,
+        "budget_compliance": 1,
+        "deterministic_output": 1,
+        "forbidden_violations": 0,
+        "median_wire_tokens": 239,
+        "median_metadata_overhead": 0.9176733193277311,
+        "median_duplicate_source_ratio": 0,
+        "median_changed_path_recall": 0
+      },
+      {
+        "profile": "full-evidence-focused",
+        "budget": 4096,
+        "cases": 8,
+        "invalid_cases": 0,
+        "hit_at_1": 0,
+        "hit_at_3": 0,
+        "hit_at_5": 0,
+        "mean_reciprocal_rank": 0,
+        "median_required_path_recall": 0,
+        "median_required_symbol_recall": 0,
+        "intent_accuracy": 0.875,
+        "role_accuracy": 1,
+        "budget_compliance": 1,
+        "deterministic_output": 1,
+        "forbidden_violations": 0,
+        "median_wire_tokens": 239,
+        "median_metadata_overhead": 0.9176733193277311,
+        "median_duplicate_source_ratio": 0,
+        "median_changed_path_recall": 0
+      },
+      {
+        "profile": "full-legacy-source",
+        "budget": 2048,
+        "cases": 8,
+        "invalid_cases": 0,
+        "hit_at_1": 0,
+        "hit_at_3": 0,
+        "hit_at_5": 0,
+        "mean_reciprocal_rank": 0,
+        "median_required_path_recall": 0,
+        "median_required_symbol_recall": 0,
+        "intent_accuracy": 0,
+        "role_accuracy": 0,
+        "budget_compliance": 1,
+        "deterministic_output": 1,
+        "forbidden_violations": 0,
+        "median_wire_tokens": 0,
+        "median_metadata_overhead": 0,
+        "median_duplicate_source_ratio": 0,
+        "median_changed_path_recall": 0
+      },
+      {
+        "profile": "no-relations-evidence-focused",
+        "budget": 2048,
+        "cases": 8,
+        "invalid_cases": 0,
+        "hit_at_1": 0,
+        "hit_at_3": 0,
+        "hit_at_5": 0,
+        "mean_reciprocal_rank": 0,
+        "median_required_path_recall": 0,
+        "median_required_symbol_recall": 0,
+        "intent_accuracy": 0.875,
+        "role_accuracy": 1,
+        "budget_compliance": 1,
+        "deterministic_output": 1,
+        "forbidden_violations": 0,
+        "median_wire_tokens": 239,
+        "median_metadata_overhead": 0.9176733193277311,
+        "median_duplicate_source_ratio": 0,
+        "median_changed_path_recall": 0
+      }
+    ]
+  }
+}

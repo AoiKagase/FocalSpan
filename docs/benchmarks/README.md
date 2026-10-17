@@ -30,13 +30,13 @@ because it materializes and indexes every historical snapshot. Do not run it
 for a rejected candidate merely to complete a checklist:
 
     go run ./cmd/focalspan-bench run --suite testdata/benchmark/focalspan-history.json --profile default --repeat 3 --json-out .focalspan-bench/candidate.json --markdown-out .focalspan-bench/candidate.md --force
-    go run ./cmd/focalspan-bench compare --baseline docs/benchmarks/results-v0.5.json --candidate .focalspan-bench/candidate.json
+    go run ./cmd/focalspan-bench compare --baseline docs/benchmarks/results-whole-audit-baseline-v2.json --candidate .focalspan-bench/candidate.json
 
 For a quick two-case regression smoke, filter both the run and comparison to
 the same IDs:
 
     go run ./cmd/focalspan-bench run --suite testdata/benchmark/focalspan-history.json --case php-extractor-integration --case cpp-extractor-registry --profile default --repeat 1 --json-out .focalspan-bench/smoke.json --markdown-out .focalspan-bench/smoke.md --force
-    go run ./cmd/focalspan-bench compare --baseline docs/benchmarks/results-v0.5.json --candidate .focalspan-bench/smoke.json --case php-extractor-integration --case cpp-extractor-registry
+    go run ./cmd/focalspan-bench compare --baseline docs/benchmarks/results-whole-audit-baseline-v2.json --candidate .focalspan-bench/smoke.json --case php-extractor-integration --case cpp-extractor-registry
 
 Development attribution is opt-in and must write both outputs together:
 
@@ -86,3 +86,29 @@ snapshot or binary, and writes benchmark outputs only below the runner temporary
 directory. A configured workflow is not proof of a pass; remote Linux race and
 benchmark status remain unverified until an actual GitHub Actions run reports
 success.
+
+
+## Audit 50 CI baseline provenance
+
+`results-whole-audit-baseline-v2.json` is the unmodified measured report from
+FocalSpan commit `9400ffb55e11d65de773a48df49db69eb7f2e067`, built in a detached checkout
+using cached Go dependencies with `GOPROXY=off`, `GOSUMDB=off`, and
+`GOTOOLCHAIN=local`. It is not a relabeled v1 report. The former
+`results-v0.5.json` remains available as historical data.
+
+The exact baseline executable was built with `go build -p 1 -o <temporary-binary>
+./cmd/focalspan-bench` at that commit and run from its isolated checkout:
+
+```text
+<temporary-binary> run --suite testdata/benchmark/focalspan-history.json --repo self=<isolated-checkout> --profile default --repeat 3 --json-out <baseline.json> --markdown-out <baseline.md> --force
+```
+
+The matrix contains all 8 history cases and all 48 default profile/budget rows.
+CI full runs use the same suite, profiles, budgets, and repeat count. CI smoke
+runs use the same profiles/budgets and filter both reports to
+`php-extractor-integration` and `cpp-extractor-registry`, with repeat 1.
+v2 comparison checks target rank (zero means a miss), reciprocal rank, and
+expansion path/symbol recall, forbidden paths, and relation validity separately
+from initial retrieval. v1/v1 retains its original rules; mixed schemas are
+incompatible. Timing is diagnostic, and this baseline is a local history
+measurement rather than evidence of general repository quality.

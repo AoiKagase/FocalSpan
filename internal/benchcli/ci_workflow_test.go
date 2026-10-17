@@ -31,7 +31,7 @@ func TestCIWorkflowCoversPublicVerificationWithoutPrivateState(t *testing.T) {
 		"go run ./cmd/focalspan-bench validate",
 		"go run ./cmd/focalspan-bench run",
 		"go run ./cmd/focalspan-bench compare",
-		"docs/benchmarks/results-v0.5.json",
+		"docs/benchmarks/results-whole-audit-baseline-v2.json",
 	}
 	for _, snippet := range required {
 		if !strings.Contains(workflow, snippet) {
