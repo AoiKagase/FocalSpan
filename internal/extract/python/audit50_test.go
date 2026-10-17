@@ -150,3 +150,29 @@ func TestF40NestedScopeBindingLifetime(t *testing.T) {
 	}
 	t.Fatal("nested local incorrectly shadows enclosing scope")
 }
+
+func TestF40ReviewLocalBindingForms(t *testing.T) {
+	for _, body := range []string{" target: object = other\n target()\n", " target, other = values\n target()\n", " for target in values:\n  target()\n", " with context() as target:\n  target()\n"} {
+		t.Run(body, func(t *testing.T) {
+			got := wholeAuditExtract(t, python.NewExtractor(), "x.py", "python", "def target():\n pass\ndef caller():\n"+body)
+			target := wholeAuditSymbol(t, got, "target")
+			caller := wholeAuditSymbol(t, got, "caller")
+			for _, relation := range got.Relations {
+				if relation.Kind == "calls" && relation.FromHandle == caller.Handle && relation.ToHandle == target.Handle {
+					t.Fatalf("shadowed binding resolved globally: %+v", relation)
+				}
+			}
+		})
+	}
+}
+func TestF40ReviewDefiniteNestedCall(t *testing.T) {
+	got := wholeAuditExtract(t, python.NewExtractor(), "x.py", "python", "def outer():\n def inner():\n  pass\n inner()\n")
+	outer := wholeAuditSymbol(t, got, "outer")
+	inner := wholeAuditSymbol(t, got, "inner")
+	for _, relation := range got.Relations {
+		if relation.Kind == "calls" && relation.FromHandle == outer.Handle && relation.ToHandle == inner.Handle {
+			return
+		}
+	}
+	t.Fatal("definite nested call missing")
+}

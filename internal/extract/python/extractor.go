@@ -39,12 +39,13 @@ type pyDeclaration struct {
 const pyIdentifier = `[\p{L}\p{Nl}_\x{1885}\x{1886}\x{2118}\x{212e}\x{309b}\x{309c}][\p{L}\p{N}\p{M}\p{Pc}_\x{00b7}\x{0387}\x{1369}-\x{1371}\x{19da}\x{2118}\x{212e}]*`
 
 var (
-	pyParameterPattern = regexp.MustCompile(`^` + pyIdentifier)
-	pyClassPattern     = regexp.MustCompile(`^class\s+(` + pyIdentifier + `)`)
-	pyFunctionPattern  = regexp.MustCompile(`^(?:(async)\s+)?def\s+(` + pyIdentifier + `)\s*\(`)
-	pyAliasPattern     = regexp.MustCompile(`^(` + pyIdentifier + `)\s*=\s*(` + pyIdentifier + `)`)
-	pyClassVarPattern  = regexp.MustCompile(`^(` + pyIdentifier + `)\s*=`)
-	pyCallPattern      = regexp.MustCompile(`(` + pyIdentifier + `(?:\.` + pyIdentifier + `)*)\s*\(`)
+	pyParameterPattern  = regexp.MustCompile(`^` + pyIdentifier)
+	pyBindingIdentifier = regexp.MustCompile(`^` + pyIdentifier + `$`)
+	pyClassPattern      = regexp.MustCompile(`^class\s+(` + pyIdentifier + `)`)
+	pyFunctionPattern   = regexp.MustCompile(`^(?:(async)\s+)?def\s+(` + pyIdentifier + `)\s*\(`)
+	pyAliasPattern      = regexp.MustCompile(`^(` + pyIdentifier + `)\s*=\s*(` + pyIdentifier + `)`)
+	pyClassVarPattern   = regexp.MustCompile(`^(` + pyIdentifier + `)\s*=`)
+	pyCallPattern       = regexp.MustCompile(`(` + pyIdentifier + `(?:\.` + pyIdentifier + `)*)\s*\(`)
 )
 
 type pyLine struct {
@@ -424,16 +425,30 @@ func pythonCallTarget(index map[string][]model.Symbol, name string, decl *pyDecl
 		if pythonBindsName(scope, name, lines, symbols) {
 			return model.Symbol{}, false
 		}
+		var target model.Symbol
+		count := 0
+		for nested, candidate := range symbols {
+			if nested.Parent == scope && nested.Name == name {
+				target = candidate
+				count++
+			}
+		}
+		if count > 0 {
+			return target, count == 1
+		}
 	}
-	return uniquePython(index, name)
+	var target model.Symbol
+	count := 0
+	for _, candidate := range index[name] {
+		if candidate.ParentHandle == "" {
+			target = candidate
+			count++
+		}
+	}
+	return target, count == 1
 }
 
 func pythonBindsName(decl *pyDeclaration, name string, lines []pyLine, symbols map[*pyDeclaration]model.Symbol) bool {
-	for nested := range symbols {
-		if nested.Parent == decl && nested.Name == name {
-			return true
-		}
-	}
 	header := ""
 	for line := decl.StartLine - 1; line < decl.EndLine && line < len(lines); line++ {
 		header += lines[line].Text + " "
@@ -478,7 +493,7 @@ func pythonBindsName(decl *pyDeclaration, name string, lines []pyLine, symbols m
 				return true
 			}
 		}
-		if match := pyClassVarPattern.FindStringSubmatch(text); len(match) > 1 && match[1] == name {
+		if pythonStatementBindsName(text, name) {
 			return true
 		}
 	}
@@ -524,4 +539,85 @@ func pythonNestedScopeEnd(decl *pyDeclaration, line int, symbols map[*pyDeclarat
 		}
 	}
 	return 0
+}
+
+// Binding targets are identifiers or destructuring targets. Attribute and index
+// assignment changes an object, so it does not shadow a bare function name.
+func pythonTargetBindsName(target, name string) bool {
+	target = strings.TrimSpace(target)
+	for len(target) >= 2 && (target[0] == '(' && target[len(target)-1] == ')' || target[0] == '[' && target[len(target)-1] == ']') {
+		target = strings.TrimSpace(target[1 : len(target)-1])
+	}
+	parts := pythonTopLevelParts(target, ',')
+	if len(parts) > 1 {
+		for _, part := range parts {
+			if pythonTargetBindsName(part, name) {
+				return true
+			}
+		}
+		return false
+	}
+	target = strings.TrimLeft(target, "*")
+	return pyBindingIdentifier.MatchString(target) && target == name
+}
+
+func pythonTopLevelParts(text string, separator byte) []string {
+	depth, start := 0, 0
+	parts := make([]string, 0)
+	for at := 0; at < len(text); at++ {
+		switch text[at] {
+		case '(', '[', '{':
+			depth++
+		case ')', ']', '}':
+			if depth > 0 {
+				depth--
+			}
+		}
+		if text[at] == separator && depth == 0 {
+			parts = append(parts, text[start:at])
+			start = at + 1
+		}
+	}
+	return append(parts, text[start:])
+}
+
+func pythonStatementBindsName(text, name string) bool {
+	text = strings.TrimSpace(text)
+	text = strings.TrimPrefix(text, "async ")
+	if strings.HasPrefix(text, "for ") {
+		target := strings.TrimPrefix(text, "for ")
+		if end := strings.Index(target, " in "); end >= 0 {
+			return pythonTargetBindsName(target[:end], name)
+		}
+		return false
+	}
+	if strings.HasPrefix(text, "with ") {
+		for _, item := range pythonTopLevelParts(strings.TrimSuffix(strings.TrimPrefix(text, "with "), ":"), ',') {
+			if at := strings.LastIndex(item, " as "); at >= 0 && pythonTargetBindsName(item[at+4:], name) {
+				return true
+			}
+		}
+		return false
+	}
+	depth := 0
+	for at := 0; at < len(text); at++ {
+		switch text[at] {
+		case '(', '[', '{':
+			depth++
+		case ')', ']', '}':
+			if depth > 0 {
+				depth--
+			}
+		}
+		if depth != 0 {
+			continue
+		}
+		if text[at] == ':' {
+			return pythonTargetBindsName(text[:at], name)
+		}
+		if text[at] == '=' && (at == 0 || !strings.ContainsRune("=<>!:", rune(text[at-1]))) && (at+1 == len(text) || text[at+1] != '=') {
+			return pythonTargetBindsName(text[:at], name)
+		}
+	}
+	return false
 }
