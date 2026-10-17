@@ -45,7 +45,7 @@ const (
 	PhaseLinking  = "linking"
 	PhaseComplete = "complete"
 
-	extractorVersion = "extractors-v15-relation-language-boundaries"
+	extractorVersion = "extractors-v16-manifest-refresh"
 	// ExtractorVersion is the version required for a readable, current index.
 	ExtractorVersion = extractorVersion
 )
@@ -100,6 +100,19 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 		}
 		reindexRequired = hashErr != nil || stored != i.config.ExtractionHash()
 	}
+	facts, metadataDiagnostics, err := projectmeta.Discover(ctx, i.root, files)
+	if err != nil {
+		return model.IndexRun{}, fmt.Errorf("discover project metadata: %w", err)
+	}
+	factsRevision := revisionForFacts(facts)
+	previousFactsRevision, previousFactsErr := i.store.Meta(ctx, "manifest_facts_revision")
+	if previousFactsErr != nil && !errors.Is(previousFactsErr, sql.ErrNoRows) {
+		return model.IndexRun{}, fmt.Errorf("read manifest revision: %w", previousFactsErr)
+	}
+	manifestChanged := previousFactsErr != nil || previousFactsRevision != factsRevision
+	// Resolved edges no longer retain their original target spelling. Rebuild
+	// them from source whenever the metadata used to resolve them changes.
+	reindexRequired = reindexRequired || manifestChanged
 	current := make(map[string]bool, len(files))
 	toParse := make([]model.SourceFile, 0, len(files))
 	run := model.IndexRun{StartedAt: started.Format(time.RFC3339Nano), FilesSeen: len(files)}
@@ -190,19 +203,12 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 			run.ParseFailures++
 		}
 	}
-	facts, metadataDiagnostics, err := projectmeta.Discover(ctx, i.root, files)
-	if err != nil {
-		return model.IndexRun{}, fmt.Errorf("discover project metadata: %w", err)
-	}
 	for _, diagnostic := range metadataDiagnostics {
 		if diagnostic.Level == "warning" {
 			run.ParseFailures++
 		}
 	}
 	revision := revisionFor(files)
-	factsRevision := revisionForFacts(facts)
-	previousFactsRevision, previousFactsErr := i.store.Meta(ctx, "manifest_facts_revision")
-	manifestChanged := previousFactsErr != nil || previousFactsRevision != factsRevision
 	pendingLinks, pendingLinksErr := i.store.Meta(ctx, "linking_pending")
 	if pendingLinksErr != nil && !errors.Is(pendingLinksErr, sql.ErrNoRows) {
 		return model.IndexRun{}, fmt.Errorf("read pending relation linking: %w", pendingLinksErr)
