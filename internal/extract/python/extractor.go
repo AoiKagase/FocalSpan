@@ -157,13 +157,13 @@ func pythonIndex(symbols []model.Symbol) pythonIndexData {
 	index := pythonIndexData{byName: make(map[string][]model.Symbol)}
 	for _, symbol := range symbols {
 		if symbol.Kind != "module" {
-			index.byName[strings.ToLower(symbol.Name)] = append(index.byName[strings.ToLower(symbol.Name)], symbol)
+			index.byName[symbol.Name] = append(index.byName[symbol.Name], symbol)
 		}
 	}
 	return index
 }
 func uniquePython(values map[string][]model.Symbol, name string) (model.Symbol, bool) {
-	items := values[strings.ToLower(name)]
+	items := values[name]
 	if len(items) != 1 {
 		return model.Symbol{}, false
 	}

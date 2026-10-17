@@ -522,8 +522,8 @@ func resolveGoRelations(symbols []model.Symbol, relations []model.Relation) {
 		if symbol.Kind == "package" {
 			continue
 		}
-		byName[strings.ToLower(symbol.Name)] = append(byName[strings.ToLower(symbol.Name)], symbol)
-		byQualified[strings.ToLower(symbol.QualifiedName)] = append(byQualified[strings.ToLower(symbol.QualifiedName)], symbol)
+		byName[symbol.Name] = append(byName[symbol.Name], symbol)
+		byQualified[symbol.QualifiedName] = append(byQualified[symbol.QualifiedName], symbol)
 	}
 	for index := range relations {
 		relation := &relations[index]
@@ -533,9 +533,9 @@ func resolveGoRelations(symbols []model.Symbol, relations []model.Relation) {
 		if relation.Kind == "calls" && relation.Source != "go-ast" || relation.Kind != "calls" && relation.Kind != "references" {
 			continue
 		}
-		matches := byQualified[strings.ToLower(relation.UnresolvedTo)]
+		matches := byQualified[relation.UnresolvedTo]
 		if len(matches) != 1 {
-			matches = byName[strings.ToLower(relation.UnresolvedTo)]
+			matches = byName[relation.UnresolvedTo]
 		}
 		if len(matches) == 1 && matches[0].Handle != relation.FromHandle {
 			relation.ToHandle = matches[0].Handle

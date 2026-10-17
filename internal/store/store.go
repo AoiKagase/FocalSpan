@@ -1103,7 +1103,7 @@ func supportedRelation(relation string) bool {
 
 func relatedHitQuery(handle, relation, camelPattern string) (string, []any) {
 	anchor := `WITH anchor AS (
-SELECT ? AS requested_handle, s.handle, s.name, s.qualified_name, f.path
+SELECT ? AS requested_handle, s.handle, s.name, s.qualified_name, f.path, f.language, s.kind
 FROM symbols s JOIN files f ON f.id = s.file_id
 WHERE s.handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?)
 )`
@@ -1171,15 +1171,29 @@ WHERE r.kind = '%s' AND r.from_handle = a.handle AND r.to_handle IS NULL AND (%s
 }
 
 func callAnchorMatch(anchor, relation string, camel bool) string {
-	match := fmt.Sprintf(`lower(%[2]s.unresolved_to) = lower(%[1]s.name)
-OR lower(%[2]s.unresolved_to) = lower(%[1]s.qualified_name)
-OR substr(lower(%[2]s.unresolved_to), -length('.' || %[1]s.name)) = '.' || lower(%[1]s.name)
-OR substr(lower(%[2]s.unresolved_to), -length('::' || %[1]s.name)) = '::' || lower(%[1]s.name)
-OR substr(lower(%[2]s.unresolved_to), -length('->' || %[1]s.name)) = '->' || lower(%[1]s.name)`, anchor, relation)
+	lang := anchor + ".language"
+	if anchor == "target" {
+		lang = "target_file.language"
+	}
+	equal := func(left, right string) string {
+		return relationFoldSQL(lang, anchor+".kind", left) + " = " + relationFoldSQL(lang, anchor+".kind", right)
+	}
+	value := relation + ".unresolved_to"
+	name := anchor + ".name"
+	parts := []string{equal(value, name), equal(value, anchor+".qualified_name")}
+	for _, separator := range []string{".", "::", "->"} {
+		suffix := "'" + separator + "' || " + name
+		parts = append(parts, equal("substr("+value+", -length("+suffix+"))", suffix))
+	}
+	match := strings.Join(parts, " OR ")
 	if camel {
-		match += fmt.Sprintf(` OR lower(%s.unresolved_to) LIKE ? ESCAPE '\'`, relation)
+		match += fmt.Sprintf(` OR (%s.kind = 'tests' AND lower(%s.unresolved_to) LIKE ? ESCAPE '\')`, relation, relation)
 	}
 	return match
+}
+
+func relationFoldSQL(lang, kind, value string) string {
+	return "(CASE WHEN " + lang + " IN ('vb6','vbnet','nim') OR (" + lang + " = 'php' AND " + kind + " IN ('function','method','class','interface','trait','enum','namespace')) THEN lower(" + value + ") ELSE " + value + " END)"
 }
 
 func callTargetMatch(target, relation string) string {

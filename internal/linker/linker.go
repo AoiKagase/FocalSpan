@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/focalspan/focalspan/internal/language"
 	"github.com/focalspan/focalspan/internal/model"
 	"github.com/focalspan/focalspan/internal/projectmeta"
 	"github.com/focalspan/focalspan/internal/store"
@@ -277,7 +278,7 @@ func resolveCandidates(from model.Symbol, target string, symbols []model.Symbol,
 	}
 	qualified := make([]model.Symbol, 0)
 	for _, symbol := range symbols {
-		if symbol.Handle != from.Handle && strings.EqualFold(symbol.QualifiedName, target) {
+		if symbol.Handle != from.Handle && language.SymbolNamesEqual(symbol.Language, symbol.Kind, symbol.QualifiedName, target) {
 			qualified = append(qualified, symbol)
 		}
 	}
@@ -286,7 +287,7 @@ func resolveCandidates(from model.Symbol, target string, symbols []model.Symbol,
 	}
 	name := make([]model.Symbol, 0)
 	for _, symbol := range symbols {
-		if symbol.Handle != from.Handle && strings.EqualFold(symbol.Name, target) {
+		if symbol.Handle != from.Handle && language.SymbolNamesEqual(symbol.Language, symbol.Kind, symbol.Name, target) {
 			name = append(name, symbol)
 		}
 	}

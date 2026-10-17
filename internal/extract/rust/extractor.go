@@ -626,8 +626,8 @@ func (b *rustBuilder) index() rustIndex {
 		if symbol.Handle == b.owner.Handle {
 			continue
 		}
-		idx.byName[strings.ToLower(symbol.Name)] = append(idx.byName[strings.ToLower(symbol.Name)], symbol)
-		idx.byQualified[strings.ToLower(symbol.QualifiedName)] = append(idx.byQualified[strings.ToLower(symbol.QualifiedName)], symbol)
+		idx.byName[symbol.Name] = append(idx.byName[symbol.Name], symbol)
+		idx.byQualified[symbol.QualifiedName] = append(idx.byQualified[symbol.QualifiedName], symbol)
 	}
 	return idx
 }
@@ -767,7 +767,7 @@ func (b *rustBuilder) sort() {
 var rustControl = map[string]bool{"if": true, "for": true, "while": true, "match": true, "loop": true, "println": true, "panic": true, "Some": false, "None": false}
 
 func uniqueRust(values map[string][]model.Symbol, name string) (model.Symbol, bool) {
-	items := values[strings.ToLower(name)]
+	items := values[name]
 	if len(items) != 1 {
 		return model.Symbol{}, false
 	}
@@ -775,7 +775,7 @@ func uniqueRust(values map[string][]model.Symbol, name string) (model.Symbol, bo
 }
 
 func uniqueRustType(values map[string][]model.Symbol, name string) (model.Symbol, bool) {
-	items := values[strings.ToLower(name)]
+	items := values[name]
 	types := make([]model.Symbol, 0, len(items))
 	for _, item := range items {
 		switch item.Kind {
