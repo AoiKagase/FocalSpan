@@ -1,8 +1,10 @@
 package resx
 
 import (
+	"bytes"
 	"context"
-	"regexp"
+	"encoding/xml"
+	"io"
 	"strings"
 
 	"github.com/focalspan/focalspan/internal/model"
@@ -29,43 +31,89 @@ type scanResult struct {
 	Diagnostics []model.Diagnostic
 }
 
-var tagStartPattern = regexp.MustCompile(`(?is)<(data|metadata|setting)\b`)
-var fileRefPattern = regexp.MustCompile(`(?is)<ResXFileRef\b[^>]*>\s*([^<]+?)\s*</ResXFileRef\s*>`)
-
+// scan uses XML token boundaries while retaining original attribute byte spans.
+// Decoder never loads external entities; malformed XML stops extraction at the
+// error rather than turning text or partial attributes into resource markup.
 func scan(ctx context.Context, content []byte) (scanResult, error) {
 	result := scanResult{}
-	for _, match := range tagStartPattern.FindAllIndex(content, -1) {
+	decoder := xml.NewDecoder(bytes.NewReader(content))
+	type frame struct {
+		name    string
+		fileRef bool
+		value   string
+	}
+	stack := make([]frame, 0)
+	for {
 		if err := ctx.Err(); err != nil {
 			return scanResult{}, err
 		}
-		start := match[0]
-		end := advanceToTagEnd(content, start+1)
-		nameStart := match[0] + 1
-		nameEnd := nameStart
-		for nameEnd < end && content[nameEnd] != ' ' && content[nameEnd] != '\t' && content[nameEnd] != '\r' && content[nameEnd] != '\n' && content[nameEnd] != '>' {
-			nameEnd++
+		start := int(decoder.InputOffset())
+		token, err := decoder.Token()
+		if err == io.EOF {
+			break
 		}
-		name := strings.ToLower(string(content[nameStart:nameEnd]))
-		kind := "resx_resource"
-		if name == "metadata" {
-			kind = "resx_metadata"
-		} else if name == "setting" {
-			kind = "setting"
+		if err != nil {
+			result.Diagnostics = append(result.Diagnostics, model.Diagnostic{Level: "warning", Code: "resx_invalid_xml", Message: "resource XML is malformed"})
+			break
 		}
-		attrs := parseAttributes(content, nameEnd, end)
-		result.Items = append(result.Items, item{Kind: kind, Name: attributeValue(attrs, "name"), StartByte: start, EndByte: end, Attributes: attrs})
-	}
-	for _, match := range fileRefPattern.FindAllSubmatchIndex(content, -1) {
-		if len(match) < 4 {
-			continue
-		}
-		value := strings.TrimSpace(string(content[match[2]:match[3]]))
-		if semicolon := strings.IndexByte(value, ';'); semicolon >= 0 {
-			value = value[:semicolon]
-		}
-		value = strings.ReplaceAll(value, `\\`, `\`)
-		if value != "" {
-			result.Imports = append(result.Imports, value)
+		switch current := token.(type) {
+		case xml.StartElement:
+			end := int(decoder.InputOffset())
+			name := strings.ToLower(current.Name.Local)
+			next := frame{name: name}
+			if name == "data" || name == "metadata" || name == "setting" {
+				// InputOffset is the end of this actual start tag. Parse only its raw
+				// attributes so entity decoding never changes source coordinates.
+				nameEnd := start + 1
+				for nameEnd < end && !isSpace(content[nameEnd]) && content[nameEnd] != '/' && content[nameEnd] != '>' {
+					nameEnd++
+				}
+				attrs := parseAttributes(content, nameEnd, end)
+				for _, decoded := range current.Attr {
+					for index := range attrs {
+						local := attrs[index].Name
+						if colon := strings.IndexByte(local, ':'); colon >= 0 {
+							local = local[colon+1:]
+						}
+						if local == decoded.Name.Local {
+							attrs[index].Value = decoded.Value
+						}
+					}
+				}
+				kind := "resx_resource"
+				if name == "metadata" {
+					kind = "resx_metadata"
+				} else if name == "setting" {
+					kind = "setting"
+				}
+				result.Items = append(result.Items, item{Kind: kind, Name: attributeValue(attrs, "name"), StartByte: start, EndByte: end, Attributes: attrs})
+				next.fileRef = name == "data" && strings.TrimSpace(strings.Split(attributeValue(attrs, "type"), ",")[0]) == "System.Resources.ResXFileRef"
+			}
+			stack = append(stack, next)
+		case xml.CharData:
+			if len(stack) == 0 {
+				continue
+			}
+			last := len(stack) - 1
+			if stack[last].name == "resxfileref" {
+				stack[last].value += string(current)
+			}
+			if last > 0 && stack[last].name == "value" && stack[last-1].fileRef {
+				stack[last-1].value += string(current)
+			}
+		case xml.EndElement:
+			if len(stack) == 0 {
+				continue
+			}
+			last := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			if last.fileRef || last.name == "resxfileref" {
+				target := strings.TrimSpace(strings.SplitN(last.value, ";", 2)[0])
+				target = strings.ReplaceAll(target, `\\`, `\`)
+				if target != "" {
+					result.Imports = append(result.Imports, target)
+				}
+			}
 		}
 	}
 	return result, nil
