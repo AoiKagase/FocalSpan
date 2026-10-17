@@ -5,6 +5,7 @@ import (
 	"github.com/focalspan/focalspan/internal/extract"
 	"github.com/focalspan/focalspan/internal/extract/rust"
 	"github.com/focalspan/focalspan/internal/model"
+	"os"
 	"strings"
 	"testing"
 )
@@ -47,7 +48,7 @@ func wholeAuditNoSymbol(t *testing.T, got model.Extraction, name string) {
 }
 
 func TestF25RustCharacterDoesNotOpenScope(t *testing.T) {
-	got := wholeAuditExtract(t, rust.NewExtractor(), "x.rs", "rust", "fn first() { let brace = '{'; }\nfn second() {}\n")
+	got := wholeAuditExtract(t, rust.NewExtractor(), "x.rs", "rust", audit50Fixture(t, "F25/rust-1.rs"))
 	first := wholeAuditSymbol(t, got, "first")
 	second := wholeAuditSymbol(t, got, "second")
 	if first.EndLine != 1 || second.ParentHandle == first.Handle {
@@ -94,4 +95,13 @@ func TestF25CharacterTokensIncludeEntireEscapedOrUnicodeLiteral(t *testing.T) {
 			t.Fatalf("literal %s tokens=%+v", source, tokens)
 		}
 	}
+}
+
+func audit50Fixture(t *testing.T, name string) string {
+	t.Helper()
+	data, err := os.ReadFile("../../../testdata/audit50/" + name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }

@@ -5,6 +5,7 @@ import (
 	"github.com/focalspan/focalspan/internal/extract"
 	"github.com/focalspan/focalspan/internal/extract/goast"
 	"github.com/focalspan/focalspan/internal/model"
+	"os"
 	"strings"
 	"testing"
 )
@@ -47,7 +48,7 @@ func wholeAuditNoSymbol(t *testing.T, got model.Extraction, name string) {
 }
 
 func TestF41GoAnonymousTypeAliasKeepsAliasKind(t *testing.T) {
-	got := wholeAuditExtract(t, goast.NewExtractor(), "x.go", "go", "package p\ntype Alias = struct{}\ntype IAlias = interface{}\n")
+	got := wholeAuditExtract(t, goast.NewExtractor(), "x.go", "go", audit50Fixture(t, "F41/goast-1.go"))
 	for _, name := range []string{"Alias", "IAlias"} {
 		s := wholeAuditSymbol(t, got, name)
 		if s.Kind != "type_alias" {
@@ -71,4 +72,13 @@ func audit50SourceInvariants(t *testing.T, got model.Extraction, source string) 
 			t.Fatalf("chunk source differs: kind=%s bytes=%d:%d", chunk.Kind, chunk.StartByte, chunk.EndByte)
 		}
 	}
+}
+
+func audit50Fixture(t *testing.T, name string) string {
+	t.Helper()
+	data, err := os.ReadFile("../../../testdata/audit50/" + name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }
