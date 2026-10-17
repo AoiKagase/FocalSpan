@@ -8,8 +8,9 @@ Invalid explicit Git base/head references must return errors through Impact, Imp
 - [x] 2026-10-17 UTC: Observed RED: four invalid-ref service cases returned success; MCP also returned a successful empty packet. Valid-reference controls passed. Fixture Git init required normal permissions after sandbox denied config writes.
 - [x] 2026-10-17 UTC: Added immediate wrapped error return; service regressions and non-Git compatibility test passed. MCP regression passed in a dedicated run.
 - [x] 2026-10-17 UTC: Full tests, full race rerun, vet, native build and all three CGO-disabled cross-builds passed. Independent read-only review found no actionable issues.
-- [ ] Commit the fix, integrate latest master, and verify the merged tree.
-- [x] 2026-10-17 UTC: Fix committed as 8dbc7df. Latest master integrated with only the plan conflict described below. Integrated full tests, full race tests, vet, native build and all three cross-builds passed; only final merge commit and master advancement remain.
+- [x] 2026-10-17 UTC: Fix committed and merged into master through 2a79ed8 after integrated verification. master is checked out in the clean managed MCP worktree; the source checkout remains codex/parallel-index-locks to preserve its user-owned edits.
+- [x] 2026-10-17 UTC: Fix committed as 8dbc7df. Latest master integrated with only the plan conflict described below. Integrated full tests, full race tests, vet, native build and all three cross-builds passed.
+- [x] 2026-10-17 UTC: Final go test ./... passed from the clean master worktree after fast-forward; completion record is documentation-only.
 
 ## Surprises & Discoveries
 Explicit-reference Git errors are overwritten during candidate retrieval.
@@ -23,7 +24,7 @@ Explicit-reference Git errors are overwritten during candidate retrieval.
 - 2026-10-17 UTC: Use PLAN.md as ledger; do not execute repository helper scripts. Commit the plan transition separately from product code. No network or dependency restore.
 
 ## Outcomes & Retrospective
-The explicit-reference fix and regressions passed both pre-integration and integrated verification, including the latest MCP supervisor changes. The one transient store initialization failure is recorded above; isolated ten-repeat testing and both subsequent full race runs passed. No store code was changed. Independent review found no actionable issues. Unrelated tracked edits were preserved byte-for-byte as a patch (481d2c278a820ccfda79ec7bde9bd0ddd35cd68a). Final master advancement remains pending.
+The explicit-reference fix and regressions passed both pre-integration and integrated verification, including the latest MCP supervisor changes. The one transient store initialization failure is recorded above; isolated ten-repeat testing and both subsequent full race runs passed. No store code was changed. Independent review found no actionable issues. Unrelated tracked edits were preserved byte-for-byte as a patch (481d2c278a820ccfda79ec7bde9bd0ddd35cd68a). master was advanced to the verified merge 2a79ed8; no push or binary deployment was performed.
 
 ## Context and Orientation
 internal/app/evidence.go shares impact retrieval between service APIs. MCP already converts service failures to tool errors.
