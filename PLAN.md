@@ -10,7 +10,7 @@
 
 **Spec:** `docs/audits/2026-10-17-whole-repository-50.json`。元監査のF01〜F50を変更せず対応付ける。
 
-**Plan ID:** `whole-audit-50-20261017`。状態は**検証済み・統合待ち**。本書がactive ExecPlan。前PLANを`docs/superpowers/plans/completed/2026-10-18-additional-19-before-audit50.md`へbyte-for-byte保存した。
+**Plan ID:** `whole-audit-50-20261017`。状態は**完了**。本書がactive ExecPlan。前PLANを`docs/superpowers/plans/completed/2026-10-18-additional-19-before-audit50.md`へbyte-for-byte保存した。
 
 ## Purpose / Big Picture
 
@@ -32,7 +32,7 @@
 - [x] 50件を5段階の実装順と正式テストへ対応付けた。製品コードの変更・検証はまだ行っていない。
 - [x] 実装開始時の状態保存、専用branch、active PLAN切替の文書コミット（5e175b6）。
 - [x] A〜Eの対象48件をRED→GREENで修正し、IDごとにコミット／証拠を記録。
-- [ ] 通常→raceを直列実行し、vet・各ビルド・独立レビュー・FF統合を完了。
+- [x] 通常→raceを直列実行し、vet・各ビルド・独立レビュー・FF統合を完了。
 
 実装時はUTC時刻でProgressを追記し、各IDにREDコマンド／実際の失敗、GREENコマンド／結果、commit SHA、review結果を対応付ける。未実行の検証を成功扱いしない。
 
@@ -291,7 +291,7 @@ F06のno-clobber helperはGo標準APIと既存x/sysだけを使う。Unixは同�
 
 ## Outcomes & Retrospective
 
-対象48件の実装・全Go gate・WSL受入れ・独立レビューが完了。F02/F03は除外。検証ソースと結果は `docs/audits/2026-10-18-audit48-verification.md`。masterへのfast-forward統合と今回branchの削除は承認済みで、この記録のコミット後に実行する。
+対象48件の実装・全Go gate・WSL受入れ・独立レビューが完了。F02/F03は除外。検証ソースと結果は `docs/audits/2026-10-18-audit48-verification.md`。masterへのfast-forward統合と今回branchの削除まで完了した。
 
 本書作成時の検証は文書のID完全性・参照先・`git diff --check`のみ。計画作成のためにビルド・通常テスト・race・vet・restore・生成を実行しない。
 
@@ -301,3 +301,8 @@ F06のno-clobber helperはGo標準APIと既存x/sysだけを使う。Unixは同�
 - 独立レビュー3担当でブロッカーなし。レビューの原本再現と正式テストを突き合わせて修正・再承認した。
 - F11 scanner→Indexの受入れもPASS。設定patternは既存契約の`**/*.go`を使用（`.go`単体はglobではない）。
 - 製品ソースの最終commit: ae800042cef19263a9a60197616e0fafe740f8e1。詳細は検証記録を参照。
+
+### 統合完了
+
+- masterへfast-forward: fa82c5d0dd56581116fb72cccdecd49d37aab92c。統合後の元作業treeで全通常テストもPASS。
+- 開始時の既存変更7ファイルはhash一致を再確認。今回branchはmaster到達確認後に削除済み。managed worktreeもarchiveし、raw logsはC:/Temp/fs50-final-evidenceへ保持した。push・稼働バイナリ置換なし。

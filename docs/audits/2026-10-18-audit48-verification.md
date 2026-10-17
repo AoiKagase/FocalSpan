@@ -40,3 +40,5 @@
 開始時の既存変更7ファイルはbyte hash一致。ユーザー差分はstageしていない。生成バイナリはC:/Tempだけに保存した。push・稼働バイナリ置換は行わない。masterへのfast-forward統合とbranch cleanupは、この検証記録をコミットした後に実行する。
 
 raw logsとgate JSONは作業worktreeの`.superpowers/sdd/PLAN/`。worktree archive前に`C:/Temp/fs50-final-evidence`へ保存する。
+
+統合実績: masterへ `fa82c5d0dd56581116fb72cccdecd49d37aab92c` をfast-forward。元作業treeの全通常テストPASS、既存変更7ファイルのhash一致を再確認。今回branch削除・managed worktree archive済み。raw logs: C:/Temp/fs50-final-evidence。最終CI smoke比較も compatible=true / regressions=0。
