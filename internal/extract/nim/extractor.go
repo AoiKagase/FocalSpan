@@ -27,11 +27,11 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 	if err := ctx.Err(); err != nil {
 		return model.Extraction{}, err
 	}
-	_, diagnostics, err := Lex(ctx, file.Content)
+	tokens, diagnostics, err := Lex(ctx, file.Content)
 	if err != nil {
 		return model.Extraction{}, err
 	}
-	parsed := parseNim(file)
+	parsed := parseNim(file, tokens)
 	for index := range diagnostics {
 		diagnostics[index].FilePath = file.Path
 	}

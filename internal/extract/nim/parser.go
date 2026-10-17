@@ -30,6 +30,7 @@ type nimParseResult struct {
 	Owner       *nimDecl
 	Decls       []*nimDecl
 	Lines       []nimLine
+	CodeLines   []nimLine
 	Diagnostics []model.Diagnostic
 }
 
@@ -41,15 +42,27 @@ var (
 	nimSuitePattern     = regexp.MustCompile(`(?i)^suite\s+["']([^"']+)["']`)
 )
 
-func parseNim(file model.SourceFile) nimParseResult {
+func parseNim(file model.SourceFile, tokens []Token) nimParseResult {
 	lines := nimSourceLines(file.Content)
-	result := nimParseResult{Lines: lines}
+	code := append([]byte(nil), file.Content...)
+	for _, token := range tokens {
+		if token.Kind == TripleString || token.Kind == LongComment {
+			for at := token.StartByte; at < token.EndByte; at++ {
+				if code[at] != '\n' && code[at] != '\r' {
+					code[at] = ' '
+				}
+			}
+		}
+	}
+	codeLines := nimSourceLines(code)
+	result := nimParseResult{Lines: lines, CodeLines: codeLines}
 	name := filepath.Base(file.Path)
 	result.Owner = &nimDecl{Kind: "module", Name: name, Qualified: name, Header: "module " + name, StartLine: 1, EndLine: len(lines), Indent: -1}
 	stack := make([]*nimDecl, 0, 8)
 	for index, line := range lines {
 		lineNo := index + 1
-		text := strings.TrimSpace(nimCode(line.Text))
+		text := strings.TrimSpace(nimCode(codeLines[index].Text))
+		header := strings.TrimSpace(nimCode(line.Text))
 		if text == "" || strings.HasPrefix(text, "#") {
 			continue
 		}
@@ -65,15 +78,15 @@ func parseNim(file model.SourceFile) nimParseResult {
 		}
 		var decl *nimDecl
 		if match := nimRoutinePattern.FindStringSubmatch(text); len(match) == 3 {
-			decl = newNimDecl(strings.ToLower(match[1]), nimTrimExport(nimTrimBacktick(match[2])), text, lineNo, line.Indent, parent)
+			decl = newNimDecl(strings.ToLower(match[1]), nimTrimExport(nimTrimBacktick(match[2])), header, lineNo, line.Indent, parent)
 		} else if match := nimNamedTypePattern.FindStringSubmatch(text); len(match) == 3 {
-			decl = newNimDecl(strings.ToLower(match[2]), nimTrimExport(match[1]), text, lineNo, line.Indent, parent)
+			decl = newNimDecl(strings.ToLower(match[2]), nimTrimExport(match[1]), header, lineNo, line.Indent, parent)
 		} else if match := nimValuePattern.FindStringSubmatch(text); len(match) == 3 {
-			decl = newNimDecl(strings.ToLower(match[1]), nimTrimExport(match[2]), text, lineNo, line.Indent, parent)
+			decl = newNimDecl(strings.ToLower(match[1]), nimTrimExport(match[2]), header, lineNo, line.Indent, parent)
 		} else if match := nimTestPattern.FindStringSubmatch(text); len(match) == 2 {
-			decl = newNimDecl("test", match[1], text, lineNo, line.Indent, parent)
+			decl = newNimDecl("test", match[1], header, lineNo, line.Indent, parent)
 		} else if match := nimSuitePattern.FindStringSubmatch(text); len(match) == 2 {
-			decl = newNimDecl("suite", match[1], text, lineNo, line.Indent, parent)
+			decl = newNimDecl("suite", match[1], header, lineNo, line.Indent, parent)
 		}
 		if decl == nil {
 			continue

@@ -85,7 +85,7 @@ func buildNimRelations(result *model.Extraction, file model.SourceFile, parsed n
 		symbols = append(symbols, byDecl[decl])
 	}
 	index := nimIndex(symbols)
-	for lineIndex, line := range parsed.Lines {
+	for lineIndex, line := range parsed.CodeLines {
 		text := strings.TrimSpace(nimCode(line.Text))
 		if text == "" || strings.HasPrefix(text, "#") {
 			continue
