@@ -254,6 +254,13 @@ func resolveCandidates(from model.Symbol, target string, symbols []model.Symbol,
 	if target == "" {
 		return nil
 	}
+	compatible := make([]model.Symbol, 0, len(symbols))
+	for _, symbol := range symbols {
+		if language.RelationLanguagesCompatible(from.Language, symbol.Language, relationKind) {
+			compatible = append(compatible, symbol)
+		}
+	}
+	symbols = compatible
 	if (relationKind == "calls" || relationKind == "tests") && !strings.ContainsAny(target, `/\`) {
 		qualified, names := []model.Symbol{}, []model.Symbol{}
 		for _, symbol := range symbols {

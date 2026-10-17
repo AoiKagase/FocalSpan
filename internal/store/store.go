@@ -1154,6 +1154,9 @@ ORDER BY m.confidence DESC, f.path, c.start_line, c.handle, m.direction, m.sourc
 }
 
 func incomingMatches(kind, unresolvedMatch string) string {
+	if kind == "calls" || kind == "tests" {
+		unresolvedMatch = "(" + unresolvedMatch + ") AND EXISTS (SELECT 1 FROM symbols origin JOIN files origin_file ON origin_file.id=origin.file_id WHERE origin.handle=r.from_handle AND " + relationLanguageSQL("origin_file.language", "a.language") + ")"
+	}
 	return fmt.Sprintf(`SELECT r.from_handle AS candidate_handle, r.confidence, r.source,
 CASE WHEN r.to_handle = a.handle THEN 1 ELSE 0 END AS resolved, 'incoming' AS direction
 FROM relations r, anchor a
@@ -1161,6 +1164,9 @@ WHERE r.kind = '%s' AND (r.to_handle = a.handle OR (r.to_handle IS NULL AND (%s)
 }
 
 func outgoingMatches(kind, unresolvedMatch string) string {
+	if kind == "calls" || kind == "tests" {
+		unresolvedMatch = "(" + unresolvedMatch + ") AND " + relationLanguageSQL("a.language", "target_file.language")
+	}
 	return fmt.Sprintf(`SELECT r.to_handle AS candidate_handle, r.confidence, r.source, 1 AS resolved, 'outgoing' AS direction
 FROM relations r, anchor a
 WHERE r.kind = '%s' AND r.from_handle = a.handle AND r.to_handle IS NOT NULL
@@ -1168,6 +1174,11 @@ UNION ALL
 SELECT target.handle AS candidate_handle, r.confidence, r.source, 0 AS resolved, 'outgoing' AS direction
 FROM relations r, anchor a JOIN symbols target JOIN files target_file ON target_file.id = target.file_id
 WHERE r.kind = '%s' AND r.from_handle = a.handle AND r.to_handle IS NULL AND (%s)`, kind, kind, unresolvedMatch)
+}
+
+// Keep the family rules aligned with language.RelationLanguagesCompatible.
+func relationLanguageSQL(from, to string) string {
+	return "(" + from + " = " + to + " OR (" + from + " IN ('c','cpp') AND " + to + " IN ('c','cpp')) OR (" + from + " IN ('javascript','typescript') AND " + to + " IN ('javascript','typescript')))"
 }
 
 func callAnchorMatch(anchor, relation string, camel bool) string {

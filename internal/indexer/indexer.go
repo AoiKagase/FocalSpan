@@ -45,7 +45,7 @@ const (
 	PhaseLinking  = "linking"
 	PhaseComplete = "complete"
 
-	extractorVersion = "extractors-v14-call-symbol-resolution"
+	extractorVersion = "extractors-v15-relation-language-boundaries"
 	// ExtractorVersion is the version required for a readable, current index.
 	ExtractorVersion = extractorVersion
 )

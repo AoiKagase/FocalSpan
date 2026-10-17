@@ -23,6 +23,8 @@
 
 ## Progress
 
+- 2026-10-17 execution: Task 5完了。A03=911ca20、A13=f987403、A10=4a97e1d/a2829fc、A12=d5770e5、A11は正式RED→GREEN。language/linker/store/indexer/search/extract全体/appの全テストPASS（C:/Temp/fs24-task5.log）。異言語130件の除外もPASS。ExtractorVersion=v15。
+
 - 2026-10-17 execution: Task 4完了。A02=6579a31、A04=c5e8103、A18=8d56050、A19はRED→GREEN。全extractor/evidence/app/mcpserverテストPASS（C:/Temp/fs24-task4.log）。Go分類はファイル・命名・引数/返り値を確認し、aliasにも対応。ExtractorVersion=v10。
 
 - 2026-10-17 execution: Task 3完了。O02=b678eb3、O05はRED→GREEN。config/generic/template/indexer/appの全テストPASS（C:/Temp/fs24-task3.log）、全fallbackと埋め込みの追加検査もPASS。抽出設定hashを完了transactionへ保存し、extractors-v7-configured-windowsへ更新。
