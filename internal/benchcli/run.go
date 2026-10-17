@@ -364,18 +364,40 @@ func renderHumanComparison(output io.Writer, comparison benchmark.Comparison) {
 }
 func writeOutput(path string, data []byte, force bool) error {
 	if !force {
-		if _, err := os.Stat(path); err == nil {
+		if _, err := os.Lstat(path); err == nil {
 			return fmt.Errorf("output exists: %s", path)
+		} else if !os.IsNotExist(err) {
+			return err
 		}
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
-	temporary := path + ".tmp"
-	if err := os.WriteFile(temporary, data, 0o644); err != nil {
+	temp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".focalspan-*")
+	if err != nil {
 		return err
 	}
-	return os.Rename(temporary, path)
+	name := temp.Name()
+	defer os.Remove(name)
+	if err := temp.Chmod(0644); err != nil {
+		temp.Close()
+		return err
+	}
+	if _, err := temp.Write(data); err != nil {
+		temp.Close()
+		return err
+	}
+	if err := temp.Sync(); err != nil {
+		temp.Close()
+		return err
+	}
+	if err := temp.Close(); err != nil {
+		return err
+	}
+	if force {
+		return os.Rename(name, path)
+	}
+	return publishOutputExclusive(name, path)
 }
 
 type stringList []string

@@ -30,11 +30,23 @@
 
 - [x] 監査50 ID、現行の関連API、master基準と既存差分を確認した。
 - [x] 50件を5段階の実装順と正式テストへ対応付けた。製品コードの変更・検証はまだ行っていない。
-- [ ] 実装開始時の状態保存、専用branch、active PLAN切替の文書コミット。
+- [x] 実装開始時の状態保存、専用branch、active PLAN切替の文書コミット（5e175b6）。
 - [ ] A〜Eの全50件をRED→GREENで修正し、IDごとにコミット／証拠を記録。
 - [ ] 通常→raceを直列実行し、vet・各ビルド・独立レビュー・FF統合を完了。
 
 実装時はUTC時刻でProgressを追記し、各IDにREDコマンド／実際の失敗、GREENコマンド／結果、commit SHA、review結果を対応付ける。未実行の検証を成功扱いしない。
+
+### 実装台帳
+
+更新UTC: 2026-10-17T15:33:15.429981+00:00。実装済み 5/50。RED/GREEN logは専用worktreeの`.superpowers/sdd/PLAN/`に保存。
+
+| ID | 状態 | RED | GREEN | commit |
+|---|---|---|---|---|
+| F01 | complete | F01-red.log | F01-green.log | 48f15e5c7a50 |
+| F02 | complete (Ubuntu real symlink; Windows privilege-only case substituted per user) | F02-linux-red.log | F02-ubuntu-green.log + F02-windows-green.log | a2ae8f84c03b |
+| F03 | complete | F03-linux-red.log | F03-linux-green.log | afe9737d4192 |
+| F09 | complete | F09-red.log | F09-green.log | ceffd75bc652 |
+| F11 | complete | F11-red.log | F11-app-green.log | 0339a074ca28 |
 
 ## Surprises & Discoveries
 
@@ -51,6 +63,8 @@
 | F04は新しいv2 baselineを実測して追加 | v1をschema名だけ変更するとN19の正解順位の意味が一致しない。旧baselineは変更しない。 |
 | F49は内部の展開実施状態を追加 | 数値0だけでは「未実施」「対象ラベルなし」「全欠落」を区別できない。公開reportフィールドは追加しない。 |
 | 抽出／リンクの変更後は既存索引を再抽出させる | 修正が新規全索引だけに効くことを防ぐ。最終統合でExtractorVersionを更新し、既存索引の差分更新と全再構築を比較する。 |
+
+2026-10-17 UTC Ruling: ユーザーがローカルLinux代替を選択し、WSL-Ubuntuを指定した。実file symlinkの受入れはUbuntuで行い、Windowsはnative回帰と既存junction受入れを行う。Windowsの権限依存file symlinkテストのskipをWindows実受入れPASSとは数えない。UbuntuにはGoを追加せずWindowsでcross-buildしたtest binaryを実行する。この差分を独立レビュー対象にする。
 
 ## Context and Orientation
 
@@ -211,7 +225,7 @@ F06のno-clobber helperはGo標準APIと既存x/sysだけを使う。Unixは同�
 1. `go test ./...`を完了させてから、`go test -race ./...`を実行する。通常とraceを同時に走らせない。race用C compilerは既知の利用可能な環境を明示する。
 2. `go vet ./...`、`go build ./cmd/focalspan`を実行する。benchmark/evalも含むnative buildは`go build -o <temporary-output-directory> ./cmd/...`で確認し、稼働binaryを上書きしない。
 3. `CGO_ENABLED=0`でWindows amd64、Windows arm64、Linux amd64、Darwin arm64について、`./cmd/focalspan`、`./cmd/focalspan-bench`、`./cmd/focalspan-eval`を各々一時保存先へbuildする。cross-buildはOS runtime testの代わりにしない。
-4. Windows／LinuxでF02/F03/F21のOS受入れと設定の別process lockテストを実行する。スキップや未実行は明示し、必須OS受入れが残る間は統合しない。benchmark/evalは解析対象コードを実行せず、F04のCLI比較まで検証する。
+4. F02/F03/F21はWSL-Ubuntuの実symlink／大小文字受入れとWindows native通常回帰／既存junction受入れで検査し、設定の別process lockテストも実行する（Decision Logのユーザー指定によるOS代替）。スキップや未実行は明示し、必須OS受入れが残る間は統合しない。benchmark/evalは解析対象コードを実行せず、F04のCLI比較まで検証する。
 5. 50 IDのテスト／commit対応、Evidence契約、設定喪失、境界、増分整合性を独立レビューする。指摘修正後は影響検証を再実行し、最終sourceで全通常→全raceを再確認する。`git diff --check`と既存ユーザー変更の保持も確認する。
 
 開始済みの確認を同じsourceで理由なく繰り返さない。追加修正・未解決の懸念があれば、その影響に応じて再検証する。すべてのGateは実行したcommit SHAとlogをPLANへ記録する。
@@ -228,6 +242,6 @@ F06のno-clobber helperはGo標準APIと既存x/sysだけを使う。Unixは同�
 
 ## Outcomes & Retrospective
 
-現時点の成果はこの提案と永続化した監査仕様だけで、修正件数は0/50。実装完了時に50件の主テスト／関連受入れ／commit SHA、旧索引の更新結果、全Gate、review修正、未解決項目の有無、FF統合先と既存変更保持の証拠を記入する。
+現時点の実装済み修正は5/50。各件の状態・実測証拠はProgressの台帳に記載。最終検証・独立レビュー・統合は未完了。実装完了時に50件の主テスト／関連受入れ／commit SHA、旧索引の更新結果、全Gate、review修正、未解決項目の有無、FF統合先と既存変更保持の証拠を記入する。
 
 本書作成時の検証は文書のID完全性・参照先・`git diff --check`のみ。計画作成のためにビルド・通常テスト・race・vet・restore・生成を実行しない。
