@@ -41,10 +41,18 @@ func (c *Client) Diff(ctx context.Context, req DiffRequest) ([]ChangedFile, erro
 	args := []string{"-C", c.Root, "diff", "--unified=0", "--no-ext-diff"}
 	if req.Base != "" || req.Head != "" {
 		if req.Base != "" {
-			args = append(args, req.Base)
+			base, err := c.resolveCommit(ctx, req.Base)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, base)
 		}
 		if req.Head != "" {
-			args = append(args, req.Head)
+			head, err := c.resolveCommit(ctx, req.Head)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, head)
 		}
 	}
 	args = append(args, "--")
@@ -69,6 +77,17 @@ func (c *Client) Diff(ctx context.Context, req DiffRequest) ([]ChangedFile, erro
 		return ParseUnifiedZeroDiff(out)
 	}
 	return files, nil
+}
+
+func (c *Client) resolveCommit(ctx context.Context, ref string) (string, error) {
+	if ref == "" || strings.HasPrefix(ref, "-") || strings.ContainsRune(ref, 0) {
+		return "", fmt.Errorf("invalid Git reference %q", ref)
+	}
+	out, err := exec.CommandContext(ctx, "git", "-C", c.Root, "rev-parse", "--verify", "--end-of-options", ref+"^{commit}").Output()
+	if err != nil {
+		return "", fmt.Errorf("resolve Git reference %q: %w", ref, err)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 // WorkingTreeDiff compares the current source to HEAD so staged and unstaged
