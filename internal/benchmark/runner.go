@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/focalspan/focalspan/internal/app"
@@ -78,7 +79,10 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 		if err != nil {
 			return RunReport{}, err
 		}
-		destination := filepath.Join(request.Workspace, "snapshots", repositoryID, caseID)
+		destination, err := SnapshotDestination(request.Workspace, "snapshots", repositoryID, caseID)
+		if err != nil {
+			return RunReport{}, err
+		}
 		snapshotStarted := time.Now()
 		snapshot, err := runner.Snapshotter.Materialize(ctx, benchmarkCase.Repository, repositoryPath, benchmarkCase.BaseRef, destination)
 		snapshotDuration := time.Since(snapshotStarted)
@@ -340,10 +344,33 @@ func containsString(values []string, want string) bool {
 var workspaceIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
 func safeWorkspaceID(value string) (string, error) {
-	if !workspaceIDPattern.MatchString(value) {
+	if !workspaceIDPattern.MatchString(value) || value == "." || value == ".." || strings.HasSuffix(value, ".") {
+		return "", fmt.Errorf("unsafe workspace id %q", value)
+	}
+	base := strings.ToUpper(strings.SplitN(value, ".", 2)[0])
+	if base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" || len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) && base[3] >= '1' && base[3] <= '9' {
 		return "", fmt.Errorf("unsafe workspace id %q", value)
 	}
 	return value, nil
+}
+
+// SnapshotDestination validates components and the resulting workspace boundary.
+func SnapshotDestination(workspace string, components ...string) (string, error) {
+	root, err := filepath.Abs(workspace)
+	if err != nil {
+		return "", err
+	}
+	for _, component := range components {
+		if _, err := safeWorkspaceID(component); err != nil {
+			return "", err
+		}
+	}
+	destination := filepath.Join(append([]string{root}, components...)...)
+	rel, err := filepath.Rel(root, destination)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("snapshot destination outside workspace")
+	}
+	return destination, nil
 }
 
 func validateLabelsAtBase(root string, benchmarkCase Case) error {

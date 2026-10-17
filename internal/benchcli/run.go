@@ -99,7 +99,11 @@ func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) e
 			fmt.Fprintf(stderr, "case %s: unresolved repository %s\n", c.ID, c.Repository)
 			continue
 		}
-		snapshot, materializeErr := snapshotter.Materialize(ctx, c.Repository, repo, c.BaseRef, filepath.Join(workspace, c.ID))
+		destination, destinationErr := benchmark.SnapshotDestination(workspace, c.ID)
+		if destinationErr != nil {
+			return destinationErr
+		}
+		snapshot, materializeErr := snapshotter.Materialize(ctx, c.Repository, repo, c.BaseRef, destination)
 		if materializeErr != nil {
 			invalid++
 			fmt.Fprintf(stderr, "case %s: %v\n", c.ID, materializeErr)

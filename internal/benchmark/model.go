@@ -173,6 +173,12 @@ func ValidateSuite(suite Suite) error {
 	}
 	seenIDs := map[string]int{}
 	for index, caseValue := range suite.Cases {
+		if _, err := safeWorkspaceID(caseValue.ID); err != nil {
+			problems = append(problems, err.Error())
+		}
+		if _, err := safeWorkspaceID(caseValue.Repository); err != nil {
+			problems = append(problems, err.Error())
+		}
 		label := fmt.Sprintf("case[%d]", index)
 		if caseValue.ID == "" {
 			problems = append(problems, label+": id must not be empty")
