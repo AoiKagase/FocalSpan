@@ -7,7 +7,7 @@ Concurrent index openers must wait through transient SQLite schema-read contenti
 - [x] 2026-10-17 UTC: Reproduced TestConcurrentInitialOpenKeepsReadersAlive failure in a 100-repeat race run. Found unconfigured, context-free readSchemaVersionPath connection used before Store configuration.
 - [x] 2026-10-17 UTC: Deterministic real-lock tests returned immediate SQLITE_BUSY before release and before the caller deadline (RED). Corrupt-database control passed without waiting.
 - [x] 2026-10-17 UTC: Passed the existing open context to QueryRowContext and retried only primary SQLite BUSY (including extended codes) with cancellable 25ms waits. Release/deadline/control tests passed; explicit cancellation control added.
-- [ ] Focused/stress/full verification, review, explicit-path commits and local master merge.
+- [x] 2026-10-17 UTC: Focused/stress/full verification and review passed. Scoped fix committed as fa44628 and fast-forward merged into master. Deleted the merged work branch; only local master remains.
 - [x] 2026-10-17 UTC: New real-lock regressions, cancellation and corruption controls plus the existing concurrent initializer passed 100 repeats with race enabled (85.439s). Full tests, full race suite, vet, native build and all three CGO-disabled cross-builds passed. Independent review found no actionable issues.
 
 ## Surprises & Discoveries
@@ -19,7 +19,7 @@ The earlier one-off 261 failure was reproducible. All openers hold shared lifecy
 - Keep the completed predecessor byte-for-byte in docs/superpowers/plans/completed/2026-10-17-git-change-correctness.md.
 
 ## Outcomes & Retrospective
-The previously intermittent initialization failure is reproduced and addressed with bounded context-aware BUSY retry. Deterministic regressions observed failure before the fix and passed afterward. Both the lifecycle lease and the original acquisition deadline are retained throughout retries. No migration, public wire or source-fidelity behavior changed. Full verification and independent review passed; commit and local merge remain pending.
+The previously intermittent initialization failure is reproduced and addressed with bounded context-aware BUSY retry. Deterministic regressions observed failure before the fix and passed afterward. Both the lifecycle lease and the original acquisition deadline are retained throughout retries. No migration, public wire or source-fidelity behavior changed. Full verification and independent review passed; fa44628 is merged into master with the same verified code tree. The merged task branch was removed. User-owned tracked edits preserve patch hash 481d2c278a820ccfda79ec7bde9bd0ddd35cd68a. No push or runtime deployment was performed. This final update is documentation-only.
 
 ## Context and Orientation
 internal/store/lifecycle.go acquires leases and probes the database through readSchemaVersionPath in store.go. The probe opens a separate connection before configureAndMigrate. Existing store/concurrency_test.go checks simultaneous initialization with 12 readers.
