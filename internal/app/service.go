@@ -165,7 +165,7 @@ type QueryRequest struct {
 	RetrievalMode search.RetrievalMode
 }
 
-func (s *Service) Query(ctx context.Context, req QueryRequest) (model.ContextBundle, error) {
+func (s *Service) queryRead(ctx context.Context, req QueryRequest) (model.ContextBundle, error) {
 	if req.TokenBudget == 0 {
 		req.TokenBudget = s.Config.DefaultTokenBudget
 	}
@@ -231,7 +231,7 @@ func (s *Service) Health(ctx context.Context) (model.HealthStatus, error) {
 	return report, nil
 }
 
-func (s *Service) Expand(ctx context.Context, handles []string, relation string, tokenBudget int) (model.ContextBundle, error) {
+func (s *Service) expandRead(ctx context.Context, handles []string, relation string, tokenBudget int) (model.ContextBundle, error) {
 	if tokenBudget == 0 {
 		tokenBudget = s.Config.DefaultTokenBudget
 	}
@@ -242,7 +242,7 @@ func (s *Service) Expand(ctx context.Context, handles []string, relation string,
 	return s.packWithSavings(ctx, model.PackRequest{Query: relation, TokenBudget: tokenBudget, Mode: "source", Candidates: result.Candidates, IntentHints: []string{relation}})
 }
 
-func (s *Service) Impact(ctx context.Context, base, head string, tokenBudget int) (model.ContextBundle, error) {
+func (s *Service) impactRead(ctx context.Context, base, head string, tokenBudget int) (model.ContextBundle, error) {
 	if tokenBudget == 0 {
 		tokenBudget = s.Config.DefaultTokenBudget
 	}

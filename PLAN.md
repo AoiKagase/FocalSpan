@@ -9,7 +9,7 @@ Implement the approved five fixes: fail closed on traversal errors; constrain re
 - [x] 2026-10-17 UTC: Confirmed master a91128f and preserved dirty user paths; archived completed generic-source plan byte-for-byte; created codex/remaining-five-fixes.
 - [x] 2026-10-17 UTC: Step 1 RED: missing/empty-cancelled walks returned success and unavailable root was accepted by Indexer. GREEN: repository and indexer suites pass; errors now precede all writes.
 - [x] 2026-10-17 UTC: Step 2 RED on path/changed-only late exact match; GREEN across store/search/app suites and explicit 1000+ condition, literal wildcard/path boundary/case/range controls. Outside-scope anchors preserved; Evidence wire/invariants pass.
-- [ ] Step 3: Shared Writer lease around complete Query/Expand/Impact reads; commit.
+- [x] 2026-10-17 UTC: Step 3 RED admitted writer during paused read and admitted query during subprocess writer. GREEN app suite: shared lease spans all public result construction; parallel readers pass; six public APIs honor caller wait cancellation. Auto-update moved before admission; pending reads reject incomplete updates.
 - [ ] Step 4: Impact auto-update or explicit stale-index rejection; commit.
 - [ ] Step 5: Status/Health readiness from all completion metadata; commit.
 - [ ] Full offline verification, independent whole-branch review, fast-forward merge and merged task branch cleanup.

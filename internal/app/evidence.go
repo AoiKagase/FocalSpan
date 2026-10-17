@@ -67,11 +67,6 @@ func (s *Service) queryCandidatesDetailed(ctx context.Context, req QueryRequest,
 	if strings.TrimSpace(req.Query) == "" {
 		return candidateResult{}, errors.New("query must not be blank")
 	}
-	if !req.NoUpdate && s.Config.AutoUpdateBeforeQuery {
-		if _, err := s.Index(ctx, false); err != nil {
-			return candidateResult{}, fmt.Errorf("auto-update index: %w", err)
-		}
-	}
 	retrievalMode := req.RetrievalMode
 	if retrievalMode == "" {
 		retrievalMode = search.RetrievalFull
@@ -96,7 +91,7 @@ func (s *Service) QueryEvidenceAttributed(ctx context.Context, req EvidenceQuery
 	return s.queryEvidence(ctx, req, true)
 }
 
-func (s *Service) queryEvidence(ctx context.Context, req EvidenceQueryRequest, trace bool) (AttributedEvidenceResult, error) {
+func (s *Service) queryEvidenceRead(ctx context.Context, req EvidenceQueryRequest, trace bool) (AttributedEvidenceResult, error) {
 	known, err := evidence.NormalizeKnownHandles(req.KnownHandles)
 	if err != nil {
 		return AttributedEvidenceResult{}, err
@@ -145,7 +140,7 @@ func shouldAbstainEvidenceQuery(req EvidenceQueryRequest, plan query.Plan, candi
 	return true
 }
 
-func (s *Service) ExpandEvidence(ctx context.Context, req EvidenceExpandRequest) (evidence.CompileResult, error) {
+func (s *Service) expandEvidenceRead(ctx context.Context, req EvidenceExpandRequest) (evidence.CompileResult, error) {
 	if err := ctx.Err(); err != nil {
 		return evidence.CompileResult{}, err
 	}
@@ -170,7 +165,7 @@ func (s *Service) ExpandEvidence(ctx context.Context, req EvidenceExpandRequest)
 	return s.evidenceCompiler.Compile(evidence.CompileRequest{Plan: result.Plan, Revision: result.Revision, TokenBudget: req.TokenBudget, Mode: req.Mode, Candidates: result.Candidates, KnownHandles: known, ExpansionAnchors: req.Handles})
 }
 
-func (s *Service) ImpactEvidence(ctx context.Context, req EvidenceImpactRequest) (evidence.CompileResult, error) {
+func (s *Service) impactEvidenceRead(ctx context.Context, req EvidenceImpactRequest) (evidence.CompileResult, error) {
 	known, err := evidence.NormalizeKnownHandles(req.KnownHandles)
 	if err != nil {
 		return evidence.CompileResult{}, err
