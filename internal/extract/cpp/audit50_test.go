@@ -7,6 +7,7 @@ import (
 	"github.com/focalspan/focalspan/internal/extract/cpp"
 	"github.com/focalspan/focalspan/internal/extract/csharp"
 	"github.com/focalspan/focalspan/internal/model"
+	"os"
 	"strings"
 	"testing"
 )
@@ -50,19 +51,19 @@ func wholeAuditNoSymbol(t *testing.T, got model.Extraction, name string) {
 
 func TestF43ConstantFalseElifStaysInactive(t *testing.T) {
 	t.Run("cpp", func(t *testing.T) {
-		got := wholeAuditExtract(t, cpp.NewExtractor(), "x.cpp", "cpp", "#if 0\nvoid hidden() {}\n#elif 0\nvoid fake() {}\n#endif\nvoid real() {}\n")
+		got := wholeAuditExtract(t, cpp.NewExtractor(), "x.cpp", "cpp", audit50Fixture(t, "F43/cpp-1.cpp"))
 		wholeAuditNoSymbol(t, got, "fake")
 		wholeAuditSymbol(t, got, "real")
 	})
 	t.Run("csharp", func(t *testing.T) {
-		got := wholeAuditExtract(t, csharp.NewExtractor(), "x.cs", "csharp", "#if false\nclass Hidden {}\n#elif false\nclass Fake {}\n#endif\nclass Real {}\n")
+		got := wholeAuditExtract(t, csharp.NewExtractor(), "x.cs", "csharp", audit50Fixture(t, "F43/cpp-2.cs"))
 		wholeAuditNoSymbol(t, got, "Fake")
 		wholeAuditSymbol(t, got, "Real")
 	})
 }
 
 func TestF26CPPForwardDeclarationStopsAtSemicolon(t *testing.T) {
-	got := wholeAuditExtract(t, cpp.NewExtractor(), "x.cpp", "cpp", "struct A;\nvoid f() {}\n")
+	got := wholeAuditExtract(t, cpp.NewExtractor(), "x.cpp", "cpp", audit50Fixture(t, "F26/cpp-1.cpp"))
 	a := wholeAuditSymbol(t, got, "A")
 	f := wholeAuditSymbol(t, got, "f")
 	if a.EndLine != 1 || f.Kind != "function" {
@@ -71,7 +72,7 @@ func TestF26CPPForwardDeclarationStopsAtSemicolon(t *testing.T) {
 }
 
 func TestF44CPPReceiverOwnershipIsCaseSensitive(t *testing.T) {
-	got := wholeAuditExtract(t, cpp.NewExtractor(), "x.cpp", "cpp", "class A {};\nclass a {};\nvoid a::f() {}\n")
+	got := wholeAuditExtract(t, cpp.NewExtractor(), "x.cpp", "cpp", audit50Fixture(t, "F44/cpp-1.cpp"))
 	a := wholeAuditSymbol(t, got, "a")
 	f := wholeAuditSymbol(t, got, "f")
 	if f.ParentHandle != a.Handle {
@@ -80,7 +81,7 @@ func TestF44CPPReceiverOwnershipIsCaseSensitive(t *testing.T) {
 }
 
 func TestF42CPPNamespacedFreeFunctionIsFunction(t *testing.T) {
-	got := wholeAuditExtract(t, cpp.NewExtractor(), "x.cpp", "cpp", "namespace demo { void f() {} }\n")
+	got := wholeAuditExtract(t, cpp.NewExtractor(), "x.cpp", "cpp", audit50Fixture(t, "F42/cpp-1.cpp"))
 	f := wholeAuditSymbol(t, got, "f")
 	if f.Kind != "function" {
 		t.Fatalf("namespaced free function=%+v", f)
@@ -143,4 +144,24 @@ func TestF42ClassQualifiedMemberRemainsMethod(t *testing.T) {
 			t.Fatalf("class member=%+v", s)
 		}
 	}
+}
+
+func audit50Fixture(t *testing.T, name string) string {
+	t.Helper()
+	data, err := os.ReadFile("../../../testdata/audit50/" + name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func TestReviewF43Regression(t *testing.T) {
+	got := wholeAuditExtract(t, cpp.NewExtractor(), "x.cpp", "cpp", audit50Fixture(t, "F43/review-x.cpp"))
+	wholeAuditSymbol(t, got, "Real")
+}
+
+func TestReviewF43UnknownExpression(t *testing.T) {
+	got := wholeAuditExtract(t, cpp.NewExtractor(), "x.cpp", "cpp", "#if 1 && FEATURE\nvoid Maybe(){}\n#else\nvoid Alternate(){}\n#endif\n")
+	wholeAuditSymbol(t, got, "Maybe")
+	wholeAuditSymbol(t, got, "Alternate")
 }

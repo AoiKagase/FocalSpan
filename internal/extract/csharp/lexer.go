@@ -169,14 +169,14 @@ func makeToken(kind TokenKind, content []byte, mapa sourceutil.SourceMap, start,
 }
 
 func applyDirective(text string, active bool, stack []conditionalFrame) (bool, []conditionalFrame) {
-	fields := strings.Fields(strings.TrimPrefix(strings.TrimSpace(text), "#"))
+	fields := strings.Fields(strings.TrimPrefix(strings.TrimSpace(strings.SplitN(text, "//", 2)[0]), "#"))
 	if len(fields) == 0 {
 		return active, stack
 	}
 	switch fields[0] {
 	case "if", "ifdef", "ifndef":
 		frame := conditionalFrame{parent: active}
-		if fields[0] == "if" && len(fields) > 1 {
+		if fields[0] == "if" && len(fields) == 2 {
 			if fields[1] == "false" || fields[1] == "0" {
 				active = false
 			}
@@ -187,7 +187,7 @@ func applyDirective(text string, active bool, stack []conditionalFrame) (bool, [
 		if len(stack) > 0 {
 			frame := &stack[len(stack)-1]
 			active = frame.parent && !frame.taken
-			if fields[0] == "elif" && len(fields) > 1 {
+			if fields[0] == "elif" && len(fields) == 2 {
 				if fields[1] == "false" || fields[1] == "0" {
 					active = false
 				}

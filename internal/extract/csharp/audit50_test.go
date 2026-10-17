@@ -6,6 +6,7 @@ import (
 	"github.com/focalspan/focalspan/internal/extract/cpp"
 	"github.com/focalspan/focalspan/internal/extract/csharp"
 	"github.com/focalspan/focalspan/internal/model"
+	"os"
 	"strings"
 	"testing"
 )
@@ -49,24 +50,24 @@ func wholeAuditNoSymbol(t *testing.T, got model.Extraction, name string) {
 
 func TestF43ConstantFalseElifStaysInactive(t *testing.T) {
 	t.Run("cpp", func(t *testing.T) {
-		got := wholeAuditExtract(t, cpp.NewExtractor(), "x.cpp", "cpp", "#if 0\nvoid hidden() {}\n#elif 0\nvoid fake() {}\n#endif\nvoid real() {}\n")
+		got := wholeAuditExtract(t, cpp.NewExtractor(), "x.cpp", "cpp", audit50Fixture(t, "F43/csharp-1.cpp"))
 		wholeAuditNoSymbol(t, got, "fake")
 		wholeAuditSymbol(t, got, "real")
 	})
 	t.Run("csharp", func(t *testing.T) {
-		got := wholeAuditExtract(t, csharp.NewExtractor(), "x.cs", "csharp", "#if false\nclass Hidden {}\n#elif false\nclass Fake {}\n#endif\nclass Real {}\n")
+		got := wholeAuditExtract(t, csharp.NewExtractor(), "x.cs", "csharp", audit50Fixture(t, "F43/csharp-2.cs"))
 		wholeAuditNoSymbol(t, got, "Fake")
 		wholeAuditSymbol(t, got, "Real")
 	})
 }
 
 func TestF27CSharpVerbatimBackslashDoesNotMaskNextMethod(t *testing.T) {
-	got := wholeAuditExtract(t, csharp.NewExtractor(), "x.cs", "csharp", "class A { string p = @\"C:\\\"; void F() {} }\n")
+	got := wholeAuditExtract(t, csharp.NewExtractor(), "x.cs", "csharp", audit50Fixture(t, "F27/csharp-1.cs"))
 	wholeAuditSymbol(t, got, "F")
 }
 
 func TestF45CSharpNestedTypeKeepsOuterQualification(t *testing.T) {
-	got := wholeAuditExtract(t, csharp.NewExtractor(), "x.cs", "csharp", "namespace N { class Outer { class Inner { void F() {} } } }\n")
+	got := wholeAuditExtract(t, csharp.NewExtractor(), "x.cs", "csharp", audit50Fixture(t, "F45/csharp-1.cs"))
 	inner := wholeAuditSymbol(t, got, "Inner")
 	f := wholeAuditSymbol(t, got, "F")
 	if inner.QualifiedName != "N.Outer.Inner" || f.QualifiedName != "N.Outer.Inner.F" {
@@ -111,4 +112,24 @@ func TestF45SameNestedNamesUnderDifferentOuterTypesRemainDistinct(t *testing.T) 
 			t.Fatalf("missing %s: %+v", name, got.Symbols)
 		}
 	}
+}
+
+func audit50Fixture(t *testing.T, name string) string {
+	t.Helper()
+	data, err := os.ReadFile("../../../testdata/audit50/" + name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func TestReviewF43Regression(t *testing.T) {
+	got := wholeAuditExtract(t, csharp.NewExtractor(), "x.cs", "csharp", audit50Fixture(t, "F43/review-x.cs"))
+	wholeAuditSymbol(t, got, "Real")
+}
+
+func TestReviewF43UnknownExpression(t *testing.T) {
+	got := wholeAuditExtract(t, csharp.NewExtractor(), "x.cs", "csharp", "#if true && FEATURE\nclass Maybe{}\n#else\nclass Alternate{}\n#endif\n")
+	wholeAuditSymbol(t, got, "Maybe")
+	wholeAuditSymbol(t, got, "Alternate")
 }
