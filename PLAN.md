@@ -23,6 +23,8 @@
 
 ## Progress
 
+- 2026-10-17 execution: Task 3完了。O02=b678eb3、O05はRED→GREEN。config/generic/template/indexer/appの全テストPASS（C:/Temp/fs24-task3.log）、全fallbackと埋め込みの追加検査もPASS。抽出設定hashを完了transactionへ保存し、extractors-v7-configured-windowsへ更新。
+
 - 2026-10-17 execution: Task 2完了。A05=9d1c962、A14=83217c3、A09=868b37a（gitlink列挙で区別する追補をA06と共に実施）。A06の外側junction拒否・内側許可はRED→GREEN。repository/store/indexer/appはTask 3の先行RED 2テストだけ除外して全PASS（C:/Temp/fs24-task2-green.log）。Task 3のO02/O05も正式REDを観測済み。
 
 - 2026-10-17 execution: Task 1 GREEN: O01=3700ec1、A01=66cb695。A07も正式RED→GREEN。gitx/repository/app/cli全テストPASS（C:/Temp/fs24-task1.log）。安全なref解決・textconv無効化・Git probeを完了。

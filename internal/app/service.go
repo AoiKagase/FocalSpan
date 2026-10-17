@@ -80,7 +80,7 @@ func newWithConfig(root string, cfg config.Config, allowSchemaUpgrade bool) (*Se
 	if err != nil {
 		return nil, err
 	}
-	registry := newExtractorRegistry()
+	registry := newExtractorRegistry(cfg)
 	estimator := budget.NewEstimator()
 	service := &Service{Root: root, Config: cfg, Store: st, packer: budget.NewPacker(estimator), evidenceCompiler: evidence.NewCompiler(estimator), indexGate: make(chan struct{}, 1)}
 	service.indexer = indexer.New(root, cfg, st, registry)
@@ -88,7 +88,11 @@ func newWithConfig(root string, cfg config.Config, allowSchemaUpgrade bool) (*Se
 	return service, nil
 }
 
-func newExtractorRegistry() *extract.Registry {
+func newExtractorRegistry(configs ...config.Config) *extract.Registry {
+	cfg := config.Default()
+	if len(configs) > 0 {
+		cfg = configs[0]
+	}
 	return extract.NewRegistry(
 		goast.NewExtractor(),
 		php.NewExtractor(),
@@ -104,10 +108,10 @@ func newExtractorRegistry() *extract.Registry {
 		vbextract.NewVBNetExtractor(),
 		nimstructural.NewExtractor(),
 		zigstructural.NewExtractor(),
-		templateextract.NewExtractor(),
+		templateextract.NewExtractorWithChunkOptions(cfg.GenericChunkLines, cfg.GenericChunkOverlap),
 		xaml.NewExtractor(),
 		resx.NewExtractor(),
-		generic.NewExtractor(),
+		generic.NewExtractorWithOptions(cfg.GenericChunkLines, cfg.GenericChunkOverlap),
 	)
 }
 

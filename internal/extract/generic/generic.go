@@ -13,9 +13,22 @@ import (
 	"github.com/focalspan/focalspan/internal/model"
 )
 
-type Extractor struct{}
+type Extractor struct{ size, overlap int }
 
-func NewExtractor() Extractor { return Extractor{} }
+func NewExtractor() Extractor { return NewExtractorWithOptions(80, 10) }
+
+func NewExtractorWithOptions(lines, overlap int) Extractor {
+	if lines < 1 {
+		lines = 80
+	}
+	if overlap < 0 {
+		overlap = 0
+	}
+	if overlap >= lines {
+		overlap = lines - 1
+	}
+	return Extractor{lines, overlap}
+}
 
 func (Extractor) Name() string { return "generic-structural" }
 
@@ -26,23 +39,27 @@ func (Extractor) Supports(path, language string) bool {
 	return true
 }
 
-func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extraction, error) {
+func (e Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extraction, error) {
 	if err := ctx.Err(); err != nil {
 		return model.Extraction{}, err
 	}
+	if e.size == 0 {
+		e = NewExtractor()
+	}
+	options := []int{e.size, e.overlap}
 	switch file.Language {
 	case "markdown":
-		return markdown(file), nil
+		return markdown(file, options...), nil
 	case "powershell", "shell":
-		return indentation(file), nil
+		return indentation(file, options...), nil
 	case "csharp":
-		return csharpStructured(file), nil
+		return csharpStructured(file, options...), nil
 	case "javascript", "typescript":
-		return javascriptStructured(file), nil
+		return javascriptStructured(file, options...), nil
 	case "c", "cpp", "java", "php":
-		return braceBalanced(file), nil
+		return braceBalanced(file, options...), nil
 	default:
-		return windows(file, 80, 10), nil
+		return fallbackWindows(file, options...), nil
 	}
 }
 
@@ -87,15 +104,15 @@ var controlDeclarationWords = map[string]bool{
 	"using": true, "while": true,
 }
 
-func csharpStructured(file model.SourceFile) model.Extraction {
-	return structured(file, matchCSharpDeclaration)
+func csharpStructured(file model.SourceFile, options ...int) model.Extraction {
+	return structured(file, matchCSharpDeclaration, options...)
 }
 
-func javascriptStructured(file model.SourceFile) model.Extraction {
-	return structured(file, matchJavaScriptDeclaration)
+func javascriptStructured(file model.SourceFile, options ...int) model.Extraction {
+	return structured(file, matchJavaScriptDeclaration, options...)
 }
 
-func structured(file model.SourceFile, match declarationMatcher) model.Extraction {
+func structured(file model.SourceFile, match declarationMatcher, options ...int) model.Extraction {
 	lines := splitLines(string(file.Content))
 	source := sourceutil.NewSourceMap(file.Content)
 	pairs, codeLines := scanSource(lines)
@@ -119,7 +136,7 @@ func structured(file model.SourceFile, match declarationMatcher) model.Extractio
 		result = appendGeneric(result, file, source, allocator, lines, declaration.startLine, end, declaration.kind, declaration.name)
 	}
 	if len(result.Chunks) == 0 {
-		return windows(file, 80, 10)
+		return fallbackWindows(file, options...)
 	}
 	return result
 }
@@ -299,7 +316,7 @@ func scanSource(lines []string) ([]bracePair, []string) {
 	return pairs, cleaned
 }
 
-func braceBalanced(file model.SourceFile) model.Extraction {
+func braceBalanced(file model.SourceFile, options ...int) model.Extraction {
 	lines := splitLines(string(file.Content))
 	source := sourceutil.NewSourceMap(file.Content)
 	result := model.Extraction{Diagnostics: []model.Diagnostic{{FilePath: file.Path, Level: "info", Code: "generic_extraction", Message: "generic structural extraction is syntax-approximate"}}}
@@ -330,7 +347,7 @@ func braceBalanced(file model.SourceFile) model.Extraction {
 		result = appendGeneric(result, file, source, allocator, lines, start, len(lines)-1, kind, name)
 	}
 	if len(result.Chunks) == 0 {
-		return windows(file, 80, 10)
+		return fallbackWindows(file, options...)
 	}
 	return result
 }
@@ -388,7 +405,7 @@ func braceDelta(line string) int {
 	return delta
 }
 
-func indentation(file model.SourceFile) model.Extraction {
+func indentation(file model.SourceFile, options ...int) model.Extraction {
 	lines := splitLines(string(file.Content))
 	source := sourceutil.NewSourceMap(file.Content)
 	result := model.Extraction{Diagnostics: []model.Diagnostic{{FilePath: file.Path, Level: "info", Code: "generic_extraction", Message: "indentation extraction is syntax-approximate"}}}
@@ -416,12 +433,12 @@ func indentation(file model.SourceFile) model.Extraction {
 		result = appendGeneric(result, file, source, allocator, lines, start, end, kinds[i], names[i])
 	}
 	if len(result.Chunks) == 0 {
-		return windows(file, 80, 10)
+		return fallbackWindows(file, options...)
 	}
 	return result
 }
 
-func markdown(file model.SourceFile) model.Extraction {
+func markdown(file model.SourceFile, options ...int) model.Extraction {
 	lines := splitLines(string(file.Content))
 	source := sourceutil.NewSourceMap(file.Content)
 	result := model.Extraction{Diagnostics: []model.Diagnostic{{FilePath: file.Path, Level: "info", Code: "markdown_extraction", Message: "Markdown is split by heading"}}}
@@ -451,9 +468,17 @@ func markdown(file model.SourceFile) model.Extraction {
 		result = appendGeneric(result, file, source, allocator, lines, start, end, "heading", names[i])
 	}
 	if len(result.Chunks) == 0 {
-		return windows(file, 80, 10)
+		return fallbackWindows(file, options...)
 	}
 	return result
+}
+
+func fallbackWindows(file model.SourceFile, options ...int) model.Extraction {
+	size, overlap := 80, 10
+	if len(options) == 2 {
+		size, overlap = options[0], options[1]
+	}
+	return windows(file, size, overlap)
 }
 
 func windows(file model.SourceFile, size, overlap int) model.Extraction {

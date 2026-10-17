@@ -10,7 +10,7 @@ import (
 	"github.com/focalspan/focalspan/internal/model"
 )
 
-func appendEmbeddedScript(ctx context.Context, file model.SourceFile, region Region, language, contextName string, parent model.Symbol, allocator *model.HandleAllocator, result *model.Extraction) error {
+func appendEmbeddedScript(ctx context.Context, file model.SourceFile, region Region, language, contextName string, parent model.Symbol, allocator *model.HandleAllocator, result *model.Extraction, fallbacks ...generic.Extractor) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -22,7 +22,11 @@ func appendEmbeddedScript(ctx context.Context, file model.SourceFile, region Reg
 		return nil
 	}
 	local := model.SourceFile{Path: file.Path, Language: language, Content: region.Content}
-	delegated, err := generic.NewExtractor().Extract(ctx, local)
+	fallback := generic.NewExtractor()
+	if len(fallbacks) > 0 {
+		fallback = fallbacks[0]
+	}
+	delegated, err := fallback.Extract(ctx, local)
 	if err != nil {
 		return err
 	}

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/focalspan/focalspan/internal/extract/generic"
 	"path"
 	"sort"
 	"strings"
@@ -13,6 +14,7 @@ import (
 )
 
 type templateBuilder struct {
+	fallback  generic.Extractor
 	ctx       context.Context
 	file      model.SourceFile
 	regions   []Region
@@ -23,8 +25,12 @@ type templateBuilder struct {
 	nodeSyms  map[int]model.Symbol
 }
 
-func build(ctx context.Context, file model.SourceFile, regions []Region, parsed parseResult) (model.Extraction, error) {
+func build(ctx context.Context, file model.SourceFile, regions []Region, parsed parseResult, fallbacks ...generic.Extractor) (model.Extraction, error) {
 	b := &templateBuilder{ctx: ctx, file: file, regions: regions, parsed: parsed, allocator: model.NewHandleAllocator(), nodeSyms: make(map[int]model.Symbol)}
+	b.fallback = generic.NewExtractor()
+	if len(fallbacks) > 0 {
+		b.fallback = fallbacks[0]
+	}
 	b.result.Diagnostics = append(b.result.Diagnostics, parsed.Diagnostics...)
 	b.root = b.makeRoot()
 	b.result.Symbols = append(b.result.Symbols, b.root)
@@ -152,7 +158,7 @@ func (b *templateBuilder) appendEmbedded() error {
 		if id := attrs["id"]; id != "" {
 			contextName = "id-" + id
 		}
-		if err := appendEmbeddedScript(b.ctx, b.file, region, language, contextName, parent, b.allocator, &b.result); err != nil {
+		if err := appendEmbeddedScript(b.ctx, b.file, region, language, contextName, parent, b.allocator, &b.result, b.fallback); err != nil {
 			return err
 		}
 	}
