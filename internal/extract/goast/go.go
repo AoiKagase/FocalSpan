@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/focalspan/focalspan/internal/model"
 )
@@ -49,10 +51,14 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 		packageName = parsed.Name.Name
 	}
 	packageHandle := allocator.Allocate("sym", file.Path, "go", "package", packageName, packageName)
+	testingAliases := map[string]bool{"testing": true}
 	packageStart, packageEnd := span(fset, parsed)
 	result.Symbols = append(result.Symbols, model.Symbol{Handle: packageHandle, FilePath: file.Path, Language: "go", Kind: "package", Name: packageName, QualifiedName: packageName, Signature: "package " + packageName, StartLine: packageStart.line, EndLine: packageEnd.line, StartByte: packageStart.offset, EndByte: packageEnd.offset, Confidence: 1})
 	for _, spec := range parsed.Imports {
 		path := strings.Trim(spec.Path.Value, "\"")
+		if path == "testing" && spec.Name != nil {
+			testingAliases[spec.Name.Name] = true
+		}
 		result.Relations = append(result.Relations, model.Relation{FromHandle: packageHandle, UnresolvedTo: path, Kind: "imports", Confidence: 1, Source: "go-ast"})
 	}
 
@@ -62,7 +68,7 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 		}
 		switch d := decl.(type) {
 		case *ast.FuncDecl:
-			symbol := buildFuncSymbol(file, fset, d, allocator)
+			symbol := buildFuncSymbol(file, fset, d, allocator, testingAliases)
 			result.Symbols = append(result.Symbols, symbol)
 			result.Relations = append(result.Relations, model.Relation{FromHandle: packageHandle, ToHandle: symbol.Handle, Kind: "contains", Confidence: 1, Source: "go-ast"})
 			result.Relations = append(result.Relations, typeRelations(symbol, d.Type, file, fset)...)
@@ -194,7 +200,7 @@ func span(fset *token.FileSet, node interface {
 	return sourceSpan{start.Line, start.Offset}, sourceSpan{end.Line, end.Offset}
 }
 
-func buildFuncSymbol(file model.SourceFile, fset *token.FileSet, decl *ast.FuncDecl, allocator *model.HandleAllocator) model.Symbol {
+func buildFuncSymbol(file model.SourceFile, fset *token.FileSet, decl *ast.FuncDecl, allocator *model.HandleAllocator, testingAliases map[string]bool) model.Symbol {
 	start, end := span(fset, decl)
 	name := decl.Name.Name
 	kind := "function"
@@ -204,12 +210,54 @@ func buildFuncSymbol(file model.SourceFile, fset *token.FileSet, decl *ast.FuncD
 		receiver := receiverName(decl.Recv.List[0].Type)
 		qualified = receiver + "." + name
 	}
-	if strings.HasPrefix(name, "Test") || strings.HasPrefix(name, "Benchmark") || strings.HasPrefix(name, "Fuzz") || strings.HasPrefix(name, "Example") {
+	if isTestDeclaration(file.Path, decl, testingAliases) {
 		kind = "test"
 	}
 	signature := funcSignature(file.Content, fset, decl)
 	handle := allocator.Allocate("sym", file.Path, "go", kind, qualified, model.NormalizeSignature(signature))
 	return model.Symbol{Handle: handle, FilePath: file.Path, Language: "go", Kind: kind, Name: name, QualifiedName: qualified, Signature: signature, StartLine: start.line, EndLine: end.line, StartByte: start.offset, EndByte: end.offset, Confidence: 1}
+}
+
+func isTestDeclaration(path string, decl *ast.FuncDecl, aliases map[string]bool) bool {
+	if decl.Type == nil || decl.Type.Params == nil {
+		return false
+	}
+	if !strings.HasSuffix(path, "_test.go") || decl.Recv != nil || (decl.Type.TypeParams != nil && len(decl.Type.TypeParams.List) > 0) || (decl.Type.Results != nil && len(decl.Type.Results.List) > 0) {
+		return false
+	}
+	name := decl.Name.Name
+	for _, test := range []struct{ prefix, typ string }{{"Test", "T"}, {"Benchmark", "B"}, {"Fuzz", "F"}, {"Example", ""}} {
+		if !strings.HasPrefix(name, test.prefix) {
+			continue
+		}
+		if tail := strings.TrimPrefix(name, test.prefix); tail != "" {
+			r, _ := utf8.DecodeRuneInString(tail)
+			if unicode.IsLower(r) {
+				continue
+			}
+		}
+		params := decl.Type.Params.List
+		if test.typ == "" {
+			return len(params) == 0
+		}
+		if len(params) != 1 || len(params[0].Names) > 1 {
+			return false
+		}
+		pointer, ok := params[0].Type.(*ast.StarExpr)
+		if !ok {
+			return false
+		}
+		if typ, ok := pointer.X.(*ast.Ident); ok {
+			return aliases["."] && typ.Name == test.typ
+		}
+		typ, ok := pointer.X.(*ast.SelectorExpr)
+		if !ok || typ.Sel.Name != test.typ {
+			return false
+		}
+		qualifier, ok := typ.X.(*ast.Ident)
+		return ok && aliases[qualifier.Name]
+	}
+	return false
 }
 
 func buildDeclSymbols(file model.SourceFile, fset *token.FileSet, decl *ast.GenDecl, spec ast.Spec, allocator *model.HandleAllocator) []model.Symbol {

@@ -45,7 +45,7 @@ const (
 	PhaseLinking  = "linking"
 	PhaseComplete = "complete"
 
-	extractorVersion = "extractors-v9-rust-test-attributes"
+	extractorVersion = "extractors-v10-go-test-declarations"
 	// ExtractorVersion is the version required for a readable, current index.
 	ExtractorVersion = extractorVersion
 )
