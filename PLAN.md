@@ -11,7 +11,7 @@ After file updates commit, cancellation or failure during linking must remain re
 - [x] 2026-10-17 UTC: Pending marker committed with file updates; unchanged reopen recovery and repeated cancellation now pass. Full indexer suite passed, including existing pre-write cancellation tests.
 - [x] 2026-10-17 UTC: Full race tests, go vet, native and three cross-builds passed. Independent read-only review found no actionable issues.
 - [x] 2026-10-17 UTC: First normal full suite failed in existing TestSupervisorFailedCandidatesKeepOldWorker with worker EOF. Isolated five-repeat rerun and serial full-suite rerun both passed without source edits.
-- [ ] Full offline verification, independent review, scoped commit, merge and merged branch cleanup.
+- [x] 2026-10-17 UTC: Full offline verification and independent review passed. Scoped fix a31e976 fast-forward merged into master; merged task branch removed.
 
 ## Surprises & Discoveries
 
@@ -28,7 +28,7 @@ Concurrent normal/race verification produced one normal-suite supervisor fixture
 
 ## Outcomes & Retrospective
 
-Implemented a durable linking_pending marker without schema changes. Initial and incremental indexing recover after store reopen and repeated interruption; successful recovery restores scoped linking. Full normal suite (serial rerun), full race suite, go vet, native and three cross-builds passed. Independent review found no actionable issues. Initial supervisor fixture failure remains documented with isolated five-repeat success; its cause is unconfirmed. User tracked patch hash remains 481d2c278a820ccfda79ec7bde9bd0ddd35cd68a. Artifacts: .build/link-recovery-verification. Commit and local merge remain.
+Implemented a durable linking_pending marker without schema changes. Initial and incremental indexing recover after store reopen and repeated interruption; successful recovery restores scoped linking. Full normal suite (serial rerun), full race suite, go vet, native and three cross-builds passed. Independent review found no actionable issues. Initial supervisor fixture failure remains documented with isolated five-repeat success; its cause is unconfirmed. User tracked patch hash remains 481d2c278a820ccfda79ec7bde9bd0ddd35cd68a. Artifacts: .build/link-recovery-verification. Fix a31e976 is fast-forward merged into master with the same verified code tree. Merged task branch removed; user changes preserved. No push or runtime deployment performed by this task. Final completion update is documentation-only.
 
 ## Context and Orientation
 
