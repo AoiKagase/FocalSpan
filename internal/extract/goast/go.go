@@ -12,6 +12,7 @@ import (
 	"go/token"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -55,7 +56,10 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 	packageStart, packageEnd := span(fset, parsed)
 	result.Symbols = append(result.Symbols, model.Symbol{Handle: packageHandle, FilePath: file.Path, Language: "go", Kind: "package", Name: packageName, QualifiedName: packageName, Signature: "package " + packageName, StartLine: packageStart.line, EndLine: packageEnd.line, StartByte: packageStart.offset, EndByte: packageEnd.offset, Confidence: 1})
 	for _, spec := range parsed.Imports {
-		path := strings.Trim(spec.Path.Value, "\"")
+		path, unquoteErr := strconv.Unquote(spec.Path.Value)
+		if unquoteErr != nil {
+			continue
+		}
 		if path == "testing" && spec.Name != nil {
 			testingAliases[spec.Name.Name] = true
 		}
