@@ -525,7 +525,7 @@ func (b *builder) lexicalParent(decl *declaration) *declaration {
 	if best == nil && strings.Contains(decl.Qualified, "::") {
 		receiver := decl.Qualified[:strings.LastIndex(decl.Qualified, "::")]
 		for _, candidate := range b.parsed.Declarations {
-			if (candidate.Kind == "class" || candidate.Kind == "struct") && strings.EqualFold(candidate.Qualified, receiver) {
+			if (candidate.Kind == "class" || candidate.Kind == "struct") && candidate.Qualified == receiver {
 				return candidate
 			}
 		}
@@ -539,7 +539,7 @@ func (b *builder) receiverParent(decl *declaration) *declaration {
 	}
 	receiver := decl.Qualified[:strings.LastIndex(decl.Qualified, "::")]
 	for _, candidate := range b.parsed.Declarations {
-		if (candidate.Kind == "class" || candidate.Kind == "struct" || candidate.Kind == "union") && strings.EqualFold(candidate.Qualified, receiver) {
+		if (candidate.Kind == "class" || candidate.Kind == "struct" || candidate.Kind == "union") && candidate.Qualified == receiver {
 			return candidate
 		}
 	}

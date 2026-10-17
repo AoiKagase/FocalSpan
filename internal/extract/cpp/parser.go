@@ -185,8 +185,8 @@ func (p *parser) parseType(position, hi int, parent *declaration, namespace stri
 	}
 	name := p.tokens[p.sig[namePos]].Text
 	open := p.findToken(namePos+1, namePos+1, hi, "{")
-	if open < 0 {
-		semi := p.findToken(namePos+1, namePos+2, hi, ";")
+	semi := p.findToken(namePos+1, namePos+1, hi, ";")
+	if open < 0 || semi >= 0 && semi < open {
 		if semi < 0 {
 			return nil, position, false
 		}
@@ -309,8 +309,17 @@ func (p *parser) parseFunction(position, hi int, parent *declaration, namespace,
 		return nil, position, false
 	}
 	kind := "function"
-	if currentType != "" || strings.Contains(qualified, "::") {
+	if currentType != "" {
 		kind = "method"
+	} else if namePosition > position && p.tokens[p.sig[namePosition-1]].Text == "::" {
+		kind = "method"
+		receiver := strings.TrimSuffix(qualified, "::"+name)
+		for _, candidate := range p.result.Declarations {
+			if candidate.Kind == "namespace" && candidate.Qualified == receiver {
+				kind = "function"
+				break
+			}
+		}
 	}
 	if name == currentType || strings.HasPrefix(name, "~") {
 		kind = "constructor"

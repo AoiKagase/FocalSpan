@@ -158,30 +158,36 @@ func makeToken(kind TokenKind, content []byte, mapa sourceutil.SourceMap, start,
 	return Token{Kind: kind, Text: string(content[start:end]), StartByte: start, EndByte: end, StartLine: span.StartLine, EndLine: span.EndLine, Active: active}
 }
 
-type conditionalFrame struct{ parent, disabled bool }
+type conditionalFrame struct{ parent, taken bool }
 
 func applyDirective(text string, active bool, stack []conditionalFrame) (bool, []conditionalFrame) {
-	trimmed := strings.TrimSpace(text)
-	fields := strings.Fields(strings.TrimPrefix(trimmed, "#"))
+	fields := strings.Fields(strings.TrimPrefix(strings.TrimSpace(text), "#"))
 	if len(fields) == 0 {
 		return active, stack
 	}
 	switch fields[0] {
 	case "if", "ifdef", "ifndef":
 		frame := conditionalFrame{parent: active}
-		if fields[0] == "if" && len(fields) > 1 && fields[1] == "0" {
-			frame.disabled = true
-			active = false
+		if fields[0] == "if" && len(fields) > 1 {
+			if fields[1] == "0" {
+				active = false
+			}
+			frame.taken = fields[1] == "1"
 		}
 		stack = append(stack, frame)
-	case "else", "elif":
+	case "elif", "else":
 		if len(stack) > 0 {
 			frame := &stack[len(stack)-1]
-			if frame.disabled {
-				active = frame.parent
-				frame.disabled = false
-			} else {
-				active = frame.parent
+			active = frame.parent && !frame.taken
+			if fields[0] == "elif" && len(fields) > 1 {
+				if fields[1] == "0" {
+					active = false
+				}
+				if fields[1] == "1" {
+					frame.taken = true
+				}
+			} else if fields[0] == "else" {
+				frame.taken = true
 			}
 		}
 	case "endif":
