@@ -9,7 +9,7 @@
 
 ## Purpose / Big Picture
 
-この計画の「最初の5件」は直前の追加監査で除外した未修正5件であり、前計画で修正済みの5件ではない。新たな修正対象は合計24件。ユーザーの今回の依頼は計画作成までで、製品コードの実装は開始していない。
+この計画の「最初の5件」は直前の追加監査で除外した未修正5件であり、前計画で修正済みの5件ではない。修正対象は合計24件。ユーザーの実装承認に基づき全24件を修正・コミット済み。現在は全検証と承認済みのローカルfast-forward統合を進めている。
 
 8つの修正単位を順に実行する。各単位内でも異なる根本原因は回帰テストとコミットを分ける。実装・回帰テストの見積もりは14〜20時間、全検証・レビューは2〜4時間。実際の進捗と検証結果を以下へ追記する。
 
@@ -18,10 +18,14 @@
 - MCP公開フィールド、Evidence v1/v2のwire形式、DBスキーマバージョンを変更しない。通常応答へ順位やtoken-savingsのdebug項目を追加しない。原文はstructured contentに1回だけ出す。
 - 検索は既存のShared Writerロック、更新はExclusive Writerロックを維持する。待機は最大5秒、期限・キャンセルを優先する。indexGateはFinalizeUpgrade完了まで保持する。
 - ネットワーク、依存取得、外部LLM、解析対象ソースの実行、push、稼働バイナリの置換は行わない。通常テストとraceテストは直列に実行する。
-- 既存の未コミット変更・未追跡ファイル・ロック・他のworktreeを保持する。今回の計画変更はPLAN.mdと新規archiveだけを所有し、AGENTS.md、README.md、docs/design.md、internal/mcpserver/{server.go,context_v2_test.go}の既存差分を取り込まない。
+- 既存の未コミット変更・未追跡ファイル・ロック・他のworktreeを保持する。計画作成時はPLAN.mdと新規archiveだけを所有した。実装は対応表の対象ファイルだけを変更し、AGENTS.md、README.md、docs/design.md、internal/mcpserver/{server.go,context_v2_test.go}の既存差分を取り込まない。
 - シェルコマンドは `rtk` 経由。各不具合の再現テストを修正前に実行し、意図した理由で失敗したことを確認する。Evidence変更には原文・行位置・不変条件・実測wire予算のテストを必須とする。
 
 ## Progress
+
+- 2026-10-17 final gates: 全通常テスト、全raceテスト（UCRT64 GCC）、go vet、native build、CGO_ENABLED=0のWindows amd64/Linux amd64/Darwin arm64ビルドがすべてexit 0。ログはC:/Temp/fs24-all-normal.log、fs24-all-race.log、fs24-build-gates.log。24 IDと24 regression mapping、git diff --checkもPASS。独立レビューの全production差分とfixture分離追補は指摘なし。統合先master=47ef2a1を確認し、承認済みFF統合に進む。
+
+- 2026-10-17 final verification: 全通常テストPASS（C:/Temp/fs24-all-normal.log、exit 0）。独立レビュー47ef2a1..ccf613eはP1/P2指摘なし。全体テストで検出したbenchmark/evalの共有fixture索引競合を一時コピーへ分離し、両パッケージと全体を再検証。追加差分の独立レビューも指摘なし。全raceを通常テスト完了後に開始。
 
 - 2026-10-17 execution: Task 8完了。A15=d78c03f、A16=ea60b31。全CLI/codexテストPASS（C:/Temp/fs24-task8.log）。全24件の修正をコミット済み。O01の失敗時メタデータ保持とA16のauto-update/未管理登録の補足受け入れもPASS。全通常/race/vet/ビルドと独立レビューはこれから実行する。
 
@@ -43,8 +47,8 @@
 
 - [x] 2026-10-17 10:06 UTC: master / 47ef2a1と既存のdirty pathsを確認。24件の対象を照合し、旧PLAN.mdを同一内容でarchiveへ保存した。
 - [x] 2026-10-17 UTC: 24件を8単位へ割り当て、依存順・内部API・受け入れ条件を記述。文書検査PASS（24 IDの一意性、8 Task、必須section、archive、末尾空白なし）、旧計画との同一内容確認とgit diff --checkもPASS。製品コードは変更せず、テスト・ビルドは実行していない。
-- [ ] 実装開始の指示後に専用ブランチを作成し、計画移行だけをコミットする。
-- [ ] Task 1〜8の各RED/GREEN・コミットを完了する。
+- [x] 実装開始の指示後に専用ブランチを作成し、計画移行だけをコミットする。
+- [x] Task 1〜8の各RED/GREEN・コミットを完了する。
 - [ ] 全検証・レビュー・masterへのfast-forward統合と作業ブランチ削除を完了する。
 
 ## Context and Orientation
@@ -94,10 +98,10 @@
 
 **Interfaces:** `repository.ProbeGitRepository(ctx context.Context, root string) (bool, error)` を導入する。安全性に関わる呼び出し元はboolだけのIsGitRepositoryに依存しない。`gitx.Client.resolveCommit(ctx context.Context, ref string) (string, error)` は入力を検証し、オプション終了境界付きrev-parseでcommit objectへ解決する。差分へ渡すのは得られたobject IDだけとする。
 
-- [ ] **RED:** `TestGitProbeFailurePreservesIgnoredSourceAndIndex`、`TestDiffRefCannotWriteOutputFile`、`TestDiffIgnoresTextconv` を正式化する。ダミー機密fixtureが格納されないこと、victimのバイト列が保持されること、textconv設定の有無で原文差分が一致することを検査する。
-- [ ] **実装:** 空文字は既存の省略規則に従う。先頭`-`、NUL等の不正refを拒否し、無効refのエラーを保持する。全diff経路へ`--no-textconv --no-ext-diff`を適用する。Git利用不能・probe失敗は原則エラー。本当に非Gitと確認できる場合だけwalkへ進む。Git不在でも祖先に.gitマーカーがない非Gitディレクトリは使用可能とし、.gitのdirectory/file、壊れたマーカー、キャンセルを区別する。ローカライズされたstderr文言だけで判別しない。
-- [ ] **GREEN:** `rtk go test ./internal/gitx ./internal/repository ./internal/app ./internal/cli`。通常ref、annotated tag、HEAD~1、head省略、非Git、Gitのない非Git、worktree、既存のquoted path・削除hunkを維持する。
-- [ ] O01、A01、A07をそれぞれ対象パスだけstageしてコミットする。
+- [x] **RED:** `TestGitProbeFailurePreservesIgnoredSourceAndIndex`、`TestDiffRefCannotWriteOutputFile`、`TestDiffIgnoresTextconv` を正式化する。ダミー機密fixtureが格納されないこと、victimのバイト列が保持されること、textconv設定の有無で原文差分が一致することを検査する。
+- [x] **実装:** 空文字は既存の省略規則に従う。先頭`-`、NUL等の不正refを拒否し、無効refのエラーを保持する。全diff経路へ`--no-textconv --no-ext-diff`を適用する。Git利用不能・probe失敗は原則エラー。本当に非Gitと確認できる場合だけwalkへ進む。Git不在でも祖先に.gitマーカーがない非Gitディレクトリは使用可能とし、.gitのdirectory/file、壊れたマーカー、キャンセルを区別する。ローカライズされたstderr文言だけで判別しない。
+- [x] **GREEN:** `rtk go test ./internal/gitx ./internal/repository ./internal/app ./internal/cli`。通常ref、annotated tag、HEAD~1、head省略、非Git、Gitのない非Git、worktree、既存のquoted path・削除hunkを維持する。
+- [x] O01、A01、A07をそれぞれ対象パスだけstageしてコミットする。
 
 ### Task 2 — 走査と索引保存先の境界を修正する（A05 / A06 / A09 / A14）
 
@@ -105,10 +109,10 @@
 
 **Interfaces:** `repository.PrepareIndexDirectory(ctx context.Context, root, relative string) (string, error)` はroot実体内であることを検査して正規化した保存先を返す。既存のscanner、store、indexlockは同じ保存先を使う。通常ファイルの走査エラーを既定除外へ置き換えない。
 
-- [ ] **RED:** .ENV/Credentials.json/ID_RSA、NULの位置8191/8192/EOF近傍、既存/途中親のroot外junction、root内link、Git mode160000のディレクトリを正式fixtureへ移す。拒否時に外側のDB・lock・ディレクトリを作らないことも検査する。
-- [ ] **実装:** 既定の機密名判定は大小文字を区別せず安全側に揃え、明示Includeの既存の許可規則を保持する。NULは読み取り済みの全バイトを検査する。Git列挙結果のgitlink/ディレクトリ/非通常ファイルは内容を読まずskipし、サブモジュールへ再帰しない。通常ファイルのread/stat失敗は引き続き更新全体を中止する。
-- [ ] **保存先:** 字句上の`..`検査に加え、既存の最も近い親から実体を解決し、作成前と使用前にroot内であることを再検査する。root外を指すindex linkは拒否、root自体のlinkとroot内linkは許可する。OSのlink差し替え競合をこの検査だけで完全防御したと主張しない。リンクfixtureを実行できないOSはSKIPを明記し、Windows junctionは実行確認する。
-- [ ] **GREEN:** `rtk go test ./internal/repository ./internal/store ./internal/indexer ./internal/app`。A05/A06/A09/A14を個別にコミットする。
+- [x] **RED:** .ENV/Credentials.json/ID_RSA、NULの位置8191/8192/EOF近傍、既存/途中親のroot外junction、root内link、Git mode160000のディレクトリを正式fixtureへ移す。拒否時に外側のDB・lock・ディレクトリを作らないことも検査する。
+- [x] **実装:** 既定の機密名判定は大小文字を区別せず安全側に揃え、明示Includeの既存の許可規則を保持する。NULは読み取り済みの全バイトを検査する。Git列挙結果のgitlink/ディレクトリ/非通常ファイルは内容を読まずskipし、サブモジュールへ再帰しない。通常ファイルのread/stat失敗は引き続き更新全体を中止する。
+- [x] **保存先:** 字句上の`..`検査に加え、既存の最も近い親から実体を解決し、作成前と使用前にroot内であることを再検査する。root外を指すindex linkは拒否、root自体のlinkとroot内linkは許可する。OSのlink差し替え競合をこの検査だけで完全防御したと主張しない。リンクfixtureを実行できないOSはSKIPを明記し、Windows junctionは実行確認する。
+- [x] **GREEN:** `rtk go test ./internal/repository ./internal/store ./internal/indexer ./internal/app`。A05/A06/A09/A14を個別にコミットする。
 
 ### Task 3 — 設定と抽出結果を一致させる（O02 / O05）
 
@@ -116,18 +120,18 @@
 
 **Interfaces:** `Config.ExtractionHash() string`、`generic.NewExtractorWithOptions(lines, overlap int) Extractor`、`template.NewExtractorWithChunkOptions(lines, overlap int) Extractor` を追加する。既存引数なしconstructorは80行/10行の既定値を保持する。metaの`extraction_configuration_hash`を追加するがDBスキーマは変更しない。
 
-- [ ] **RED:** 同一バイトのlogic.txtをtext→Goへ変更し、差分IndexだけでValidateTokenが得られることを検査する。10行/設定2・0で5chunk、90行/設定80・0で次chunkが81行目、設定80・10で71行目、上限160行、BOM/CRLFを検査する。
-- [ ] **実装:** 抽出設定hashの欠落/相違は再抽出を要求し、成功した更新の同じtransactionで新hashを保存する。Status/Healthもこのmetaの欠落/相違をstaleと判定し、読み取りエラーは返す。hashの対象はLanguageOverrides、GenericChunkLines、GenericChunkOverlap。scanner対象の変更は毎回の列挙で反映する。読み取り失敗をhash不一致へ変換しない。generic内の5つの固定windows呼び出しとtemplateの埋め込みfallbackへ設定を通す。worker数・予算だけの変更で抽出全件をやり直さない。
-- [ ] **GREEN:** `rtk go test ./internal/config ./internal/extract/generic ./internal/extract/template ./internal/indexer ./internal/app`。失敗した走査/抽出準備で新設定を完了済みと記録しないことを確認し、O02/O05を個別にコミットする。
+- [x] **RED:** 同一バイトのlogic.txtをtext→Goへ変更し、差分IndexだけでValidateTokenが得られることを検査する。10行/設定2・0で5chunk、90行/設定80・0で次chunkが81行目、設定80・10で71行目、上限160行、BOM/CRLFを検査する。
+- [x] **実装:** 抽出設定hashの欠落/相違は再抽出を要求し、成功した更新の同じtransactionで新hashを保存する。Status/Healthもこのmetaの欠落/相違をstaleと判定し、読み取りエラーは返す。hashの対象はLanguageOverrides、GenericChunkLines、GenericChunkOverlap。scanner対象の変更は毎回の列挙で反映する。読み取り失敗をhash不一致へ変換しない。generic内の5つの固定windows呼び出しとtemplateの埋め込みfallbackへ設定を通す。worker数・予算だけの変更で抽出全件をやり直さない。
+- [x] **GREEN:** `rtk go test ./internal/config ./internal/extract/generic ./internal/extract/template ./internal/indexer ./internal/app`。失敗した走査/抽出準備で新設定を完了済みと記録しないことを確認し、O02/O05を個別にコミットする。
 
 ### Task 4 — Evidenceの忠実性と抽出器の位置・分類を修正する（A02 / A04 / A18 / A19）
 
 **Files:** `internal/evidence/fidelity.go`; `internal/extract/goast/go.go`; `internal/extract/rust/extractor.go`; `internal/indexer/indexer.go`。既存fidelity/wire/invariant、goast/rustテストと新規 `internal/app/source_coordinates_test.go` を使用する。
 
-- [ ] **RED:** 実際のJS/C#/RESX等のsynthetic chunkをsourceモードへ通し、syntheticだけで返すことを検査する。Goの//line virtual.go:900でも物理3行目を維持する。Rust cfg(not(test))を通常関数、実際の#[test]/#[tokio::test]をテストとする。Go connection.goのTestConnectionは通常関数とする。
-- [ ] **実装:** synthetic判定を全モードへ適用し、source/excerptへ昇格させない。予算不足時もsynthetic由来の生成文を原文と表示しない。Goは物理位置を使用する。Goテスト分類は_test.goとASTの引数・返り値・Test/Benchmark/Fuzz/Exampleの命名を確認し、既存の正当なテストを維持する。Rustは属性の構文上のパスを比較し、任意の部分文字列testでは判定しない。cfg式の実行・マクロ展開は追加しない。
-- [ ] **GREEN:** `rtk go test ./internal/evidence ./internal/extract/... ./internal/app ./internal/mcpserver`。source/focused/outline、予算256/512/1200/4000、v1/v2、BOM/CRLF、変更行限定で原文と位置・wire予算を検査する。
-- [ ] 抽出結果を変える最初の修正でExtractorVersionを更新する。以後も、前コミットで生成した索引を次の修正後に再利用できる場合はバージョンを更新する。旧索引のStatusはstale、次の更新で再抽出する。4件を個別にコミットする。
+- [x] **RED:** 実際のJS/C#/RESX等のsynthetic chunkをsourceモードへ通し、syntheticだけで返すことを検査する。Goの//line virtual.go:900でも物理3行目を維持する。Rust cfg(not(test))を通常関数、実際の#[test]/#[tokio::test]をテストとする。Go connection.goのTestConnectionは通常関数とする。
+- [x] **実装:** synthetic判定を全モードへ適用し、source/excerptへ昇格させない。予算不足時もsynthetic由来の生成文を原文と表示しない。Goは物理位置を使用する。Goテスト分類は_test.goとASTの引数・返り値・Test/Benchmark/Fuzz/Exampleの命名を確認し、既存の正当なテストを維持する。Rustは属性の構文上のパスを比較し、任意の部分文字列testでは判定しない。cfg式の実行・マクロ展開は追加しない。
+- [x] **GREEN:** `rtk go test ./internal/evidence ./internal/extract/... ./internal/app ./internal/mcpserver`。source/focused/outline、予算256/512/1200/4000、v1/v2、BOM/CRLF、変更行限定で原文と位置・wire予算を検査する。
+- [x] 抽出結果を変える最初の修正でExtractorVersionを更新する。以後も、前コミットで生成した索引を次の修正後に再利用できる場合はバージョンを更新する。旧索引のStatusはstale、次の更新で再抽出する。4件を個別にコミットする。
 
 ### Task 5 — 関係の保存・解決・照合を修正する（A03 / A10 / A11 / A12 / A13）
 
@@ -135,11 +139,11 @@
 
 **Interfaces:** `Store.IncomingRelationPaths(ctx context.Context, targetPaths []string) ([]string, error)` は更新前の解決済み入辺のsource pathを返す。indexerは結果を反復し依存元の閉包を求める。`language.SymbolNamesEqual(language, kind, left, right string) bool` と `language.RelationLanguagesCompatible(from, to, relation string) bool` を共通化する。`resolveCandidates`はrelation kindも受け取る。
 
-- [ ] **RED A03:** Caller→Targetを作り、Targetの本文更新後も同じcallsが残ることを検査する。鎖・循環・シグネチャ変更・削除/再追加・抽出失敗・中断を加え、差分索引をfull rebuildのsymbol/relation集合と比較する。
-- [ ] **実装 A03:** 変更/削除対象から入辺を持つ未変更sourceを更新前に収集し、現在走査済みのファイルから再抽出する。そのsourceの置換でもさらに入辺が消えるため、訪問集合で閉包を作り各pathを1回だけ処理する。削除済みsourceは再生成しない。全updatesを既存transactionで適用しlinking_pendingの回復を維持する。FilesChanged等は内容変更の件数を保ち、依存再抽出で二重計上しない。
-- [ ] **RED/GREEN A10/A11/A12:** Go validate≠Validate、JS/TS・Python・Rustの大小違い、Go→Python拒否、唯一のTargetをtarget.go/defs.goのどちらに置いても解決する対照例を追加する。VB/PHP/Nimの既存許容比較とC/C++・JS/TS間の正当な関係を維持する。言語の一致、識別子種別、関係kindを候補の最終解決前に検査し、callsはsymbol一致を優先する。imports等だけにファイル照合を使い、既存の明示ToHandleを持つtemplate/XAML等の境界関係を壊さない。
-- [ ] **RED/GREEN A13:** foo_barとmodule.fooXbar、%を含む有効なpath、Unicode名の境界を検査する。動的識別子をLIKEパターンへ連結せずliteralなprefix/suffix比較にする。意図的なcamel-case探索パターンだけは各literalをescapeする。正確な言語・名前照合をSQL上限より前に適用し、別言語や誤名が130件あっても対象が落ちないようにする。
-- [ ] **検証・commit:** `rtk go test ./internal/language ./internal/linker ./internal/store ./internal/indexer ./internal/search ./internal/extract/... ./internal/app`。新しい依存閉包の最悪時は全ファイルを1回ずつ再抽出する。無条件で全件再構築する実装にしない。各IDを個別にコミットし、必要なExtractorVersionを更新する。
+- [x] **RED A03:** Caller→Targetを作り、Targetの本文更新後も同じcallsが残ることを検査する。鎖・循環・シグネチャ変更・削除/再追加・抽出失敗・中断を加え、差分索引をfull rebuildのsymbol/relation集合と比較する。
+- [x] **実装 A03:** 変更/削除対象から入辺を持つ未変更sourceを更新前に収集し、現在走査済みのファイルから再抽出する。そのsourceの置換でもさらに入辺が消えるため、訪問集合で閉包を作り各pathを1回だけ処理する。削除済みsourceは再生成しない。全updatesを既存transactionで適用しlinking_pendingの回復を維持する。FilesChanged等は内容変更の件数を保ち、依存再抽出で二重計上しない。
+- [x] **RED/GREEN A10/A11/A12:** Go validate≠Validate、JS/TS・Python・Rustの大小違い、Go→Python拒否、唯一のTargetをtarget.go/defs.goのどちらに置いても解決する対照例を追加する。VB/PHP/Nimの既存許容比較とC/C++・JS/TS間の正当な関係を維持する。言語の一致、識別子種別、関係kindを候補の最終解決前に検査し、callsはsymbol一致を優先する。imports等だけにファイル照合を使い、既存の明示ToHandleを持つtemplate/XAML等の境界関係を壊さない。
+- [x] **RED/GREEN A13:** foo_barとmodule.fooXbar、%を含む有効なpath、Unicode名の境界を検査する。動的識別子をLIKEパターンへ連結せずliteralなprefix/suffix比較にする。意図的なcamel-case探索パターンだけは各literalをescapeする。正確な言語・名前照合をSQL上限より前に適用し、別言語や誤名が130件あっても対象が落ちないようにする。
+- [x] **検証・commit:** `rtk go test ./internal/language ./internal/linker ./internal/store ./internal/indexer ./internal/search ./internal/extract/... ./internal/app`。新しい依存閉包の最悪時は全ファイルを1回ずつ再抽出する。無条件で全件再構築する実装にしない。各IDを個別にコミットし、必要なExtractorVersionを更新する。
 
 ### Task 6 — 現在の変更範囲を正しく作る（O03 / A08）
 
@@ -147,11 +151,11 @@
 
 **Interfaces:** 旧新両方のhunk区間を保持する内部edit型を追加する。`Client.MapRangesToWorktree(ctx context.Context, head string, changed []ChangedFile) ([]ChangedFile, error)` は指定headの行範囲を現在のpath/行範囲へ変換する。既存の公開ChangedFile/Evidence形は変更しない。
 
-- [ ] **RED A08:** 既存HEADとunbornの双方で未追跡new.goを検出する。ignored・機密・binary・過大ファイルは最終候補に出さない。stagedとunstagedとuntrackedを統合してもpath/範囲を二重計上しない。
-- [ ] **実装 A08:** `git ls-files --others --exclude-standard -z`で列挙し、現在のファイルに対する全体範囲を付与する。既存のHEAD→worktree差分へunionし、scannerの適格性検査へ通す。明示的な履歴ref間だけのImpactへ無関係な未追跡ファイルを混ぜない。
-- [ ] **RED O03:** HEAD~1→HEADの4行目の変更後に200行のコメントを挿入し、現在の203行目以降の関数を返すことを確認する。置換・削除・rename・head省略・現在削除済みのファイルも検査する。
-- [ ] **実装 O03:** base/head両方を指定した場合だけheadの座標を現在へ変換する。baseだけ・headだけの指定は既存の単一ref→worktree比較を保ち、既に現在の座標なので再変換しない。両方省略も現在座標とする。両refはTask 1のcommit IDへ固定し、head→worktreeの原文diffから対応を計算する。変更されていない部分は行数差を加算、置換部分は交差した現在側hunkへ保守的に対応、挿入分は後続位置へ反映、削除部分は既存の生存境界規則へ合わせ、全削除ファイルは除外する。Gitが示すrenameだけを追い、曖昧な対応・読めないblobは明確なalignmentエラーにする。異なる座標のまま成功や空結果へ変換しない。索引と現在ファイルのhash検証・auto/manual設定を維持する。
-- [ ] **GREEN/commit:** `rtk go test ./internal/gitx ./internal/app ./internal/search ./internal/mcpserver`。両形式のImpactとchanged-only、auto/manual、wire/invariantsを検査し、O03/A08を個別にコミットする。
+- [x] **RED A08:** 既存HEADとunbornの双方で未追跡new.goを検出する。ignored・機密・binary・過大ファイルは最終候補に出さない。stagedとunstagedとuntrackedを統合してもpath/範囲を二重計上しない。
+- [x] **実装 A08:** `git ls-files --others --exclude-standard -z`で列挙し、現在のファイルに対する全体範囲を付与する。既存のHEAD→worktree差分へunionし、scannerの適格性検査へ通す。明示的な履歴ref間だけのImpactへ無関係な未追跡ファイルを混ぜない。
+- [x] **RED O03:** HEAD~1→HEADの4行目の変更後に200行のコメントを挿入し、現在の203行目以降の関数を返すことを確認する。置換・削除・rename・head省略・現在削除済みのファイルも検査する。
+- [x] **実装 O03:** base/head両方を指定した場合だけheadの座標を現在へ変換する。baseだけ・headだけの指定は既存の単一ref→worktree比較を保ち、既に現在の座標なので再変換しない。両方省略も現在座標とする。両refはTask 1のcommit IDへ固定し、head→worktreeの原文diffから対応を計算する。変更されていない部分は行数差を加算、置換部分は交差した現在側hunkへ保守的に対応、挿入分は後続位置へ反映、削除部分は既存の生存境界規則へ合わせ、全削除ファイルは除外する。Gitが示すrenameだけを追い、曖昧な対応・読めないblobは明確なalignmentエラーにする。異なる座標のまま成功や空結果へ変換しない。索引と現在ファイルのhash検証・auto/manual設定を維持する。
+- [x] **GREEN/commit:** `rtk go test ./internal/gitx ./internal/app ./internal/search ./internal/mcpserver`。両形式のImpactとchanged-only、auto/manual、wire/invariantsを検査し、O03/A08を個別にコミットする。
 
 ### Task 7 — 読み取りと設定書き込みでキャンセルを守る（O04 / A17）
 
@@ -159,19 +163,19 @@
 
 **Interfaces:** `Service.revision(ctx context.Context) (string, error)` とし、Metaのエラーを全呼び出し元へ返す。`readIndex`は内部の再入経路も含め、callbackの前後でcontextを確認し、キャンセル時にデータ結果を返さない。設定用atomicWriteはctxを受け取る内部形へ変更する。
 
-- [ ] **RED O04:** 最後のcandidate取得直後とrevision取得前後にチャネルでキャンセルし、Query/Expand/Impactのlegacy/Evidence/attributedが成功しないことを検査する。DB metadata読み取りエラーも成功へ変換されないことを検査する。
-- [ ] **実装 O04:** revision取得のエラー握り潰しを除去する。成功結果を返す直前にctxを再確認し、キャンセルが観測されたらzero resultとcontextエラーを返す。結果が返った後のキャンセルまで防げるとは主張しない。
-- [ ] **RED/実装 A17:** InstallProject/UninstallProjectを開始前とtemp書き込み後・rename前でキャンセルし、元configのバイト列・modeが保持され、tempだけ片付くことを確認する。原子的renameをcommit pointとし、それより前のキャンセルで置換しない。dry-runもキャンセル済みならエラーにする。テスト用の同期点を外部公開APIへ追加しない。
-- [ ] **GREEN/commit:** `rtk go test ./internal/app ./internal/integration/codex ./internal/mcpserver`。同時検索・5秒競合・キャンセル・設定の正常install/uninstallを維持し、2件を別コミットにする。
+- [x] **RED O04:** 最後のcandidate取得直後とrevision取得前後にチャネルでキャンセルし、Query/Expand/Impactのlegacy/Evidence/attributedが成功しないことを検査する。DB metadata読み取りエラーも成功へ変換されないことを検査する。
+- [x] **実装 O04:** revision取得のエラー握り潰しを除去する。成功結果を返す直前にctxを再確認し、キャンセルが観測されたらzero resultとcontextエラーを返す。結果が返った後のキャンセルまで防げるとは主張しない。
+- [x] **RED/実装 A17:** InstallProject/UninstallProjectを開始前とtemp書き込み後・rename前でキャンセルし、元configのバイト列・modeが保持され、tempだけ片付くことを確認する。原子的renameをcommit pointとし、それより前のキャンセルで置換しない。dry-runもキャンセル済みならエラーにする。テスト用の同期点を外部公開APIへ追加しない。
+- [x] **GREEN/commit:** `rtk go test ./internal/app ./internal/integration/codex ./internal/mcpserver`。同時検索・5秒競合・キャンセル・設定の正常install/uninstallを維持し、2件を別コミットにする。
 
 ### Task 8 — CLI引数とCodex登録の状態比較を修正する（A15 / A16）
 
 **Files:** `internal/cli/run.go`; `internal/integration/codex/project_config.go`、既存 `cli_test.go`, `project_config_test.go`。
 
-- [ ] **RED A15:** --query needle、-query needle、--query=needle、自然文、--区切り、前後に--root/--path/--known-handle、ハイフンから始まる値を表形式テストへする。明示queryと位置引数の衝突は曖昧に連結せず、既存の入力検証エラーにする。
-- [ ] **実装 A15:** normalizeQueryArgsで--query/-queryを値付きとして保持する。自然文からqueryを作る場合だけ補完し、明示値を二重追加しない。
-- [ ] **RED/実装 A16:** 正常登録のenabled、enabled_tools、command、root、auto-update、startup/tool timeoutを1つずつ変更し、managed_matchにならないことを検査する。StatusProjectはInstallProjectの期待specと同じtableMatchesを利用し、未管理登録はunmanaged_match/conflict、管理対象はmanaged_match/managed_driftに分ける。バイナリ名が同じ別パスを一致と見なさない。公開状態値とフィールドは維持する。
-- [ ] **GREEN/commit:** `rtk go test ./internal/cli ./internal/integration/codex`。CRLF/TOML/他の登録保持/dry-runを維持し、A15/A16を個別にコミットする。
+- [x] **RED A15:** --query needle、-query needle、--query=needle、自然文、--区切り、前後に--root/--path/--known-handle、ハイフンから始まる値を表形式テストへする。明示queryと位置引数の衝突は曖昧に連結せず、既存の入力検証エラーにする。
+- [x] **実装 A15:** normalizeQueryArgsで--query/-queryを値付きとして保持する。自然文からqueryを作る場合だけ補完し、明示値を二重追加しない。
+- [x] **RED/実装 A16:** 正常登録のenabled、enabled_tools、command、root、auto-update、startup/tool timeoutを1つずつ変更し、managed_matchにならないことを検査する。StatusProjectはInstallProjectの期待specと同じtableMatchesを利用し、未管理登録はunmanaged_match/conflict、管理対象はmanaged_match/managed_driftに分ける。バイナリ名が同じ別パスを一致と見なさない。公開状態値とフィールドは維持する。
+- [x] **GREEN/commit:** `rtk go test ./internal/cli ./internal/integration/codex`。CRLF/TOML/他の登録保持/dry-runを維持し、A15/A16を個別にコミットする。
 
 ## Interfaces and Dependencies
 
@@ -239,7 +243,7 @@ Task 1→2/6、Task 3→4/5の索引再抽出、Task 4→5の正しいsymbol位�
 - 2026-10-17: DB schema/public fieldsは変更せず、既存metaに抽出設定hashを保存する。抽出器/解決ルール変更はExtractorVersionで既存派生索引を更新する。
 - 2026-10-17: 履歴Impactは現在ソースを返す既存方針を維持し、行範囲を対応付ける。対応不能時は成功結果を捏造せずエラーにする。
 - 2026-10-17: 入辺の原ターゲット文字列は解決時に消えるため、推測で復元せず現在ソースから依存元を再抽出する。
-- 2026-10-17: 今回は計画文書だけを変更する。実装ブランチ作成、テスト実行、コード修正、commit/mergeは実装開始時に行う。
+- 2026-10-17（計画作成時の記録）: この時点では計画文書だけを変更する。実装ブランチ作成、テスト実行、コード修正、commit/mergeは実装開始時に行う。
 
 ## Idempotence and Recovery
 
@@ -251,4 +255,4 @@ Task 1→2/6、Task 3→4/5の索引再抽出、Task 4→5の正しいsymbol位�
 
 ## Outcomes & Retrospective
 
-計画作成済み。24件の実装と最終検証は未着手。今回実行する検証は文書の対応表・参照パス・archive同一性・diffだけとし、文書変更のためにbuild/test/race/vetは実行しない。
+24件の修正と個別RED/GREENを完了し、回帰テスト・修正コミットをRegression ledgerへ対応付けた。独立レビュー（47ef2a1..ccf613e）はP1/P2指摘なし。全通常テストで検出した共有fixture上の索引ロック競合は409cfa6で分離し、追加差分の独立レビューも指摘なし。最終の全通常/race/vet/native/3環境cross-buildはすべて成功した。承認済みmaster統合と作業ブランチ削除の結果は完了後に追記する。
