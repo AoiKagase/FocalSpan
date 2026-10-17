@@ -31,7 +31,7 @@ func CollectChanges(ctx context.Context, runner CommandRunner, repositoryPath, b
 	if err != nil {
 		return ChangeSet{}, err
 	}
-	result, err := runner.Run(ctx, repositoryPath, "git", "diff", "--unified=0", "--no-ext-diff", "--find-renames", base, target, "--")
+	result, err := runner.Run(ctx, repositoryPath, "git", "diff", "--no-color", "--unified=0", "--no-ext-diff", "--find-renames", base, target, "--")
 	if err != nil {
 		return ChangeSet{}, fmt.Errorf("git diff: %w", err)
 	}
