@@ -15,21 +15,26 @@ import (
 )
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	if err := run(ctx, args, stdout); err != nil {
+	if err := run(ctx, args, stdout, stderr); err != nil {
 		_, _ = fmt.Fprintf(stderr, "focalspan-eval: %v\n", err)
 		return 1
 	}
 	return 0
 }
 
-func run(ctx context.Context, args []string, stdout io.Writer) error {
+func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("focalspan-eval", flag.ContinueOnError)
-	fs.SetOutput(stdout)
+	fs.SetOutput(stderr)
 	rootArg := fs.String("root", ".", "repository root")
 	casesPath := fs.String("cases", "testdata/eval/cases.jsonl", "evaluation cases")
 	ablation := fs.String("ablation", "full", "full, fts-only, no-relations, or all")
 	contract := fs.String("contract", "legacy", "legacy, evidence, or compare")
 	jsonOutput := fs.Bool("json", false, "JSON output")
+	if len(args) == 1 && (args[0] == "--help" || args[0] == "-help" || args[0] == "-h") {
+		fs.SetOutput(stdout)
+		fs.Usage()
+		return nil
+	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}

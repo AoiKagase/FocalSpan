@@ -3,6 +3,7 @@ package evalcli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,6 +33,10 @@ func TestRunEvidenceContractJSON(t *testing.T) {
 	code := Run(context.Background(), []string{"--root", root, "--cases", cases, "--contract", "compare", "--json"}, &out, &errOut)
 	if code != 0 || !strings.Contains(out.String(), `"expected_coverage": 1`) || !strings.Contains(out.String(), `"legacy_wire_tokens"`) {
 		t.Fatalf("code=%d stdout=%s stderr=%s", code, out.String(), errOut.String())
+	}
+	var decoded any
+	if err := json.Unmarshal(out.Bytes(), &decoded); err != nil || errOut.Len() != 0 {
+		t.Fatalf("JSON parse=%v stderr=%s", err, errOut.String())
 	}
 	out.Reset()
 	errOut.Reset()
