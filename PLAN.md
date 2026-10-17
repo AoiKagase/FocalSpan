@@ -5,19 +5,23 @@ Invalid explicit Git base/head references must return errors through Impact, Imp
 
 ## Progress
 - [x] 2026-10-17 UTC: Inspected shared impact path; archived completed predecessor byte-for-byte.
-- [ ] Add regressions and observe RED before production changes.
-- [ ] Propagate Git error with its cause; observe GREEN.
-- [ ] Complete verification and final review.
+- [x] 2026-10-17 UTC: Observed RED: four invalid-ref service cases returned success; MCP also returned a successful empty packet. Valid-reference controls passed. Fixture Git init required normal permissions after sandbox denied config writes.
+- [x] 2026-10-17 UTC: Added immediate wrapped error return; service regressions and non-Git compatibility test passed. MCP regression passed in a dedicated run.
+- [x] 2026-10-17 UTC: Full tests, full race rerun, vet, native build and all three CGO-disabled cross-builds passed. Independent read-only review found no actionable issues.
+- [ ] Commit the fix, integrate latest master, and verify the merged tree.
 
 ## Surprises & Discoveries
 Explicit-reference Git errors are overwritten during candidate retrieval.
+- Native full tests and vet passed. Initial race execution selected 32-bit MinGW because nested cmd environment settings did not reach Go; explicit PowerShell environment verification selected x86_64 UCRT GCC. The first correctly configured full race run hit an existing TestConcurrentInitialOpenKeepsReadersAlive SQLite lock error (261); the isolated test passed ten repeats. Full race rerun pending.
+- All three CGO-disabled cross-builds passed with normal permissions. Sandbox-only attempts emitted module-cache access-denied warnings.
+- master advanced to d4c1ab9 (MCP supervisor) during this task; integrate its changes and archive its completed PLAN before final master verification.
 
 ## Decision Log
 - 2026-10-17 UTC: Only fix explicit-reference errors. Preserve no-reference non-Git behavior and unrelated edits. Work in the existing feature checkout as authorized by the approved plan.
 - 2026-10-17 UTC: Use PLAN.md as ledger; do not execute repository helper scripts. Commit the plan transition separately from product code. No network or dependency restore.
 
 ## Outcomes & Retrospective
-Pending.
+The explicit-reference fix and regressions passed pre-integration verification. The one transient store initialization failure is recorded above; isolated ten-repeat testing and the subsequent full race run passed. No store code was changed. Master integration remains pending.
 
 ## Context and Orientation
 internal/app/evidence.go shares impact retrieval between service APIs. MCP already converts service failures to tool errors.

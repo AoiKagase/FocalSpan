@@ -230,6 +230,9 @@ func (s *Service) impactCandidates(ctx context.Context, base, head string) (cand
 	var err error
 	if base != "" || head != "" {
 		changed, err = gitx.NewClient(s.Root).Diff(ctx, gitx.DiffRequest{Base: base, Head: head})
+		if err != nil {
+			return candidateResult{}, fmt.Errorf("read Git changes: %w", err)
+		}
 	} else {
 		unstaged, unstagedErr := gitx.NewClient(s.Root).Diff(ctx, gitx.DiffRequest{})
 		staged, stagedErr := gitx.NewClient(s.Root).Diff(ctx, gitx.DiffRequest{Staged: true})
