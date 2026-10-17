@@ -184,10 +184,11 @@ func (s *Scanner) excluded(path string) bool {
 			return true
 		}
 	}
-	secret := base == ".env" || strings.HasPrefix(base, ".env.") || base == "id_rsa" || base == "id_ed25519"
+	secretBase := strings.ToLower(base)
+	secret := secretBase == ".env" || strings.HasPrefix(secretBase, ".env.") || secretBase == "id_rsa" || secretBase == "id_ed25519"
 	if !secret {
 		for _, pattern := range []string{"*.pem", "*.key", "credentials.json", "secrets.json"} {
-			if ok, _ := filepath.Match(pattern, base); ok {
+			if ok, _ := filepath.Match(pattern, secretBase); ok {
 				secret = true
 				break
 			}
