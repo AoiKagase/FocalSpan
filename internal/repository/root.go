@@ -113,14 +113,5 @@ func canonicalOrAbsolute(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if real, err := filepath.EvalSymlinks(abs); err == nil {
-		return filepath.Clean(real), nil
-	}
-	if _, err := os.Stat(abs); err != nil {
-		return "", err
-	}
-	// A few Windows-protected temporary locations deny the final-path query
-	// while allowing normal file access. Preserve containment checks with the
-	// absolute path when canonicalization is unavailable.
-	return filepath.Clean(abs), nil
+	return physicalPath(abs)
 }
