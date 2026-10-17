@@ -7,7 +7,7 @@ N01〜N19を修正し、範囲外参照・データ消失・古い関係・抽�
 - [x] 専用branch codex/additional-19-fixesをmaster@6bd4259から作成し、前PLANをそのままarchive。
 - [x] ① N01〜N03: ファイル境界・ID・snapshot所有範囲。
 - [x] ② N04・N05: 設定競合・管理マーカー。
-- [ ] ③ N06〜N10: Git形式固定・manifest再抽出・JSONC。
+- [x] ③ N06〜N10: Git形式固定・manifest再抽出・JSONC。
 - [ ] ④ N11〜N18: Python/Go抽出。
 - [ ] ⑤ N19: 正解順位とreport v2。
 - [ ] 全通常→race、vet、native/cross-build、独立レビュー、FF統合・作業branch削除。
@@ -53,6 +53,7 @@ MCP公開field・Evidence v1/v2・DB schema維持。設定lock/競合errorは内
 最後にgo test ./...→go test -race ./...を直列実行（Windows raceはC:/msys64/ucrt64/bin/gcc.exe）、go vet ./...、native build、CGO_ENABLED=0のwindows/amd64・linux/amd64・darwin/arm64でfocalspan/focalspan-bench/focalspan-evalをbuild。独立reviewとgit diff --checkを通す。
 
 ## Surprises & Discoveries
+③: N06=1f98bbe、N07=b0a1303、N08=18b0197、N09=bf345ee、N10は正式RED→GREEN。N08は監査の直接LinkerテストをIndexerの差分/全再構築比較へ正式化した（失われた参照名は原文からだけ復元）。N09で既存facts期待値2件をbaseUrl込みへ更新。C:/Temp/fs19-n06〜n10-{red,green}.log参照。
 ②: N04の外部変更/並行writerとN05のstring内markerは正式RED→GREEN。全indexlock/codex成功（C:/Temp/fs19-settings-green.log）。N04=1b5250b。残りの受け入れ補足（設定lockの別process・Uninstall競合）も最終検証前に追加する。
 ①: N01/N02/N03の正式REDを確認後、repository/store/indexer、benchmark/benchcliはGREEN。ログC:/Temp/fs19-n01-{red,green}.log、fs19-n02-{red,green}.log、fs19-n03-{red,green}.log。N01=53529c5、N02=32276c1。既存dirty paths保持。
 

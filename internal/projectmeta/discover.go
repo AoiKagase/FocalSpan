@@ -154,7 +154,15 @@ func parseCargo(text string, add func(string, string, string, float64)) {
 
 func parseJSONMetadata(text, base string, add func(string, string, string, float64)) error {
 	var value map[string]any
-	if err := json.Unmarshal([]byte(text), &value); err != nil {
+	data := []byte(text)
+	if base == "tsconfig.json" || base == "jsconfig.json" {
+		var err error
+		data, err = jsonc(text)
+		if err != nil {
+			return err
+		}
+	}
+	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
 	if name, ok := value["name"].(string); ok {
