@@ -189,8 +189,8 @@ func span(fset *token.FileSet, node interface {
 	Pos() token.Pos
 	End() token.Pos
 }) (sourceSpan, sourceSpan) {
-	start := fset.PositionFor(node.Pos(), true)
-	end := fset.PositionFor(node.End(), true)
+	start := fset.PositionFor(node.Pos(), false)
+	end := fset.PositionFor(node.End(), false)
 	return sourceSpan{start.Line, start.Offset}, sourceSpan{end.Line, end.Offset}
 }
 
