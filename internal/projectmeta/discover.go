@@ -3,6 +3,7 @@ package projectmeta
 import (
 	"context"
 	"encoding/json"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -163,7 +164,7 @@ func parseJSONMetadata(text, base string, add func(string, string, string, float
 		}
 		add(kind, "", name, 1)
 	}
-	for _, key := range []string{"type", "main", "module", "types", "baseUrl"} {
+	for _, key := range []string{"type", "main", "module", "types"} {
 		if item, ok := value[key].(string); ok {
 			add(key, "", item, .9)
 		}
@@ -175,12 +176,27 @@ func parseJSONMetadata(text, base string, add func(string, string, string, float
 			}
 		}
 	}
-	if paths, ok := value["paths"].(map[string]any); ok {
+	baseURL, _ := value["baseUrl"].(string)
+	pathsValue := value["paths"]
+	if base == "tsconfig.json" || base == "jsconfig.json" {
+		if options, ok := value["compilerOptions"].(map[string]any); ok {
+			if raw, exists := options["baseUrl"]; exists {
+				baseURL, _ = raw.(string)
+			}
+			if raw, exists := options["paths"]; exists {
+				pathsValue = raw
+			}
+		}
+	}
+	if baseURL != "" {
+		add("baseUrl", "", baseURL, .9)
+	}
+	if paths, ok := pathsValue.(map[string]any); ok {
 		for name, raw := range paths {
 			if values, ok := raw.([]any); ok {
 				for _, item := range values {
 					if target, ok := item.(string); ok {
-						add("path-alias", name, target, .8)
+						add("path-alias", name, path.Join(strings.ReplaceAll(baseURL, `\`, "/"), strings.ReplaceAll(target, `\`, "/")), .8)
 					}
 				}
 			}
