@@ -112,6 +112,7 @@ func findManagedBounds(content, name string) (managedBounds, bool, error) {
 	begin := managedBeginMarker(name)
 	end := managedEndMarker(name)
 	var foundBegin, foundEnd []int
+	var state byte
 	for offset := 0; offset < len(content); {
 		next := strings.IndexByte(content[offset:], '\n')
 		lineEnd := len(content)
@@ -120,12 +121,13 @@ func findManagedBounds(content, name string) (managedBounds, bool, error) {
 		}
 		line := strings.TrimSuffix(content[offset:lineEnd], "\n")
 		line = strings.TrimSuffix(line, "\r")
-		if line == begin {
+		if state == 0 && line == begin {
 			foundBegin = append(foundBegin, offset)
 		}
-		if line == end {
+		if state == 0 && line == end {
 			foundEnd = append(foundEnd, offset)
 		}
+		state = tomlStringState(line, state)
 		if next < 0 {
 			break
 		}
@@ -144,4 +146,56 @@ func findManagedBounds(content, name string) (managedBounds, bool, error) {
 		endOffset = len(content)
 	}
 	return managedBounds{start: foundBegin[0], end: endOffset}, true, nil
+}
+
+// tomlStringState tracks strings only; TOML validity is checked by the parser.
+// Outside strings a comment consumes the rest of the line.
+func tomlStringState(line string, state byte) byte {
+	for i := 0; i < len(line); {
+		ch := line[i]
+		if state == 0 {
+			if ch == '#' {
+				break
+			}
+			if ch == '\'' || ch == '"' {
+				if i+2 < len(line) && line[i+1] == ch && line[i+2] == ch {
+					if ch == '"' {
+						state = 'b'
+					} else {
+						state = 'l'
+					}
+					i += 3
+					continue
+				}
+				state = ch
+			}
+			i++
+			continue
+		}
+		if (state == '"' || state == 'b') && ch == '\\' {
+			i += 2
+			continue
+		}
+		if state == 'b' || state == 'l' {
+			quote := byte('\'')
+			if state == 'b' {
+				quote = '"'
+			}
+			if ch == quote {
+				j := i
+				for j < len(line) && line[j] == quote {
+					j++
+				}
+				if j-i >= 3 {
+					state = 0
+				}
+				i = j
+				continue
+			}
+		} else if ch == state {
+			state = 0
+		}
+		i++
+	}
+	return state
 }
