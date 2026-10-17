@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+"encoding/json"
 	"fmt"
 	"strings"
 
@@ -95,20 +96,16 @@ func (s *Store) RelationsForLink(ctx context.Context, scope LinkScope) ([]model.
 	if !scope.Full {
 		parts := make([]string, 0, 2)
 		if len(scope.ChangedPaths) > 0 {
-			placeholders := make([]string, len(scope.ChangedPaths))
-			for index, path := range scope.ChangedPaths {
-				placeholders[index] = "?"
-				args = append(args, path)
-			}
-			parts = append(parts, `EXISTS (SELECT 1 FROM symbols source_symbol JOIN files source_file ON source_file.id = source_symbol.file_id WHERE source_symbol.handle = r.from_handle AND source_file.path IN (`+strings.Join(placeholders, ",")+`))`)
+			encoded, err := json.Marshal(scope.ChangedPaths)
+			if err != nil { return nil, err }
+			args = append(args,string(encoded))
+			parts = append(parts, `EXISTS (SELECT 1 FROM symbols source_symbol JOIN files source_file ON source_file.id = source_symbol.file_id WHERE source_symbol.handle = r.from_handle AND source_file.path IN (``SELECT value FROM json_each(?)`+`))`)
 		}
 		if len(scope.LookupKeys) > 0 {
-			placeholders := make([]string, len(scope.LookupKeys))
-			for index, key := range scope.LookupKeys {
-				placeholders[index] = "?"
-				args = append(args, key)
-			}
-			parts = append(parts, `EXISTS (SELECT 1 FROM relation_lookup dependency WHERE dependency.relation_id = r.id AND dependency.lookup_key IN (`+strings.Join(placeholders, ",")+`))`)
+			encoded, err := json.Marshal(scope.LookupKeys)
+			if err != nil { return nil, err }
+			args = append(args,string(encoded))
+			parts = append(parts, `EXISTS (SELECT 1 FROM relation_lookup dependency WHERE dependency.relation_id = r.id AND dependency.lookup_key IN (``SELECT value FROM json_each(?)`+`))`)
 		}
 		query += ` WHERE r.to_handle IS NULL AND r.unresolved_to IS NOT NULL AND (` + strings.Join(parts, " OR ") + ")"
 	} else if scope.UseProjection {
