@@ -736,7 +736,7 @@ func (s *Store) SearchFTS(ctx context.Context, query string, limit int) ([]model
 	limit = retrievalLimit(limit, 100, 500)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	rows, err := s.queryCandidateRows(ctx, `SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature, c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash, bm25(chunk_fts) FROM chunk_fts JOIN chunks c ON c.handle = chunk_fts.handle JOIN files f ON f.id = c.file_id WHERE chunk_fts MATCH ? ORDER BY bm25(chunk_fts), f.path, c.start_line, c.handle LIMIT ?`, query, limit)
+	rows, err := s.queryCandidateRows(ctx, `SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature, c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash, c.estimated_tokens, bm25(chunk_fts) FROM chunk_fts JOIN chunks c ON c.handle = chunk_fts.handle JOIN files f ON f.id = c.file_id WHERE chunk_fts MATCH ? ORDER BY bm25(chunk_fts), f.path, c.start_line, c.handle LIMIT ?`, query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("FTS search: %w", err)
 	}
@@ -745,7 +745,7 @@ func (s *Store) SearchFTS(ctx context.Context, query string, limit int) ([]model
 	for rows.Next() {
 		var candidate model.RankedCandidate
 		var bm25 float64
-		if err := rows.Scan(&candidate.Handle, &candidate.Path, &candidate.Language, &candidate.Kind, &candidate.Symbol, &candidate.Signature, &candidate.StartLine, &candidate.EndLine, &candidate.StartByte, &candidate.EndByte, &candidate.Content, &candidate.ContentHash, &bm25); err != nil {
+		if err := rows.Scan(&candidate.Handle, &candidate.Path, &candidate.Language, &candidate.Kind, &candidate.Symbol, &candidate.Signature, &candidate.StartLine, &candidate.EndLine, &candidate.StartByte, &candidate.EndByte, &candidate.Content, &candidate.ContentHash, &candidate.EstimatedTokens, &bm25); err != nil {
 			return nil, err
 		}
 		candidate.Score = -bm25
@@ -770,7 +770,7 @@ func retrievalLimit(value, fallback, maximum int) int {
 	return value
 }
 
-const rankedCandidateProjection = `SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature, c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash, COALESCE(symbol.confidence, 0) FROM chunks c JOIN files f ON f.id = c.file_id LEFT JOIN symbols symbol ON symbol.handle = c.symbol_handle WHERE `
+const rankedCandidateProjection = `SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature, c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash, c.estimated_tokens, COALESCE(symbol.confidence, 0) FROM chunks c JOIN files f ON f.id = c.file_id LEFT JOIN symbols symbol ON symbol.handle = c.symbol_handle WHERE `
 
 func (s *Store) SearchExactSymbols(ctx context.Context, values []string, limit int) ([]model.RankedCandidate, error) {
 	values = lookupValues(values)
@@ -1110,7 +1110,7 @@ WHERE s.handle = COALESCE((SELECT symbol_handle FROM chunks WHERE handle = ?), ?
 	if relation == "self" {
 		return anchor + `
 SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature,
-       c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash,
+       c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash, c.estimated_tokens,
        1.0, 'self', 1, 'related'
 FROM anchor a JOIN chunks c ON c.symbol_handle = a.handle JOIN files f ON f.id = c.file_id
 ORDER BY f.path, c.start_line, c.handle`, []any{handle, handle, handle}
@@ -1145,7 +1145,7 @@ SELECT r.to_handle AS candidate_handle, r.confidence, r.source, 1 AS resolved, '
 	query := anchor + `,
 matches AS (` + matches + `)
 SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature,
-       c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash,
+       c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash, c.estimated_tokens,
        m.confidence, m.source, m.resolved, m.direction
 FROM matches m JOIN chunks c ON c.symbol_handle = m.candidate_handle JOIN files f ON f.id = c.file_id
 WHERE m.candidate_handle IS NOT NULL` + filter + `
@@ -1238,7 +1238,7 @@ func scanRelationHits(rows *sql.Rows, anchorHandle, relation string) ([]model.Re
 		var source, direction string
 		var confidence float64
 		var resolved int
-		if err := rows.Scan(&candidate.Handle, &candidate.Path, &candidate.Language, &candidate.Kind, &candidate.Symbol, &candidate.Signature, &candidate.StartLine, &candidate.EndLine, &candidate.StartByte, &candidate.EndByte, &candidate.Content, &candidate.ContentHash, &confidence, &source, &resolved, &direction); err != nil {
+		if err := rows.Scan(&candidate.Handle, &candidate.Path, &candidate.Language, &candidate.Kind, &candidate.Symbol, &candidate.Signature, &candidate.StartLine, &candidate.EndLine, &candidate.StartByte, &candidate.EndByte, &candidate.Content, &candidate.ContentHash, &candidate.EstimatedTokens, &confidence, &source, &resolved, &direction); err != nil {
 			return nil, err
 		}
 		context := model.RelationContext{AnchorHandle: anchorHandle, Kind: relation, Direction: model.RelationDirection(direction), Confidence: confidence, Source: source, Resolved: resolved != 0}
@@ -1429,14 +1429,14 @@ func camelCaseLikePattern(value string) string {
 }
 
 func candidateQuery(condition string) string {
-	return `SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature, c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash FROM chunks c JOIN files f ON f.id = c.file_id WHERE ` + condition + ` ORDER BY f.path, c.start_line, c.handle`
+	return `SELECT c.handle, f.path, f.language, c.kind, c.symbol_name, c.signature, c.start_line, c.end_line, c.start_byte, c.end_byte, c.content, c.content_hash, c.estimated_tokens FROM chunks c JOIN files f ON f.id = c.file_id WHERE ` + condition + ` ORDER BY f.path, c.start_line, c.handle`
 }
 
 func scanCandidates(rows *sql.Rows) ([]model.RankedCandidate, error) {
 	result := make([]model.RankedCandidate, 0)
 	for rows.Next() {
 		var candidate model.RankedCandidate
-		if err := rows.Scan(&candidate.Handle, &candidate.Path, &candidate.Language, &candidate.Kind, &candidate.Symbol, &candidate.Signature, &candidate.StartLine, &candidate.EndLine, &candidate.StartByte, &candidate.EndByte, &candidate.Content, &candidate.ContentHash); err != nil {
+		if err := rows.Scan(&candidate.Handle, &candidate.Path, &candidate.Language, &candidate.Kind, &candidate.Symbol, &candidate.Signature, &candidate.StartLine, &candidate.EndLine, &candidate.StartByte, &candidate.EndByte, &candidate.Content, &candidate.ContentHash, &candidate.EstimatedTokens); err != nil {
 			return nil, err
 		}
 		result = append(result, candidate)
@@ -1448,7 +1448,7 @@ func scanRankedCandidates(rows *sql.Rows) ([]model.RankedCandidate, error) {
 	result := make([]model.RankedCandidate, 0)
 	for rows.Next() {
 		var candidate model.RankedCandidate
-		if err := rows.Scan(&candidate.Handle, &candidate.Path, &candidate.Language, &candidate.Kind, &candidate.Symbol, &candidate.Signature, &candidate.StartLine, &candidate.EndLine, &candidate.StartByte, &candidate.EndByte, &candidate.Content, &candidate.ContentHash, &candidate.Confidence); err != nil {
+		if err := rows.Scan(&candidate.Handle, &candidate.Path, &candidate.Language, &candidate.Kind, &candidate.Symbol, &candidate.Signature, &candidate.StartLine, &candidate.EndLine, &candidate.StartByte, &candidate.EndByte, &candidate.Content, &candidate.ContentHash, &candidate.EstimatedTokens, &candidate.Confidence); err != nil {
 			return nil, err
 		}
 		result = append(result, candidate)
