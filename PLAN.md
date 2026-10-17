@@ -9,7 +9,7 @@
 
 ## Purpose / Big Picture
 
-この計画の「最初の5件」は直前の追加監査で除外した未修正5件であり、前計画で修正済みの5件ではない。修正対象は合計24件。ユーザーの実装承認に基づき全24件を修正・コミット済み。現在は全検証と承認済みのローカルfast-forward統合を進めている。
+この計画の「最初の5件」は直前の追加監査で除外した未修正5件であり、前計画で修正済みの5件ではない。修正対象は合計24件。ユーザーの実装承認に基づき全24件を修正・コミットし、全検証とローカルfast-forward統合を完了した。
 
 8つの修正単位を順に実行する。各単位内でも異なる根本原因は回帰テストとコミットを分ける。実装・回帰テストの見積もりは14〜20時間、全検証・レビューは2〜4時間。実際の進捗と検証結果を以下へ追記する。
 
@@ -22,6 +22,8 @@
 - シェルコマンドは `rtk` 経由。各不具合の再現テストを修正前に実行し、意図した理由で失敗したことを確認する。Evidence変更には原文・行位置・不変条件・実測wire予算のテストを必須とする。
 
 ## Progress
+
+- 2026-10-17 integration complete: masterを47ef2a1から6bf2af3へfast-forwardし、codex/remaining-24-fixesの到達を確認後に同ブランチを削除。既存変更7ファイルの内容ハッシュはすべて統合前と一致した。検証済みソースに変更はなく、最後の変更はこの完了記録のみ。push・稼働バイナリ置換は実施していない。
 
 - 2026-10-17 final gates: 全通常テスト、全raceテスト（UCRT64 GCC）、go vet、native build、CGO_ENABLED=0のWindows amd64/Linux amd64/Darwin arm64ビルドがすべてexit 0。ログはC:/Temp/fs24-all-normal.log、fs24-all-race.log、fs24-build-gates.log。24 IDと24 regression mapping、git diff --checkもPASS。独立レビューの全production差分とfixture分離追補は指摘なし。統合先master=47ef2a1を確認し、承認済みFF統合に進む。
 
@@ -49,7 +51,7 @@
 - [x] 2026-10-17 UTC: 24件を8単位へ割り当て、依存順・内部API・受け入れ条件を記述。文書検査PASS（24 IDの一意性、8 Task、必須section、archive、末尾空白なし）、旧計画との同一内容確認とgit diff --checkもPASS。製品コードは変更せず、テスト・ビルドは実行していない。
 - [x] 実装開始の指示後に専用ブランチを作成し、計画移行だけをコミットする。
 - [x] Task 1〜8の各RED/GREEN・コミットを完了する。
-- [ ] 全検証・レビュー・masterへのfast-forward統合と作業ブランチ削除を完了する。
+- [x] 全検証・レビュー・masterへのfast-forward統合と作業ブランチ削除を完了する。
 
 ## Context and Orientation
 
@@ -255,4 +257,4 @@ Task 1→2/6、Task 3→4/5の索引再抽出、Task 4→5の正しいsymbol位�
 
 ## Outcomes & Retrospective
 
-24件の修正と個別RED/GREENを完了し、回帰テスト・修正コミットをRegression ledgerへ対応付けた。独立レビュー（47ef2a1..ccf613e）はP1/P2指摘なし。全通常テストで検出した共有fixture上の索引ロック競合は409cfa6で分離し、追加差分の独立レビューも指摘なし。最終の全通常/race/vet/native/3環境cross-buildはすべて成功した。承認済みmaster統合と作業ブランチ削除の結果は完了後に追記する。
+24件の修正と個別RED/GREENを完了し、回帰テスト・修正コミットをRegression ledgerへ対応付けた。独立レビュー（47ef2a1..ccf613e）はP1/P2指摘なし。全通常テストで検出した共有fixture上の索引ロック競合は409cfa6で分離し、追加差分の独立レビューも指摘なし。最終の全通常/race/vet/native/3環境cross-buildはすべて成功した。masterへ6bf2af3までfast-forward統合し、今回の作業ブランチを削除済み。ユーザー既存変更は保持した。ビルド成功は各対象OS上での動作確認を意味せず、稼働バイナリは変更していない。supervisorの原因未確定EOFは計画どおり対象外。
