@@ -51,6 +51,21 @@ func CompareReports(baseline, candidate RunReport) Comparison {
 		left := base[key]
 		right := cand[key]
 		var worse, better []string
+		if baseline.Schema == ReportSchemaV2 {
+			if left.TargetRank != right.TargetRank {
+				detail := fmt.Sprintf("target_rank %d -> %d", left.TargetRank, right.TargetRank)
+				if right.TargetRank == 0 || (left.TargetRank > 0 && right.TargetRank > left.TargetRank) {
+					worse = append(worse, detail)
+				} else {
+					better = append(better, detail)
+				}
+			}
+			compareHigher("reciprocal_rank", left.ReciprocalRank, right.ReciprocalRank, &worse, &better)
+			compareHigher("expand_required_path_recall", left.ExpandRequiredPathRecall, right.ExpandRequiredPathRecall, &worse, &better)
+			compareHigher("expand_required_symbol_recall", left.ExpandRequiredSymbolRecall, right.ExpandRequiredSymbolRecall, &worse, &better)
+			compareHigher("expand_relation_valid", float64(left.ExpandRelationValid), float64(right.ExpandRelationValid), &worse, &better)
+			compareLower("expand_forbidden_violations", float64(left.ExpandForbiddenViolations), float64(right.ExpandForbiddenViolations), &worse, &better)
+		}
 		compareHigher("required_path_recall", left.RequiredPathRecall, right.RequiredPathRecall, &worse, &better)
 		compareHigher("required_symbol_recall", left.RequiredSymbolRecall, right.RequiredSymbolRecall, &worse, &better)
 		compareHigher("intent_correct", float64(left.IntentCorrect), float64(right.IntentCorrect), &worse, &better)
