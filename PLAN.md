@@ -9,7 +9,7 @@ Generic chunks must retain original line endings and byte ranges selecting exact
 - [x] 2026-10-17 UTC: Traced generic normalized lines into appendGeneric content and byteOffset. Archived completed BOM plan byte-for-byte.
 - [x] 2026-10-17 UTC: RED on all raw source/range edge cases and v5 unchanged-file refresh; CRLF source normalized and EOF byte ranges exceeded source.
 - [x] 2026-10-17 UTC: Slice raw bytes using a source map built once per extraction branch. Bump version to extractors-v6-source-fidelity. Focused generic/BOM/indexer/service regressions passed, including original Evidence source/lines and measured wire/invariants. Removed generic exemption from existing BOM byte-range regression.
-- [ ] Full verification, independent review, scoped commit, merge and merged branch cleanup.
+- [x] 2026-10-17 UTC: Full verification and independent review passed. Scoped fix fd92568 fast-forward merged into master and merged task branch removed.
 
 - [x] 2026-10-17 UTC: Final full go test ./..., go test -race ./..., go vet ./..., native and three CGO-disabled cross-builds passed. Independent read-only review found no actionable issues. SourceMap constructed once per branch avoids per-chunk rescans. Evidence source/hash/ranges, version refresh, wire measurement and invariants passed.
 
@@ -24,7 +24,7 @@ Generic splitLines normalizes CRLF for parsing. appendGeneric reconstructs conte
 
 ## Outcomes & Retrospective
 
-Final regressions and full offline verification pass; existing parser lines and declaration selection remain unchanged. Raw source slices supply content, hashes and matching symbol/chunk ranges. CRLF/mixed/UTF-8/empty/EOF cases and BOM PowerShell exact slices pass. v5 indexes refresh once even with unchanged files; following updates skip them. Independent review found no actionable issues. Artifacts: .build/generic-fidelity-verification. Commit and local merge remain.
+Final regressions and full offline verification pass; existing parser lines and declaration selection remain unchanged. Raw source slices supply content, hashes and matching symbol/chunk ranges. CRLF/mixed/UTF-8/empty/EOF cases and BOM PowerShell exact slices pass. v5 indexes refresh once even with unchanged files; following updates skip them. Independent review found no actionable issues. Artifacts: .build/generic-fidelity-verification. Fix fd92568 fast-forward merged into master with the same verified code tree. Only local master remains; unrelated user changes retain patch hash 481d2c278a820ccfda79ec7bde9bd0ddd35cd68a. No push or runtime deployment performed. Final completion update is documentation-only.
 
 ## Context and Orientation
 
