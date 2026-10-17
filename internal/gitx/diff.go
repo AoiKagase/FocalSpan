@@ -16,6 +16,8 @@ const (
 	ChangeRename ChangeKind = "rename"
 )
 
+// LineRange is a one-based source span. A point range can also anchor a
+// deletion-only hunk at its surviving boundary.
 type LineRange struct {
 	Start int `json:"start"`
 	End   int `json:"end"`
@@ -29,7 +31,7 @@ type ChangedFile struct {
 	Ranges  []LineRange `json:"ranges,omitempty"`
 }
 
-var hunkPattern = regexp.MustCompile(`^@@ -[0-9]+(?:,[0-9]+)? \+([0-9]+)(?:,([0-9]+))? @@`)
+var hunkPattern = regexp.MustCompile(`^@@ -[0-9]+(?:,([0-9]+))? \+([0-9]+)(?:,([0-9]+))? @@`)
 
 func ParseUnifiedZeroDiff(data []byte) ([]ChangedFile, error) {
 	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
@@ -93,19 +95,33 @@ func ParseUnifiedZeroDiff(data []byte) ([]ChangedFile, error) {
 				continue
 			}
 			inHunk = true
-			start, err := strconv.Atoi(matches[1])
+			start, err := strconv.Atoi(matches[2])
 			if err != nil {
 				return nil, fmt.Errorf("parse hunk start: %w", err)
 			}
 			count := 1
-			if matches[2] != "" {
-				count, err = strconv.Atoi(matches[2])
+			if matches[3] != "" {
+				count, err = strconv.Atoi(matches[3])
 				if err != nil {
 					return nil, fmt.Errorf("parse hunk count: %w", err)
 				}
 			}
 			if count > 0 {
 				files[current].Ranges = append(files[current].Ranges, LineRange{Start: start, End: start + count - 1})
+			} else if files[current].Kind != ChangeDelete {
+				oldCount := 1
+				if matches[1] != "" {
+					oldCount, err = strconv.Atoi(matches[1])
+					if err != nil {
+						return nil, fmt.Errorf("parse old hunk count: %w", err)
+					}
+				}
+				if oldCount > 0 {
+					// A zero-length new range points to the preceding surviving
+					// line, or zero when deletion starts at the beginning of a file.
+					anchor := max(1, start)
+					files[current].Ranges = append(files[current].Ranges, LineRange{Start: anchor, End: anchor})
+				}
 			}
 		}
 	}

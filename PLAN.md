@@ -5,9 +5,10 @@ A deletion inside a surviving function must remain discoverable by Git impact an
 
 ## Progress
 - [x] 2026-10-17 UTC: Inspected Git hunk parser and overlap consumers. Parser discards all new-count-zero hunks, including removals inside surviving functions.
-- [ ] Add parser and real-Git service regressions; observe RED.
-- [ ] Preserve one-based deletion boundary anchors; observe GREEN.
+- [x] 2026-10-17 UTC: Observed RED for middle/start/EOF parser anchors and all three real-Git states. Legacy/Evidence impact and unstaged/staged changed-only queries returned no function. Empty/full-file deletion and insertion controls passed.
+- [x] 2026-10-17 UTC: Kept actual deletion-only boundaries as one-based point ranges and retained full-deletion/empty-hunk behavior. New and existing focused parser/service regressions passed, including exact source/locations and measured Packet budgets/invariants.
 - [ ] Full verification, review, scoped commit, local master merge and branch cleanup.
+- [x] 2026-10-17 UTC: Full go test ./..., go test -race ./..., go vet ./..., native build and all three CGO-disabled cross-builds passed. Independent read-only review found no actionable issues. Focused tests include explicit packet wire measurement/invariants and exact source fidelity.
 
 ## Surprises & Discoveries
 Git zero-length new ranges use the preceding surviving line (or zero at file start). A boundary anchor can select a surviving enclosing chunk without reconstructing removed source. File deletions and truly empty hunks must retain empty current-source ranges.
@@ -18,7 +19,7 @@ Git zero-length new ranges use the preceding surviving line (or zero at file sta
 - Verify new context results with explicit wire measurement, packet validation and exact current fixture source, since candidate inclusion changes Evidence behavior.
 
 ## Outcomes & Retrospective
-Pending.
+Deletion-only changes now retain a conservative surviving boundary instead of disappearing from range-based lookup. New public-service regressions observed the old failure then passed with exact current fixture bytes and positions. No packet fields or deleted source synthesis were introduced. Existing full-file deletion and empty-hunk behavior remains covered. User-owned tracked edits retain patch hash 481d2c278a820ccfda79ec7bde9bd0ddd35cd68a. Full verification and independent review passed; commit and merge remain pending.
 
 ## Context and Orientation
 internal/gitx/diff.go currently keeps ranges only when the new line count is positive. internal/app changed-only and impact paths select indexed chunks by overlap with these ranges. Empty zero-change diff behavior is already tested.
