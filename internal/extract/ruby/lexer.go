@@ -136,12 +136,24 @@ func heredocEnd(source []byte, start int) (int, bool) {
 	if lineEnd < 0 {
 		return len(source), false
 	}
-	header := strings.TrimSpace(string(source[start : start+lineEnd]))
-	if !strings.HasPrefix(header, "<<") {
+	at := start + 2
+	if at < start+lineEnd && (source[at] == '~' || source[at] == '-') {
+		at++
+	}
+	quote := byte(0)
+	if at < start+lineEnd && (source[at] == '\'' || source[at] == '"' || source[at] == '`') {
+		quote = source[at]
+		at++
+	}
+	markerStart := at
+	if at >= start+lineEnd || !isRubyIdent(source[at]) {
 		return 0, false
 	}
-	marker := strings.Trim(strings.TrimSpace(strings.TrimPrefix(header, "<<")), "~-\"'")
-	if marker == "" {
+	for at < start+lineEnd && (isRubyIdent(source[at]) || source[at] >= '0' && source[at] <= '9') {
+		at++
+	}
+	marker := string(source[markerStart:at])
+	if quote != 0 && (at >= start+lineEnd || source[at] != quote) {
 		return 0, false
 	}
 	rest := source[start+lineEnd+1:]

@@ -97,3 +97,15 @@ func TestF29BlockCommentsAndHeredocHideRelations(t *testing.T) {
 		t.Fatal("real call missing")
 	}
 }
+
+func TestF29ReviewArgumentHeredoc(t *testing.T) {
+	for _, opener := range []string{"puts(<<~TEXT)", "puts(<<-'TEXT')", "puts(<<\"TEXT\")"} {
+		source := opener + "\ndef fake\nend\nTEXT\ndef real\nend\n"
+		got := wholeAuditExtract(t, ruby.NewExtractor(), "x.rb", "ruby", source)
+		wholeAuditNoSymbol(t, got, "fake")
+		real := wholeAuditSymbol(t, got, "real")
+		if real.StartLine != 5 || real.EndLine != 6 {
+			t.Fatalf("following declaration moved: %+v", real)
+		}
+	}
+}
