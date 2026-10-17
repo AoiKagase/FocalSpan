@@ -5,9 +5,10 @@ Concurrent index openers must wait through transient SQLite schema-read contenti
 
 ## Progress
 - [x] 2026-10-17 UTC: Reproduced TestConcurrentInitialOpenKeepsReadersAlive failure in a 100-repeat race run. Found unconfigured, context-free readSchemaVersionPath connection used before Store configuration.
-- [ ] Add deterministic exclusive-SQL-lock regressions; observe RED.
-- [ ] Implement bounded, context-aware schema probe retry for SQLite busy codes only; observe GREEN.
+- [x] 2026-10-17 UTC: Deterministic real-lock tests returned immediate SQLITE_BUSY before release and before the caller deadline (RED). Corrupt-database control passed without waiting.
+- [x] 2026-10-17 UTC: Passed the existing open context to QueryRowContext and retried only primary SQLite BUSY (including extended codes) with cancellable 25ms waits. Release/deadline/control tests passed; explicit cancellation control added.
 - [ ] Focused/stress/full verification, review, explicit-path commits and local master merge.
+- [x] 2026-10-17 UTC: New real-lock regressions, cancellation and corruption controls plus the existing concurrent initializer passed 100 repeats with race enabled (85.439s). Full tests, full race suite, vet, native build and all three CGO-disabled cross-builds passed. Independent review found no actionable issues.
 
 ## Surprises & Discoveries
 The earlier one-off 261 failure was reproducible. All openers hold shared lifecycle leases, so transient SQLite WAL recovery may still contend even though migration is protected by exclusive leases. The probe has no busy timeout and does not consume the caller context.
@@ -18,7 +19,7 @@ The earlier one-off 261 failure was reproducible. All openers hold shared lifecy
 - Keep the completed predecessor byte-for-byte in docs/superpowers/plans/completed/2026-10-17-git-change-correctness.md.
 
 ## Outcomes & Retrospective
-Pending.
+The previously intermittent initialization failure is reproduced and addressed with bounded context-aware BUSY retry. Deterministic regressions observed failure before the fix and passed afterward. Both the lifecycle lease and the original acquisition deadline are retained throughout retries. No migration, public wire or source-fidelity behavior changed. Full verification and independent review passed; commit and local merge remain pending.
 
 ## Context and Orientation
 internal/store/lifecycle.go acquires leases and probes the database through readSchemaVersionPath in store.go. The probe opens a separate connection before configureAndMigrate. Existing store/concurrency_test.go checks simultaneous initialization with 12 readers.

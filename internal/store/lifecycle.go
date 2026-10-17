@@ -58,7 +58,7 @@ func openWithLease(ctx context.Context, root, directory string, allowUpgrade boo
 		}
 		version := ""
 		if exists {
-			version, err = readSchemaVersionPath(dbPath)
+			version, err = readSchemaVersionPath(ctx, dbPath)
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return nil, err
 			}

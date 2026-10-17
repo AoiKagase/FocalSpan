@@ -138,21 +138,35 @@ func openDatabase(root, dbPath string, existing bool) (*Store, error) {
 	return s, nil
 }
 
-func readSchemaVersionPath(path string) (string, error) {
+func readSchemaVersionPath(ctx context.Context, path string) (string, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return "", fmt.Errorf("open index database: %w", err)
 	}
 	defer db.Close()
-	var version string
-	err = db.QueryRow(`SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&version)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", sql.ErrNoRows
+	ticker := time.NewTicker(25 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if err := ctx.Err(); err != nil {
+			return "", fmt.Errorf("read schema version: %w", err)
+		}
+		var version string
+		err = db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&version)
+		if err == nil || errors.Is(err, sql.ErrNoRows) {
+			return version, err
+		}
+		// SQLITE_BUSY is primary code 5; extended recovery code 261 shares
+		// its low byte. Busy recovery is transient even under shared leases.
+		var sqliteError interface{ Code() int }
+		if !errors.As(err, &sqliteError) || sqliteError.Code()&0xff != 5 {
+			return "", fmt.Errorf("read schema version: %w", err)
+		}
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("read schema version: %w", ctx.Err())
+		case <-ticker.C:
+		}
 	}
-	if err != nil {
-		return "", fmt.Errorf("read schema version: %w", err)
-	}
-	return version, nil
 }
 
 func (s *Store) configureAndMigrate(existing bool) error {
