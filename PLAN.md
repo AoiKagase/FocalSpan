@@ -10,7 +10,7 @@ Implement the approved five fixes: fail closed on traversal errors; constrain re
 - [x] 2026-10-17 UTC: Step 1 RED: missing/empty-cancelled walks returned success and unavailable root was accepted by Indexer. GREEN: repository and indexer suites pass; errors now precede all writes.
 - [x] 2026-10-17 UTC: Step 2 RED on path/changed-only late exact match; GREEN across store/search/app suites and explicit 1000+ condition, literal wildcard/path boundary/case/range controls. Outside-scope anchors preserved; Evidence wire/invariants pass.
 - [x] 2026-10-17 UTC: Step 3 RED admitted writer during paused read and admitted query during subprocess writer. GREEN app suite: shared lease spans all public result construction; parallel readers pass; six public APIs honor caller wait cancellation. Auto-update moved before admission; pending reads reject incomplete updates.
-- [ ] Step 4: Impact auto-update or explicit stale-index rejection; commit.
+- [x] 2026-10-17 UTC: Step 4 RED in all worktree/ref × automatic/manual combinations returned old source. GREEN full app suite: automatic Impact updates before read lease; affected source hashes verified even after auto-update; manual mode never mutates and rejects mismatches. Deleted-file controls still pass.
 - [ ] Step 5: Status/Health readiness from all completion metadata; commit.
 - [ ] Full offline verification, independent whole-branch review, fast-forward merge and merged task branch cleanup.
 

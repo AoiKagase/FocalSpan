@@ -46,7 +46,7 @@ func (s *Service) Expand(ctx context.Context, h []string, r string, n int) (mode
 	return readResult(s, ctx, false, func(ctx context.Context) (model.ContextBundle, error) { return s.expandRead(ctx, h, r, n) })
 }
 func (s *Service) Impact(ctx context.Context, b, h string, n int) (model.ContextBundle, error) {
-	return readResult(s, ctx, false, func(ctx context.Context) (model.ContextBundle, error) { return s.impactRead(ctx, b, h, n) })
+	return readResult(s, ctx, s.Config.AutoUpdateBeforeQuery, func(ctx context.Context) (model.ContextBundle, error) { return s.impactRead(ctx, b, h, n) })
 }
 func (s *Service) queryEvidence(ctx context.Context, req EvidenceQueryRequest, trace bool) (AttributedEvidenceResult, error) {
 	return readResult(s, ctx, !req.NoUpdate && s.Config.AutoUpdateBeforeQuery, func(ctx context.Context) (AttributedEvidenceResult, error) {
@@ -57,5 +57,5 @@ func (s *Service) ExpandEvidence(ctx context.Context, req EvidenceExpandRequest)
 	return readResult(s, ctx, false, func(ctx context.Context) (evidence.CompileResult, error) { return s.expandEvidenceRead(ctx, req) })
 }
 func (s *Service) ImpactEvidence(ctx context.Context, req EvidenceImpactRequest) (evidence.CompileResult, error) {
-	return readResult(s, ctx, false, func(ctx context.Context) (evidence.CompileResult, error) { return s.impactEvidenceRead(ctx, req) })
+	return readResult(s, ctx, s.Config.AutoUpdateBeforeQuery, func(ctx context.Context) (evidence.CompileResult, error) { return s.impactEvidenceRead(ctx, req) })
 }

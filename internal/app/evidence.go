@@ -251,6 +251,9 @@ func (s *Service) impactCandidates(ctx context.Context, base, head string) (cand
 			rangesByPath[file.Path] = append(rangesByPath[file.Path], file.Ranges...)
 		}
 	}
+	if err := s.validateImpactSources(ctx, rangesByPath); err != nil {
+		return candidateResult{}, err
+	}
 	paths := make([]string, 0, len(rangesByPath))
 	for path := range rangesByPath {
 		paths = append(paths, path)
