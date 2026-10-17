@@ -1,6 +1,7 @@
 package benchmark
 
 import (
+	"archive/tar"
 	"context"
 	"errors"
 	"io"
@@ -9,6 +10,29 @@ import (
 	"strings"
 	"testing"
 )
+
+type canceledArchiveRunner struct{ cancel context.CancelFunc }
+
+func (c canceledArchiveRunner) Run(context.Context, string, string, ...string) (CommandResult, error) {
+	return CommandResult{Stdout: []byte(strings.Repeat("a", 40))}, nil
+}
+func (c canceledArchiveRunner) Stream(_ context.Context, _, _ string, w io.Writer, _ ...string) ([]byte, error) {
+	err := tar.NewWriter(w).Close()
+	c.cancel()
+	return nil, err
+}
+func TestSnapshotCancellationRemovesOwnedDestination(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	destination := filepath.Join(t.TempDir(), "snapshot")
+	_, err := NewGitSnapshotter(canceledArchiveRunner{cancel}).Materialize(ctx, "repo", "unused", "HEAD", destination)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("late cancellation ignored: %v", err)
+	}
+	if _, err := os.Stat(destination); !os.IsNotExist(err) {
+		t.Fatalf("cancelled partial snapshot remains: %v", err)
+	}
+}
 
 type brokenArchiveRunner struct{}
 

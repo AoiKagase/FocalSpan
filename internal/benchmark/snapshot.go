@@ -59,6 +59,10 @@ func (s *gitSnapshotter) Materialize(ctx context.Context, repositoryID, reposito
 	// writing record padding. Drain the pipe so the subprocess can exit.
 	_, drainErr := io.Copy(io.Discard, reader)
 	<-done
+	if err := ctx.Err(); err != nil {
+		_ = os.RemoveAll(destination)
+		return Snapshot{}, err
+	}
 	if extractErr == nil && drainErr != nil && commandErr == nil {
 		extractErr = drainErr
 	}
