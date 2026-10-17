@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -99,8 +98,11 @@ func (s *Scanner) paths(ctx context.Context) ([]string, error) {
 	}
 	paths := make([]string, 0)
 	err := filepath.WalkDir(s.Root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if walkErr != nil {
-			return nil
+			return walkErr
 		}
 		if path == s.Root {
 			return nil
@@ -122,7 +124,7 @@ func (s *Scanner) paths(ctx context.Context) ([]string, error) {
 		paths = append(paths, rel)
 		return nil
 	})
-	if err != nil && !errors.Is(err, context.Canceled) {
+	if err != nil {
 		return nil, fmt.Errorf("walk repository: %w", err)
 	}
 	sort.Strings(paths)

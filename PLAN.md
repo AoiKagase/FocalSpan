@@ -7,7 +7,7 @@ Implement the approved five fixes: fail closed on traversal errors; constrain re
 ## Progress
 
 - [x] 2026-10-17 UTC: Confirmed master a91128f and preserved dirty user paths; archived completed generic-source plan byte-for-byte; created codex/remaining-five-fixes.
-- [ ] Step 1: RED/GREEN traversal failure and cancellation rollback; commit.
+- [x] 2026-10-17 UTC: Step 1 RED: missing/empty-cancelled walks returned success and unavailable root was accepted by Indexer. GREEN: repository and indexer suites pass; errors now precede all writes.
 - [ ] Step 2: Scoped candidate readers before limits, including external relation anchors; commit.
 - [ ] Step 3: Shared Writer lease around complete Query/Expand/Impact reads; commit.
 - [ ] Step 4: Impact auto-update or explicit stale-index rejection; commit.
