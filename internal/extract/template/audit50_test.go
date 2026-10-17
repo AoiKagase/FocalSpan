@@ -137,3 +137,33 @@ func TestF39ReviewHeredocSuffix(t *testing.T) {
 		}
 	}
 }
+
+func TestF39ReviewHeredocNonASCIIContinuation(t *testing.T) {
+	for _, continuation := range []string{"é", "suffix", "_", "1"} {
+		source := "<?php echo <<<TEXT\nTEXT" + continuation + " ?> {include file='fake.tpl'}\nTEXT; ?>\n{include file='real.tpl'}"
+		got := wholeAuditExtract(t, templateextract.NewExtractor(), "x.tpl", "smarty", source)
+		found := false
+		for _, relation := range got.Relations {
+			if relation.Kind == "imports" {
+				if relation.UnresolvedTo == "fake.tpl" {
+					t.Fatalf("identifier continuation exposed PHP body: %+v", relation)
+				}
+				if relation.UnresolvedTo == "real.tpl" {
+					found = true
+				}
+			}
+		}
+		if !found {
+			t.Fatal("real Smarty include missing")
+		}
+		regions, err := templateextract.Scan(context.Background(), []byte(source))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, region := range regions {
+			if region.Kind == templateextract.KindPHPBlock && region.EndByte != strings.Index(source, "TEXT; ?>")+len("TEXT; ?>") {
+				t.Fatalf("premature PHP region end: %+v", region)
+			}
+		}
+	}
+}

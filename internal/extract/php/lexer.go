@@ -251,7 +251,7 @@ func (l *lexer) scanHeredoc(start int) (int, Kind, bool) {
 		}
 		line := strings.TrimSuffix(string(l.content[lineStart:lineEnd]), "\r")
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, label) && (len(trimmed) == len(label) || !isASCIIIdentifierPart(trimmed[len(label)])) {
+		if strings.HasPrefix(trimmed, label) && (len(trimmed) == len(label) || (!isASCIIIdentifierPart(trimmed[len(label)]) && trimmed[len(label)] < utf8.RuneSelf)) {
 			terminator := strings.Index(line, label)
 			if terminator < 0 {
 				terminator = 0
