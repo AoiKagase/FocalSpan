@@ -95,7 +95,11 @@ func (c *Client) resolveCommit(ctx context.Context, ref string) (string, error) 
 func (c *Client) WorkingTreeDiff(ctx context.Context) ([]ChangedFile, error) {
 	err := exec.CommandContext(ctx, "git", "-C", c.Root, "rev-parse", "--verify", "--quiet", "HEAD").Run()
 	if err == nil {
-		return c.Diff(ctx, DiffRequest{Base: "HEAD"})
+		files, err := c.Diff(ctx, DiffRequest{Base: "HEAD"})
+		if err != nil {
+			return nil, err
+		}
+		return c.withUntracked(ctx, files)
 	}
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -118,5 +122,34 @@ func (c *Client) WorkingTreeDiff(ctx context.Context) ([]ChangedFile, error) {
 	for i := range files {
 		files[i].Ranges = []LineRange{{Start: 1, End: int(^uint(0) >> 1)}}
 	}
-	return files, nil
+	return c.withUntracked(ctx, files)
+}
+
+func (c *Client) withUntracked(ctx context.Context, files []ChangedFile) ([]ChangedFile, error) {
+	out, err := exec.CommandContext(ctx, "git", "-C", c.Root, "ls-files", "--others", "--exclude-standard", "-z").Output()
+	if err != nil {
+		return nil, fmt.Errorf("git untracked files: %w", err)
+	}
+	result := make([]ChangedFile, 0, len(files))
+	seen := make(map[string]int)
+	for _, file := range files {
+		if index, ok := seen[file.Path]; ok {
+			result[index].Ranges = append(result[index].Ranges, file.Ranges...)
+		} else {
+			seen[file.Path] = len(result)
+			result = append(result, file)
+		}
+	}
+	for _, path := range strings.Split(string(out), "\x00") {
+		if path == "" {
+			continue
+		}
+		path = filepath.ToSlash(filepath.Clean(path))
+		if _, exists := seen[path]; exists {
+			continue
+		}
+		seen[path] = len(result)
+		result = append(result, ChangedFile{Path: path, Kind: ChangeAdd, Ranges: []LineRange{{Start: 1, End: int(^uint(0) >> 1)}}})
+	}
+	return result, nil
 }
