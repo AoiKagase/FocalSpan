@@ -1,6 +1,10 @@
 package benchmark
 
 func FailureCodes(r QualityResult) []string {
+	return FailureCodesWithExpansion(r, ExpansionAssessment{})
+}
+
+func FailureCodesWithExpansion(r QualityResult, assessment ExpansionAssessment) []string {
 	var codes []string
 	if r.IntentCorrect == 0 {
 		codes = append(codes, "intent_mismatch")
@@ -26,7 +30,7 @@ func FailureCodes(r QualityResult) []string {
 		codes = append(codes, "role_mismatch")
 	}
 	for _, code := range r.FailureCodes {
-		if code == "ranked_candidate_not_packed" {
+		if (code == "ranked_candidate_not_packed" || code == "expansion_anchor_missing") && !containsString(codes, code) {
 			codes = append(codes, code)
 		}
 	}
@@ -36,7 +40,10 @@ func FailureCodes(r QualityResult) []string {
 	if r.Deterministic == 0 {
 		codes = append(codes, "nondeterministic_output")
 	}
-	if r.ExpandRequiredPathRecall > 0 && r.ExpandRequiredPathRecall < 1 {
+	if assessment.MissingAnchors > 0 && !containsString(codes, "expansion_anchor_missing") {
+		codes = append(codes, "expansion_anchor_missing")
+	}
+	if (assessment.Requested > 0 && (assessment.Completed < assessment.Requested || assessment.MatchedPaths < assessment.RequiredPaths || assessment.MatchedSymbols < assessment.RequiredSymbols)) || (r.ExpandRequiredPathRecall > 0 && r.ExpandRequiredPathRecall < 1) || (r.ExpandRequiredSymbolRecall > 0 && r.ExpandRequiredSymbolRecall < 1) {
 		codes = append(codes, "expansion_required_missing")
 	}
 	if r.KnownResendCount > 0 {

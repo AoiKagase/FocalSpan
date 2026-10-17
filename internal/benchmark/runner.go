@@ -225,10 +225,18 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 						_ = engine.Close()
 						return RunReport{}, measureErr
 					}
+					assessment := ExpansionAssessment{}
 					if profile.RunExpansion {
+						if len(benchmarkCase.Expand) > 0 {
+							quality.ExpandRelationValid = 1
+						}
 						for _, expectation := range benchmarkCase.Expand {
+							assessment.Requested++
+							assessment.RequiredPaths += len(expectation.RequiredPaths)
+							assessment.RequiredSymbols += len(expectation.RequiredSymbols)
 							anchor, anchorErr := FindExpansionAnchor(*run.Packet, expectation.From)
 							if anchorErr != nil {
+								assessment.MissingAnchors++
 								quality.FailureCodes = append(quality.FailureCodes, "expansion_anchor_missing")
 								continue
 							}
@@ -262,18 +270,27 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 								return RunReport{}, measureErr
 							}
 							metrics := MeasureExpansion(initialMeasured, knownMeasured, controlMeasured, expectation)
-							quality.ExpandRequiredPathRecall = metrics.RequiredPathRecall
-							quality.ExpandRequiredSymbolRecall = metrics.RequiredSymbolRecall
+							assessment.add(metrics)
 							quality.ExpandForbiddenViolations += metrics.ForbiddenViolations
-							quality.ExpandRelationValid = metrics.RelationValid
-							quality.CumulativeWireTokens = metrics.CumulativeWireTokens
-							quality.CumulativeWireTokensWithoutKnown = metrics.CumulativeWireTokensWithoutKnown
-							quality.DeltaTokenRatio = metrics.DeltaTokenRatio
+							if metrics.RelationValid == 0 {
+								quality.ExpandRelationValid = 0
+							}
+							quality.CumulativeWireTokens += metrics.CumulativeWireTokens - initialMeasured.Budget.Used
+							quality.CumulativeWireTokensWithoutKnown += metrics.CumulativeWireTokensWithoutKnown - initialMeasured.Budget.Used
+
 							quality.KnownResendCount += metrics.KnownResendCount
 						}
 					}
+					assessment.apply(&quality)
+					if assessment.Requested > 0 {
+						quality.CumulativeWireTokens += quality.WireTokens
+						quality.CumulativeWireTokensWithoutKnown += quality.WireTokens
+						if quality.CumulativeWireTokensWithoutKnown > 0 {
+							quality.DeltaTokenRatio = float64(quality.CumulativeWireTokens) / float64(quality.CumulativeWireTokensWithoutKnown)
+						}
+					}
 					explicitCodes := append([]string(nil), quality.FailureCodes...)
-					quality.FailureCodes = FailureCodes(quality)
+					quality.FailureCodes = FailureCodesWithExpansion(quality, assessment)
 					for _, code := range explicitCodes {
 						if !containsString(quality.FailureCodes, code) {
 							quality.FailureCodes = append(quality.FailureCodes, code)

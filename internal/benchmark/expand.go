@@ -7,6 +7,7 @@ import (
 )
 
 type ExpansionMetrics struct {
+	MatchedPaths, MatchedSymbols     int
 	RequiredPathRecall               float64
 	RequiredSymbolRecall             float64
 	ForbiddenViolations              int
@@ -36,7 +37,7 @@ func FindExpansionAnchor(packet evidence.Packet, want SymbolExpectation) (string
 func MeasureExpansion(initial, known, control evidence.Packet, want ExpandExpectation) ExpansionMetrics {
 	paths := MatchRequiredPaths(known, want.RequiredPaths)
 	symbols := MatchRequiredSymbols(known, want.RequiredSymbols)
-	r := ExpansionMetrics{RequiredPathRecall: ratio(paths.Matched, paths.Total), RequiredSymbolRecall: ratio(symbols.Matched, symbols.Total), RelationValid: boolInt(packetRelationsValid(known)), CumulativeWireTokens: initial.Budget.Used + known.Budget.Used, CumulativeWireTokensWithoutKnown: initial.Budget.Used + control.Budget.Used}
+	r := ExpansionMetrics{MatchedPaths: paths.Matched, MatchedSymbols: symbols.Matched, RequiredPathRecall: ratio(paths.Matched, paths.Total), RequiredSymbolRecall: ratio(symbols.Matched, symbols.Total), RelationValid: boolInt(packetRelationsValid(known)), CumulativeWireTokens: initial.Budget.Used + known.Budget.Used, CumulativeWireTokensWithoutKnown: initial.Budget.Used + control.Budget.Used}
 	if r.CumulativeWireTokensWithoutKnown > 0 {
 		r.DeltaTokenRatio = float64(r.CumulativeWireTokens) / float64(r.CumulativeWireTokensWithoutKnown)
 	}
@@ -55,4 +56,26 @@ func MeasureExpansion(initial, known, control evidence.Packet, want ExpandExpect
 		}
 	}
 	return r
+}
+
+// ExpansionAssessment retains applicability and count denominators internally.
+type ExpansionAssessment struct {
+	Requested, Completed, MissingAnchors                         int
+	RequiredPaths, MatchedPaths, RequiredSymbols, MatchedSymbols int
+}
+
+func (a *ExpansionAssessment) add(m ExpansionMetrics) {
+	a.Completed++
+	a.MatchedPaths += m.MatchedPaths
+	a.MatchedSymbols += m.MatchedSymbols
+}
+func (a ExpansionAssessment) apply(q *QualityResult) {
+	if a.Requested == 0 {
+		return
+	}
+	q.ExpandRequiredPathRecall = ratio(a.MatchedPaths, a.RequiredPaths)
+	q.ExpandRequiredSymbolRecall = ratio(a.MatchedSymbols, a.RequiredSymbols)
+	if a.Completed < a.Requested {
+		q.ExpandRelationValid = 0
+	}
 }
