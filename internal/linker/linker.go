@@ -452,7 +452,7 @@ func linkerPathMatch(importer, candidate, target string) bool {
 	if importer != "" {
 		dir := filepath.ToSlash(filepath.Dir(importer))
 		joined := filepath.ToSlash(filepath.Join(dir, target))
-		if sameStorePath(candidate, joined) || strings.HasPrefix(strings.ToLower(candidate), strings.ToLower(joined)+"/") {
+		if sourcePathMatches(candidate, joined) {
 			return true
 		}
 	}
