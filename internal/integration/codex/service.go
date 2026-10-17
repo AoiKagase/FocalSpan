@@ -166,6 +166,12 @@ func (s *Service) Status(ctx context.Context, req Request) (RegistrationStatus, 
 		status.State = StateAbsent
 	} else {
 		status.Command, status.Args = current.Command, append([]string(nil), current.Args...)
+		if current.cwd != "" {
+			status.RootMode = "fixed_cwd"
+		}
+		if current.executionDrift {
+			status.Diagnostics = append(status.Diagnostics, "global registration has explicit execution overrides")
+		}
 		status.Matches = managedUserRegistration(current)
 		if status.Matches {
 			status.State, status.Managed = StateManagedMatch, true

@@ -115,7 +115,7 @@ func TestUserGetParsesCurrentCodexStdioRegistration(t *testing.T) {
 		t.Fatal("userGet() exists = false, want true")
 	}
 	want := userRegistration{Command: `C:\Tools\focalspan.exe`, Args: []string{"serve"}}
-	if !reflect.DeepEqual(registration, want) {
+	if registration.Command != want.Command || !reflect.DeepEqual(registration.Args, want.Args) || registration.executionDrift {
 		t.Fatalf("userGet() registration = %+v, want %+v", registration, want)
 	}
 }
@@ -169,7 +169,7 @@ func TestParseUserRegistrationAcceptsLegacyFlatJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := userRegistration{Command: `C:\Tools\focalspan.exe`, Args: []string{"serve"}}
-	if !reflect.DeepEqual(got, want) {
+	if got.Command != want.Command || !reflect.DeepEqual(got.Args, want.Args) || got.executionDrift {
 		t.Fatalf("parseUserRegistration() = %+v, want %+v", got, want)
 	}
 }

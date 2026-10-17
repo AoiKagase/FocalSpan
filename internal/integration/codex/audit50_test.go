@@ -3,6 +3,7 @@ package codex
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"github.com/focalspan/focalspan/internal/indexlock"
 	"github.com/pelletier/go-toml/v2"
@@ -157,5 +158,112 @@ func TestF05DryRunAndLockWait(t *testing.T) {
 	got, _ = os.ReadFile(path)
 	if !bytes.Equal(got, original) {
 		t.Error("lock wait changed configuration")
+	}
+}
+
+func TestF10GlobalExecutionDrift(t *testing.T) {
+	command := testExecutable(t, "focalspan.exe")
+	for _, tc := range []struct {
+		name, level, key string
+		value            any
+		drift            bool
+	}{
+		{"default", "", "", nil, false},
+		{"disabled", "root", "enabled", false, true},
+		{"fixed cwd", "transport", "cwd", "/other", true},
+		{"env", "transport", "env", map[string]string{"AUDIT": "fake"}, true},
+		{"env vars", "transport", "env_vars", []string{"AUDIT"}, true},
+		{"startup timeout", "root", "startup_timeout_sec", 1, true},
+		{"tool timeout", "root", "tool_timeout_sec", 2, true},
+		{"tool allow list", "root", "enabled_tools", []string{}, true},
+		{"tool deny list", "root", "disabled_tools", []string{"code_context"}, true},
+		{"empty env", "transport", "env", map[string]string{}, false},
+		{"null timeout", "root", "startup_timeout_sec", nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var doc map[string]any
+			if err := json.Unmarshal(currentCodexRegistrationJSON(t, command, []string{"serve"}), &doc); err != nil {
+				t.Fatal(err)
+			}
+			if tc.level == "root" {
+				doc[tc.key] = tc.value
+			} else if tc.level == "transport" {
+				doc["transport"].(map[string]any)[tc.key] = tc.value
+			}
+			payload, _ := json.Marshal(doc)
+			runner := &fakeCommandRunner{fn: func(context.Context, string, []string) (CommandResult, error) {
+				return CommandResult{Stdout: payload}, nil
+			}}
+			service := NewService(runner)
+			req := Request{Scope: ScopeUser, Name: "focalspan-test", Command: command}
+			status, err := service.Status(context.Background(), req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.drift {
+				if status.State == StateManagedMatch || status.Matches {
+					t.Errorf("execution drift reported match: %+v", status)
+				}
+			} else if status.State != StateManagedMatch {
+				t.Errorf("normal registration not matched: %+v", status)
+			}
+			if tc.key == "cwd" && status.RootMode == "runtime_cwd" {
+				t.Error("fixed cwd reported as runtime cwd")
+			}
+			result, err := service.Install(context.Background(), req)
+			if tc.drift {
+				if err == nil || result.Action == "unchanged" {
+					t.Errorf("drift install accepted unchanged: %+v %v", result, err)
+				}
+			} else if err != nil || result.Action != "unchanged" {
+				t.Errorf("normal install failed: %+v %v", result, err)
+			}
+		})
+	}
+}
+
+func TestF10InvalidExecutionMetadata(t *testing.T) {
+	for _, setting := range []string{`"enabled":null`, `"env":"bad"`, `"cwd":12`, `"enabled_tools":false`} {
+		payload := []byte(`{"command":"focalspan","args":["serve"],` + setting + `}`)
+		if _, err := parseUserRegistration(payload); err == nil {
+			t.Errorf("invalid execution setting accepted: %s", setting)
+		}
+	}
+}
+func TestF10ForceRestoresDefaultExecution(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	path := filepath.Join(home, "config.toml")
+	command := testExecutable(t, "focalspan.exe")
+	encoded, _ := json.Marshal(command)
+	original := "[mcp_servers.focalspan-test]\ncommand = " + string(encoded) + "\nargs = [\"serve\"]\nenabled = false\ncwd = \"/other\"\n"
+	if err := os.WriteFile(path, []byte(original), 0600); err != nil {
+		t.Fatal(err)
+	}
+	fake := &fakeCommandRunner{fn: func(context.Context, string, []string) (CommandResult, error) {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return CommandResult{}, err
+		}
+		var doc map[string]any
+		if err := toml.Unmarshal(content, &doc); err != nil {
+			return CommandResult{}, err
+		}
+		server, _ := findServer(doc, "focalspan-test")
+		data, err := json.Marshal(map[string]any{"enabled": server["enabled"], "transport": map[string]any{"type": "stdio", "command": server["command"], "args": server["args"], "cwd": server["cwd"], "env": server["env"]}})
+		return CommandResult{Stdout: data}, err
+	}}
+	service := NewService(fake)
+	req := Request{Scope: ScopeUser, Name: "focalspan-test", Command: command, Force: true}
+	before, err := service.Status(context.Background(), req)
+	if err != nil || before.Matches {
+		t.Fatalf("drift not visible: %+v %v", before, err)
+	}
+	if _, err := service.Install(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	after, err := service.Status(context.Background(), req)
+	if err != nil || !after.Matches || after.RootMode != "runtime_cwd" {
+		t.Fatalf("force did not restore defaults: %+v %v", after, err)
 	}
 }

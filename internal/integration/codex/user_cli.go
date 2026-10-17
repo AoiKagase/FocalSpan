@@ -34,9 +34,12 @@ func (execRunner) Run(ctx context.Context, name string, args ...string) (Command
 }
 
 type userRegistration struct {
-	observedConfig *projectObservation
-	Command        string
-	Args           []string
+	observedConfig    *projectObservation
+	executionSettings map[string]json.RawMessage
+	executionDrift    bool
+	cwd               string
+	Command           string
+	Args              []string
 }
 
 func (s *Service) codexRunner(req Request) (CommandRunner, string, error) {
@@ -90,26 +93,93 @@ func parseUserRegistration(data []byte) (userRegistration, error) {
 	if err := json.Unmarshal(data, &payload); err != nil {
 		return userRegistration{}, errors.New("Codex returned an unreadable MCP registration")
 	}
-
-	if len(payload.Transport) == 0 {
-		return validatedUserRegistration(payload.Command, payload.Args)
+	var transport map[string]json.RawMessage
+	if len(payload.Transport) > 0 {
+		if string(bytes.TrimSpace(payload.Transport)) == "null" {
+			return userRegistration{}, errors.New("Codex returned an MCP registration with a null transport")
+		}
+		var stdio struct {
+			Type    string   `json:"type"`
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		}
+		if err := json.Unmarshal(payload.Transport, &stdio); err != nil {
+			return userRegistration{}, errors.New("Codex returned an unreadable MCP registration")
+		}
+		if stdio.Type != "stdio" {
+			return userRegistration{}, fmt.Errorf("Codex returned an unsupported MCP transport %q", stdio.Type)
+		}
+		payload.Command, payload.Args = stdio.Command, stdio.Args
+		if err := json.Unmarshal(payload.Transport, &transport); err != nil {
+			return userRegistration{}, errors.New("Codex returned an unreadable MCP registration")
+		}
 	}
-	if string(bytes.TrimSpace(payload.Transport)) == "null" {
-		return userRegistration{}, errors.New("Codex returned an MCP registration with a null transport")
+	registration, err := validatedUserRegistration(payload.Command, payload.Args)
+	if err != nil {
+		return userRegistration{}, err
 	}
-
-	var transport struct {
-		Type    string   `json:"type"`
-		Command string   `json:"command"`
-		Args    []string `json:"args"`
-	}
-	if err := json.Unmarshal(payload.Transport, &transport); err != nil {
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(data, &root); err != nil {
 		return userRegistration{}, errors.New("Codex returned an unreadable MCP registration")
 	}
-	if transport.Type != "stdio" {
-		return userRegistration{}, fmt.Errorf("Codex returned an unsupported MCP transport %q", transport.Type)
+	registration.executionSettings = make(map[string]json.RawMessage)
+	for _, level := range []struct {
+		prefix string
+		fields map[string]json.RawMessage
+	}{{"", root}, {"transport.", transport}} {
+		for _, key := range []string{"enabled", "cwd", "env", "env_vars", "startup_timeout_sec", "tool_timeout_sec", "enabled_tools", "disabled_tools"} {
+			raw, exists := level.fields[key]
+			if !exists {
+				continue
+			}
+			registration.executionSettings[level.prefix+key] = append(json.RawMessage(nil), raw...)
+			normal, cwd, err := defaultUserSetting(key, raw)
+			if err != nil {
+				return userRegistration{}, fmt.Errorf("Codex returned an invalid MCP execution setting %s", key)
+			}
+			registration.executionDrift = registration.executionDrift || !normal
+			if cwd != "" {
+				registration.cwd = cwd
+			}
+		}
 	}
-	return validatedUserRegistration(transport.Command, transport.Args)
+	return registration, nil
+}
+
+// Global CLI installation specifies no cwd, environment, timeouts or tool
+// restrictions. Null and empty no-op values preserve legacy/default JSON.
+func defaultUserSetting(key string, raw json.RawMessage) (bool, string, error) {
+	if string(bytes.TrimSpace(raw)) == "null" {
+		if key == "enabled" {
+			return false, "", errors.New("enabled must be boolean")
+		}
+		return true, "", nil
+	}
+	switch key {
+	case "enabled":
+		var v bool
+		err := json.Unmarshal(raw, &v)
+		return v, "", err
+	case "cwd":
+		var v string
+		err := json.Unmarshal(raw, &v)
+		return v == "", v, err
+	case "env":
+		var v map[string]string
+		err := json.Unmarshal(raw, &v)
+		return len(v) == 0, "", err
+	case "env_vars", "enabled_tools", "disabled_tools":
+		var v []string
+		err := json.Unmarshal(raw, &v)
+		return key != "enabled_tools" && len(v) == 0, "", err
+	default:
+		var v float64
+		err := json.Unmarshal(raw, &v)
+		if err == nil && v < 0 {
+			err = errors.New("negative timeout")
+		}
+		return false, "", err
+	}
 }
 
 func validatedUserRegistration(command string, args []string) (userRegistration, error) {
@@ -197,11 +267,11 @@ func isMissingRegistration(result CommandResult, runErr error) bool {
 }
 
 func sameUserRegistration(current userRegistration, expected RegistrationSpec) bool {
-	return current.Command == expected.Command && stringSlicesEqual(current.Args, expected.Args)
+	return !current.executionDrift && current.Command == expected.Command && stringSlicesEqual(current.Args, expected.Args)
 }
 
 func managedUserRegistration(current userRegistration) bool {
-	return managedFocalSpanCommand(current.Command) && managedGlobalServeArgs(current.Args)
+	return !current.executionDrift && managedFocalSpanCommand(current.Command) && managedGlobalServeArgs(current.Args)
 }
 
 func managedGlobalServeArgs(args []string) bool {
@@ -212,7 +282,7 @@ func managedGlobalServeArgs(args []string) bool {
 }
 
 func managedLegacyUserRegistration(current userRegistration, root string) bool {
-	return managedFocalSpanCommand(current.Command) && managedServeArgs(current.Args, root)
+	return !current.executionDrift && managedFocalSpanCommand(current.Command) && managedServeArgs(current.Args, root)
 }
 
 func managedFocalSpanCommand(command string) bool {
