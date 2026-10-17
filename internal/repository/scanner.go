@@ -20,12 +20,21 @@ import (
 )
 
 type Scanner struct {
-	Root   string
-	Config config.Config
+	Root                 string
+	Config               config.Config
+	actualIndexDirectory string
 }
 
 func NewScanner(root string, cfg config.Config) *Scanner {
-	return &Scanner{Root: filepath.Clean(root), Config: cfg}
+	s := &Scanner{Root: filepath.Clean(root), Config: cfg}
+	if actual, err := physicalPath(filepath.Join(root, cfg.IndexDirectory)); err == nil {
+		if realRoot, err := physicalPath(root); err == nil {
+			if rel, err := filepath.Rel(realRoot, actual); err == nil {
+				s.actualIndexDirectory = filepath.ToSlash(rel)
+			}
+		}
+	}
+	return s
 }
 
 func (s *Scanner) Scan(ctx context.Context) ([]model.SourceFile, []model.Diagnostic, error) {
@@ -59,7 +68,7 @@ func (s *Scanner) Scan(ctx context.Context) ([]model.SourceFile, []model.Diagnos
 			return nil, diagnostics, fmt.Errorf("stat source %s: %w", rel, err)
 		}
 		if !info.Mode().IsRegular() {
-			continue // Gitlinks and other non-source entries are not readable files.
+			return nil, diagnostics, fmt.Errorf("source %s is not a regular file", rel)
 		}
 		if info.Size() > s.maxFileBytes() {
 			diagnostics = append(diagnostics, model.Diagnostic{FilePath: rel, Level: "info", Code: "file_too_large", Message: "file exceeds configured maximum size"})
@@ -110,9 +119,21 @@ func (s *Scanner) paths(ctx context.Context) ([]string, error) {
 			return nil, fmt.Errorf("git file listing: %w", err)
 		}
 		parts := strings.Split(string(out), "\x00")
+		stages, err := exec.CommandContext(ctx, "git", "-C", s.Root, "ls-files", "--stage", "-z").Output()
+		if err != nil {
+			return nil, fmt.Errorf("git index listing: %w", err)
+		}
+		gitlinks := make(map[string]bool)
+		for _, entry := range strings.Split(string(stages), "\x00") {
+			if strings.HasPrefix(entry, "160000 ") {
+				if tab := strings.IndexByte(entry, '\t'); tab >= 0 {
+					gitlinks[filepath.ToSlash(entry[tab+1:])] = true
+				}
+			}
+		}
 		paths := make([]string, 0, len(parts))
 		for _, part := range parts {
-			if part != "" {
+			if part != "" && !gitlinks[filepath.ToSlash(part)] {
 				paths = append(paths, filepath.ToSlash(filepath.Clean(part)))
 			}
 		}
@@ -164,6 +185,9 @@ func (s *Scanner) excluded(path string) bool {
 	p := filepath.ToSlash(strings.TrimSuffix(path, "/"))
 	if p == "" {
 		return false
+	}
+	if actual := s.actualIndexDirectory; actual != "" && actual != "." && (p == actual || strings.HasPrefix(p, actual+"/")) {
+		return true
 	}
 	indexDir := s.Config.IndexDirectory
 	if filepath.IsAbs(indexDir) {

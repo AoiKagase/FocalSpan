@@ -23,6 +23,8 @@
 
 ## Progress
 
+- 2026-10-17 execution: Task 2完了。A05=9d1c962、A14=83217c3、A09=868b37a（gitlink列挙で区別する追補をA06と共に実施）。A06の外側junction拒否・内側許可はRED→GREEN。repository/store/indexer/appはTask 3の先行RED 2テストだけ除外して全PASS（C:/Temp/fs24-task2-green.log）。Task 3のO02/O05も正式REDを観測済み。
+
 - 2026-10-17 execution: Task 1 GREEN: O01=3700ec1、A01=66cb695。A07も正式RED→GREEN。gitx/repository/app/cli全テストPASS（C:/Temp/fs24-task1.log）。安全なref解決・textconv無効化・Git probeを完了。
 
 - 2026-10-17 execution: e986a29で計画移行をコミットし、codex/remaining-24-fixesで開始。O01は正式回帰REDを確認後、Git probeのエラー伝播と本当の非Gitの区別を実装。repository/app/cli全テストGREEN（C:/Temp/fs24-o01.log）。Task 1のA01/A07は未修正。
@@ -178,6 +180,8 @@ Task 1→2/6、Task 3→4/5の索引再抽出、Task 4→5の正しいsymbol位�
 5. 全ゲートと必要なレビューの通過後、既存の統合方針に従いmasterへfast-forwardマージし、到達確認後に今回の作業ブランチだけ削除する。push/稼働バイナリ置換は行わない。最終結果をPLANへ記録する。
 
 ## Surprises & Discoveries
+
+- Task 2: このWindows環境ではfilepath.EvalSymlinksがjunctionを字句パスのまま返した。GetFinalPathNameByHandleで開いた実体を検査する。A09の通常ディレクトリskipは既存のファイル→directory読み取り失敗検査を弱めたため、Git stageのmode160000だけを列挙から除き、通常ファイルの型変化は引き続きエラーにした。
 
 - 再現テストの数は問題数と一致しない。A11は内部関数/実索引の2テストで1件、O05は行数/overlapの2テストで1件。24件のIDで管理する。
 - A03は入辺のsourceも置換するとさらに上流の入辺が消えるため、直接呼び出し元だけの再抽出では足りない。訪問集合を持つ依存閉包が必要。

@@ -15,6 +15,7 @@ import (
 
 	"github.com/focalspan/focalspan/internal/indexlock"
 	"github.com/focalspan/focalspan/internal/model"
+	"github.com/focalspan/focalspan/internal/repository"
 )
 
 //go:embed migrations/*.sql
@@ -109,8 +110,9 @@ func open(root, indexDir string, allowUpgrade bool) (*Store, error) {
 	if err != nil || rel == ".." || len(rel) >= 3 && rel[:3] == ".."+string(filepath.Separator) {
 		return nil, errors.New("index directory escapes repository root")
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, fmt.Errorf("create index directory: %w", err)
+	dir, err = repository.PrepareIndexDirectory(context.Background(), root, indexDir)
+	if err != nil {
+		return nil, err
 	}
 	return openWithLease(context.Background(), root, dir, allowUpgrade)
 }
