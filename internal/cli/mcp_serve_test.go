@@ -15,7 +15,7 @@ import (
 
 func TestMCPServeUsesProcessWorkingDirectory(t *testing.T) {
 	if os.Getenv("FOCALSPAN_CWD_SERVE_HELPER") == "1" {
-		os.Exit(Run(context.Background(), []string{"serve", "--auto-update=false"}, os.Stdout, os.Stderr))
+		os.Exit(Run(context.Background(), []string{"serve", "--worker", "--auto-update=false"}, os.Stdout, os.Stderr))
 	}
 
 	root := t.TempDir()

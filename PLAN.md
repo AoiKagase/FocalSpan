@@ -5,14 +5,17 @@ Keep the host's MCP stdio session alive while reloading the installed FocalSpan 
 
 ## Progress
 - [x] 2026-10-17 UTC: Inspected SDK subprocess transport, MCP schema negotiation, registration and active work. Created isolated managed worktree codex/mcp-worker-restart from 7e30ed1 so another session's root PLAN.md remains untouched.
-- [ ] Add subprocess-backed supervisor regressions and observe RED.
-- [ ] Implement supervisor, CLI worker mode and registration of the restart API.
-- [ ] Verify protocol fidelity, cancellation, compatibility failure, process death and cleanup; review.
-- [ ] Complete full tests, race, vet, native and three CGO-disabled builds.
+- [x] 2026-10-17 UTC: RED observed for missing supervisor API and real CLI restart tool; subprocess lifecycle and Evidence tests added.
+- [x] 2026-10-17 UTC: Implemented supervisor, CLI worker mode and restart-tool allowlist. MCP tests and real executable-replacement integration passed.
+- [x] 2026-10-17 UTC: Focused MCP/CLI/registration tests passed, including mapped executable replacement, v1/v2 fidelity, legacy capabilities, crashed/cancelled candidate reaping, in-flight-call cancellation and recovery. A changed-root candidate was reproduced RED and added to the startup contract.
+- [x] 2026-10-17 UTC: Independent read-only review completed without actionable findings. Added a real forwarded-call drain regression to cover the review's noted test limitation. Subsequent protocol-error fix observed RED-to-GREEN.
+- [x] 2026-10-17 UTC: Full go test ./..., go test -race ./..., go vet ./..., native build and CGO_ENABLED=0 builds for windows/amd64, linux/amd64 and darwin/arm64 passed. Final full test/race rerun after the last wire-budget assertions also passed; logs are in .build/restart-verification.
 
 ## Surprises & Discoveries
 - The root checkout has a different active Git-impact plan. Only this worktree's PLAN.md is owned here.
-- A default-capability worker can return v1 Evidence; the supervisor can apply the existing v2 negotiation function on behalf of the actual frontend client without changing source placement or budget logic.
+- SDK modern requests carry client capabilities in _meta; legacy clients only supply them at initialize. Explicitly forward the resolved capabilities and leave Evidence serialization entirely to the worker. Re-encoding an already negotiated v2 response was caught by the v2 regression and removed.
+- Candidate health root is part of the immutable startup contract, so a new binary which ignores --root cannot switch this session to another repository.
+- A protocol regression showed generic error wrapping destroyed worker JSON-RPC code/message/data. Preserve typed JSON-RPC errors verbatim; ordinary transport failures retain recovery guidance. A real forwarded-call drain test supplements the direct gate test noted by the reviewer.
 - Windows UCRT GCC at C:/msys64/ucrt64/bin/gcc.exe is needed for amd64 race checks.
 
 ## Decision Log
@@ -22,14 +25,16 @@ Keep the host's MCP stdio session alive while reloading the installed FocalSpan 
 - 2026-10-17 UTC: No registration outside this checkout, binary deployment, host reconnect, push or merge is part of implementation. One initial host reconnect to the new supervisor is necessary; subsequent compatible worker replacements retain the session.
 
 ## Outcomes & Retrospective
-Pending implementation and verification.
+Implemented and verified the persistent supervisor and code_restart_process API. The same frontend MCP session survives worker replacement with a different PID, while code_restart retains its existing configuration/index reopen behavior. Failed candidates preserve the running worker. Tests cover real forwarded-call draining, typed JSON-RPC error code/message/data preservation, and exact wire-budget accounting plus Evidence validation for v1/v2. Independent review returned no actionable findings, and its drain-test limitation was addressed.
+
+All required tests, race checks, vet, native build and three CGO-disabled cross-builds passed. Windows process replacement and restart were executed; Linux and macOS were compile checks only. Deployment, registration changes and initial host reconnect remain outside this implementation milestone; the installed service has not been updated by this work. One initial reconnect is required to activate the supervisor.
 
 ## Context and Orientation
 internal/mcpserver owns the SDK server, context schema negotiation and five existing tools. internal/cli runServe currently hosts this service directly. internal/integration/codex defines the enabled-tools allowlist. Existing raw MCP forwarding preserves structured evidence and summary separation.
 
 ## Plan of Work
 1. Add an independent subprocess test helper and a frontend in-memory MCP session. Require six supervisor tools, distinct worker PIDs across restart, preserved root/options, v1/v2 output, no source in summaries, and successful later calls on the same host session.
-2. Add supervisor.go in mcpserver using the SDK CommandTransport. Capture the initial five-tool catalog/capabilities/instructions, publish them plus code_restart_process, and forward requests under a cancellable read lease. Reuse negotiatedContextOutput for packet tools.
+2. Add supervisor.go in mcpserver using the SDK CommandTransport. Capture the initial five-tool catalog/capabilities/instructions, publish them plus code_restart_process, and forward requests/capabilities under a cancellable read lease without re-encoding Evidence.
 3. Launch/health-check a candidate with startup timeout, compare the captured contract, drain current calls, swap, then close/reap the prior child. Failed launch/compatibility/cancellation leaves the old worker serving. Worker crashes surface errors; explicit restart recovers without duplicating requests. Host shutdown closes its worker.
 4. Make CLI serve resolve root once, supervise by default, and use --worker only for the original direct server. Preserve auto-update and legacy no-auto-update options. Include code_restart_process in managed registrations and document lifecycle/limitations.
 5. Run focused and complete verification and a read-only review; record real results.
