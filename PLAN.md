@@ -1,49 +1,55 @@
-# Preserve original generic extraction source bytes
+# Repair remaining five index consistency problems
 
 ## Purpose / Big Picture
 
-Generic chunks must retain original line endings and byte ranges selecting exactly their content. CRLF, mixed endings, UTF-8, EOF and BOM must not produce normalized source labeled verbatim. Refresh existing indexes once after the extraction behavior changes.
+Implement the approved five fixes: fail closed on traversal errors; constrain retrieval before caps; serialize complete reads against index writers; refresh/validate Impact; report incomplete indexes as stale. Prefer consistency: shared Writer lease waits at most five seconds, then returns BusyError. Preserve MCP/Evidence schemas and database schema.
 
 ## Progress
 
-- [x] 2026-10-17 UTC: Traced generic normalized lines into appendGeneric content and byteOffset. Archived completed BOM plan byte-for-byte.
-- [x] 2026-10-17 UTC: RED on all raw source/range edge cases and v5 unchanged-file refresh; CRLF source normalized and EOF byte ranges exceeded source.
-- [x] 2026-10-17 UTC: Slice raw bytes using a source map built once per extraction branch. Bump version to extractors-v6-source-fidelity. Focused generic/BOM/indexer/service regressions passed, including original Evidence source/lines and measured wire/invariants. Removed generic exemption from existing BOM byte-range regression.
-- [x] 2026-10-17 UTC: Full verification and independent review passed. Scoped fix fd92568 fast-forward merged into master and merged task branch removed.
-
-- [x] 2026-10-17 UTC: Final full go test ./..., go test -race ./..., go vet ./..., native and three CGO-disabled cross-builds passed. Independent read-only review found no actionable issues. SourceMap constructed once per branch avoids per-chunk rescans. Evidence source/hash/ranges, version refresh, wire measurement and invariants passed.
+- [x] 2026-10-17 UTC: Confirmed master a91128f and preserved dirty user paths; archived completed generic-source plan byte-for-byte; created codex/remaining-five-fixes.
+- [ ] Step 1: RED/GREEN traversal failure and cancellation rollback; commit.
+- [ ] Step 2: Scoped candidate readers before limits, including external relation anchors; commit.
+- [ ] Step 3: Shared Writer lease around complete Query/Expand/Impact reads; commit.
+- [ ] Step 4: Impact auto-update or explicit stale-index rejection; commit.
+- [ ] Step 5: Status/Health readiness from all completion metadata; commit.
+- [ ] Full offline verification, independent whole-branch review, fast-forward merge and merged task branch cleanup.
 
 ## Surprises & Discoveries
 
-Generic splitLines normalizes CRLF for parsing. appendGeneric reconstructs content with LF and counts each newline as one byte; EndByte also includes an invented final newline while Content excludes it. Keep parsing behavior and line selection unchanged; derive source storage from original bytes.
+The prior audit's five temporary overlay tests are in C:/Temp/focalspan_remaining_audit_20261017_test.go. Interleaving tests must use channels and a separate writer rather than synchronously invoking Index while a read lease is held.
 
 ## Decision Log
 
-- 2026-10-17 UTC: Preserve existing exclusion of the final selected line terminator; preserve all bytes between selected lines. Use source line starts and clamp EOF naturally, keeping symbols/chunks/content hashes consistent.
-- 2026-10-17 UTC: Own PLAN.md, predecessor archive, generic appendGeneric and version constant, plus new focused tests and any BOM regression tightening. Preserve user changes and existing worktrees. No network, restore, fixture code execution or deployment.
+- 2026-10-17 UTC: User selected consistency over immediate stale snapshots. Index before taking Shared Writer lease; private read helpers must not reacquire it. Health may inspect pending metadata; data reads reject incomplete indexes.
+- 2026-10-17 UTC: Preserve existing relation anchor discovery outside candidate scope. Apply path/range constraints to returned candidates before caps. Bound SQL scope batches and merge before global caps.
+- 2026-10-17 UTC: Auto-update disabled means no indexing; Impact rejects eligible current files whose stored hashes are absent/different. Deleted source is never synthesized.
+- 2026-10-17 UTC: Own only plan/archive and source/test sections required by these five fixes. Preserve user edits in AGENTS.md, README.md, docs/design.md and internal/mcpserver/{server.go,context_v2_test.go}, plus all existing untracked files. Baseline tracked patch hash 481d2c278a820ccfda79ec7bde9bd0ddd35cd68a. No network, restore, analyzed fixture-code execution, push or deployment.
 
 ## Outcomes & Retrospective
 
-Final regressions and full offline verification pass; existing parser lines and declaration selection remain unchanged. Raw source slices supply content, hashes and matching symbol/chunk ranges. CRLF/mixed/UTF-8/empty/EOF cases and BOM PowerShell exact slices pass. v5 indexes refresh once even with unchanged files; following updates skip them. Independent review found no actionable issues. Artifacts: .build/generic-fidelity-verification. Fix fd92568 fast-forward merged into master with the same verified code tree. Only local master remains; unrelated user changes retain patch hash 481d2c278a820ccfda79ec7bde9bd0ddd35cd68a. No push or runtime deployment performed. Final completion update is documentation-only.
+Pending execution. This file is the durable inline execution ledger.
 
 ## Context and Orientation
 
-internal/extract/generic/generic.go funnels declaration, Markdown and fallback windows through appendGeneric. internal/extract/sourceutil maps original line starts. Registry adjusts BOM offsets. internal/indexer/indexer.go extractorVersion invalidates unchanged files when extraction changes. Evidence uses stored chunk source in source mode.
+Repository scanner silently ignores WalkDir errors. Search retrieves capped lists before Paths/ChangedOnly filtering. Service reads candidates and revision separately. Impact reads current Git ranges against stored source. Health only tests config hash and nonempty last revision. Existing indexlock supports shared/exclusive Writer leases across processes; index writers hold Exclusive through final metadata.
 
 ## Plan of Work
 
-1. Test raw content/hash/ranges for LF/CRLF/mixed/UTF-8/empty/EOF sources and selected noninitial lines; cover public PowerShell Evidence with BOM and CRLF and old-version refresh.
-2. Map selected line ranges back to raw bytes without changing parser input. Update version so old normalized chunks are replaced on incremental indexing.
-3. Run focused/full verification and read-only review, commit explicit paths, fast-forward master, remove merged task branch and record results.
+1. Formalize traversal regression and preserve old index/metadata on failure; propagate walk errors and context cancellation.
+2. Introduce internal CandidateScope/scoped reader with parameterized scope predicates before candidate caps. Keep unconstrained behavior, relation anchors and path-boundary semantics.
+3. Centralize read admission, one Shared Writer lease per public read, auto-update before admission, and one revision per result. Test same-process and subprocess contention/cancellation and parallel reads.
+4. Update Impact before read admission when enabled; otherwise compare affected eligible source hashes under lease and fail explicitly on mismatch. Cover working tree, explicit refs and deletions.
+5. Derive stale/readiness from config, extractor version, linking_pending and successful completion; propagate metadata errors and retain diagnostics.
+6. Run full gates and fresh read-only review; commit explicit paths, merge master, delete merged task branch, document actual outcomes.
 
 ## Validation and Acceptance
 
-Observe RED before product changes. Validate packet invariants and measured wire budget for source Evidence. Run go test ./..., go test -race ./..., go vet ./..., native build and CGO-disabled windows/amd64, linux/amd64, darwin/arm64 builds. Offline GOPROXY=off, GOSUMDB=off, GOTOOLCHAIN=local; race compiler C:/msys64/ucrt64/bin/gcc.exe. Serialize normal and race suites. Run git diff --check and preserve unrelated tracked patch hash 481d2c278a820ccfda79ec7bde9bd0ddd35cd68a.
+Write and observe each failing deterministic regression before behavior edits. Include 130 duplicate symbols, path/changed-only filters, out-of-scope relation anchors, snapshot barriers, five-second wait/cancellation, incomplete metadata, exact Evidence source and measured wire/invariants. Run focused tests per task; final go test ./..., then go test -race ./..., go vet ./..., native build and CGO-disabled Windows amd64/Linux amd64/Darwin arm64 cross-builds. Offline GOPROXY=off/GOSUMDB=off/GOTOOLCHAIN=local; race compiler C:/msys64/ucrt64/bin/gcc.exe. git diff --check and user patch hash must remain valid. Final docs-only changes use scoped checks.
 
 ## Idempotence and Recovery
 
-Version mismatch forces a single refresh even with unchanged file hash; next update skips unchanged files. Existing writer transaction and cancellation protections apply. Revert only scoped task commits if needed and preserve user files. Final docs-only edits use scoped checks.
+Do not delete lock files. Preserve existing lease ordering and writer transaction rollback. Failed reads do not mutate indexes. Missing completion metadata requires an update, not automatic migration. Revert only owned commits if needed. Preserve all user files and detached worktrees.
 
 ## Interfaces and Dependencies
 
-Existing generic extractor, sourceutil.SourceMap, SourceFile, Indexer metadata and Evidence APIs. No schema migration, dependencies or public fields.
+Internal CandidateScope/candidate reader and read-admission helpers; expose current extractor version internally for readiness comparison. No new dependencies, DB schema versions, public packet fields or new debug output. Existing five-second BusyError and cancellation remain public error behavior. Supervisor EOF investigation is excluded.
