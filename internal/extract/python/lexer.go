@@ -28,7 +28,8 @@ func Lex(ctx context.Context, source []byte) ([]Token, []model.Diagnostic, error
 		for contentEnd > lineStart && (source[contentEnd-1] == '\n' || source[contentEnd-1] == '\r') {
 			contentEnd--
 		}
-		if lineStart < skipUntil {
+		continuedString := lineStart < skipUntil
+		if continuedString && skipUntil >= contentEnd {
 			continue
 		}
 		indentEnd := lineStart
@@ -43,7 +44,7 @@ func Lex(ctx context.Context, source []byte) ([]Token, []model.Diagnostic, error
 			indentEnd++
 		}
 		trimmed := strings.TrimSpace(string(source[indentEnd:contentEnd]))
-		if trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+		if !continuedString && trimmed != "" && !strings.HasPrefix(trimmed, "#") {
 			if indent > indentStack[len(indentStack)-1] {
 				indentStack = append(indentStack, indent)
 				tokens = append(tokens, pythonToken(Indent, source, lineStart, indentEnd))
@@ -54,7 +55,11 @@ func Lex(ctx context.Context, source []byte) ([]Token, []model.Diagnostic, error
 				}
 			}
 		}
-		for at := indentEnd; at < contentEnd; {
+		lexStart := indentEnd
+		if continuedString {
+			lexStart = skipUntil
+		}
+		for at := lexStart; at < contentEnd; {
 			if err := ctx.Err(); err != nil {
 				return tokens, diagnostics, err
 			}
@@ -91,7 +96,7 @@ func Lex(ctx context.Context, source []byte) ([]Token, []model.Diagnostic, error
 					end = contentEnd
 				}
 				at = end
-				if triple && end > contentEnd {
+				if end > contentEnd {
 					skipUntil = end
 				}
 				kind := String
@@ -111,7 +116,7 @@ func Lex(ctx context.Context, source []byte) ([]Token, []model.Diagnostic, error
 				triple := at+2 < len(source) && source[at+1] == quote && source[at+2] == quote
 				end := stringEnd(source, at, 1, quote, triple)
 				at = end
-				if triple && end > contentEnd {
+				if end > contentEnd {
 					skipUntil = end
 				}
 				kind := String
@@ -196,9 +201,14 @@ func stringPrefixLength(source []byte, at int) int {
 func stringEnd(source []byte, at, prefix int, quote byte, triple bool) int {
 	open := at + prefix - 1
 	if triple {
-		needle := string([]byte{quote, quote, quote})
-		if close := strings.Index(string(source[open+3:]), needle); close >= 0 {
-			return open + 3 + close + 3
+		for position := open + 3; position < len(source); position++ {
+			if source[position] == '\\' {
+				position++
+				continue
+			}
+			if position+2 < len(source) && source[position] == quote && source[position+1] == quote && source[position+2] == quote {
+				return position + 3
+			}
 		}
 		return len(source)
 	}
