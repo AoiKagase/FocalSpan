@@ -414,10 +414,7 @@ func factCandidatePaths(fact projectmeta.Fact, target string) []string {
 		mapped := strings.ReplaceAll(base, "*", remainder)
 		return []string{filepath.ToSlash(filepath.Join(manifestDir, mapped))}
 	default:
-		if fact.Target == "" || (!strings.Contains(fact.Target, "/") && !strings.Contains(fact.Target, "\\") && filepath.Ext(fact.Target) == "") {
-			return nil
-		}
-		return []string{filepath.ToSlash(filepath.Join(manifestDir, strings.ReplaceAll(fact.Target, "\\", "/")))}
+		return nil
 	}
 }
 
