@@ -42,10 +42,6 @@ func (s *Scanner) Scan(ctx context.Context) ([]model.SourceFile, []model.Diagnos
 	if err != nil {
 		return nil, nil, err
 	}
-	realRoot, err := canonicalOrAbsolute(s.Root)
-	if err != nil {
-		return nil, nil, fmt.Errorf("resolve scan root: %w", err)
-	}
 	files := make([]model.SourceFile, 0, len(paths))
 	diagnostics := make([]model.Diagnostic, 0)
 	for _, rel := range paths {
@@ -65,13 +61,6 @@ func (s *Scanner) Scan(ctx context.Context) ([]model.SourceFile, []model.Diagnos
 				return nil, diagnostics, fmt.Errorf("resolve source %s: %w", rel, err)
 			}
 			diagnostics = append(diagnostics, model.Diagnostic{FilePath: rel, Level: "warning", Code: "path_escape", Message: "file resolved outside repository root"})
-			continue
-		}
-		physicalRelative, err := filepath.Rel(realRoot, contained)
-		if err != nil {
-			return nil, diagnostics, fmt.Errorf("resolve source policy %s: %w", rel, err)
-		}
-		if s.excluded(filepath.ToSlash(physicalRelative)) {
 			continue
 		}
 		info, err := os.Stat(contained)
