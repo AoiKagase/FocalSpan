@@ -42,14 +42,12 @@ func TestRegistryBOMPreservesSymbolsAndOriginalBytePositions(t *testing.T) {
 			if !found {
 				t.Fatalf("BOM lost first declaration %s: %+v", tc.name, got.Symbols)
 			}
-			if tc.language != "powershell" { // Generic end-range conventions are outside this fix.
-				for _, chunk := range got.Chunks {
-					if chunk.StartByte == 0 && chunk.EndByte == 0 {
-						continue // Synthetic outlines deliberately have no source range.
-					}
-					if chunk.StartByte < 3 || chunk.EndByte > len(raw) || chunk.EndByte < chunk.StartByte || string(raw[chunk.StartByte:chunk.EndByte]) != chunk.Content {
-						t.Errorf("chunk does not select original source bytes: %+v", chunk)
-					}
+			for _, chunk := range got.Chunks {
+				if chunk.StartByte == 0 && chunk.EndByte == 0 {
+					continue // Synthetic outlines deliberately have no source range.
+				}
+				if chunk.StartByte < 3 || chunk.EndByte > len(raw) || chunk.EndByte < chunk.StartByte || string(raw[chunk.StartByte:chunk.EndByte]) != chunk.Content {
+					t.Errorf("chunk does not select original source bytes: %+v", chunk)
 				}
 			}
 		})

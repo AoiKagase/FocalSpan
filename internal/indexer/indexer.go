@@ -45,7 +45,7 @@ const (
 	PhaseLinking  = "linking"
 	PhaseComplete = "complete"
 
-	extractorVersion = "extractors-v5-polyglot"
+	extractorVersion = "extractors-v6-source-fidelity"
 )
 
 func New(root string, cfg config.Config, st *store.Store, registry *extract.Registry) *Indexer {

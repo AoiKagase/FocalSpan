@@ -7,9 +7,11 @@ Generic chunks must retain original line endings and byte ranges selecting exact
 ## Progress
 
 - [x] 2026-10-17 UTC: Traced generic normalized lines into appendGeneric content and byteOffset. Archived completed BOM plan byte-for-byte.
-- [ ] Observe failing exact-source/range and public Evidence regressions, including old-version refresh.
-- [ ] Slice raw bytes by selected lines and bump extractor version for existing indexes.
+- [x] 2026-10-17 UTC: RED on all raw source/range edge cases and v5 unchanged-file refresh; CRLF source normalized and EOF byte ranges exceeded source.
+- [x] 2026-10-17 UTC: Slice raw bytes using a source map built once per extraction branch. Bump version to extractors-v6-source-fidelity. Focused generic/BOM/indexer/service regressions passed, including original Evidence source/lines and measured wire/invariants. Removed generic exemption from existing BOM byte-range regression.
 - [ ] Full verification, independent review, scoped commit, merge and merged branch cleanup.
+
+- [x] 2026-10-17 UTC: Final full go test ./..., go test -race ./..., go vet ./..., native and three CGO-disabled cross-builds passed. Independent read-only review found no actionable issues. SourceMap constructed once per branch avoids per-chunk rescans. Evidence source/hash/ranges, version refresh, wire measurement and invariants passed.
 
 ## Surprises & Discoveries
 
@@ -22,7 +24,7 @@ Generic splitLines normalizes CRLF for parsing. appendGeneric reconstructs conte
 
 ## Outcomes & Retrospective
 
-Pending implementation and verification.
+Final regressions and full offline verification pass; existing parser lines and declaration selection remain unchanged. Raw source slices supply content, hashes and matching symbol/chunk ranges. CRLF/mixed/UTF-8/empty/EOF cases and BOM PowerShell exact slices pass. v5 indexes refresh once even with unchanged files; following updates skip them. Independent review found no actionable issues. Artifacts: .build/generic-fidelity-verification. Commit and local merge remain.
 
 ## Context and Orientation
 

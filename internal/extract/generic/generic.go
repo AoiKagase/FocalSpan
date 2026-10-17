@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/focalspan/focalspan/internal/extract/sourceutil"
 	"github.com/focalspan/focalspan/internal/model"
 )
 
@@ -96,6 +97,7 @@ func javascriptStructured(file model.SourceFile) model.Extraction {
 
 func structured(file model.SourceFile, match declarationMatcher) model.Extraction {
 	lines := splitLines(string(file.Content))
+	source := sourceutil.NewSourceMap(file.Content)
 	pairs, codeLines := scanSource(lines)
 	result := model.Extraction{Diagnostics: []model.Diagnostic{{FilePath: file.Path, Level: "info", Code: "generic_extraction", Message: "language-aware structural extraction is syntax-approximate"}}}
 	allocator := model.NewHandleAllocator()
@@ -114,7 +116,7 @@ func structured(file model.SourceFile, match declarationMatcher) model.Extractio
 				end = len(lines) - 1
 			}
 		}
-		result = appendGeneric(result, file, allocator, lines, declaration.startLine, end, declaration.kind, declaration.name)
+		result = appendGeneric(result, file, source, allocator, lines, declaration.startLine, end, declaration.kind, declaration.name)
 	}
 	if len(result.Chunks) == 0 {
 		return windows(file, 80, 10)
@@ -299,6 +301,7 @@ func scanSource(lines []string) ([]bracePair, []string) {
 
 func braceBalanced(file model.SourceFile) model.Extraction {
 	lines := splitLines(string(file.Content))
+	source := sourceutil.NewSourceMap(file.Content)
 	result := model.Extraction{Diagnostics: []model.Diagnostic{{FilePath: file.Path, Level: "info", Code: "generic_extraction", Message: "generic structural extraction is syntax-approximate"}}}
 	allocator := model.NewHandleAllocator()
 	depth := 0
@@ -316,15 +319,15 @@ func braceBalanced(file model.SourceFile) model.Extraction {
 			depth = 0
 		}
 		if start >= 0 && before == 0 && depth == 0 {
-			result = appendGeneric(result, file, allocator, lines, start, i, kind, name)
+			result = appendGeneric(result, file, source, allocator, lines, start, i, kind, name)
 			start, kind, name = -1, "", ""
 		} else if start >= 0 && depth == 0 && before > 0 {
-			result = appendGeneric(result, file, allocator, lines, start, i, kind, name)
+			result = appendGeneric(result, file, source, allocator, lines, start, i, kind, name)
 			start, kind, name = -1, "", ""
 		}
 	}
 	if start >= 0 {
-		result = appendGeneric(result, file, allocator, lines, start, len(lines)-1, kind, name)
+		result = appendGeneric(result, file, source, allocator, lines, start, len(lines)-1, kind, name)
 	}
 	if len(result.Chunks) == 0 {
 		return windows(file, 80, 10)
@@ -387,6 +390,7 @@ func braceDelta(line string) int {
 
 func indentation(file model.SourceFile) model.Extraction {
 	lines := splitLines(string(file.Content))
+	source := sourceutil.NewSourceMap(file.Content)
 	result := model.Extraction{Diagnostics: []model.Diagnostic{{FilePath: file.Path, Level: "info", Code: "generic_extraction", Message: "indentation extraction is syntax-approximate"}}}
 	allocator := model.NewHandleAllocator()
 	starts := make([]int, 0)
@@ -409,7 +413,7 @@ func indentation(file model.SourceFile) model.Extraction {
 		if i+1 < len(starts) {
 			end = starts[i+1] - 1
 		}
-		result = appendGeneric(result, file, allocator, lines, start, end, kinds[i], names[i])
+		result = appendGeneric(result, file, source, allocator, lines, start, end, kinds[i], names[i])
 	}
 	if len(result.Chunks) == 0 {
 		return windows(file, 80, 10)
@@ -419,6 +423,7 @@ func indentation(file model.SourceFile) model.Extraction {
 
 func markdown(file model.SourceFile) model.Extraction {
 	lines := splitLines(string(file.Content))
+	source := sourceutil.NewSourceMap(file.Content)
 	result := model.Extraction{Diagnostics: []model.Diagnostic{{FilePath: file.Path, Level: "info", Code: "markdown_extraction", Message: "Markdown is split by heading"}}}
 	allocator := model.NewHandleAllocator()
 	starts := make([]int, 0)
@@ -443,7 +448,7 @@ func markdown(file model.SourceFile) model.Extraction {
 		if i+1 < len(starts) {
 			end = starts[i+1] - 1
 		}
-		result = appendGeneric(result, file, allocator, lines, start, end, "heading", names[i])
+		result = appendGeneric(result, file, source, allocator, lines, start, end, "heading", names[i])
 	}
 	if len(result.Chunks) == 0 {
 		return windows(file, 80, 10)
@@ -453,6 +458,7 @@ func markdown(file model.SourceFile) model.Extraction {
 
 func windows(file model.SourceFile, size, overlap int) model.Extraction {
 	lines := splitLines(string(file.Content))
+	source := sourceutil.NewSourceMap(file.Content)
 	result := model.Extraction{Diagnostics: []model.Diagnostic{{FilePath: file.Path, Level: "info", Code: "line_window", Message: "fallback line windows used"}}}
 	allocator := model.NewHandleAllocator()
 	if len(lines) == 0 {
@@ -463,7 +469,7 @@ func windows(file model.SourceFile, size, overlap int) model.Extraction {
 		if end > len(lines) {
 			end = len(lines)
 		}
-		result = appendGeneric(result, file, allocator, lines, start, end-1, "window", "")
+		result = appendGeneric(result, file, source, allocator, lines, start, end-1, "window", "")
 		if end == len(lines) {
 			break
 		}
@@ -472,17 +478,27 @@ func windows(file model.SourceFile, size, overlap int) model.Extraction {
 	return result
 }
 
-func appendGeneric(result model.Extraction, file model.SourceFile, allocator *model.HandleAllocator, lines []string, start, end int, kind, name string) model.Extraction {
+func appendGeneric(result model.Extraction, file model.SourceFile, source sourceutil.SourceMap, allocator *model.HandleAllocator, lines []string, start, end int, kind, name string) model.Extraction {
 	if start < 0 || end < start || start >= len(lines) {
 		return result
 	}
 	if end >= len(lines) {
 		end = len(lines) - 1
 	}
-	content := strings.Join(lines[start:end+1], "\n")
+	// Parser lines are normalized, but evidence must retain original bytes.
+	// Exclude only the final selected line's terminator, as before.
+	startByte := source.LineStarts[start]
+	endByte := len(file.Content)
+	if end+1 < len(source.LineStarts) {
+		endByte = source.LineStarts[end+1] - 1 // final LF
+		if endByte > startByte && file.Content[endByte-1] == '\r' {
+			endByte-- // CR from the final CRLF
+		}
+	}
+	content := string(file.Content[startByte:endByte])
 	qualified := name
 	handle := allocator.Allocate("sym", file.Path, file.Language, kind, qualified, model.NormalizeSignature(strings.TrimSpace(firstNonEmpty(lines[start:end+1]))))
-	symbol := model.Symbol{Handle: handle, FilePath: file.Path, Language: file.Language, Kind: kind, Name: name, QualifiedName: qualified, Signature: strings.TrimSpace(firstNonEmpty(lines[start : end+1])), StartLine: start + 1, EndLine: end + 1, StartByte: byteOffset(lines, start), EndByte: byteOffset(lines, end+1), Confidence: .55}
+	symbol := model.Symbol{Handle: handle, FilePath: file.Path, Language: file.Language, Kind: kind, Name: name, QualifiedName: qualified, Signature: strings.TrimSpace(firstNonEmpty(lines[start : end+1])), StartLine: start + 1, EndLine: end + 1, StartByte: startByte, EndByte: endByte, Confidence: .55}
 	result.Symbols = append(result.Symbols, symbol)
 	digest := sha256.Sum256([]byte(content))
 	result.Chunks = append(result.Chunks, model.Chunk{Handle: model.StableHandle("chunk", symbol.Handle, content), FilePath: file.Path, Language: file.Language, Kind: kind, SymbolHandle: handle, SymbolName: name, Signature: symbol.Signature, StartLine: start + 1, EndLine: end + 1, StartByte: symbol.StartByte, EndByte: symbol.EndByte, Content: content, ContentHash: hex.EncodeToString(digest[:])})
@@ -505,12 +521,4 @@ func firstNonEmpty(lines []string) string {
 		}
 	}
 	return ""
-}
-
-func byteOffset(lines []string, line int) int {
-	offset := 0
-	for i := 0; i < line && i < len(lines); i++ {
-		offset += len(lines[i]) + 1
-	}
-	return offset
 }
