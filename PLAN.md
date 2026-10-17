@@ -23,6 +23,8 @@
 
 ## Progress
 
+- 2026-10-17 execution: Task 8完了。A15=d78c03f、A16=ea60b31。全CLI/codexテストPASS（C:/Temp/fs24-task8.log）。全24件の修正をコミット済み。O01の失敗時メタデータ保持とA16のauto-update/未管理登録の補足受け入れもPASS。全通常/race/vet/ビルドと独立レビューはこれから実行する。
+
 - 2026-10-17 execution: Task 7完了。O04=28e798c、A17は正式RED→GREEN。検索候補取得後・内部再入・欠落revision、設定開始前/dry-run/rename前のキャンセルを検査。app/codex/mcpserver全テストPASS（C:/Temp/fs24-task7.log）。設定元バイトとmodeを保持しtemp削除もPASS。
 
 - 2026-10-17 execution: Task 6完了。A08=24c6626、O03は正式RED→GREEN。履歴headを固定し、old/new hunkで現在行へ変換。挿入/置換/削除/rename/単一ref/現在削除とauto/manualの全関連検査PASS（C:/Temp/fs24-task6.log）。
@@ -178,6 +180,35 @@ Task 1→2/6、Task 3→4/5の索引再抽出、Task 4→5の正しいsymbol位�
 言語照合の内部policyは一般検索の曖昧な名前検索を変更せず、関係の解決・関係SQLの正確性へ適用する。既存のlookup projectionは広い候補取得用に残し、誤った候補を最終照合で確定しない。VB/PHP/Nim等の既存fixtureを先に固定し、一律のcase-sensitive化で互換性を壊さない。
 
 ## Validation and Acceptance
+
+### Regression ledger
+
+| ID | 主な正式回帰テスト | 修正commit |
+|---|---|---|
+| O01 | TestGitSafetyProbeFailureDoesNotWalkIgnoredFiles / TestGitProbeFailurePreservesIgnoredSourceAndIndex | 3700ec1 |
+| O02 | TestConfigurationReextractsSameBytes | b678eb3 |
+| O03 | TestHistoricalImpactMapsCurrentWorktreeLines / TestMapLineRanges | 83554f4 |
+| O04 | TestEvidenceHonorsCancellationAfterCandidates / TestReadIndexHonorsLateCancellationIncludingNestedRead | 28e798c |
+| O05 | TestGenericConfiguredWindowOptions / TestConfiguredFallbackWindows / TestEmbeddedFallbackUsesConfiguredWindows | b288a0d |
+| A01 | TestGitSafetyRefCannotWriteOutputFile / TestGitSafetyRefValidationAndTags | 66cb695 |
+| A02 | TestSyntheticNeverClaimsSourceFidelity / TestActualModuleOutlineNeverClaimsSourceFidelity | 6579a31 |
+| A03 | TestIncrementalPreservesIncomingRelations | 911ca20 |
+| A04 | TestLineDirectiveKeepsPhysicalLocations | c5e8103 |
+| A05 | TestScannerRejectsSecretCaseVariants | 9d1c962 |
+| A06 | TestIndexDirectoryRejectsOutsideJunction / TestIndexDirectoryAllowsInsideJunction | 4f3c579 |
+| A07 | TestGitSafetyDiffIgnoresTextconv | 4a7b0e3 |
+| A08 | TestWorkingTreeIncludesUntrackedSources / TestUntrackedSourceInChangedQueryAndImpact | 24c6626 |
+| A09 | TestIndexSkipsGitlinkDirectory / TestFileReadFailurePreservesIndex | 868b37a / 4f3c579 |
+| A10 | TestGoCallResolutionRespectsCase / TestLocalRelationsRespectCase / TestOtherLocalRelationsRespectCase / TestRelationCaseMatchesLanguage | 4a97e1d / a2829fc |
+| A11 | TestCallResolutionRejectsOtherLanguage / TestRelationLanguageFilterBeforeCandidateLimit | 68241e9 |
+| A12 | TestCallResolutionDoesNotPreferFileBasename | d5770e5 |
+| A13 | TestRelationUnderscoreIsLiteral | f987403 |
+| A14 | TestScannerRejectsNULAnywhere | 83217c3 |
+| A15 | TestExplicitQueryNormalization / TestExplicitQueryCLI / TestExplicitBlankQueryCannotUsePositionalText | d78c03f |
+| A16 | TestProjectStatusComparesFullRegistration / TestProjectStatusDetectsAutoUpdateDrift / TestProjectStatusUnmanagedMatchAndConflict | ea60b31 |
+| A17 | TestProjectOperationsHonorCancelledContext / TestAtomicWriteCancellationBeforeCommit | 8adecbd |
+| A18 | TestTestAttributeRequiresAttributePath | 8d56050 |
+| A19 | TestProductionFunctionTestPrefixIsNotTest / TestGoTestDeclarationSignatureControls | a845b35 |
 
 各修正前に正式回帰をREDで観測し、対象修正後にGREENを確認する。24 IDすべてについてテスト名・実行結果・対応commitをProgressへ記録する。既存overlayの一括実行だけで完了としない。Fixtureとend-to-end acceptanceはtestdataとpackage integration testsへ置く。
 
