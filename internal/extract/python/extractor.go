@@ -45,21 +45,27 @@ type pyLine struct {
 	Start, End, ContentStart int
 	Indent                   int
 	Text                     string
+	Original                 string
 }
 
 func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extraction, error) {
 	if err := ctx.Err(); err != nil {
 		return model.Extraction{}, err
 	}
-	_, diagnostics, err := Lex(ctx, file.Content)
+	tokens, diagnostics, err := Lex(ctx, file.Content)
 	if err != nil {
 		return model.Extraction{}, err
 	}
-	return buildPython(ctx, file, diagnostics), nil
+	return buildPython(ctx, file, diagnostics, tokens), nil
 }
 
-func buildPython(ctx context.Context, file model.SourceFile, diagnostics []model.Diagnostic) model.Extraction {
+func buildPython(ctx context.Context, file model.SourceFile, diagnostics []model.Diagnostic, tokens []Token) model.Extraction {
 	lines := pythonLines(file.Content)
+	code := pythonCodeView(file.Content, tokens)
+	for i := range lines {
+		lines[i].Original = lines[i].Text
+		lines[i].Text = strings.TrimRight(string(code[lines[i].Start:lines[i].End]), "\r\n")
+	}
 	result := model.Extraction{}
 	for index := range diagnostics {
 		diagnostics[index].FilePath = file.Path
@@ -197,7 +203,11 @@ func parsePythonDeclarations(lines []pyLine) []*pyDeclaration {
 			continue
 		}
 		if strings.HasPrefix(text, "@") {
-			decorators = append(decorators, text)
+			decorator := strings.TrimSpace(line.Original)
+			if decorator == "" {
+				decorator = text
+			}
+			decorators = append(decorators, decorator)
 			continue
 		}
 		var decl *pyDeclaration
