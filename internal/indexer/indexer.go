@@ -116,7 +116,6 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 			run.FilesDeleted++
 		}
 	}
-	sort.Strings(deletions)
 	emit(Progress{Phase: PhaseParsing, Total: len(toParse)})
 	results := i.parse(ctx, toParse, func(completed int) {
 		emit(Progress{Phase: PhaseParsing, Completed: completed, Total: len(toParse)})
@@ -129,10 +128,16 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 	for _, result := range results {
 		if result.err != nil {
 			run.ParseFailures++
+			// Do not retain old source under the newly scanned revision. An
+			// absent row also ensures the failed file is retried next time.
+			if existing[result.file.Path] {
+				deletions = append(deletions, result.file.Path)
+			}
 			continue
 		}
 		updates = append(updates, store.FileUpdate{File: result.file, Extraction: result.extraction})
 	}
+	sort.Strings(deletions)
 	for _, diagnostic := range scanDiagnostics {
 		if diagnostic.Level == "warning" {
 			run.ParseFailures++

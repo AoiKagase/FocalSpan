@@ -7,13 +7,17 @@ Successful indexing must not expose old source from changed files whose extracti
 ## Progress
 
 - [x] 2026-10-17 UTC: Found failed extraction skips replacement but retains old rows. Archived the completed deletion-only plan byte-for-byte.
-- [ ] Add and observe failing deterministic regression.
-- [ ] Evict failed paths transactionally; verify retries, recovery and cancellation.
+- [x] 2026-10-17 UTC: Injected hard extractor failure; RED returned stale OldToken source after a successful new-revision run.
+- [x] 2026-10-17 UTC: Evict failed paths transactionally. Focused indexer tests passed, including retry, repair, unaffected source and existing cancellation rollback.
 - [ ] Full verification, independent review, scoped commit, local merge and merged branch cleanup.
+
+- [x] 2026-10-17 UTC: Full go test ./..., go test -race ./..., go vet ./..., native and all three cross-builds passed. Independent read-only review found no actionable issues. git diff --check passed; unrelated tracked patch hash remains 481d2c278a820ccfda79ec7bde9bd0ddd35cd68a.
 
 ## Surprises & Discoveries
 
 Paths absent from the store are retried on the next scan. Eviction avoids stale source without artificial hashes. Partial extraction returning no error remains usable.
+
+Ordinary malformed Go returns a partial AST rather than a hard failure; the regression uses a wrapper extractor injecting a deterministic error while delegating successful extraction to the real Go extractor.
 
 ## Decision Log
 
@@ -22,7 +26,7 @@ Paths absent from the store are retried on the next scan. Eviction avoids stale 
 
 ## Outcomes & Retrospective
 
-Pending implementation and verification.
+Hard extraction errors now evict only the failed file's old rows using the existing update transaction. Repeated failure retries and repair recovery pass alongside unaffected-file and cancellation controls. Ordinary partial Go extraction is unchanged. Full offline verification and independent review passed. Build artifacts are under .build/extraction-failure-verification; merging and branch cleanup remain.
 
 ## Context and Orientation
 
