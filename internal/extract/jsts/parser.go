@@ -100,21 +100,30 @@ func (p *parser) parseModules() {
 				continue
 			}
 			end := -1
-			for cursor := position + 1; cursor < len(p.sig); cursor++ {
-				if p.tokens[p.sig[cursor]].Kind == StringLiteral {
-					end = cursor
-					break
-				}
-				if p.tokens[p.sig[cursor]].Text == ";" {
-					break
+			if position+1 < len(p.sig) && p.tokens[p.sig[position+1]].Kind == StringLiteral {
+				end = position + 1
+			} else {
+				for cursor := position + 1; cursor+1 < len(p.sig); cursor++ {
+					token := p.tokens[p.sig[cursor]]
+					if token.Text == ";" {
+						break
+					}
+					if token.Text == "{" {
+						if close, ok := p.matching[p.sig[cursor]]; ok {
+							cursor = p.positionOf(close)
+							continue
+						}
+					}
+					if token.Text == "from" && p.tokens[p.sig[cursor+1]].Kind == StringLiteral {
+						end = cursor + 1
+						break
+					}
 				}
 			}
 			if end < 0 {
 				continue
 			}
-			for _, target := range stringLiterals(p.tokens, p.sig[position:end+1]) {
-				p.result.Modules = append(p.result.Modules, moduleRelation{Target: target, Source: "jsts:import"})
-			}
+			p.result.Modules = append(p.result.Modules, moduleRelation{Target: strings.Trim(p.tokens[p.sig[end]].Text, "\"'"), Source: "jsts:import"})
 			for _, item := range importedNamesWithAliases(p.tokens, p.sig[position:end+1]) {
 				p.result.Modules = append(p.result.Modules, moduleRelation{Target: item.Target, Alias: item.Alias, Source: "jsts:import-symbol"})
 			}
@@ -640,7 +649,7 @@ func importedNamesWithAliases(tokens []Token, indexes []int) []importedName {
 			inside = false
 			continue
 		}
-		if !inside || tokens[index].Kind != Identifier || text == "as" {
+		if !inside || tokens[index].Kind != Identifier && tokens[index].Kind != StringLiteral || text == "as" {
 			continue
 		}
 		if position > 0 && tokens[indexes[position-1]].Text == "as" && len(result) > 0 {
@@ -648,7 +657,8 @@ func importedNamesWithAliases(tokens []Token, indexes []int) []importedName {
 			continue
 		}
 		if position+1 < len(indexes) && tokens[indexes[position+1]].Text == "as" || position+1 == len(indexes) || tokens[indexes[position+1]].Text == "," || tokens[indexes[position+1]].Text == "}" {
-			result = append(result, importedName{Target: text, Alias: text})
+			name := strings.Trim(text, "\"'")
+			result = append(result, importedName{Target: name, Alias: name})
 		}
 	}
 	return result

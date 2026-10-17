@@ -143,3 +143,25 @@ func TestF36ArrowSpanAndOrdinaryVariable(t *testing.T) {
 		t.Fatalf("incomplete arrow: %+v", arrow)
 	}
 }
+
+func TestF34ReviewStringNamedImport(t *testing.T) {
+	got := wholeAuditExtract(t, jsts.NewExtractor(), "x.js", "javascript", "import { \"a-b\" as ab } from './module.js'\nconst message='not-a-module';\nfunction caller(){ ab(); }\n")
+	module, alias := false, false
+	for _, relation := range got.Relations {
+		if relation.Kind == "imports" {
+			if relation.Source == "jsts:import" && relation.UnresolvedTo == "module.js" {
+				module = true
+			}
+			if relation.Source == "jsts:import-symbol" && relation.UnresolvedTo == "a-b" {
+				alias = true
+			}
+			if relation.UnresolvedTo == "not-a-module" || relation.Source == "jsts:import" && relation.UnresolvedTo == "a-b" {
+				t.Fatalf("non-module imported: %+v", relation)
+			}
+		}
+	}
+	if !module || !alias {
+		t.Fatalf("module=%v alias=%v relations=%+v", module, alias, got.Relations)
+	}
+	wholeAuditSymbol(t, got, "caller")
+}
