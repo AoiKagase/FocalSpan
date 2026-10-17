@@ -24,7 +24,7 @@ type qualityKey struct {
 
 func CompareReports(baseline, candidate RunReport) Comparison {
 	result := Comparison{}
-	if baseline.Schema != candidate.Schema || baseline.Schema != ReportSchemaV1 {
+	if baseline.Schema != candidate.Schema || (baseline.Schema != ReportSchemaV1 && baseline.Schema != ReportSchemaV2) {
 		result.Warnings = append(result.Warnings, "report schema incompatible")
 		return result
 	}

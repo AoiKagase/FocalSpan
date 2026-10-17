@@ -57,6 +57,7 @@ type RunReport struct {
 }
 
 const ReportSchemaV1 = "focalspan.benchmark-report.v1"
+const ReportSchemaV2 = "focalspan.benchmark-report.v2"
 
 func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, error) {
 	if request.Repeat <= 0 {
@@ -65,7 +66,7 @@ func (runner *Runner) Run(ctx context.Context, request RunRequest) (RunReport, e
 	if runner.Snapshotter == nil || runner.EngineFactory == nil {
 		return RunReport{}, fmt.Errorf("runner dependencies are required")
 	}
-	report := RunReport{Schema: ReportSchemaV1, Suite: request.Suite.Name}
+	report := RunReport{Schema: ReportSchemaV2, Suite: request.Suite.Name}
 	for _, benchmarkCase := range request.Suite.Cases {
 		repositoryPath, exists := request.Repositories[benchmarkCase.Repository]
 		if !exists {

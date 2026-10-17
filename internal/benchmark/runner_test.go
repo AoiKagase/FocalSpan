@@ -150,6 +150,9 @@ func TestRunnerSequencesCasesProfilesBudgetsAndRepeats(t *testing.T) {
 	if snapshotter.calls != 1 || factory.opens != 1 || factory.builds != 1 || factory.queries != 8 || factory.closes != 1 || len(report.Runs) != 4 {
 		t.Fatalf("snapshot=%d opens=%d builds=%d queries=%d closes=%d runs=%d", snapshotter.calls, factory.opens, factory.builds, factory.queries, factory.closes, len(report.Runs))
 	}
+	if report.Schema != "focalspan.benchmark-report.v2" {
+		t.Fatalf("new report schema=%s", report.Schema)
+	}
 	wantModes := []search.RetrievalMode{
 		search.RetrievalFull, search.RetrievalFull, search.RetrievalFull, search.RetrievalFull,
 		search.RetrievalFTSOnly, search.RetrievalFTSOnly, search.RetrievalFTSOnly, search.RetrievalFTSOnly,

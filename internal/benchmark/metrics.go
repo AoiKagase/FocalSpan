@@ -129,7 +129,7 @@ func MeasurePacket(c Case, profile string, budget int, packet evidence.Packet, d
 		r.RelationValid = 0
 	}
 	for i, item := range packet.Evidence {
-		if item.Role == evidence.RoleTarget && r.TargetRank == 0 {
+		if r.TargetRank == 0 && requiredTarget(c, item) {
 			r.TargetRank = i + 1
 		}
 		for _, p := range c.ForbiddenPaths {
@@ -196,6 +196,23 @@ func MeasurePacket(c Case, profile string, budget int, packet evidence.Packet, d
 		r.ChangedPathRecall = ratio(selected, len(changedPaths))
 	}
 	return r
+}
+
+func requiredTarget(c Case, item evidence.Item) bool {
+	if len(c.RequiredSymbols) > 0 {
+		for _, want := range c.RequiredSymbols {
+			if item.Location.Path == want.Path && item.Symbol == want.Name && (want.Kind == "" || item.Kind == want.Kind) && (want.Role == "" || string(item.Role) == want.Role) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, path := range c.RequiredPaths {
+		if item.Location.Path == path {
+			return true
+		}
+	}
+	return false
 }
 
 func measurePacketBytes(result *QualityResult, packet evidence.Packet) {
