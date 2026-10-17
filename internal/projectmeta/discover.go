@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/focalspan/focalspan/internal/model"
@@ -379,13 +380,19 @@ func parseZigManifest(text string, add func(string, string, string, float64)) {
 }
 
 func quotedAssignment(line, key string) string {
-	if key != "" {
-		pattern := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(key) + `\s*=\s*["']([^"']+)["']`)
-		if match := pattern.FindStringSubmatch(line); len(match) == 2 {
-			return match[1]
-		}
+	pattern := regexp.MustCompile(`(?i)(?:^|[,{]\s*)` + regexp.QuoteMeta(key) + `\s*=\s*(?:"((?:\\.|[^"\\])*)"|'([^']*)')`)
+	match := pattern.FindStringSubmatch(strings.TrimSpace(line))
+	if len(match) < 3 {
+		return ""
 	}
-	return firstQuoted(line)
+	if match[2] != "" {
+		return match[2]
+	}
+	value, err := strconv.Unquote(`"` + match[1] + `"`)
+	if err != nil {
+		return ""
+	}
+	return value
 }
 
 func assignmentValue(line, key string) string {
