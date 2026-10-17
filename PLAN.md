@@ -5,7 +5,7 @@ N01〜N19を修正し、範囲外参照・データ消失・古い関係・抽�
 
 ## Progress
 - [x] 専用branch codex/additional-19-fixesをmaster@6bd4259から作成し、前PLANをそのままarchive。
-- [ ] ① N01〜N03: ファイル境界・ID・snapshot所有範囲。
+- [x] ① N01〜N03: ファイル境界・ID・snapshot所有範囲。
 - [ ] ② N04・N05: 設定競合・管理マーカー。
 - [ ] ③ N06〜N10: Git形式固定・manifest再抽出・JSONC。
 - [ ] ④ N11〜N18: Python/Go抽出。
@@ -53,7 +53,7 @@ MCP公開field・Evidence v1/v2・DB schema維持。設定lock/競合errorは内
 最後にgo test ./...→go test -race ./...を直列実行（Windows raceはC:/msys64/ucrt64/bin/gcc.exe）、go vet ./...、native build、CGO_ENABLED=0のwindows/amd64・linux/amd64・darwin/arm64でfocalspan/focalspan-bench/focalspan-evalをbuild。独立reviewとgit diff --checkを通す。
 
 ## Surprises & Discoveries
-実測結果を追記する。
+①: N01/N02/N03の正式REDを確認後、repository/store/indexer、benchmark/benchcliはGREEN。ログC:/Temp/fs19-n01-{red,green}.log、fs19-n02-{red,green}.log、fs19-n03-{red,green}.log。N01=53529c5、N02=32276c1。既存dirty paths保持。
 
 ## Decision Log
 - 2026-10-17: ユーザー選択: 設定競合は中止・再試行案内、正解判定symbol優先。

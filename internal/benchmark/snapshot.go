@@ -35,7 +35,14 @@ func (s *gitSnapshotter) Materialize(ctx context.Context, repositoryID, reposito
 	if !ok {
 		return Snapshot{}, fmt.Errorf("git snapshot runner does not support streaming")
 	}
-	if err := os.MkdirAll(destination, 0o755); err != nil {
+	if err := ctx.Err(); err != nil {
+		return Snapshot{}, err
+	}
+	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+		return Snapshot{}, err
+	}
+	// Only a directory created by this operation may be removed on failure.
+	if err := os.Mkdir(destination, 0o755); err != nil {
 		return Snapshot{}, err
 	}
 	reader, writer := io.Pipe()
