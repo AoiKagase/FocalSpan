@@ -5,6 +5,7 @@ import (
 	"github.com/focalspan/focalspan/internal/extract"
 	"github.com/focalspan/focalspan/internal/extract/vb"
 	"github.com/focalspan/focalspan/internal/model"
+	"os"
 	"strings"
 	"testing"
 )
@@ -47,12 +48,12 @@ func wholeAuditNoSymbol(t *testing.T, got model.Extraction, name string) {
 }
 
 func TestF30VBStringIsNotDeclaration(t *testing.T) {
-	got := wholeAuditExtract(t, vb.NewVBNetExtractor(), "x.vb", "vbnet", "Class A\nSub F()\nDim s As String = \"Class Fake\"\nEnd Sub\nEnd Class\n")
+	got := wholeAuditExtract(t, vb.NewVBNetExtractor(), "x.vb", "vbnet", audit50Fixture(t, "F30/vb-1.vb"))
 	wholeAuditNoSymbol(t, got, "Fake")
 }
 
 func TestF24VBConstructorClosesAtEndSub(t *testing.T) {
-	got := wholeAuditExtract(t, vb.NewVBNetExtractor(), "x.vb", "vbnet", "Class A\nPublic Sub New()\nEnd Sub\nPublic Sub After()\nEnd Sub\nEnd Class\n")
+	got := wholeAuditExtract(t, vb.NewVBNetExtractor(), "x.vb", "vbnet", audit50Fixture(t, "F24/vb-1.vb"))
 	owner := wholeAuditSymbol(t, got, "A")
 	ctor := wholeAuditSymbol(t, got, "New")
 	after := wholeAuditSymbol(t, got, "After")
@@ -117,4 +118,28 @@ func TestF24SemanticMethodKindRetainsFunctionTerminator(t *testing.T) {
 			t.Fatalf("semantic method terminator: method=%+v after=%+v", method, after)
 		}
 	}
+}
+
+func audit50Fixture(t *testing.T, name string) string {
+	t.Helper()
+	data, err := os.ReadFile("../../../testdata/audit50/" + name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func TestReviewF30Regression(t *testing.T) {
+	got := wholeAuditExtract(t, vb.NewVB6Extractor(), "x.bas", "vb6", audit50Fixture(t, "F30/review-x.bas"))
+	wholeAuditSymbol(t, got, "Real")
+	wholeAuditNoSymbol(t, got, "Fake")
+}
+
+func TestReviewF30DoubledQuotesVB6(t *testing.T) {
+	got := wholeAuditExtract(t, vb.NewVB6Extractor(), "x.bas", "vb6", `Sub Real()
+s = "quoted ""Sub Fake()"""
+End Sub
+`)
+	wholeAuditSymbol(t, got, "Real")
+	wholeAuditNoSymbol(t, got, "Fake")
 }

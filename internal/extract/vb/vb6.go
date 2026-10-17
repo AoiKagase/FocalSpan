@@ -89,29 +89,30 @@ func parseVB6(file model.SourceFile) vbParseResult {
 
 func parseVB6Declaration(text string, line int, stack []*vbDecl) *vbDecl {
 	parent := vbDeclParent(stack)
-	if match := vb6DeclarePattern.FindStringSubmatch(text); len(match) == 3 {
+	code := vbStringPattern.ReplaceAllString(text, `""`)
+	if match := vb6DeclarePattern.FindStringSubmatch(code); len(match) == 3 {
 		return newVBDecl("declare", match[2], text, line, false, parent)
 	}
-	if match := vb6PropertyPattern.FindStringSubmatch(text); len(match) == 3 {
+	if match := vb6PropertyPattern.FindStringSubmatch(code); len(match) == 3 {
 		return newVBDecl("property-"+strings.ToLower(match[1]), match[2], text, line, true, parent)
 	}
-	if match := vb6MethodPattern.FindStringSubmatch(text); len(match) == 3 {
+	if match := vb6MethodPattern.FindStringSubmatch(code); len(match) == 3 {
 		kind := strings.ToLower(match[1])
 		if strings.Contains(match[2], "_") {
 			kind = "event-handler"
 		}
 		return newVBDecl(kind, match[2], text, line, true, parent)
 	}
-	if match := vb6EventPattern.FindStringSubmatch(text); len(match) == 2 {
+	if match := vb6EventPattern.FindStringSubmatch(code); len(match) == 2 {
 		return newVBDecl("event", match[1], text, line, false, parent)
 	}
-	if match := vb6TypePattern.FindStringSubmatch(text); len(match) == 2 {
+	if match := vb6TypePattern.FindStringSubmatch(code); len(match) == 2 {
 		return newVBDecl("type", match[1], text, line, true, parent)
 	}
-	if match := vb6EnumPattern.FindStringSubmatch(text); len(match) == 2 {
+	if match := vb6EnumPattern.FindStringSubmatch(code); len(match) == 2 {
 		return newVBDecl("enum", match[1], text, line, true, parent)
 	}
-	if match := vb6ConstPattern.FindStringSubmatch(text); len(match) == 2 {
+	if match := vb6ConstPattern.FindStringSubmatch(code); len(match) == 2 {
 		return newVBDecl("constant", match[1], text, line, false, parent)
 	}
 	return nil
