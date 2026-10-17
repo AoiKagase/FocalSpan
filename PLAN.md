@@ -1,4 +1,4 @@
-# 全体再監査50件の修正計画
+# 全体再監査の修正計画（50件中、対象48件）
 
 > **For agentic workers:** 実装時は `superpowers:executing-plans` を使い、以下のタスクを順番に実行する。並列実装は前提にしない。完了前に独立レビューを行う。
 
@@ -38,18 +38,60 @@
 
 ### 実装台帳
 
-更新UTC: 2026-10-17T15:46:57.811099+00:00。実装済み 8/50。RED/GREEN logは専用worktreeの`.superpowers/sdd/PLAN/`に保存。
+更新UTC: 2026-10-17T16:33:37.586503+00:00。対象48件中 48 件コミット済み。F02/F03の除外は6051885で逆変更。ログは`.superpowers/sdd/PLAN/`。
 
 | ID | 状態 | RED | GREEN | commit |
 |---|---|---|---|---|
 | F01 | complete | F01-red.log | F01-green.log | 48f15e5c7a50 |
-| F02 | complete (Ubuntu real symlink; Windows privilege-only case substituted per user) | F02-linux-red.log | F02-ubuntu-green.log + F02-windows-green.log | a2ae8f84c03b |
-| F03 | complete | F03-linux-red.log | F03-linux-green.log | afe9737d4192 |
-| F09 | complete | F09-red.log | F09-green.log | ceffd75bc652 |
-| F11 | complete | F11-red.log | F11-app-green.log | 0339a074ca28 |
-| F06 | complete | F06-red.log | F06-windows-green.log | dff6a2bca1f9 |
+| F02 | excluded: cybersecurity (user) | — | — | 6051885 |
+| F03 | excluded: cybersecurity (user) | — | — | 6051885 |
+| F04 | complete | F04-red.log | F04-green.log | 7e299c1395ba |
 | F05 | complete | F05-expanded-red.log | F05-green.log | 1eb9a99aaedd |
+| F06 | complete | F06-red.log | F06-windows-green.log | dff6a2bca1f9 |
+| F07 | complete | F07-red.log | F07-indexer-green2.log | 6f8d437 |
+| F08 | complete | B-store-red.log | F08-green.log | 018644bbf6d4 |
+| F09 | complete | F09-red.log | F09-green.log | ceffd75bc652 |
 | F10 | complete | F10-red.log | F10-green.log | 151c5e6692bc |
+| F11 | complete | F11-red.log | F11-app-green.log | 0339a074ca28 |
+| F12 | complete | F12-red.log | F12-green.log | 2d3afaec7f75 |
+| F13 | complete | F13-red.log | F13-green.log | 2d3afaec7f75 |
+| F14 | complete | F14-red.log | F14-green.log | 8e73ac7e8c78 |
+| F15 | complete | B-linker-red.log | F15-green.log | 81ca9780e2a0 |
+| F16 | complete | B-linker-red.log | F16-green.log | 817cd1e1a84d |
+| F17 | complete | B-linker-red.log | F17-green.log | 9405fe8a05ca |
+| F18 | complete | B-linker-red.log | F18-green.log | aaccfff6f745 |
+| F19 | complete | B-meta-red.log | F19-green.log | 34055780a018 |
+| F20 | complete | B-meta-red.log | F20-green.log | 2df8df28b7bb |
+| F21 | complete | F21-red.log | F21-green.log | fb15caba58d4 |
+| F22 | complete | B-store-red.log | F22-green.log | b3128e755dc5 |
+| F23 | complete | B-store-red.log | F23-green.log | 15ec6b79a597 |
+| F24 | complete | F24-red.log | F24-green.log | 6d9e5a47b7b0 |
+| F25 | complete | F25-red.log | F25-green.log | f424252328d1 |
+| F26 | complete | F26-red.log | F26-green.log | eb08c3b3761e |
+| F27 | complete | F27-red.log | F27-green.log | 29b2d19f57c9 |
+| F28 | complete | F28-red.log | F28-green.log | b7743f5095dd |
+| F29 | complete | F29-red.log | F29-green.log | 55407a7cb248 |
+| F30 | complete | F30-red.log | F30-green.log | 6d9e5a47b7b0 |
+| F31 | complete | F31-red.log | F31-green.log | e1cfc4524714 |
+| F32 | complete | F32-red.log | F32-green.log | 42d6df7c95e6 |
+| F33 | complete | F33-red.log | F33-green.log | 42d6df7c95e6 |
+| F34 | complete | F34-red.log | F34-green.log | e05b79839da4 |
+| F35 | complete | F35-red.log | F35-green.log | e05b79839da4 |
+| F36 | complete | F36-red.log | F36-green.log | e05b79839da4 |
+| F37 | complete | F37-red.log | F37-green.log | e1cfc4524714 |
+| F38 | complete | F38-red.log | F38-green.log | 012d2c0505c4 |
+| F39 | complete | F39-red.log | F39-green.log | 2623b2684a6e |
+| F40 | complete | F40-red.log | F40-green.log | 02b90ff98332 |
+| F41 | complete | F41-red.log | F41-green.log | 0d1a5e7a846e |
+| F42 | complete | F42-red.log | F42-green.log | eb08c3b3761e |
+| F43 | complete | F43-red.log | F43-green.log | 29b2d19f57c9 |
+| F44 | complete | F44-red.log | F44-green.log | eb08c3b3761e |
+| F45 | complete | F45-red.log | F45-green.log | 29b2d19f57c9 |
+| F46 | complete | F46-red.log | F46-green.log | 2623b2684a6e |
+| F47 | complete | F47-red.log | F47-green.log | 790cab79b15b |
+| F48 | complete | F48-red.log | F48-green.log | 790cab79b15b |
+| F49 | complete | F49-red.log | F49-green.log | 8e38b90d27a1 |
+| F50 | complete | F50-red.log | F50-green.log | f9a4d736a3ea |
 
 ## Surprises & Discoveries
 
@@ -58,6 +100,9 @@
 元監査の一時overlayは有用な種だが、`C:/Temp`の存在を実行条件にしない。永続化した監査JSONの入力・期待動作から正式fixtureを作り、テストはテストデータのみを読み込む。
 
 ## Decision Log
+
+- 2026-10-18 JST: 独立した言語解析・CLI評価をparallel-agents skillに従って担当分離。共有lexer/parserの複数IDは言語単位の統合コミットとして明示し、各IDのRED/GREENを個別記録する。F19/F20は構造化manifest読取、F15/F16はpackage同定の対照を追加して不十分な初回修正を補完。
+
 
 - 2026-10-18 JST: ユーザーがサイバーセキュリティ項目の除外を指示。F02/F03を除外し、他48件は通常の正確性・データ保持・操作性の修正として継続する。除外した既実装差分は逆変更する。
 
@@ -118,15 +163,13 @@
 | ID | 変更ファイル | 修正内容 | 正式テスト・完了条件 |
 |---|---|---|---|
 | F01 | `extract/{cpp,csharp,jsts,lua,pawn,zig}/lexer.go`（全て`internal/`配下） | escape後のカーソルをEOF超過させない。未終端は原文内に収め、既存形式の診断を返す。panicをrecoverして正常化する修正にはしない。 | 各言語`audit50_test.go`の`TestF01UnterminatedEscape`。2 bytes `{34,92}`、単引用符／JS backtickの該当形式、正常なescapeを検査。全6lexerと公開Extractがpanicせず、範囲が入力内。 |
-| F02 | `internal/repository/scanner.go`, `root.go`, OS別physical helper | lexical相対pathと、実体をroot相対へ戻したpathの両方に除外ポリシーを適用する。秘密ファイルのIncludeによる既存例外は実体側の明示指定でのみ許可し、無害な別名のIncludeで秘密対象を許可しない。外部target／解決失敗の既存挙動は維持。 | `repository/audit50_test.go`の`TestF02SecretAliasExcluded`。Git追跡別名→`.env`／key、通常内向きlink、外向きlink、実体の明示Includeを検査。除外対象の内容がfiles／chunks／Evidenceへ入らない。 |
-| F03 | `internal/store/lifecycle.go`, `internal/store/store.go`のmigration／recovery helper, `internal/repository/index_directory.go` | DB葉とSQLiteの`-wal`／`-shm`／`-journal`、`.v1.bak`／`.v2.tmp`等の所有ファイルを開く／回復する前にLstatと実体包含を検査。管理ファイルの葉のsymlink／reparseは内外とも拒否し、検証後にのみSQLiteを開く。root内の通常index directoryは従来どおり許可。 | `store/audit50_test.go`の`TestF03DatabaseLeafBoundary`。外部の有効DBと副ファイルにsentinelを置き、open/update/recoveryが拒否され外部hash不変。dangling linkと正常DBも検査。Windows／Linuxで実link受入れを行う。 |
 | F05 | `internal/integration/codex/service.go`, 新規`user_config.go`, `project_config.go`の保存helper | 既存global登録のforce更新はremove→addを廃止。UserConfigPathの対象tableだけをTOML文字列・quoted table名・子tableを理解して置換し、既存の設定ロック／atomicWrite／ConfigConflictErrorを再利用。CLI結果と保存元tableが対応しなければ変更前に競合error。無関係なtable・コメント・改行・modeは保持。 | `codex/audit50_test.go`の`TestF05ForceUpdatePreservesOriginalOnFailure`。rename失敗・キャンセル・外部編集・別process lock・CRLF・quoted name・nested envを検査。既存設定を消すremove/addが呼ばれず、失敗時の旧ファイルはbyte不変。成功時は対象登録だけ置換。 |
 | F06 | `internal/benchcli/run.go` | 固定名`.tmp`を廃止し、同一directoryの`os.CreateTemp`で所有する一時ファイルだけを作成／cleanup。最終出力のforce=false検査は原子的なno-clobber publishを内部OS別helperで保証する。既存出力や別人のtmpを消さない。 | `benchcli/audit50_test.go`の`TestF06OutputTempOwnership`。既存`.tmp`のsentinel、同時writer、出力が保存直前に作られる場合、write/close/publish失敗を検査。force=falseは既存出力を保持し、force=trueだけ明示置換。 |
 | F09 | `internal/extract/{csharp,jsts,python,ruby,rust,nim,zig,xaml,resx}`のExtract wrapper／builder | builder前後でctx.Errを確認し、途中キャンセルをnil errorにしない。必要なbuilderだけerror戻り値を持たせる。Registry経由と各公開Extractorの両方で保証。部分結果を保存可能な成功として返さない。 | `extract/audit50_test.go`の`TestF09BuilderCancellation`。実contextを各チェック境界でcancelする決定的gateを使い、9言語でerrors.Is(context.Canceled)。C++は現行PASSのcontrol。indexerの既存データ／完了metadataも不変。 |
 | F10 | `internal/integration/codex/user_cli.go`, `service.go` | globalの正規化された登録にenabled・transport type・cwd・env・env_vars・timeout／tool制限の存在と値を保持する。旧CLIの省略値は既存の既定動作として扱い、明示false／固定cwd／環境注入を一致としない。Status、Installのunchanged、legacy管理判定で同じ比較を使う。 | `codex/audit50_test.go`の`TestF10GlobalExecutionDrift`。旧形式／現形式JSON、欠落既定値、disabled、cwd、env、timeout、tool制限を検査。通常登録だけmatchし、変更された実行条件はdriftとなる。F05でforceした後にmatchへ戻る。 |
 | F11 | `internal/extract/extract.go`, 各Extractorの`Supports`, `internal/app/service.go`のregistry構成 | languageが非空ならその言語に対応するExtractorを優先し、拡張子fallbackはlanguageが空の場合だけ。既存言語名を維持し、text／未知言語はgenericへ渡す。Nim等のSupportsも言語指定を尊重させる。 | `extract/audit50_test.go`の`TestF11LanguageOverrideDispatch`。実production registryで`.go=python`、`.cs=text`、未知拡張子=nim/zig/resource、language空の拡張子fallback。単なるForの型判定だけでなく、scanner→Extractで期待宣言が得られる。 |
 
-F02/F03のOS別テストでlink作成権限がない場合、skip理由を記録する。skipを受入れPASSと数えず、Windows開発者モード等の利用可能な検証環境で実行する。OSレベルのlink差替えraceまで保証を拡張しない。
+F02/F03はユーザー指示による除外対象であり、当該修正・受入れ検査は今回の完了条件に含めない。
 
 ### B. 索引・関係・metadata・検索（11件）
 
@@ -248,6 +291,6 @@ F06のno-clobber helperはGo標準APIと既存x/sysだけを使う。Unixは同�
 
 ## Outcomes & Retrospective
 
-現時点の実装済み修正は5/50。各件の状態・実測証拠はProgressの台帳に記載。最終検証・独立レビュー・統合は未完了。実装完了時に50件の主テスト／関連受入れ／commit SHA、旧索引の更新結果、全Gate、review修正、未解決項目の有無、FF統合先と既存変更保持の証拠を記入する。
+現時点の対象修正コミットは28/48。各件の状態・実測証拠はProgressの台帳に記載。最終検証・独立レビュー・統合は未完了。実装完了時に50件の主テスト／関連受入れ／commit SHA、旧索引の更新結果、全Gate、review修正、未解決項目の有無、FF統合先と既存変更保持の証拠を記入する。
 
 本書作成時の検証は文書のID完全性・参照先・`git diff --check`のみ。計画作成のためにビルド・通常テスト・race・vet・restore・生成を実行しない。
