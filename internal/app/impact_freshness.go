@@ -21,7 +21,9 @@ func (s *Service) validateImpactSources(ctx context.Context, affected map[string
 			return fmt.Errorf("cannot verify impact source %q (%s); update the index before retrying", diagnostic.FilePath, diagnostic.Code)
 		}
 	}
+	seen := make(map[string]bool, len(files))
 	for _, file := range files {
+		seen[file.Path] = true
 		if len(affected[file.Path]) == 0 {
 			continue
 		}
@@ -31,6 +33,13 @@ func (s *Service) validateImpactSources(ctx context.Context, affected map[string
 		}
 		if !found || hash != file.SHA256 {
 			return fmt.Errorf("index is stale for impact source %q; update the index before retrying", file.Path)
+		}
+	}
+	// Explicit refs can contain current-source ranges for files that have
+	// since disappeared from this worktree. Never retrieve their old rows.
+	for path := range affected {
+		if !seen[path] {
+			delete(affected, path)
 		}
 	}
 	return nil

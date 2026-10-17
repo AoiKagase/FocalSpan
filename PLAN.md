@@ -20,6 +20,8 @@ The prior audit's five temporary overlay tests are in C:/Temp/focalspan_remainin
 
 Final scan acceptance found file read/stat failures still skipped. Added RED/GREEN preservation test using a tracked file replaced by a directory. Fail-closed scanning also exposed custom index directories previously being read as source; RED/GREEN exclusion test now covers them. Windows missing-file errors wrapped by ContainedPath require errors.Is(fs.ErrNotExist), not os.IsNotExist. Normal Git deletions remain accepted. Root regular-file replacement now rejects before enumeration (RED/GREEN). Repository/indexer and app suites passed these compatibility controls.
 
+Final Impact deletion acceptance added explicit historical refs with positive ranges while the current file is deleted. RED returned stale rows; GREEN prunes paths absent from current eligible source before lookup. Manual-mode fixtures now configure NewWithConfig before creation rather than mutate Service.Config afterward, avoiding a configuration-hash false positive. Focused Impact/deletion tests pass and fresh reviewer follow-up found no issues. The earlier full normal suite passed; repeat it for this final change before race/build gates.
+
 ## Decision Log
 
 - 2026-10-17 UTC: User selected consistency over immediate stale snapshots. Index before taking Shared Writer lease; private read helpers must not reacquire it. Health may inspect pending metadata; data reads reject incomplete indexes.

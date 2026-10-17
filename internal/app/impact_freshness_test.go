@@ -2,10 +2,12 @@ package app
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/focalspan/focalspan/internal/config"
 	"github.com/focalspan/focalspan/internal/evidence"
 )
 
@@ -19,12 +21,13 @@ func TestImpactFreshnessHonorsAutoUpdateForWorkingTreeAndRefs(t *testing.T) {
 				path := filepath.Join(root, "auth.go")
 				writeAppFile(t, path, "package auth\nfunc ValidateToken() bool { return false }\n")
 				commitGitChangesFixture(t, root)
-				s, err := New(root)
+				cfg := config.Default()
+				cfg.AutoUpdateBeforeQuery = auto
+				s, err := NewWithConfig(root, cfg)
 				if err != nil {
 					t.Fatal(err)
 				}
 				defer s.Close()
-				s.Config.AutoUpdateBeforeQuery = auto
 				initial, err := s.Index(ctx, true)
 				if err != nil {
 					t.Fatal(err)
@@ -37,7 +40,7 @@ func TestImpactFreshnessHonorsAutoUpdateForWorkingTreeAndRefs(t *testing.T) {
 				}
 				packet, err := s.ImpactEvidence(ctx, EvidenceImpactRequest{BaseRef: base, HeadRef: head, TokenBudget: 1200, Mode: evidence.ModeSource})
 				if !auto {
-					if err == nil {
+					if err == nil || !strings.Contains(err.Error(), "auth.go") {
 						t.Fatalf("stale impact succeeded: %+v", packet.Packet.Evidence)
 					}
 					revision, _ := s.Store.Meta(ctx, "last_revision")
@@ -64,5 +67,36 @@ func TestImpactFreshnessHonorsAutoUpdateForWorkingTreeAndRefs(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestManualRefImpactDoesNotReturnCurrentlyDeletedSource(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	runAppGit(t, root, "init")
+	path := filepath.Join(root, "auth.go")
+	writeAppFile(t, path, "package auth\nfunc ValidateToken() bool { return false }\n")
+	commitGitChangesFixture(t, root)
+	writeAppFile(t, path, "package auth\nfunc ValidateToken() bool { return true }\n")
+	commitGitChangesFixture(t, root)
+	cfg := config.Default()
+	cfg.AutoUpdateBeforeQuery = false
+	s, err := NewWithConfig(root, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if _, err = s.Index(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ImpactEvidence(ctx, EvidenceImpactRequest{BaseRef: "HEAD~1", HeadRef: "HEAD", Mode: evidence.ModeSource, TokenBudget: 1200})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Packet.Evidence) != 0 {
+		t.Fatalf("currently deleted source returned for historical ranges: %+v", got.Packet.Evidence)
 	}
 }
