@@ -96,7 +96,11 @@ func (s *Scanner) paths(ctx context.Context) ([]string, error) {
 	if !info.IsDir() {
 		return nil, fmt.Errorf("repository root is not a directory: %s", s.Root)
 	}
-	if IsGitRepository(ctx, s.Root) {
+	isGit, err := ProbeGitRepository(ctx, s.Root)
+	if err != nil {
+		return nil, err
+	}
+	if isGit {
 		cmd := exec.CommandContext(ctx, "git", "-C", s.Root, "ls-files", "-co", "--exclude-standard", "-z")
 		out, err := cmd.Output()
 		if err != nil {

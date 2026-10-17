@@ -229,9 +229,13 @@ func (s *Service) statusRead(ctx context.Context) (model.Status, error) {
 
 func (s *Service) healthRead(ctx context.Context) (model.HealthStatus, error) {
 	status, err := s.Status(ctx)
+	isGit, probeErr := repository.ProbeGitRepository(ctx, s.Root)
+	if err == nil {
+		err = probeErr
+	}
 	report := model.HealthStatus{
 		Status:             status,
-		RepositoryDetected: repository.IsGitRepository(ctx, s.Root),
+		RepositoryDetected: isGit,
 		ConfigValid:        true,
 		DBOpen:             true,
 		FTS5:               true,

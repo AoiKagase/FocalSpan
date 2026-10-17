@@ -239,7 +239,11 @@ func (s *Service) impactCandidates(ctx context.Context, base, head string) (cand
 			if ctx.Err() != nil {
 				return candidateResult{}, ctx.Err()
 			}
-			if !repository.IsGitRepository(ctx, s.Root) {
+			isGit, probeErr := repository.ProbeGitRepository(ctx, s.Root)
+			if probeErr != nil {
+				return candidateResult{}, probeErr
+			}
+			if !isGit {
 				return candidateResult{Plan: plan, Revision: s.revision(ctx), Diagnostics: []string{"impact unavailable: repository is not a Git repository"}}, nil
 			}
 			return candidateResult{}, fmt.Errorf("read Git changes: %w", err)

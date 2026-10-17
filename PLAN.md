@@ -23,6 +23,8 @@
 
 ## Progress
 
+- 2026-10-17 execution: e986a29で計画移行をコミットし、codex/remaining-24-fixesで開始。O01は正式回帰REDを確認後、Git probeのエラー伝播と本当の非Gitの区別を実装。repository/app/cli全テストGREEN（C:/Temp/fs24-o01.log）。Task 1のA01/A07は未修正。
+
 - [x] 2026-10-17 10:06 UTC: master / 47ef2a1と既存のdirty pathsを確認。24件の対象を照合し、旧PLAN.mdを同一内容でarchiveへ保存した。
 - [x] 2026-10-17 UTC: 24件を8単位へ割り当て、依存順・内部API・受け入れ条件を記述。文書検査PASS（24 IDの一意性、8 Task、必須section、archive、末尾空白なし）、旧計画との同一内容確認とgit diff --checkもPASS。製品コードは変更せず、テスト・ビルドは実行していない。
 - [ ] 実装開始の指示後に専用ブランチを作成し、計画移行だけをコミットする。

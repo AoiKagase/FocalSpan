@@ -701,7 +701,8 @@ func resolveRoot(ctx context.Context, start string) (string, bool, error) {
 		real = abs
 	}
 	real = filepath.Clean(real)
-	return real, repository.IsGitRepository(ctx, real), nil
+	isGit, err := repository.ProbeGitRepository(ctx, real)
+	return real, isGit, err
 }
 
 func newFlagSet(name string) *flag.FlagSet {
