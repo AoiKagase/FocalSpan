@@ -1,44 +1,38 @@
-﻿# Propagate explicit Git impact reference errors
+﻿# Git change correctness after merged-branch cleanup
 
 ## Purpose / Big Picture
-Invalid explicit Git base/head references must return errors through Impact, ImpactEvidence and MCP code_impact rather than empty success.
+Complete the three remaining audit findings: impact candidates must not disappear behind the global candidate cap, Git quoted paths must match indexed paths, and changed-only queries must include staged changes and propagate Git errors.
 
 ## Progress
-- [x] 2026-10-17 UTC: Inspected shared impact path; archived completed predecessor byte-for-byte.
-- [x] 2026-10-17 UTC: Observed RED: four invalid-ref service cases returned success; MCP also returned a successful empty packet. Valid-reference controls passed. Fixture Git init required normal permissions after sandbox denied config writes.
-- [x] 2026-10-17 UTC: Added immediate wrapped error return; service regressions and non-Git compatibility test passed. MCP regression passed in a dedicated run.
-- [x] 2026-10-17 UTC: Full tests, full race rerun, vet, native build and all three CGO-disabled cross-builds passed. Independent read-only review found no actionable issues.
-- [x] 2026-10-17 UTC: Fix committed and merged into master through 2a79ed8 after integrated verification. master is checked out in the clean managed MCP worktree; the source checkout remains codex/parallel-index-locks to preserve its user-owned edits.
-- [x] 2026-10-17 UTC: Fix committed as 8dbc7df. Latest master integrated with only the plan conflict described below. Integrated full tests, full race tests, vet, native build and all three cross-builds passed.
-- [x] 2026-10-17 UTC: Final go test ./... passed from the clean master worktree after fast-forward; completion record is documentation-only.
+- [x] 2026-10-17 UTC: Deleted all eight local branches merged into master with safe branch deletion. Detached old worktrees, preserving all untracked files and root dirty changes. Created codex/git-change-correctness.
+- [ ] Observe RED for all three findings, then implement minimal fixes.
+- [ ] Full verification, independent review, explicit-path commits and local master merge.
 
 ## Surprises & Discoveries
-Explicit-reference Git errors are overwritten during candidate retrieval.
-- Native full tests and vet passed. Initial race execution selected 32-bit MinGW because nested cmd environment settings did not reach Go; explicit PowerShell environment verification selected x86_64 UCRT GCC. The first correctly configured full race run hit an existing TestConcurrentInitialOpenKeepsReadersAlive SQLite lock error (261); the isolated test passed ten repeats. Full race rerun pending.
-- All three CGO-disabled cross-builds passed with normal permissions. Sandbox-only attempts emitted module-cache access-denied warnings.
-- master advanced to d4c1ab9 (MCP supervisor) during this task; integrate its changes and archive its completed PLAN before final master verification.
-- Merge with master conflicted only in PLAN.md. Keep this successor plan active and preserve master's completed supervisor plan byte-for-byte in docs/superpowers/plans/completed/2026-10-17-mcp-worker-restart.md (blob 696262d3be6fc52232bd5c5944b024dd55f3f7c1).
+All old feature branches were ancestors of master. Old PHP/structural worktrees contain untracked files and were preserved. No remote branches other than master were present; no network operation was needed.
 
 ## Decision Log
-- 2026-10-17 UTC: Only fix explicit-reference errors. Preserve no-reference non-Git behavior and unrelated edits. Work in the existing feature checkout as authorized by the approved plan.
-- 2026-10-17 UTC: Use PLAN.md as ledger; do not execute repository helper scripts. Commit the plan transition separately from product code. No network or dependency restore.
+- 2026-10-17 UTC: Resume the remaining three findings in original severity order. Preserve user-owned dirty files. No fixture code execution, network or dependency restore. Keep the current checkout, using a new feature branch. No worktree deletion requested or performed.
+- Use exact-path Store retrieval before changed-line filtering, rank and then apply MaxCandidates. Preserve existing public packet/CLI formats.
+- Include both staged and unstaged ranges in changed-only queries and propagate errors through both query APIs and baseline calculation.
 
 ## Outcomes & Retrospective
-The explicit-reference fix and regressions passed both pre-integration and integrated verification, including the latest MCP supervisor changes. The one transient store initialization failure is recorded above; isolated ten-repeat testing and both subsequent full race runs passed. No store code was changed. Independent review found no actionable issues. Unrelated tracked edits were preserved byte-for-byte as a patch (481d2c278a820ccfda79ec7bde9bd0ddd35cd68a). master was advanced to the verified merge 2a79ed8; no push or binary deployment was performed.
+Pending.
 
 ## Context and Orientation
-internal/app/evidence.go shares impact retrieval between service APIs. MCP already converts service failures to tool errors.
+internal/app/evidence.go currently limits AllCandidates before change filtering. internal/gitx/diff.go does not decode Git C-quoted paths. internal/app/service.go only reads unstaged changes and suppresses failures.
 
 ## Plan of Work
-1. Add real local Git fixture tests for invalid base/head and valid refs through both service APIs; observe failing error cases.
-2. Immediately check explicit-reference Diff errors and wrap using read Git changes and %w. Test MCP propagation.
-3. Run focused/full tests, race, vet, native build and CGO-disabled cross-builds; review task changes.
+1. Add failing real-Git service regressions with low candidate budgets and a late changed file/chunk; add exact-path store tests when introducing the helper.
+2. Add parser cases for C-quoted Unicode, spaces, tabs/quotes and rename paths. Fix path decoding while retaining existing diff kinds and ranges.
+3. Add staged-only query tests and Git-error propagation tests for legacy/evidence queries and baseline requests; implement range union and error returns.
+4. Run focused/full tests, full race tests with verified 64-bit UCRT GCC, vet, native build and CGO-disabled Windows amd64/Linux amd64/Darwin arm64 builds. Include existing Evidence wire/invariant tests. Review and merge locally, preserving unrelated edits.
 
 ## Validation and Acceptance
-Invalid refs preserve exec.ExitError; valid refs yield changed evidence; existing non-Git/no-ref behavior passes. Full tests cover Evidence wire budgets and invariants. Disable module downloads and toolchain downloads. Cross-build Windows amd64, Linux amd64 and Darwin arm64 without claiming target runtime verification.
+Observe RED for behavioral changes. Cover late files and late chunks, exact path matching, deterministic candidate limits, malformed quoted paths, staged-only changes and Git failures. Full suite must retain Evidence fidelity and budget invariants. Disable GOPROXY/GOSUMDB and automatic toolchain downloads. Cross-builds do not imply target runtime acceptance.
 
 ## Idempotence and Recovery
-Temporary Git test fixtures never execute source code. Preserve unrelated edits. Archived predecessor: docs/superpowers/plans/completed/2026-10-15-parallel-index-locks.md.
+Use temporary test fixtures only. Keep old worktrees detached with their original files. Archive prior PLAN byte-for-byte at docs/superpowers/plans/completed/2026-10-17-impact-reference-errors.md. Commit plan transitions separately. Revert only task-owned changes if needed.
 
 ## Interfaces and Dependencies
-No new dependencies, public types or wire formats. Git failures use existing error channels.
+Add internal Store exact-path retrieval. changedRanges gains an error return and its internal callers propagate it. No new dependencies, public flags or Evidence wire fields.
