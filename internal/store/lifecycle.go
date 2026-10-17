@@ -45,6 +45,9 @@ func openWithLease(ctx context.Context, root, directory string, allowUpgrade boo
 		if err != nil {
 			return nil, err
 		}
+		if err := validateIndexFiles(directory); err != nil {
+			return nil, err
+		}
 		if mode == indexlock.Exclusive && allowUpgrade {
 			if err := recoverUpgradeArtifacts(dbPath); err != nil {
 				return nil, err
