@@ -33,6 +33,9 @@ func InstallProject(ctx context.Context, configPath, name string, spec Registrat
 	if dryRun {
 		return installProject(ctx, configPath, name, spec, true)
 	}
+	if err := ctx.Err(); err != nil {
+		return OperationResult{}, err
+	}
 	if err := ensureConfigDirectory(filepath.Dir(configPath)); err != nil {
 		return OperationResult{}, err
 	}

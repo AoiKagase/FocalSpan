@@ -15,6 +15,31 @@ type auditConcurrentEditContext struct {
 	edited bool
 }
 
+type cancelBeforeConfigDirectory struct {
+	context.Context
+	checks int
+}
+
+func (c *cancelBeforeConfigDirectory) Err() error {
+	c.checks++
+	if c.checks >= 2 {
+		return context.Canceled
+	}
+	return nil
+}
+func TestInstallCancellationBeforeDirectoryCreation(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), ".codex")
+	path := filepath.Join(dir, "config.toml")
+	spec := RegistrationSpec{Command: "focalspan.exe", Args: []string{"mcp"}, Enabled: true, StartupTimeoutSec: 30, ToolTimeoutSec: 60, EnabledTools: append([]string(nil), EnabledTools...)}
+	_, err := InstallProject(&cancelBeforeConfigDirectory{Context: context.Background()}, path, "focalspan", spec, false)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancel: %v", err)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("cancelled operation created configuration directory: %v", err)
+	}
+}
+
 func (c *auditConcurrentEditContext) Err() error {
 	if !c.edited {
 		matches, _ := filepath.Glob(filepath.Join(filepath.Dir(c.path), ".config.toml.focalspan-*"))
