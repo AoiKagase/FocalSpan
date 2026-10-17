@@ -12,7 +12,7 @@ Implement the approved five fixes: fail closed on traversal errors; constrain re
 - [x] 2026-10-17 UTC: Step 3 RED admitted writer during paused read and admitted query during subprocess writer. GREEN app suite: shared lease spans all public result construction; parallel readers pass; six public APIs honor caller wait cancellation. Auto-update moved before admission; pending reads reject incomplete updates.
 - [x] 2026-10-17 UTC: Step 4 RED in all worktree/ref × automatic/manual combinations returned old source. GREEN full app suite: automatic Impact updates before read lease; affected source hashes verified even after auto-update; manual mode never mutates and rejects mismatches. Deleted-file controls still pass.
 - [x] 2026-10-17 UTC: Step 5 RED on missing/pending/old metadata and actual interrupted linking. GREEN app suite: Status/Health derive stale/readiness from required metadata under shared lease; data reads reject stale/incomplete indexes; recovery passes. Git-failure fixture now initializes an index so it reaches its intended Git-error boundary.
-- [ ] Full offline verification, independent whole-branch review, fast-forward merge and merged task branch cleanup.
+- [x] 2026-10-17 UTC: Final full go test ./... and then go test -race ./... passed. go vet ./..., native build and CGO-disabled Windows amd64/Linux amd64/Darwin arm64 builds passed. Independent whole-branch review plus final Impact follow-up found no actionable issues. Fixes through 5389180 fast-forward merged into master; task branch deleted.
 
 ## Surprises & Discoveries
 
@@ -32,7 +32,7 @@ Final Impact deletion acceptance added explicit historical refs with positive ra
 
 ## Outcomes & Retrospective
 
-All five implementation steps have targeted passing regressions and independent whole-branch read-only review found no actionable issues, including latest scanner compatibility changes. Final full verification and integration remain. This file is the durable inline execution ledger.
+All five fixes are complete and merged into master through 5389180 with the same verified code tree. Regression coverage includes missing/file roots, read failure rollback, custom index-directory exclusion, 130 duplicate symbols, 1000+ scope conditions, outside-scope anchors, parallel readers, subprocess writer admission, six public read APIs, Impact auto/manual/ref/deleted-source behavior and metadata readiness/recovery. Evidence exact source, locations, invariants and measured wire budget pass. Full normal and race suites, vet, native and three cross-builds passed. Independent review found no actionable issues. Artifacts: .build/remaining-five-verification. Existing user changes retain tracked patch hash 481d2c278a820ccfda79ec7bde9bd0ddd35cd68a; only local master remains. No push, live process changes or runtime deployment performed. Final completion record is documentation-only.
 
 ## Context and Orientation
 
