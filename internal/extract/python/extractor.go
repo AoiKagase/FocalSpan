@@ -106,12 +106,10 @@ func buildPython(ctx context.Context, file model.SourceFile, diagnostics []model
 		}
 		result.Chunks = append(result.Chunks, pythonChunk(file, symbol, chunkKind, start, chunkEnd))
 	}
-	for _, line := range lines {
-		text := strings.TrimSpace(line.Text)
-		if strings.HasPrefix(text, "import ") || strings.HasPrefix(text, "from ") {
-			if target := pythonImportTarget(text); target != "" {
-				addPythonRelation(&result, model.Relation{FromHandle: owner.Handle, UnresolvedTo: target, Kind: "imports", Confidence: .9, Source: "python-import"})
-			}
+	imports := pythonImportRecords(lines)
+	for index := range lines {
+		for _, target := range imports[index] {
+			addPythonRelation(&result, model.Relation{FromHandle: owner.Handle, UnresolvedTo: target, Kind: "imports", Confidence: .9, Source: "python-import"})
 		}
 	}
 	index := pythonIndex(result.Symbols)
@@ -129,11 +127,6 @@ func buildPython(ctx context.Context, file model.SourceFile, diagnostics []model
 		}
 		for line := decl.StartLine; line <= decl.EndLine && line <= len(lines); line++ {
 			text := strings.TrimSpace(lines[line-1].Text)
-			if decl.Parent == nil && (strings.HasPrefix(text, "import ") || strings.HasPrefix(text, "from ")) {
-				if target := pythonImportTarget(text); target != "" {
-					addPythonRelation(&result, model.Relation{FromHandle: owner.Handle, UnresolvedTo: target, Kind: "imports", Confidence: .9, Source: "python-import"})
-				}
-			}
 			for _, match := range pyCallPattern.FindAllStringSubmatch(text, -1) {
 				name := match[1]
 				if strings.HasPrefix(name, "def") || name == "if" || name == "for" || name == "while" || name == "class" || name == "print" {
@@ -347,28 +340,6 @@ func pythonBases(header string) []string {
 	}
 	return result
 }
-func pythonImportTarget(text string) string {
-	if strings.HasPrefix(text, "from ") {
-		value := strings.TrimPrefix(text, "from ")
-		fields := strings.Fields(value)
-		if len(fields) >= 3 && fields[1] == "import" {
-			imported := strings.TrimSpace(strings.Split(fields[2], ",")[0])
-			if imported != "" && imported != "*" {
-				return fields[0] + "." + imported
-			}
-		}
-		if len(fields) > 0 {
-			return fields[0]
-		}
-		return value
-	}
-	value := strings.TrimPrefix(text, "import ")
-	if space := strings.IndexAny(value, " \t"); space >= 0 {
-		return value[:space]
-	}
-	return value
-}
-
 func pythonLines(source []byte) []pyLine {
 	lines := make([]pyLine, 0)
 	starts := lineStarts(source)
