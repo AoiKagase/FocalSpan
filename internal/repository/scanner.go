@@ -226,11 +226,7 @@ func matchPath(pattern, path string) bool {
 }
 
 func hasNUL(b []byte) bool {
-	limit := len(b)
-	if limit > 8192 {
-		limit = 8192
-	}
-	for _, v := range b[:limit] {
+	for _, v := range b {
 		if v == 0 {
 			return true
 		}
