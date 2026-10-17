@@ -180,21 +180,21 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (model.ContextBun
 	return s.packWithSavings(ctx, model.PackRequest{Query: req.Query, TokenBudget: req.TokenBudget, Mode: mode, Candidates: result.Candidates, IntentHints: result.Plan.IntentStrings()})
 }
 
-func (s *Service) changedRanges(ctx context.Context, changedOnly bool) map[string][]search.LineRange {
+func (s *Service) changedRanges(ctx context.Context, changedOnly bool) (map[string][]search.LineRange, error) {
 	changed := map[string][]search.LineRange{}
 	if !changedOnly {
-		return changed
+		return changed, nil
 	}
-	files, err := gitx.NewClient(s.Root).Diff(ctx, gitx.DiffRequest{})
+	files, err := gitx.NewClient(s.Root).WorkingTreeDiff(ctx)
 	if err != nil {
-		return changed
+		return nil, fmt.Errorf("read Git changes: %w", err)
 	}
 	for _, file := range files {
 		for _, r := range file.Ranges {
 			changed[file.Path] = append(changed[file.Path], search.LineRange{Start: r.Start, End: r.End})
 		}
 	}
-	return changed
+	return changed, nil
 }
 
 func (s *Service) Status(ctx context.Context) (model.Status, error) {
@@ -324,7 +324,11 @@ func (s *Service) BaselineTokensForRequest(ctx context.Context, req QueryRequest
 	if retrievalMode == "" {
 		retrievalMode = search.RetrievalFull
 	}
-	candidates, err := s.searcher.Search(ctx, search.SearchRequest{Query: req.Query, Paths: req.Paths, ChangedOnly: req.ChangedOnly, Changed: s.changedRanges(ctx, req.ChangedOnly), Limit: s.Config.MaxCandidates, Mode: retrievalMode})
+	changed, err := s.changedRanges(ctx, req.ChangedOnly)
+	if err != nil {
+		return 0, err
+	}
+	candidates, err := s.searcher.Search(ctx, search.SearchRequest{Query: req.Query, Paths: req.Paths, ChangedOnly: req.ChangedOnly, Changed: changed, Limit: s.Config.MaxCandidates, Mode: retrievalMode})
 	if err != nil {
 		return 0, err
 	}

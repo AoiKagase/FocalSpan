@@ -938,6 +938,19 @@ func appendCandidates(result *[]model.RankedCandidate, seen map[string]bool, ite
 	}
 }
 
+// CandidatesForPath returns every chunk for one exact indexed path. Callers
+// which filter by line range must apply their candidate limit after filtering.
+func (s *Store) CandidatesForPath(ctx context.Context, path string) ([]model.RankedCandidate, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows, err := s.db.QueryContext(ctx, candidateQuery(`f.path = ?`), path)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanCandidates(rows)
+}
+
 func (s *Store) AllCandidates(ctx context.Context, limit int) ([]model.RankedCandidate, error) {
 	if limit <= 0 || limit > 1000 {
 		limit = 1000

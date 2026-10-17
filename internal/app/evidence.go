@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/focalspan/focalspan/internal/evidence"
@@ -75,7 +76,11 @@ func (s *Service) queryCandidatesDetailed(ctx context.Context, req QueryRequest,
 	if retrievalMode == "" {
 		retrievalMode = search.RetrievalFull
 	}
-	result, err := s.searcher.SearchDetailed(ctx, search.SearchRequest{Query: req.Query, Paths: req.Paths, ChangedOnly: req.ChangedOnly, Changed: s.changedRanges(ctx, req.ChangedOnly), Limit: s.Config.MaxCandidates, Mode: retrievalMode, Trace: trace})
+	changed, err := s.changedRanges(ctx, req.ChangedOnly)
+	if err != nil {
+		return candidateResult{}, err
+	}
+	result, err := s.searcher.SearchDetailed(ctx, search.SearchRequest{Query: req.Query, Paths: req.Paths, ChangedOnly: req.ChangedOnly, Changed: changed, Limit: s.Config.MaxCandidates, Mode: retrievalMode, Trace: trace})
 	if err != nil {
 		return candidateResult{}, err
 	}
@@ -234,32 +239,47 @@ func (s *Service) impactCandidates(ctx context.Context, base, head string) (cand
 			return candidateResult{}, fmt.Errorf("read Git changes: %w", err)
 		}
 	} else {
-		unstaged, unstagedErr := gitx.NewClient(s.Root).Diff(ctx, gitx.DiffRequest{})
-		staged, stagedErr := gitx.NewClient(s.Root).Diff(ctx, gitx.DiffRequest{Staged: true})
-		if unstagedErr != nil && stagedErr != nil {
+		changed, err = gitx.NewClient(s.Root).WorkingTreeDiff(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return candidateResult{}, ctx.Err()
+			}
 			if !repository.IsGitRepository(ctx, s.Root) {
 				return candidateResult{Plan: plan, Revision: s.revision(ctx), Diagnostics: []string{"impact unavailable: repository is not a Git repository"}}, nil
 			}
-			return candidateResult{}, fmt.Errorf("read Git changes: %w", unstagedErr)
+			return candidateResult{}, fmt.Errorf("read Git changes: %w", err)
 		}
-		changed = append(unstaged, staged...)
 	}
-	all, err := s.Store.AllCandidates(ctx, s.Config.MaxCandidates)
-	if err != nil {
-		return candidateResult{}, err
+	rangesByPath := make(map[string][]gitx.LineRange)
+	for _, file := range changed {
+		if len(file.Ranges) > 0 {
+			rangesByPath[file.Path] = append(rangesByPath[file.Path], file.Ranges...)
+		}
 	}
+	paths := make([]string, 0, len(rangesByPath))
+	for path := range rangesByPath {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
 	selected := make([]model.RankedCandidate, 0)
-	for _, candidate := range all {
-		for _, file := range changed {
-			if candidate.Path == file.Path && candidateOverlaps(candidate.StartLine, candidate.EndLine, file.Ranges) {
+	for _, path := range paths {
+		candidates, err := s.Store.CandidatesForPath(ctx, path)
+		if err != nil {
+			return candidateResult{}, err
+		}
+		for _, candidate := range candidates {
+			if candidateOverlaps(candidate.StartLine, candidate.EndLine, rangesByPath[path]) {
 				candidate.Changed = true
 				candidate.Score = 25
 				selected = append(selected, candidate)
-				break
 			}
 		}
 	}
-	return candidateResult{Plan: plan, Revision: s.revision(ctx), Candidates: rank.RankWithPlan(selected, plan)}, nil
+	selected = rank.RankWithPlan(selected, plan)
+	if len(selected) > s.Config.MaxCandidates {
+		selected = selected[:s.Config.MaxCandidates]
+	}
+	return candidateResult{Plan: plan, Revision: s.revision(ctx), Candidates: selected}, nil
 }
 
 func planForRelation(relation string) query.Plan {

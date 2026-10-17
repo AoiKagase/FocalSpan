@@ -5,8 +5,10 @@ Complete the three remaining audit findings: impact candidates must not disappea
 
 ## Progress
 - [x] 2026-10-17 UTC: Deleted all eight local branches merged into master with safe branch deletion. Detached old worktrees, preserving all untracked files and root dirty changes. Created codex/git-change-correctness.
-- [ ] Observe RED for all three findings, then implement minimal fixes.
+- [x] 2026-10-17 UTC: Observed RED for late file/chunk impact, staged-only and quoted-path queries, Git failure suppression and parser path decoding. Implemented exact-path filtering before ranking/cap, decoded Git paths, and propagated changed-only errors. Focused original regressions passed.
+- [x] 2026-10-17 UTC: Additional RED-to-GREEN checks caught mixed staged/unstaged line shifts and source lines resembling diff headers. Use HEAD-to-worktree coordinates and only parse file headers before hunks. Added unborn-repository and cap/determinism controls.
 - [ ] Full verification, independent review, explicit-path commits and local master merge.
+- [x] 2026-10-17 UTC: Full go test ./..., go test -race ./..., go vet ./..., native build and CGO-disabled windows/amd64, linux/amd64, darwin/arm64 builds passed. Focused regressions including unborn HEAD and deterministic caps passed. Independent read-only review found no actionable issues.
 
 ## Surprises & Discoveries
 All old feature branches were ancestors of master. Old PHP/structural worktrees contain untracked files and were preserved. No remote branches other than master were present; no network operation was needed.
@@ -14,10 +16,10 @@ All old feature branches were ancestors of master. Old PHP/structural worktrees 
 ## Decision Log
 - 2026-10-17 UTC: Resume the remaining three findings in original severity order. Preserve user-owned dirty files. No fixture code execution, network or dependency restore. Keep the current checkout, using a new feature branch. No worktree deletion requested or performed.
 - Use exact-path Store retrieval before changed-line filtering, rank and then apply MaxCandidates. Preserve existing public packet/CLI formats.
-- Include both staged and unstaged ranges in changed-only queries and propagate errors through both query APIs and baseline calculation.
+- Compare HEAD to the current worktree for committed repositories so staged/unstaged changes share current line coordinates. For unborn HEAD, all lines of tracked files are changed. Propagate Git errors through queries and baseline calculation. The original range-union approach failed the mixed-edit regression and was replaced.
 
 ## Outcomes & Retrospective
-Pending.
+All remaining audit findings are implemented with behavioral regressions and passed full verification and independent review. User-owned tracked edits retain patch hash 481d2c278a820ccfda79ec7bde9bd0ddd35cd68a. Tests/builds use offline settings and artifacts under .build/git-change-verification. No runtime deployment or remote push. Explicit-path commits and local master merge remain pending.
 
 ## Context and Orientation
 internal/app/evidence.go currently limits AllCandidates before change filtering. internal/gitx/diff.go does not decode Git C-quoted paths. internal/app/service.go only reads unstaged changes and suppresses failures.
