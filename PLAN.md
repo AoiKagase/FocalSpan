@@ -23,6 +23,8 @@
 
 ## Progress
 
+- 2026-10-17 execution: Task 1 GREEN: O01=3700ec1、A01=66cb695。A07も正式RED→GREEN。gitx/repository/app/cli全テストPASS（C:/Temp/fs24-task1.log）。安全なref解決・textconv無効化・Git probeを完了。
+
 - 2026-10-17 execution: e986a29で計画移行をコミットし、codex/remaining-24-fixesで開始。O01は正式回帰REDを確認後、Git probeのエラー伝播と本当の非Gitの区別を実装。repository/app/cli全テストGREEN（C:/Temp/fs24-o01.log）。Task 1のA01/A07は未修正。
 
 - [x] 2026-10-17 10:06 UTC: master / 47ef2a1と既存のdirty pathsを確認。24件の対象を照合し、旧PLAN.mdを同一内容でarchiveへ保存した。
