@@ -109,6 +109,10 @@ func TestGitChangesChangedOnlyPropagatesGitFailure(t *testing.T) {
 	}
 	defer service.Close()
 	ctx := context.Background()
+	// Keep the index readable so this test reaches the Git failure boundary.
+	if _, err := service.Index(ctx, true); err != nil {
+		t.Fatal(err)
+	}
 	for _, api := range []string{"legacy", "evidence", "baseline"} {
 		t.Run(api, func(t *testing.T) {
 			req := QueryRequest{Query: "ValidateToken", ChangedOnly: true, NoUpdate: true}

@@ -46,6 +46,8 @@ const (
 	PhaseComplete = "complete"
 
 	extractorVersion = "extractors-v6-source-fidelity"
+	// ExtractorVersion is the version required for a readable, current index.
+	ExtractorVersion = extractorVersion
 )
 
 func New(root string, cfg config.Config, st *store.Store, registry *extract.Registry) *Indexer {

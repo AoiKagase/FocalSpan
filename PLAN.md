@@ -11,12 +11,14 @@ Implement the approved five fixes: fail closed on traversal errors; constrain re
 - [x] 2026-10-17 UTC: Step 2 RED on path/changed-only late exact match; GREEN across store/search/app suites and explicit 1000+ condition, literal wildcard/path boundary/case/range controls. Outside-scope anchors preserved; Evidence wire/invariants pass.
 - [x] 2026-10-17 UTC: Step 3 RED admitted writer during paused read and admitted query during subprocess writer. GREEN app suite: shared lease spans all public result construction; parallel readers pass; six public APIs honor caller wait cancellation. Auto-update moved before admission; pending reads reject incomplete updates.
 - [x] 2026-10-17 UTC: Step 4 RED in all worktree/ref × automatic/manual combinations returned old source. GREEN full app suite: automatic Impact updates before read lease; affected source hashes verified even after auto-update; manual mode never mutates and rejects mismatches. Deleted-file controls still pass.
-- [ ] Step 5: Status/Health readiness from all completion metadata; commit.
+- [x] 2026-10-17 UTC: Step 5 RED on missing/pending/old metadata and actual interrupted linking. GREEN app suite: Status/Health derive stale/readiness from required metadata under shared lease; data reads reject stale/incomplete indexes; recovery passes. Git-failure fixture now initializes an index so it reaches its intended Git-error boundary.
 - [ ] Full offline verification, independent whole-branch review, fast-forward merge and merged task branch cleanup.
 
 ## Surprises & Discoveries
 
 The prior audit's five temporary overlay tests are in C:/Temp/focalspan_remaining_audit_20261017_test.go. Interleaving tests must use channels and a separate writer rather than synchronously invoking Index while a read lease is held.
+
+Final scan acceptance found file read/stat failures still skipped. Added RED/GREEN preservation test using a tracked file replaced by a directory. Fail-closed scanning also exposed custom index directories previously being read as source; RED/GREEN exclusion test now covers them. Windows missing-file errors wrapped by ContainedPath require errors.Is(fs.ErrNotExist), not os.IsNotExist. Normal Git deletions remain accepted. Root regular-file replacement now rejects before enumeration (RED/GREEN). Repository/indexer and app suites passed these compatibility controls.
 
 ## Decision Log
 
@@ -28,7 +30,7 @@ The prior audit's five temporary overlay tests are in C:/Temp/focalspan_remainin
 
 ## Outcomes & Retrospective
 
-Pending execution. This file is the durable inline execution ledger.
+All five implementation steps have targeted passing regressions and independent whole-branch read-only review found no actionable issues, including latest scanner compatibility changes. Final full verification and integration remain. This file is the durable inline execution ledger.
 
 ## Context and Orientation
 

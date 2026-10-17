@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -197,19 +199,35 @@ func (s *Service) changedRanges(ctx context.Context, changedOnly bool) (map[stri
 	return changed, nil
 }
 
-func (s *Service) Status(ctx context.Context) (model.Status, error) {
+func (s *Service) statusRead(ctx context.Context) (model.Status, error) {
 	status, err := s.Store.Status(ctx, s.Root)
 	if err != nil {
 		return status, err
 	}
-	hash, err := s.Store.Meta(ctx, "configuration_hash")
-	if err == nil {
-		status.Stale = hash != "" && hash != s.Config.Hash()
+	checks := []struct{ key, want string }{
+		{"configuration_hash", s.Config.Hash()},
+		{"extractor_version", indexer.ExtractorVersion},
+		{"linking_pending", "0"},
+		{"last_successful_index", ""},
+	}
+	status.Stale = status.LastRevision == ""
+	for _, check := range checks {
+		value, err := s.Store.Meta(ctx, check.key)
+		if errors.Is(err, sql.ErrNoRows) {
+			status.Stale = true
+			continue
+		}
+		if err != nil {
+			return status, fmt.Errorf("read index metadata %s: %w", check.key, err)
+		}
+		if (check.key == "last_successful_index" && value == "") || (check.key != "last_successful_index" && value != check.want) {
+			status.Stale = true
+		}
 	}
 	return status, nil
 }
 
-func (s *Service) Health(ctx context.Context) (model.HealthStatus, error) {
+func (s *Service) healthRead(ctx context.Context) (model.HealthStatus, error) {
 	status, err := s.Status(ctx)
 	report := model.HealthStatus{
 		Status:             status,

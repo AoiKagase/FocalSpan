@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -15,6 +14,10 @@ import (
 type indexReadKey struct{}
 
 func readResult[T any](s *Service, ctx context.Context, update bool, read func(context.Context) (T, error)) (T, error) {
+	return readIndex(s, ctx, update, true, read)
+}
+
+func readIndex[T any](s *Service, ctx context.Context, update, requireReady bool, read func(context.Context) (T, error)) (T, error) {
 	var zero T
 	if ctx.Value(indexReadKey{}) == s {
 		return read(ctx)
@@ -29,14 +32,23 @@ func readResult[T any](s *Service, ctx context.Context, update bool, read func(c
 		return zero, err
 	}
 	defer lease.Close()
-	pending, err := s.Store.Meta(ctx, "linking_pending")
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return zero, fmt.Errorf("read index completion: %w", err)
-	}
-	if pending == "1" {
-		return zero, errors.New("index update is incomplete; update the index before reading evidence")
+	if requireReady {
+		status, err := s.statusRead(ctx)
+		if err != nil {
+			return zero, err
+		}
+		if status.Stale {
+			return zero, errors.New("index is stale or incomplete; update the index before reading evidence")
+		}
 	}
 	return read(context.WithValue(ctx, indexReadKey{}, s))
+}
+
+func (s *Service) Status(ctx context.Context) (model.Status, error) {
+	return readIndex(s, ctx, false, false, s.statusRead)
+}
+func (s *Service) Health(ctx context.Context) (model.HealthStatus, error) {
+	return readIndex(s, ctx, false, false, s.healthRead)
 }
 
 func (s *Service) Query(ctx context.Context, req QueryRequest) (model.ContextBundle, error) {
