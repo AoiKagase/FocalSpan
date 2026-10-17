@@ -23,6 +23,9 @@ type projectObservation struct {
 }
 
 func InstallProject(ctx context.Context, configPath, name string, spec RegistrationSpec, dryRun bool) (OperationResult, error) {
+	if err := ctx.Err(); err != nil {
+		return OperationResult{}, err
+	}
 	if err := ValidateName(name); err != nil {
 		return OperationResult{}, err
 	}
@@ -54,12 +57,18 @@ func InstallProject(ctx context.Context, configPath, name string, spec Registrat
 		return OperationResult{}, fmt.Errorf("unmanaged MCP server %q already exists in %s; choose another --name or resolve it manually (--force does not remove unmanaged settings)", name, configPath)
 	}
 	if dryRun || result.Action == "unchanged" {
+		if err := ctx.Err(); err != nil {
+			return OperationResult{}, err
+		}
 		return result, nil
 	}
 
 	newContent := appendManagedBlock(obs.content, block, result.Action == "update", obs.managedBounds)
 	if err := validateTOML(newContent); err != nil {
 		return OperationResult{}, fmt.Errorf("validate generated Codex config: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return OperationResult{}, err
 	}
 	if err := ensureConfigDirectory(filepath.Dir(configPath)); err != nil {
 		return OperationResult{}, err
@@ -72,7 +81,7 @@ func InstallProject(ctx context.Context, configPath, name string, spec Registrat
 		}
 		mode = info.Mode().Perm()
 	}
-	if err := atomicWrite(configPath, newContent, mode); err != nil {
+	if err := atomicWrite(ctx, configPath, newContent, mode); err != nil {
 		return OperationResult{}, fmt.Errorf("write Codex config: %w", err)
 	}
 	return result, nil
@@ -111,6 +120,9 @@ func StatusProject(configPath, root, name string, spec RegistrationSpec) Registr
 }
 
 func UninstallProject(ctx context.Context, configPath, name string, dryRun bool) (OperationResult, error) {
+	if err := ctx.Err(); err != nil {
+		return OperationResult{}, err
+	}
 	if err := ValidateName(name); err != nil {
 		return OperationResult{}, err
 	}
@@ -120,9 +132,15 @@ func UninstallProject(ctx context.Context, configPath, name string, dryRun bool)
 	}
 	result := OperationResult{Client: ClientName, Scope: ScopeProject, Name: name, ConfigPath: configPath, Action: "unchanged", State: StateAbsent, DryRun: dryRun}
 	if !obs.managed {
+		if err := ctx.Err(); err != nil {
+			return OperationResult{}, err
+		}
 		return result, nil
 	}
 	result.Action, result.State = "removed", StateAbsent
+	if err := ctx.Err(); err != nil {
+		return OperationResult{}, err
+	}
 	if dryRun {
 		return result, nil
 	}
@@ -134,7 +152,7 @@ func UninstallProject(ctx context.Context, configPath, name string, dryRun bool)
 	if err != nil {
 		return OperationResult{}, fmt.Errorf("stat Codex config: %w", err)
 	}
-	if err := atomicWrite(configPath, newContent, info.Mode().Perm()); err != nil {
+	if err := atomicWrite(ctx, configPath, newContent, info.Mode().Perm()); err != nil {
 		return OperationResult{}, fmt.Errorf("write Codex config: %w", err)
 	}
 	return result, nil
@@ -319,7 +337,10 @@ func ensureConfigDirectory(dir string) error {
 	return nil
 }
 
-func atomicWrite(path string, content []byte, mode os.FileMode) error {
+func atomicWrite(ctx context.Context, path string, content []byte, mode os.FileMode) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	dir := filepath.Dir(path)
 	temp, err := os.CreateTemp(dir, ".config.toml.focalspan-*")
 	if err != nil {
@@ -340,6 +361,9 @@ func atomicWrite(path string, content []byte, mode os.FileMode) error {
 		return err
 	}
 	if err := temp.Close(); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	return os.Rename(tempPath, path)

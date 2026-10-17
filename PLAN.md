@@ -23,6 +23,8 @@
 
 ## Progress
 
+- 2026-10-17 execution: Task 7完了。O04=28e798c、A17は正式RED→GREEN。検索候補取得後・内部再入・欠落revision、設定開始前/dry-run/rename前のキャンセルを検査。app/codex/mcpserver全テストPASS（C:/Temp/fs24-task7.log）。設定元バイトとmodeを保持しtemp削除もPASS。
+
 - 2026-10-17 execution: Task 6完了。A08=24c6626、O03は正式RED→GREEN。履歴headを固定し、old/new hunkで現在行へ変換。挿入/置換/削除/rename/単一ref/現在削除とauto/manualの全関連検査PASS（C:/Temp/fs24-task6.log）。
 
 - 2026-10-17 execution: Task 5完了。A03=911ca20、A13=f987403、A10=4a97e1d/a2829fc、A12=d5770e5、A11は正式RED→GREEN。language/linker/store/indexer/search/extract全体/appの全テストPASS（C:/Temp/fs24-task5.log）。異言語130件の除外もPASS。ExtractorVersion=v15。
