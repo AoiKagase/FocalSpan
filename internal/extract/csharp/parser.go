@@ -209,6 +209,10 @@ func (p *parser) parseNamespace(position, hi int, parent *declaration, namespace
 }
 
 func (p *parser) parseType(position, hi int, parent *declaration, namespace string) (*declaration, int, bool) {
+	qualification := namespace
+	if parent != nil && parent.Kind != "namespace" {
+		qualification = parent.Qualified
+	}
 	kind := p.tokens[p.sig[position]].Text
 	if kind == "record" {
 		kind = "record"
@@ -230,10 +234,10 @@ func (p *parser) parseType(position, hi int, parent *declaration, namespace stri
 		if semi < 0 {
 			return nil, position, false
 		}
-		return &declaration{Kind: kind, Name: name, Qualified: joinQualified(namespace, name), Start: p.sig[position], HeaderEnd: p.tokens[p.sig[semi]].EndByte, End: p.tokens[p.sig[semi]].EndByte, BodyOpen: -1, BodyClose: -1, Parent: parent, Namespace: namespace}, semi, true
+		return &declaration{Kind: kind, Name: name, Qualified: joinQualified(qualification, name), Start: p.sig[position], HeaderEnd: p.tokens[p.sig[semi]].EndByte, End: p.tokens[p.sig[semi]].EndByte, BodyOpen: -1, BodyClose: -1, Parent: parent, Namespace: namespace}, semi, true
 	}
 	close := p.matching[p.sig[open]]
-	return &declaration{Kind: kind, Name: name, Qualified: joinQualified(namespace, name), Start: p.sig[position], HeaderEnd: p.tokens[p.sig[open]].EndByte, End: p.endAfter(close, hi), BodyOpen: p.sig[open], BodyClose: close, Parent: parent, Namespace: namespace}, p.positionOfOr(close, open), true
+	return &declaration{Kind: kind, Name: name, Qualified: joinQualified(qualification, name), Start: p.sig[position], HeaderEnd: p.tokens[p.sig[open]].EndByte, End: p.endAfter(close, hi), BodyOpen: p.sig[open], BodyClose: close, Parent: parent, Namespace: namespace}, p.positionOfOr(close, open), true
 }
 
 func (p *parser) parseFunction(position, hi int, parent *declaration, namespace, currentType string) (*declaration, int, bool) {
@@ -276,11 +280,14 @@ func (p *parser) parseFunction(position, hi int, parent *declaration, namespace,
 		return nil, position, false
 	}
 	qualified := name
-	if currentType != "" {
-		qualified = currentType + "." + name
+	owner := parent
+	for owner != nil && (owner.Kind == "method" || owner.Kind == "function") {
+		owner = owner.Parent
 	}
-	if namespace != "" {
-		qualified = namespace + "." + qualified
+	if owner != nil && owner.Kind != "namespace" {
+		qualified = owner.Qualified + "." + name
+	} else if namespace != "" {
+		qualified = namespace + "." + name
 	}
 	kind := "method"
 	if currentType == "" && parent == nil {

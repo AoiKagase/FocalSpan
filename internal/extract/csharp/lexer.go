@@ -9,7 +9,7 @@ import (
 	"github.com/focalspan/focalspan/internal/model"
 )
 
-type conditionalFrame struct{ parent, disabled bool }
+type conditionalFrame struct{ parent, taken bool }
 
 func Lex(ctx context.Context, content []byte) ([]Token, []model.Diagnostic, error) {
 	mapa := sourceutil.NewSourceMap(content)
@@ -174,21 +174,28 @@ func applyDirective(text string, active bool, stack []conditionalFrame) (bool, [
 		return active, stack
 	}
 	switch fields[0] {
-	case "if", "elif", "else":
-		if fields[0] == "if" {
-			frame := conditionalFrame{parent: active}
-			if len(fields) > 1 && fields[1] == "false" || len(fields) > 1 && fields[1] == "0" {
-				frame.disabled = true
+	case "if", "ifdef", "ifndef":
+		frame := conditionalFrame{parent: active}
+		if fields[0] == "if" && len(fields) > 1 {
+			if fields[1] == "false" || fields[1] == "0" {
 				active = false
 			}
-			stack = append(stack, frame)
-		} else if len(stack) > 0 {
+			frame.taken = (fields[1] == "true" || fields[1] == "1")
+		}
+		stack = append(stack, frame)
+	case "elif", "else":
+		if len(stack) > 0 {
 			frame := &stack[len(stack)-1]
-			if frame.disabled {
-				active = frame.parent
-				frame.disabled = false
-			} else {
-				active = frame.parent
+			active = frame.parent && !frame.taken
+			if fields[0] == "elif" && len(fields) > 1 {
+				if fields[1] == "false" || fields[1] == "0" {
+					active = false
+				}
+				if fields[1] == "true" || fields[1] == "1" {
+					frame.taken = true
+				}
+			} else if fields[0] == "else" {
+				frame.taken = true
 			}
 		}
 	case "endif":
@@ -235,6 +242,20 @@ func stringEnd(content []byte, index int) (int, TokenKind, bool) {
 		return 0, "", false
 	}
 	end := quotedEnd(content, index, '"')
+	if verbatim {
+		end = index + 1
+		for end < len(content) {
+			if content[end] == '"' {
+				end++
+				if end < len(content) && content[end] == '"' {
+					end++
+					continue
+				}
+				break
+			}
+			end++
+		}
+	}
 	kind := NormalString
 	if verbatim {
 		kind = VerbatimString
@@ -248,7 +269,7 @@ func stringEnd(content []byte, index int) (int, TokenKind, bool) {
 func quotedEnd(content []byte, index int, quote byte) int {
 	index++
 	for index < len(content) {
-		if content[index] == '\\' && quote == '"' {
+		if content[index] == '\\' {
 			if index+1 >= len(content) {
 				index = len(content)
 				break
