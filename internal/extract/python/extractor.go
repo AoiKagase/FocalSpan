@@ -39,11 +39,12 @@ type pyDeclaration struct {
 const pyIdentifier = `[\p{L}\p{Nl}_\x{1885}\x{1886}\x{2118}\x{212e}\x{309b}\x{309c}][\p{L}\p{N}\p{M}\p{Pc}_\x{00b7}\x{0387}\x{1369}-\x{1371}\x{19da}\x{2118}\x{212e}]*`
 
 var (
-	pyClassPattern    = regexp.MustCompile(`^class\s+(` + pyIdentifier + `)`)
-	pyFunctionPattern = regexp.MustCompile(`^(?:(async)\s+)?def\s+(` + pyIdentifier + `)\s*\(`)
-	pyAliasPattern    = regexp.MustCompile(`^(` + pyIdentifier + `)\s*=\s*(` + pyIdentifier + `)`)
-	pyClassVarPattern = regexp.MustCompile(`^(` + pyIdentifier + `)\s*=`)
-	pyCallPattern     = regexp.MustCompile(`(` + pyIdentifier + `(?:\.` + pyIdentifier + `)*)\s*\(`)
+	pyParameterPattern = regexp.MustCompile(`^` + pyIdentifier)
+	pyClassPattern     = regexp.MustCompile(`^class\s+(` + pyIdentifier + `)`)
+	pyFunctionPattern  = regexp.MustCompile(`^(?:(async)\s+)?def\s+(` + pyIdentifier + `)\s*\(`)
+	pyAliasPattern     = regexp.MustCompile(`^(` + pyIdentifier + `)\s*=\s*(` + pyIdentifier + `)`)
+	pyClassVarPattern  = regexp.MustCompile(`^(` + pyIdentifier + `)\s*=`)
+	pyCallPattern      = regexp.MustCompile(`(` + pyIdentifier + `(?:\.` + pyIdentifier + `)*)\s*\(`)
 )
 
 type pyLine struct {
@@ -133,21 +134,21 @@ func buildPython(ctx context.Context, file model.SourceFile, diagnostics []model
 			}
 		}
 		for line := decl.StartLine; line <= decl.EndLine && line <= len(lines); line++ {
+			if end := pythonNestedScopeEnd(decl, line, byDecl); end > 0 {
+				line = end
+				continue
+			}
 			text := strings.TrimSpace(lines[line-1].Text)
 			for _, match := range pyCallPattern.FindAllStringSubmatch(text, -1) {
 				name := match[1]
 				if strings.HasPrefix(name, "def") || name == "if" || name == "for" || name == "while" || name == "class" || name == "print" {
 					continue
 				}
-				short := name
-				if dot := strings.LastIndexByte(short, '.'); dot >= 0 {
-					short = short[dot+1:]
-				}
 				kind := "calls"
 				if decl.Kind == "test" {
 					kind = "tests"
 				}
-				if target, ok := uniquePython(index.byName, short); ok {
+				if target, ok := pythonCallTarget(index.byName, name, decl, lines, byDecl); ok {
 					addPythonRelation(&result, model.Relation{FromHandle: from.Handle, ToHandle: target.Handle, Kind: kind, Confidence: .9, Source: "python-call"})
 				} else {
 					addPythonRelation(&result, model.Relation{FromHandle: from.Handle, UnresolvedTo: name, Kind: kind, Confidence: .25, Source: "python-call"})
@@ -392,4 +393,135 @@ func sortPython(result *model.Extraction) {
 		}
 		return result.Relations[i].Kind < result.Relations[j].Kind
 	})
+}
+
+// pythonCallTarget resolves only when the lexical binding and receiver agree.
+func pythonCallTarget(index map[string][]model.Symbol, name string, decl *pyDeclaration, lines []pyLine, symbols map[*pyDeclaration]model.Symbol) (model.Symbol, bool) {
+	if dot := strings.IndexByte(name, '.'); dot >= 0 {
+		receiver, member := name[:dot], name[dot+1:]
+		if (receiver != "self" && receiver != "cls") || strings.Contains(member, ".") {
+			return model.Symbol{}, false
+		}
+		for owner := decl.Parent; owner != nil; owner = owner.Parent {
+			if owner.Kind == "class" || owner.Kind == "protocol" {
+				var target model.Symbol
+				count := 0
+				for _, candidate := range index[member] {
+					if candidate.ParentHandle == symbols[owner].Handle {
+						target = candidate
+						count++
+					}
+				}
+				return target, count == 1
+			}
+		}
+		return model.Symbol{}, false
+	}
+	for scope := decl; scope != nil; scope = scope.Parent {
+		if scope.Kind == "class" || scope.Kind == "protocol" {
+			continue
+		}
+		if pythonBindsName(scope, name, lines, symbols) {
+			return model.Symbol{}, false
+		}
+	}
+	return uniquePython(index, name)
+}
+
+func pythonBindsName(decl *pyDeclaration, name string, lines []pyLine, symbols map[*pyDeclaration]model.Symbol) bool {
+	for nested := range symbols {
+		if nested.Parent == decl && nested.Name == name {
+			return true
+		}
+	}
+	header := ""
+	for line := decl.StartLine - 1; line < decl.EndLine && line < len(lines); line++ {
+		header += lines[line].Text + " "
+		if strings.Contains(lines[line].Text, ")") {
+			break
+		}
+	}
+	if open := strings.IndexByte(header, '('); open >= 0 {
+		depth, start := 0, open+1
+		for cursor := start; cursor < len(header); cursor++ {
+			ch := header[cursor]
+			if depth == 0 && (ch == ',' || ch == ')') {
+				parameter := strings.TrimLeft(strings.TrimSpace(header[start:cursor]), "*")
+				if pyParameterPattern.FindString(parameter) == name {
+					return true
+				}
+				if ch == ')' {
+					break
+				}
+				start = cursor + 1
+			}
+			switch ch {
+			case '(', '[', '{':
+				depth++
+			case ')', ']', '}':
+				depth--
+			}
+		}
+	}
+	for line := decl.StartLine; line < decl.EndLine && line < len(lines); line++ {
+		if end := pythonNestedScopeEnd(decl, line+1, symbols); end > 0 {
+			line = end - 1
+			continue
+		}
+		text := strings.TrimSpace(lines[line].Text)
+		if strings.HasPrefix(text, "import ") || strings.HasPrefix(text, "from ") {
+			for (strings.Count(text, "(") > strings.Count(text, ")") || strings.HasSuffix(strings.TrimSpace(text), `\`)) && line+1 < decl.EndLine && line+1 < len(lines) {
+				line++
+				text += " " + strings.TrimSpace(lines[line].Text)
+			}
+			if pythonImportBindsName(text, name) {
+				return true
+			}
+		}
+		if match := pyClassVarPattern.FindStringSubmatch(text); len(match) > 1 && match[1] == name {
+			return true
+		}
+	}
+	return false
+}
+
+func pythonImportBindsName(text, name string) bool {
+	text = strings.NewReplacer("(", " ", ")", " ", `\`, " ").Replace(text)
+	words := strings.Fields(text)
+	if len(words) < 2 {
+		return false
+	}
+	from := words[0] == "from"
+	start := 1
+	if from {
+		if len(words) < 4 || words[2] != "import" {
+			return false
+		}
+		start = 3
+	}
+	for _, item := range strings.Split(strings.Join(words[start:], " "), ",") {
+		fields := strings.Fields(item)
+		if len(fields) == 0 {
+			continue
+		}
+		binding := fields[0]
+		if len(fields) >= 3 && fields[1] == "as" {
+			binding = fields[2]
+		} else if !from {
+			binding = strings.Split(binding, ".")[0]
+		}
+		if binding == name || binding == "*" {
+			return true
+		}
+	}
+	return false
+}
+
+func pythonNestedScopeEnd(decl *pyDeclaration, line int, symbols map[*pyDeclaration]model.Symbol) int {
+	for nested := range symbols {
+		if nested.Parent == decl && nested.Kind != "type_alias" && nested.Kind != "class_variable" && line >= nested.StartLine && line <= nested.EndLine {
+			return nested.EndLine
+		}
+	}
+	return 0
 }
