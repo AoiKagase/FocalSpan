@@ -198,6 +198,8 @@ Task 1→2/6、Task 3→4/5の索引再抽出、Task 4→5の正しいsymbol位�
 
 ## Decision Log
 
+- Task 7 ruling: legacy packもrevision読取失敗を返す。既存の「baselineが読めない」unit fixtureは空索引を正常完了させてからpackし、revision欠落とは別の境界として検査する。成功結果のために欠落revisionを許容する回避はしない。
+
 - Task 5 ruling: 既存polyglot受け入れテストはsrc/js_authのような明示module pathをcallsとして保持する。A12では裸のsymbol名の呼び出しをsymbol-onlyにし、/または\を含む明示pathの既存解決は保持する。module pathを裸の関数名と同じ禁止規則へ入れない。
 
 - 2026-10-17: 対象はO01〜O05とA01〜A19の24件。追加の不確定候補とsupervisorの原因未確定EOFは含めない。

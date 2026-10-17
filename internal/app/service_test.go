@@ -325,6 +325,9 @@ func TestPackWithSavingsOmitsUnreadableBaseline(t *testing.T) {
 	}
 	defer a.Close()
 
+	if _, err := a.Index(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
 	bundle, err := a.packWithSavings(context.Background(), model.PackRequest{Query: "missing", TokenBudget: 512, Candidates: []model.RankedCandidate{{Path: "missing.go"}}})
 	if err != nil {
 		t.Fatal(err)

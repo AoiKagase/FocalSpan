@@ -19,8 +19,21 @@ func readResult[T any](s *Service, ctx context.Context, update bool, read func(c
 
 func readIndex[T any](s *Service, ctx context.Context, update, requireReady bool, read func(context.Context) (T, error)) (T, error) {
 	var zero T
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	finish := func(readCtx context.Context) (T, error) {
+		result, err := read(readCtx)
+		if err != nil {
+			return zero, err
+		}
+		if err := readCtx.Err(); err != nil {
+			return zero, err
+		}
+		return result, nil
+	}
 	if ctx.Value(indexReadKey{}) == s {
-		return read(ctx)
+		return finish(ctx)
 	}
 	if update {
 		if _, err := s.Index(ctx, false); err != nil {
@@ -41,7 +54,7 @@ func readIndex[T any](s *Service, ctx context.Context, update, requireReady bool
 			return zero, errors.New("index is stale or incomplete; update the index before reading evidence")
 		}
 	}
-	return read(context.WithValue(ctx, indexReadKey{}, s))
+	return finish(context.WithValue(ctx, indexReadKey{}, s))
 }
 
 func (s *Service) Status(ctx context.Context) (model.Status, error) {

@@ -288,15 +288,20 @@ func (s *Service) impactRead(ctx context.Context, base, head string, tokenBudget
 	return bundle, nil
 }
 
-func (s *Service) pack(ctx context.Context, req model.PackRequest) model.ContextBundle {
-	if revision, err := s.Store.Meta(ctx, "last_revision"); err == nil {
-		req.IndexRevision = revision
+func (s *Service) pack(ctx context.Context, req model.PackRequest) (model.ContextBundle, error) {
+	revision, err := s.revision(ctx)
+	if err != nil {
+		return model.ContextBundle{}, err
 	}
-	return s.packer.Pack(req)
+	req.IndexRevision = revision
+	return s.packer.Pack(req), nil
 }
 
 func (s *Service) packWithSavings(ctx context.Context, req model.PackRequest) (model.ContextBundle, error) {
-	bundle := s.pack(ctx, req)
+	bundle, err := s.pack(ctx, req)
+	if err != nil {
+		return model.ContextBundle{}, err
+	}
 	baseline, err := s.baselineTokensForCandidates(ctx, req.Candidates)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {

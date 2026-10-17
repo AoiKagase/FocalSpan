@@ -79,7 +79,11 @@ func (s *Service) queryCandidatesDetailed(ctx context.Context, req QueryRequest,
 	if err != nil {
 		return candidateResult{}, err
 	}
-	return candidateResult{Plan: result.Plan, Revision: s.revision(ctx), Candidates: result.Candidates, Trace: result.Trace}, nil
+	revision, err := s.revision(ctx)
+	if err != nil {
+		return candidateResult{}, err
+	}
+	return candidateResult{Plan: result.Plan, Revision: revision, Candidates: result.Candidates, Trace: result.Trace}, nil
 }
 
 func (s *Service) QueryEvidence(ctx context.Context, req EvidenceQueryRequest) (evidence.CompileResult, error) {
@@ -218,7 +222,11 @@ func (s *Service) expandCandidates(ctx context.Context, handles []string, relati
 		}
 	}
 	plan := planForRelation(relation)
-	return candidateResult{Plan: plan, Revision: s.revision(ctx), Candidates: candidates}, nil
+	revision, err := s.revision(ctx)
+	if err != nil {
+		return candidateResult{}, err
+	}
+	return candidateResult{Plan: plan, Revision: revision, Candidates: candidates}, nil
 }
 
 func (s *Service) impactCandidates(ctx context.Context, base, head string) (candidateResult, error) {
@@ -244,7 +252,11 @@ func (s *Service) impactCandidates(ctx context.Context, base, head string) (cand
 				return candidateResult{}, probeErr
 			}
 			if !isGit {
-				return candidateResult{Plan: plan, Revision: s.revision(ctx), Diagnostics: []string{"impact unavailable: repository is not a Git repository"}}, nil
+				revision, err := s.revision(ctx)
+				if err != nil {
+					return candidateResult{}, err
+				}
+				return candidateResult{Plan: plan, Revision: revision, Diagnostics: []string{"impact unavailable: repository is not a Git repository"}}, nil
 			}
 			return candidateResult{}, fmt.Errorf("read Git changes: %w", err)
 		}
@@ -281,7 +293,11 @@ func (s *Service) impactCandidates(ctx context.Context, base, head string) (cand
 	if len(selected) > s.Config.MaxCandidates {
 		selected = selected[:s.Config.MaxCandidates]
 	}
-	return candidateResult{Plan: plan, Revision: s.revision(ctx), Candidates: selected}, nil
+	revision, err := s.revision(ctx)
+	if err != nil {
+		return candidateResult{}, err
+	}
+	return candidateResult{Plan: plan, Revision: revision, Candidates: selected}, nil
 }
 
 func planForRelation(relation string) query.Plan {
@@ -305,7 +321,13 @@ func planForImpact() query.Plan {
 	return query.Plan{RawQuery: "Git impact", Intents: []query.Intent{query.IntentImpact}, PrimaryIntent: query.IntentImpact, Profile: "impact"}
 }
 
-func (s *Service) revision(ctx context.Context) string {
-	revision, _ := s.Store.Meta(ctx, "last_revision")
-	return revision
+func (s *Service) revision(ctx context.Context) (string, error) {
+	revision, err := s.Store.Meta(ctx, "last_revision")
+	if err != nil {
+		return "", fmt.Errorf("read index revision: %w", err)
+	}
+	if revision == "" {
+		return "", errors.New("index revision is missing; run focalspan update")
+	}
+	return revision, nil
 }
