@@ -7,7 +7,13 @@ import (
 	"github.com/focalspan/focalspan/internal/extract/csharp"
 	"github.com/focalspan/focalspan/internal/extract/jsts"
 	"github.com/focalspan/focalspan/internal/extract/lua"
+	"github.com/focalspan/focalspan/internal/extract/nim"
 	"github.com/focalspan/focalspan/internal/extract/pawn"
+	"github.com/focalspan/focalspan/internal/extract/python"
+	"github.com/focalspan/focalspan/internal/extract/resx"
+	"github.com/focalspan/focalspan/internal/extract/ruby"
+	"github.com/focalspan/focalspan/internal/extract/rust"
+	"github.com/focalspan/focalspan/internal/extract/xaml"
 	"github.com/focalspan/focalspan/internal/extract/zig"
 	"github.com/focalspan/focalspan/internal/model"
 	"testing"
@@ -50,6 +56,59 @@ func TestF01UnterminatedEscape(t *testing.T) {
 					}
 				}()
 			}
+		})
+	}
+}
+
+type wholeAuditCancelGate struct {
+	context.Context
+	cancel context.CancelFunc
+	after  int
+	checks int
+	fired  bool
+}
+
+func (c *wholeAuditCancelGate) Err() error {
+	c.checks++
+	if c.checks == c.after {
+		c.fired = true
+		c.cancel()
+	}
+	return c.Context.Err()
+}
+
+func TestF09BuilderCancellation(t *testing.T) {
+	fixtures := []struct {
+		path, language, source string
+		e                      extract.Extractor
+	}{
+		{"x.cpp", "cpp", "void f() {}\n", cpp.NewExtractor()},
+		{"x.cs", "csharp", "class A { void F() {} }\n", csharp.NewExtractor()},
+		{"x.js", "javascript", "function f() {}\n", jsts.NewExtractor()},
+		{"x.py", "python", "def f():\n pass\n", python.NewExtractor()},
+		{"x.rb", "ruby", "def f\nend\n", ruby.NewExtractor()},
+		{"x.rs", "rust", "fn f() {}\n", rust.NewExtractor()},
+		{"x.nim", "nim", "proc f() = discard\n", nim.NewExtractor()},
+		{"x.zig", "zig", "fn f() void {\n}\n", zig.NewExtractor()},
+		{"x.xaml", "xaml", "<Window><Button x:Name=\"button\" /></Window>", xaml.NewExtractor()},
+		{"x.resx", "dotnet-resource", "<root><data name=\"Key\" /></root>", resx.NewExtractor()},
+	}
+	for _, f := range fixtures {
+		t.Run(f.language, func(t *testing.T) {
+			for after := 1; after <= 2048; after++ {
+				base, cancel := context.WithCancel(context.Background())
+				gate := &wholeAuditCancelGate{Context: base, cancel: cancel, after: after}
+				got, err := f.e.Extract(gate, model.SourceFile{Path: f.path, Language: f.language, Content: []byte(f.source)})
+				fired := gate.fired
+				cancel()
+				if fired && err == nil {
+					t.Fatalf("canceled at context check %d but returned success: symbols=%d chunks=%d", after, len(got.Symbols), len(got.Chunks))
+				}
+				if !fired {
+					return
+				}
+			}
+			t.Fatal("context-check sweep bound too small")
 		})
 	}
 }

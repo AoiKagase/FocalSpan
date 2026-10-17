@@ -56,7 +56,11 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 	for index := range diagnostics {
 		diagnostics[index].FilePath = file.Path
 	}
-	return buildRuby(ctx, file, diagnostics), nil
+	result := buildRuby(ctx, file, diagnostics)
+	if err := ctx.Err(); err != nil {
+		return model.Extraction{}, err
+	}
+	return result, nil
 }
 
 func buildRuby(ctx context.Context, file model.SourceFile, diagnostics []model.Diagnostic) model.Extraction {

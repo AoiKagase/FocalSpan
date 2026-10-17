@@ -42,6 +42,9 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 	if len(parsed.Diagnostics) > 0 {
 		result.Diagnostics = append(result.Diagnostics, model.Diagnostic{FilePath: file.Path, Level: "warning", Code: "csharp_partial_extraction", Message: "C# extraction recovered from malformed source"})
 	}
+	if err := ctx.Err(); err != nil {
+		return model.Extraction{}, err
+	}
 	return result, nil
 }
 

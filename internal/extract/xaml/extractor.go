@@ -24,5 +24,9 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 	if err != nil {
 		return model.Extraction{}, err
 	}
-	return build(ctx, file, parsed), nil
+	result := build(ctx, file, parsed)
+	if err := ctx.Err(); err != nil {
+		return model.Extraction{}, err
+	}
+	return result, nil
 }

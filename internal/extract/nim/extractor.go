@@ -35,5 +35,9 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 	for index := range parsed.Diagnostics {
 		parsed.Diagnostics[index].FilePath = file.Path
 	}
-	return buildNim(ctx, file, parsed, append(diagnostics, parsed.Diagnostics...)), nil
+	result := buildNim(ctx, file, parsed, append(diagnostics, parsed.Diagnostics...))
+	if err := ctx.Err(); err != nil {
+		return model.Extraction{}, err
+	}
+	return result, nil
 }
