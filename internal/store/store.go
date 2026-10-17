@@ -733,6 +733,12 @@ func uniqueStrings(values []string) []string {
 }
 
 func (s *Store) SearchFTS(ctx context.Context, query string, limit int) ([]model.RankedCandidate, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(query) == "" {
+		return []model.RankedCandidate{}, nil
+	}
 	limit = retrievalLimit(limit, 100, 500)
 	s.mu.RLock()
 	defer s.mu.RUnlock()

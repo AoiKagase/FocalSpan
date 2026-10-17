@@ -41,8 +41,13 @@ func (r *RetrieverSet) Retrieve(ctx context.Context, plan query.Plan, req Search
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	ftsQuery := query.BuildFTS(plan.Terms)
 	if mode == RetrievalFTSOnly {
-		items, err := reader.SearchFTS(ctx, query.BuildFTS(plan.Terms), ftsLimit)
+		var items []model.RankedCandidate
+		var err error
+		if ftsQuery != "" {
+			items, err = reader.SearchFTS(ctx, ftsQuery, ftsLimit)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("%s retriever: %w", RetrieverFTS, err)
 		}
@@ -64,7 +69,10 @@ func (r *RetrieverSet) Retrieve(ctx context.Context, plan query.Plan, req Search
 		return nil, fmt.Errorf("%s retriever: %w", RetrieverPrefix, err)
 	}
 	lists = append(lists, RankedList{Retriever: RetrieverPrefix, Items: prefix})
-	fts, err := reader.SearchFTS(ctx, query.BuildFTS(plan.Terms), ftsLimit)
+	var fts []model.RankedCandidate
+	if ftsQuery != "" {
+		fts, err = reader.SearchFTS(ctx, ftsQuery, ftsLimit)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%s retriever: %w", RetrieverFTS, err)
 	}
