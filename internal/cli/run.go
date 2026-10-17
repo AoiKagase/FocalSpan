@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -412,6 +413,7 @@ func normalizeQueryArgs(args []string) []string {
 
 func runServe(ctx context.Context, args []string) error {
 	fs := newFlagSet("serve")
+	worker := fs.Bool("worker", false, "internal: run the direct MCP worker without a supervisor")
 	rootArg := fs.String("root", ".", "repository root")
 	autoUpdate := fs.Bool("auto-update", true, "automatically update the index")
 	legacyNoAutoUpdate := fs.Bool("no-auto-update", false, "disable auto update")
@@ -421,6 +423,32 @@ func runServe(ctx context.Context, args []string) error {
 	root, _, err := resolveRoot(ctx, *rootArg)
 	if err != nil {
 		return err
+	}
+	serveCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if !*worker {
+		// Capture the installed path before any updater renames a mapped Windows
+		// executable. Future restarts must load the replacement at this same path.
+		executable, err := os.Executable()
+		if err != nil {
+			return fmt.Errorf("resolve worker executable: %w", err)
+		}
+		executable, err = filepath.Abs(executable)
+		if err != nil {
+			return err
+		}
+		supervisor, err := mcpserver.NewSupervisor(serveCtx, func() *exec.Cmd {
+			command := exec.Command(executable, "serve", "--worker", "--root", root,
+				"--auto-update="+strconv.FormatBool(*autoUpdate),
+				"--no-auto-update="+strconv.FormatBool(*legacyNoAutoUpdate))
+			command.Stderr = os.Stderr
+			return command
+		})
+		if err != nil {
+			return err
+		}
+		defer supervisor.Close()
+		return supervisor.Run(serveCtx)
 	}
 	var service *app.Service
 	if *autoUpdate {
@@ -437,8 +465,6 @@ func runServe(ctx context.Context, args []string) error {
 	}
 	server := mcpserver.New(service, *autoUpdate && !*legacyNoAutoUpdate)
 	defer server.Close()
-	serveCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	return server.Run(serveCtx)
 }
 
