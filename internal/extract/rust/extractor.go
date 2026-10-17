@@ -121,7 +121,7 @@ func (p *parser) parseRange(lo, hi int, parent *declaration, namespace string) e
 		raw := p.sig[position]
 		text := p.tokens[raw].Text
 		if p.tokens[raw].Kind == Attribute {
-			if strings.Contains(strings.ToLower(text), "test") {
+			if isTestAttribute(text) {
 				pendingTest = true
 			}
 			continue
@@ -225,6 +225,19 @@ func (p *parser) parseRange(lo, hi int, parent *declaration, namespace string) e
 		}
 	}
 	return nil
+}
+
+func isTestAttribute(text string) bool {
+	text = strings.TrimSpace(text)
+	if !strings.HasPrefix(text, "#[") || !strings.HasSuffix(text, "]") {
+		return false
+	}
+	attribute := strings.TrimSpace(text[2 : len(text)-1])
+	if at := strings.IndexByte(attribute, '('); at >= 0 {
+		attribute = attribute[:at]
+	}
+	attribute = strings.Join(strings.Fields(attribute), "")
+	return attribute == "test" || strings.HasSuffix(attribute, "::test")
 }
 
 func (p *parser) parseModule(position, hi int, parent *declaration, namespace string) (*declaration, int, bool) {
