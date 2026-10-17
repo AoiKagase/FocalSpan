@@ -1,0 +1,2 @@
+<?php // comment ?>
+function fake() {}
