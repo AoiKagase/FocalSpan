@@ -425,8 +425,13 @@ func (p *parser) functionHeaderLikely(start, name, open int, currentType string)
 		return false
 	}
 	for cursor := start; cursor < name; cursor++ {
+		if v := p.tokens[p.sig[cursor]].Text; v == "=" || v == "." || v == "->" || v == "return" {
+			return false
+		}
+	}
+	for cursor := start; cursor < name; cursor++ {
 		text := p.tokens[p.sig[cursor]].Text
-		if text == "::" || text == "operator" || text == "template" || text == "friend" || typeWords[text] || text == "auto" || text == "inline" || text == "static" || text == "constexpr" || text == "virtual" {
+		if p.tokens[p.sig[cursor]].Kind == Identifier || text == "::" || text == "operator" || text == "template" || text == "friend" || typeWords[text] || text == "auto" || text == "inline" || text == "static" || text == "constexpr" || text == "virtual" {
 			return true
 		}
 	}
