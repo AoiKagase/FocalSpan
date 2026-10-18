@@ -101,6 +101,25 @@ func (p *parser) parseScope(lo, hi int, parent *declaration, namespace, currentT
 		}
 		raw := p.sig[position]
 		text := p.tokens[raw].Text
+		if text == "template" && position+1 < hi && p.tokens[p.sig[position+1]].Text == "<" {
+			depth := 0
+			for position++; position < hi; position++ {
+				v := p.tokens[p.sig[position]].Text
+				if v == "<" {
+					depth++
+				}
+				if v == ">" {
+					depth--
+				}
+				if v == ">>" {
+					depth -= 2
+				}
+				if depth <= 0 {
+					break
+				}
+			}
+			continue
+		}
 		if text == "using" && position+1 < hi && p.tokens[p.sig[position+1]].Text == "namespace" {
 			for position < hi && p.tokens[p.sig[position]].Text != ";" {
 				position++
