@@ -134,21 +134,7 @@ func (p *parser) parseModules() {
 			if name := exportedDeclarationName(p.tokens, p.sig, position); name != "" {
 				p.result.Modules = append(p.result.Modules, moduleRelation{Target: name, Source: "jsts:export-symbol"})
 			}
-			end := statementEnd(p, position+1)
-			if end < 0 {
-				continue
-			}
-			source := "jsts:export"
-			if hasToken(p.tokens, p.sig[position:end+1], "from") {
-				source = "jsts:reexport"
-			}
-			for _, target := range stringLiterals(p.tokens, p.sig[position:end+1]) {
-				p.result.Modules = append(p.result.Modules, moduleRelation{Target: target, Source: source})
-			}
-			for _, name := range exportedNames(p.tokens, p.sig[position:end+1]) {
-				p.result.Modules = append(p.result.Modules, moduleRelation{Target: name, Source: "jsts:export-symbol"})
-			}
-			position = end
+			p.parseExportModule(position)
 		}
 	}
 	for position := 0; position+3 < len(p.sig); position++ {
@@ -175,6 +161,41 @@ func (p *parser) parseModules() {
 			p.result.Modules = append(p.result.Modules, moduleRelation{Target: name, Source: "jsts:commonjs-export"})
 		}
 		position = end
+	}
+}
+
+func (p *parser) parseExportModule(position int) {
+	cursor := position + 1
+	if cursor >= len(p.sig) {
+		return
+	}
+	if p.tokens[p.sig[cursor]].Text == "type" {
+		cursor++
+	}
+	if cursor >= len(p.sig) {
+		return
+	}
+	switch p.tokens[p.sig[cursor]].Text {
+	case "{":
+		close, ok := p.matching[p.sig[cursor]]
+		if !ok {
+			return
+		}
+		end := p.positionOf(close)
+		for _, name := range exportedNames(p.tokens, p.sig[cursor+1:end]) {
+			p.result.Modules = append(p.result.Modules, moduleRelation{Target: name, Source: "jsts:export-symbol"})
+		}
+		cursor = end + 1
+	case "*":
+		cursor++
+		if cursor+1 < len(p.sig) && p.tokens[p.sig[cursor]].Text == "as" {
+			cursor += 2
+		}
+	default:
+		return
+	}
+	if cursor+1 < len(p.sig) && p.tokens[p.sig[cursor]].Text == "from" && p.tokens[p.sig[cursor+1]].Kind == StringLiteral {
+		p.result.Modules = append(p.result.Modules, moduleRelation{Target: strings.Trim(p.tokens[p.sig[cursor+1]].Text, "\"'"), Source: "jsts:reexport"})
 	}
 }
 
@@ -681,7 +702,10 @@ func exportedDeclarationName(tokens []Token, sig []int, position int) string {
 	for cursor := position + 1; cursor < len(sig) && cursor < position+8; cursor++ {
 		text := tokens[sig[cursor]].Text
 		if text == "default" {
-			return "default"
+			return ""
+		}
+		if text != "async" {
+			return ""
 		}
 		if text == "function" || text == "class" || text == "interface" || text == "enum" || text == "type" || text == "const" || text == "let" || text == "var" {
 			if cursor+1 < len(sig) && tokens[sig[cursor+1]].Kind == Identifier {

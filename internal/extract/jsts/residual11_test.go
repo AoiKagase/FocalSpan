@@ -90,3 +90,47 @@ func TestR02StaticModuleArguments(t *testing.T) {
 		}
 	}
 }
+
+func TestR03ExportValueIsNotModule(t *testing.T) {
+	for _, tc := range []struct{ source, want string }{
+		{"export const label = './dep';", ""},
+		{"export default './dep';", ""},
+		{"export type Choice = './a' | './b';", ""},
+		{"export function value() { return './dep'; }", ""},
+		{"const value = 1; export {value};", ""},
+		{"export * from './dep';", "./dep"},
+		{"export {value as alias} from './dep';", "./dep"},
+	} {
+		tokens, _, e := Lex(context.Background(), []byte(tc.source))
+		if e != nil {
+			t.Fatal(e)
+		}
+		p, e := parseJSTS(context.Background(), tokens)
+		if e != nil {
+			t.Fatal(e)
+		}
+		got := ""
+		for _, m := range p.Modules {
+			if m.Source == "jsts:export" || m.Source == "jsts:reexport" {
+				got = m.Target
+			}
+		}
+		if got != tc.want {
+			t.Errorf("%s: module=%q want %q", tc.source, got, tc.want)
+		}
+	}
+	tokens, _, _ := Lex(context.Background(), []byte("export async function load() { return import('./real'); }"))
+	p, e := parseJSTS(context.Background(), tokens)
+	if e != nil {
+		t.Fatal(e)
+	}
+	found := false
+	for _, m := range p.Modules {
+		if m.Source == "jsts:dynamic-import" && m.Target == "./real" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("dynamic import inside exported function lost")
+	}
+}
