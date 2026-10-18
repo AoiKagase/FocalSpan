@@ -69,6 +69,9 @@ func (l *Linker) LinkWithScope(ctx context.Context, facts []projectmeta.Fact, sc
 		from := byHandle[relation.FromHandle]
 		activeFacts := factsForSource(from.FilePath, orderedFacts)
 		candidatePool := index.candidates(from, relation.UnresolvedTo, activeFacts)
+		if from.Language == "cpp" && relation.Source == "cpp:module-import" {
+			candidatePool = symbols
+		}
 		if from.Language == "cpp" && (relation.Kind == "calls" || relation.Kind == "tests") {
 			candidatePool = symbols
 		}
@@ -80,6 +83,9 @@ func (l *Linker) LinkWithScope(ctx context.Context, facts []projectmeta.Fact, sc
 		}
 		candidates := resolveCandidates(from, relation.UnresolvedTo, candidatePool, activeFacts, relation.Kind)
 		candidates = preferModuleOwner(from, relation, candidates)
+		if from.Language == "cpp" && relation.Source == "cpp:module-import" {
+			candidates = resolveCPPModuleImport(relation.UnresolvedTo, symbols)
+		}
 		if len(candidates) != 1 {
 			if progress != nil {
 				progress(indexRelation+1, len(relations))

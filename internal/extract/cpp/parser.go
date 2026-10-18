@@ -524,28 +524,7 @@ func (p *parser) parseDirectives() {
 			p.addDeclaration(&declaration{Kind: "macro", Name: match[1], Qualified: match[1], Start: index, HeaderEnd: token.EndByte, End: token.EndByte, BodyOpen: -1, BodyClose: -1})
 		}
 	}
-	for position := 0; position < len(p.sig); position++ {
-		text := p.tokens[p.sig[position]].Text
-		if text != "import" && text != "module" && text != "export" {
-			continue
-		}
-		end := position
-		for end < len(p.sig) && p.tokens[p.sig[end]].Text != ";" && end < position+32 {
-			end++
-		}
-		if end >= len(p.sig) {
-			continue
-		}
-		line := joinTokens(p.tokens, p.sig[position:end+1])
-		if text == "import" || strings.Contains(line, " import ") || strings.Contains(line, "export module") || text == "module" {
-			kind := "cpp:module-import"
-			if strings.Contains(line, "module") && !strings.HasPrefix(strings.TrimSpace(line), "import") {
-				kind = "cpp:module-declaration"
-			}
-			p.result.Modules = append(p.result.Modules, include{Target: strings.TrimSpace(line), Source: kind})
-		}
-		position = end
-	}
+	p.parseModules()
 }
 
 func (p *parser) addDeclaration(decl *declaration) {

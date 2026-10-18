@@ -125,6 +125,9 @@ func build(ctx context.Context, file model.SourceFile, parsed parseResult) model
 		}
 		handle := b.allocator.Allocate("sym", file.Path, file.Language, kind, qualified, model.NormalizeSignature(signature))
 		parentHandle := ""
+		if decl.Kind == "module" {
+			parentHandle = b.owner.Handle
+		}
 		if parent != nil {
 			parentHandle = b.byDecl[parent].Handle
 		}
@@ -220,6 +223,9 @@ func (b *builder) buildRelations() {
 		b.addRelation(model.Relation{FromHandle: b.owner.Handle, UnresolvedTo: target, Kind: "imports", Confidence: .8, Source: item.Source})
 	}
 	for _, item := range b.parsed.Modules {
+		if item.Source != "cpp:module-import" {
+			continue
+		}
 		b.addRelation(model.Relation{FromHandle: b.owner.Handle, UnresolvedTo: item.Target, Kind: "imports", Confidence: .75, Source: item.Source})
 	}
 	for decl, symbol := range b.byDecl {
