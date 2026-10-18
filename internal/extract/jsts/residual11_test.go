@@ -125,10 +125,11 @@ func TestR01TypedCallbackBoundaries(t *testing.T) {
 		}
 	}
 	for _, callback := range []string{
+		`target => { target(); }`,
 		`function(target): void { target(); }`,
 		`(target): void => { target(); }`,
 	} {
-		source := `function target() {} function caller(){ values.forEach(` + callback + `); }`
+		source := `function target() {} function unrelated(x): void {} function caller(){ values.forEach(` + callback + `); }`
 		x, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "a.ts", Language: "typescript", Content: []byte(source)})
 		if err != nil {
 			t.Fatal(err)

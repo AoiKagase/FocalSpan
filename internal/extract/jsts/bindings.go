@@ -219,7 +219,8 @@ func (b *bindingIndex) callbackParameters() {
 					parameterEnd = close
 					break
 				}
-				if b.tokens[b.sig[close]].Text == ";" || b.tokens[b.sig[close]].Text == "=" || b.tokens[b.sig[close]].Text == "=>" {
+				text := b.tokens[b.sig[close]].Text
+				if text == ";" || text == "=" || text == "=>" || text == "(" || text == "{" || text == "}" || text == "," {
 					break
 				}
 			}
