@@ -211,10 +211,22 @@ func (b *bindingIndex) callbackParameters() {
 			if p == 0 {
 				continue
 			}
-			if b.tokens[b.sig[p-1]].Text == ")" {
+			parameterEnd := p - 1
+			// A return annotation follows the parameter list. Prefer that list
+			// to the final identifier in a type such as Promise<void>.
+			for close := p - 1; close > 0; close-- {
+				if b.tokens[b.sig[close]].Text == ")" && close+1 < p && b.tokens[b.sig[close+1]].Text == ":" {
+					parameterEnd = close
+					break
+				}
+				if b.tokens[b.sig[close]].Text == ";" || b.tokens[b.sig[close]].Text == "=" || b.tokens[b.sig[close]].Text == "=>" {
+					break
+				}
+			}
+			if b.tokens[b.sig[parameterEnd]].Text == ")" {
 				for open, close := range b.pairs {
-					if close == b.sig[p-1] && b.tokens[open].Text == "(" {
-						lo, hi = b.position(open)+1, p-1
+					if close == b.sig[parameterEnd] && b.tokens[open].Text == "(" {
+						lo, hi = b.position(open)+1, parameterEnd
 						break
 					}
 				}
@@ -239,6 +251,15 @@ func (b *bindingIndex) callbackParameters() {
 			}
 			lo, hi = open+1, b.position(close)
 			body = hi + 1
+			if body < len(b.sig) && b.tokens[b.sig[body]].Text == ":" {
+				body++
+				for body < len(b.sig) && b.tokens[b.sig[body]].Text != "{" && b.tokens[b.sig[body]].Text != ";" {
+					body++
+				}
+			}
+			if body >= len(b.sig) || b.tokens[b.sig[body]].Text != "{" {
+				continue
+			}
 		}
 		if lo < 0 || body < 0 || body >= len(b.sig) {
 			continue
@@ -250,6 +271,9 @@ func (b *bindingIndex) callbackParameters() {
 			for end+1 < len(b.sig) {
 				if close, ok := b.pairs[b.sig[end]]; ok {
 					end = b.position(close)
+				}
+				if end+1 >= len(b.sig) {
+					break
 				}
 				next := b.tokens[b.sig[end+1]].Text
 				if next == "," || next == ";" || next == ")" || next == "]" || next == "}" {

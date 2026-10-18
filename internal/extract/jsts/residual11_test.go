@@ -114,6 +114,55 @@ func TestR01AnonymousCallbackBindings(t *testing.T) {
 	}
 }
 
+func TestR01TypedCallbackBoundaries(t *testing.T) {
+	for _, source := range []string{
+		`export function validateToken(): boolean { return true; }`,
+		`const value = x => ({x})`,
+		`const value = x => [x]`,
+	} {
+		if _, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "a.ts", Language: "typescript", Content: []byte(source)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, callback := range []string{
+		`function(target): void { target(); }`,
+		`(target): void => { target(); }`,
+	} {
+		source := `function target() {} function caller(){ values.forEach(` + callback + `); }`
+		x, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "a.ts", Language: "typescript", Content: []byte(source)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		names := map[string]string{}
+		for _, symbol := range x.Symbols {
+			names[symbol.Handle] = symbol.Name
+		}
+		for _, relation := range x.Relations {
+			if relation.Kind == "calls" && (names[relation.ToHandle] == "target" || relation.UnresolvedTo == "target") {
+				t.Errorf("typed callback inferred a call: %s: %+v", callback, relation)
+			}
+		}
+	}
+	source := `function target(){} function scoped(target): void {} function caller(){target();}`
+	x, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "a.ts", Language: "typescript", Content: []byte(source)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]string{}
+	for _, symbol := range x.Symbols {
+		names[symbol.Handle] = symbol.Name
+	}
+	found := false
+	for _, relation := range x.Relations {
+		if relation.Kind == "calls" && names[relation.FromHandle] == "caller" && names[relation.ToHandle] == "target" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("typed function binding escaped into caller: %+v", x.Relations)
+	}
+}
+
 func TestR02StaticModuleArguments(t *testing.T) {
 	for _, call := range []string{"import", "require"} {
 		for _, tc := range []struct{ arg, want string }{

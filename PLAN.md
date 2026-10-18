@@ -35,8 +35,8 @@
 ## Progress
 
 - [x] R01〜R11の監査根拠・現在の関連コード・既存の契約を照合し、修正方針と受け入れ条件を定義した。
-- [ ] 実装開始時のHEAD・差分を再確認し、専用ブランチ／作業場所を準備してPLANを切り替える。
-- [ ] 下記の順序で11件を正式回帰テストへ移し、RED→GREENと問題別コミットを記録する。
+- [x] 実装開始時のHEAD・差分を再確認し、専用ブランチ／作業場所を準備してPLANを切り替える。
+- [x] 下記の順序で11件を正式回帰テストへ移し、RED→GREENと問題別コミットを記録する。
 - [ ] 全通常テスト→全race検査、vet、ビルド、OS確認、独立レビューを完了する。
 - [ ] 検証済み変更をmasterへfast-forward統合し、今回のブランチだけを削除して完了を記録する。
 
@@ -79,11 +79,11 @@ Impactの現行Evidence分類は変更候補を`change`、関係候補を`depend
 
 ### 準備 — 作業場所とPLANの切替
 
-- [ ] HEAD・master・既存差分・添付worktreeを確認し、既存ユーザーファイルのハッシュ／差分を記録する。計画時点のHEADを無条件に現在値と見なさない。
-- [ ] `codex/residual-11-functional-fixes`をmasterから作り、管理された隔離worktreeで実装する。既存変更をreset・clean・stashしない。
-- [ ] 現行の完了済み`PLAN.md`を`docs/superpowers/plans/completed/2026-10-18-audit48-before-residual11.md`へbyte-for-byte保存し、SHA256一致を確認する。同名ファイルが存在したら上書きしない。
-- [ ] 承認された本計画をルート`PLAN.md`へ切り替え、監査報告を含む文書差分だけでPLAN切替をコミットする。候補ファイルは後続の編集元にせず、以後の進捗はルートPLANだけに記録する。
-- [ ] 再現fixtureを`testdata/regressions/residual11/`、回帰テストを各packageの`residual11_test.go`へ移す。各IDの修正前FAILはそのIDの着手時に記録する。
+- [x] HEAD・master・既存差分・添付worktreeを確認し、既存ユーザーファイルのハッシュ／差分を記録する。計画時点のHEADを無条件に現在値と見なさない。
+- [x] `codex/residual-11-functional-fixes`をmasterから作り、管理された隔離worktreeで実装する。既存変更をreset・clean・stashしない。
+- [x] 現行の完了済み`PLAN.md`を`docs/superpowers/plans/completed/2026-10-18-audit48-before-residual11.md`へbyte-for-byte保存し、SHA256一致を確認する。同名ファイルが存在したら上書きしない。
+- [x] 承認された本計画をルート`PLAN.md`へ切り替え、監査報告を含む文書差分だけでPLAN切替をコミットする。候補ファイルは後続の編集元にせず、以後の進捗はルートPLANだけに記録する。
+- [x] 再現fixtureを`testdata/regressions/residual11/`、回帰テストを各packageの`residual11_test.go`へ移す。各IDの修正前FAILはそのIDの着手時に記録する。
 
 ### Task R01 — JS/TSの束縛と呼出し先
 
@@ -91,11 +91,11 @@ Impactの現行Evidence分類は変更候補を`change`、関係候補を`depend
 
 **Interfaces:** Tokenのbyte位置とdeclarationの親子範囲から内部`bindingIndex`を作る。呼出し位置の名前が局所の動的束縛か、宣言された関数か、未束縛かを判定し、`resolveCall`と関係生成の両方で同じ判定を使う。MCP/model/DBへのフィールド追加はしない。
 
-- [ ] `TestR01ShadowedCalls`を追加する。引数・default引数・destructuring・const/let/var・catch引数・内側ブロック・nested closureで同名の大域関数へ接続しないことを検査する。局所のobject引数への`obj.method()`も同名の無関係な関数へ接続しない。束縛範囲外、通常の局所関数宣言、宣言として認識できる局所arrow/function expressionは正しい対象へ接続する。
-- [ ] `rtk proxy go test ./internal/extract/jsts -run TestR01 -count=1`でREDを記録する。実索引を通す`TestR01ShadowedCallsStayUnlinked`も追加し、後段linkerで誤接続が復活することを防ぐ。
-- [ ] 束縛のスコープと宣言種別を判定し、動的な局所呼出しの同名関係は登録しない。varの関数スコープ、let/constのブロックスコープ、引数・型注釈・分割代入の区別を扱い、別関数の束縛を漏らさない。引数名等の宣言位置を型参照として同名大域関数へ接続せず、型注釈にある真の参照は保持する。
-- [ ] `rtk proxy go test ./internal/extract/jsts ./internal/app -run TestR01 -count=1`でGREENを確認する。親子宣言、thisによるメソッド、import aliasの既存回帰も対象packageで検証する。
-- [ ] 対象hunkだけをstageし、R01のテスト・修正・ログ対応を記録してコミットする。
+- [x] `TestR01ShadowedCalls`を追加する。引数・default引数・destructuring・const/let/var・catch引数・内側ブロック・nested closureで同名の大域関数へ接続しないことを検査する。局所のobject引数への`obj.method()`も同名の無関係な関数へ接続しない。束縛範囲外、通常の局所関数宣言、宣言として認識できる局所arrow/function expressionは正しい対象へ接続する。
+- [x] `rtk proxy go test ./internal/extract/jsts -run TestR01 -count=1`でREDを記録する。実索引を通す`TestR01ShadowedCallsStayUnlinked`も追加し、後段linkerで誤接続が復活することを防ぐ。
+- [x] 束縛のスコープと宣言種別を判定し、動的な局所呼出しの同名関係は登録しない。varの関数スコープ、let/constのブロックスコープ、引数・型注釈・分割代入の区別を扱い、別関数の束縛を漏らさない。引数名等の宣言位置を型参照として同名大域関数へ接続せず、型注釈にある真の参照は保持する。
+- [x] `rtk proxy go test ./internal/extract/jsts ./internal/app -run TestR01 -count=1`でGREENを確認する。親子宣言、thisによるメソッド、import aliasの既存回帰も対象packageで検証する。
+- [x] 対象hunkだけをstageし、R01のテスト・修正・ログ対応を記録してコミットする。
 
 ### Task R02 — 静的なモジュール引数だけを認識する
 
@@ -103,11 +103,11 @@ Impactの現行Evidence分類は変更候補を`change`、関係候補を`depend
 
 **Interfaces:** 内部`staticModuleArgument(tokens []Token, significant []int) (string, bool)`を追加する。入力は呼出し括弧の内側のsignificant token列とし、第一引数が単独の静的文字列の場合だけ値を返す。`import()`と既存`require()`のモジュール抽出で共有する。
 
-- [ ] `TestR02StaticModuleArguments`を追加する。変数、連結、関数呼出し、置換付きtemplateから部分文字列を採用しない。単純な文字列、コメント、改行、importの第二引数options、末尾カンマを対照にする。
-- [ ] `rtk proxy go test ./internal/extract/jsts -run TestR02 -count=1`でREDを記録する。
-- [ ] `firstString`による式内探索を静的引数判定に置き換える。第二引数optionsの文字列をモジュール名として採用しない。実行時の式評価は行わない。
-- [ ] 同コマンドでGREENを確認し、import／requireの既存回帰を実行する。
-- [ ] R02を対象パス限定でコミットする。
+- [x] `TestR02StaticModuleArguments`を追加する。変数、連結、関数呼出し、置換付きtemplateから部分文字列を採用しない。単純な文字列、コメント、改行、importの第二引数options、末尾カンマを対照にする。
+- [x] `rtk proxy go test ./internal/extract/jsts -run TestR02 -count=1`でREDを記録する。
+- [x] `firstString`による式内探索を静的引数判定に置き換える。第二引数optionsの文字列をモジュール名として採用しない。実行時の式評価は行わない。
+- [x] 同コマンドでGREENを確認し、import／requireの既存回帰を実行する。
+- [x] R02を対象パス限定でコミットする。
 
 ### Task R03 — exportの値と再export先を区別する
 
@@ -115,11 +115,11 @@ Impactの現行Evidence分類は変更候補を`change`、関係候補を`depend
 
 **Interfaces:** `parseModules`でモジュール指定として扱うのはexport構文の`from`直後の静的文字列だけとする。既存のexport-symbol関係は宣言名・aliasから生成する。関数body等の内部文字列を外部モジュールに変換しない。
 
-- [ ] `TestR03ExportValueIsNotModule`を追加する。constの文字列、文字列union型、default値、関数内の文字列からmodule関係を作らず、`export * from`、`export {x as y} from`、ローカルの`export {x}`は保持する。export関数内の真のdynamic importも検査する。
-- [ ] `rtk proxy go test ./internal/extract/jsts -run TestR03 -count=1`でREDを記録する。
-- [ ] 文全体のstringLiterals列挙を構文別の読取りに置き換える。export宣言を読み飛ばして内部のimport/requireを取りこぼさないように、モジュール走査位置も修正する。
-- [ ] 同コマンドでGREENを確認し、R02および前回F34の改行・セミコロン省略・文字列名importの回帰を再検証する。
-- [ ] R03を対象パス限定でコミットする。
+- [x] `TestR03ExportValueIsNotModule`を追加する。constの文字列、文字列union型、default値、関数内の文字列からmodule関係を作らず、`export * from`、`export {x as y} from`、ローカルの`export {x}`は保持する。export関数内の真のdynamic importも検査する。
+- [x] `rtk proxy go test ./internal/extract/jsts -run TestR03 -count=1`でREDを記録する。
+- [x] 文全体のstringLiterals列挙を構文別の読取りに置き換える。export宣言を読み飛ばして内部のimport/requireを取りこぼさないように、モジュール走査位置も修正する。
+- [x] 同コマンドでGREENを確認し、R02および前回F34の改行・セミコロン省略・文字列名importの回帰を再検証する。
+- [x] R03を対象パス限定でコミットする。
 
 ### Task R05 — ファイルimportのmodule所有者を選ぶ
 
@@ -127,11 +127,11 @@ Impactの現行Evidence分類は変更候補を`change`、関係候補を`depend
 
 **Interfaces:** 内部`preferModuleOwner(from model.Symbol, relation model.Relation, candidates []model.Symbol) []model.Symbol`を追加し、`LinkWithScope`の最終一意性判定前に使う。SourceでJS/TSのモジュール関係とexport/import-symbol関係を区別する。
 
-- [ ] `TestR05ModuleOwnerResolution`と`TestR05RelativeImportIntegration`を追加する。参照先にmodule＋複数の関数／型があってもmoduleへ接続し、宣言なしの対照も維持する。相対パス、拡張子省略、index.ts、require、reexport、名前付きimport、複数ファイルの曖昧性を検査する。
-- [ ] `rtk proxy go test ./internal/linker ./internal/app -run TestR05 -count=1`でREDを記録する。
-- [ ] JS/TSのファイル依存で候補が単一の実ファイルを指す場合だけ、そのファイルの一意なmodule所有者へ絞る。名前付きsymbol、calls/tests、他言語の解決をこの規則で置換しない。module所有者不在や複数ファイルでは根拠なく1件を選ばない。
-- [ ] 同コマンドでGREENを確認し、全リンクと増分リンクの結果を比較する。前回F15/F17/F18/F21の回帰も維持する。
-- [ ] R05をコミットし、R04/R09がこのmodule選択に依存することをPLANへ記録する。
+- [x] `TestR05ModuleOwnerResolution`と`TestR05RelativeImportIntegration`を追加する。参照先にmodule＋複数の関数／型があってもmoduleへ接続し、宣言なしの対照も維持する。相対パス、拡張子省略、index.ts、require、reexport、名前付きimport、複数ファイルの曖昧性を検査する。
+- [x] `rtk proxy go test ./internal/linker ./internal/app -run TestR05 -count=1`でREDを記録する。
+- [x] JS/TSのファイル依存で候補が単一の実ファイルを指す場合だけ、そのファイルの一意なmodule所有者へ絞る。名前付きsymbol、calls/tests、他言語の解決をこの規則で置換しない。module所有者不在や複数ファイルでは根拠なく1件を選ばない。
+- [x] 同コマンドでGREENを確認し、全リンクと増分リンクの結果を比較する。前回F15/F17/F18/F21の回帰も維持する。
+- [x] R05をコミットし、R04/R09がこのmodule選択に依存することをPLANへ記録する。
 
 ### Task R04 — aliasの所属設定を限定する
 
@@ -139,11 +139,11 @@ Impactの現行Evidence分類は変更候補を`change`、関係候補を`depend
 
 **Interfaces:** 走査されたtsconfig/jsconfigごとに内部Factの`Kind="project-config"`を生成する。空の設定にもSourcePathを保持し、不正JSONの場合も境界の存在は保持して既存の解析診断を返す。`projectmeta.ApplicablePathAliases(sourcePath string, facts []Fact) []Fact`を追加し、最も近い設定のpath-aliasだけを返す。Fact構造とDBスキーマは変更しない。
 
-- [ ] `TestR04ApplicableAliases`と`TestR04AliasScopeIntegration`を追加する。隣接A/B、祖先設定、より近い設定、aliasなし／不正JSONの内側設定、同階層tsconfig/jsconfig、設定の追加／削除／alias変更を検査する。対象TSファイルはmoduleだけ／宣言付きの両方を用意する。
-- [ ] `rtk proxy go test ./internal/projectmeta ./internal/linker ./internal/app -run TestR04 -count=1`でREDを記録する。
-- [ ] alias候補化と最終解決の両方に同じ適用設定の判定を使う。設定のパスとbaseUrlによる既存のターゲット正規化、完全一致・wildcardを維持する。無関係なproject-config factをリンク先と解釈しない。新Factは既存manifest revisionに反映する。
-- [ ] 同コマンドでGREENを確認する。設定だけを変更した増分索引と新規全索引の関係集合が一致し、通常のGo/Composer等のfactsへ影響しないことを検査する。
-- [ ] R04を対象パス限定でコミットする。
+- [x] `TestR04ApplicableAliases`と`TestR04AliasScopeIntegration`を追加する。隣接A/B、祖先設定、より近い設定、aliasなし／不正JSONの内側設定、同階層tsconfig/jsconfig、設定の追加／削除／alias変更を検査する。対象TSファイルはmoduleだけ／宣言付きの両方を用意する。
+- [x] `rtk proxy go test ./internal/projectmeta ./internal/linker ./internal/app -run TestR04 -count=1`でREDを記録する。
+- [x] alias候補化と最終解決の両方に同じ適用設定の判定を使う。設定のパスとbaseUrlによる既存のターゲット正規化、完全一致・wildcardを維持する。無関係なproject-config factをリンク先と解釈しない。新Factは既存manifest revisionに反映する。
+- [x] 同コマンドでGREENを確認する。設定だけを変更した増分索引と新規全索引の関係集合が一致し、通常のGo/Composer等のfactsへ影響しないことを検査する。
+- [x] R04を対象パス限定でコミットする。
 
 ### Task R06 — Ruby文字列内の宣言・呼出しを除外する
 
@@ -151,11 +151,11 @@ Impactの現行Evidence分類は変更候補を`change`、関係候補を`depend
 
 **Interfaces:** lexerのTokenのbyte範囲を利用して構造解析用のcode viewを作る。改行・byte長を保ち、通常String等の本文を構造解析から除く。require・test DSL等で必要な値は元Tokenまたは原文から取得し、Evidence用の原文は変更しない。
 
-- [ ] `TestR06RubyStringRegions`を追加する。単／二重引用符、複数行、escape、percent literal、heredocの中のdef/class/end/呼出しを除外する。文字列外の宣言、通常require、test DSL、改行・byte位置を対照にする。
-- [ ] `rtk proxy go test ./internal/extract/ruby -run TestR06 -count=1`でREDを記録する。
-- [ ] 行ベースparserへ渡すcode viewと値抽出用の原文を分離する。文字列を空白化するだけでrequireやtest名まで消す修正にはしない。補間式を解析できない場合、本文から確定関係を推測しない。
-- [ ] 同コマンドでGREENを確認する。前回heredoc修正と共通の原文・行位置・byte範囲の回帰を実行する。
-- [ ] R06をコミットする。
+- [x] `TestR06RubyStringRegions`を追加する。単／二重引用符、複数行、escape、percent literal、heredocの中のdef/class/end/呼出しを除外する。文字列外の宣言、通常require、test DSL、改行・byte位置を対照にする。
+- [x] `rtk proxy go test ./internal/extract/ruby -run TestR06 -count=1`でREDを記録する。
+- [x] 行ベースparserへ渡すcode viewと値抽出用の原文を分離する。文字列を空白化するだけでrequireやtest名まで消す修正にはしない。補間式を解析できない場合、本文から確定関係を推測しない。
+- [x] 同コマンドでGREENを確認する。前回heredoc修正と共通の原文・行位置・byte範囲の回帰を実行する。
+- [x] R06をコミットする。
 
 ### Task R07 — Ruby endless methodの終端
 
@@ -163,11 +163,11 @@ Impactの現行Evidence分類は変更候補を`change`、関係候補を`depend
 
 **Interfaces:** 宣言headerの引数括弧・token境界から、引数のdefault値や`foo=`というsetter名とendless bodyの`=`を区別する。endless bodyは1つの論理式の末尾までとし、通常defのend待ちstackへ積まない。
 
-- [ ] `TestR07RubyEndlessMethods`を追加する。単純な式、引数付き、self.method、次の独立宣言、括弧／配列やbegin/endで継続する複数行式を検査する。通常defのdefault引数、setter名、比較演算子を誤認しないことも確認する。
-- [ ] `rtk proxy go test ./internal/extract/ruby -run TestR07 -count=1`でREDを記録する。
-- [ ] endless methodの宣言終端・親子関係・修飾名を論理式に合わせて計算する。後続メソッドのendを使って閉じない。曖昧な未完了式から後続宣言を確定的に子へ分類しない。
-- [ ] 同コマンドとR06回帰でGREENを確認し、原文の連続slice・行位置を検査する。
-- [ ] R07をコミットする。
+- [x] `TestR07RubyEndlessMethods`を追加する。単純な式、引数付き、self.method、次の独立宣言、括弧／配列やbegin/endで継続する複数行式を検査する。通常defのdefault引数、setter名、比較演算子を誤認しないことも確認する。
+- [x] `rtk proxy go test ./internal/extract/ruby -run TestR07 -count=1`でREDを記録する。
+- [x] endless methodの宣言終端・親子関係・修飾名を論理式に合わせて計算する。後続メソッドのendを使って閉じない。曖昧な未完了式から後続宣言を確定的に子へ分類しない。
+- [x] 同コマンドとR06回帰でGREENを確認し、原文の連続slice・行位置を検査する。
+- [x] R07をコミットする。
 
 ### Task R08 — Python simple statementの分割
 
@@ -175,11 +175,11 @@ Impactの現行Evidence分類は変更候補を`change`、関係候補を`depend
 
 **Interfaces:** `pythonImportRecords`の返却型`map[int][]string`を維持する。同一物理行の複数importを同じ行のrecordsへ追加し、文字列／コメントと括弧内を除くセミコロン境界でsimple statementを分割する。import後の実行文をモジュール名へ混ぜない。
 
-- [ ] `TestR08SemicolonImports`を追加する。`import os; import sys`、from/import alias、カンマ形式、後続の代入／呼出し、`if flag: import os; import sys`の単純suite、文字列・コメント中の`;`、既存の括弧付き複数行とbackslash継続を検査する。
-- [ ] `rtk proxy go test ./internal/extract/python -run TestR08 -count=1`でREDを記録する。
-- [ ] マスク済みcode viewとtoken境界を使ってsimple statementを分割し、各importを既存のrecordsへ追加する。各statementでownerや行番号を取り直して誤ったsource範囲を生成しない。
-- [ ] 同コマンドでGREENを確認する。複数import・scope lifetime・遮蔽・原文位置の既存回帰も実行する。
-- [ ] R08をコミットする。
+- [x] `TestR08SemicolonImports`を追加する。`import os; import sys`、from/import alias、カンマ形式、後続の代入／呼出し、`if flag: import os; import sys`の単純suite、文字列・コメント中の`;`、既存の括弧付き複数行とbackslash継続を検査する。
+- [x] `rtk proxy go test ./internal/extract/python -run TestR08 -count=1`でREDを記録する。
+- [x] マスク済みcode viewとtoken境界を使ってsimple statementを分割し、各importを既存のrecordsへ追加する。各statementでownerや行番号を取り直して誤ったsource範囲を生成しない。
+- [x] 同コマンドでGREENを確認する。複数import・scope lifetime・遮蔽・原文位置の既存回帰も実行する。
+- [x] R08をコミットする。
 
 ### Task R10 — 評価のidentity判定を直接取得へ切り替える
 
@@ -187,11 +187,11 @@ Impactの現行Evidence分類は変更候補を`change`、関係候補を`depend
 
 **Interfaces:** Storeへ`SymbolsForIdentity(ctx context.Context, path, name, kind string) ([]model.Symbol, error)`を追加する。SQLでパス・名前・指定kindを条件化し、retrieval候補上限を使わず決定的順序で返す。pathだけの存在確認には既存`FileHash`のfoundを用い、benchmark型をStoreから参照しない。
 
-- [ ] `TestR10AttributionIdentityLookup`を追加する。同名502件の末尾、path-only、索引済みの空ファイル、同一ファイルの複数chunk、kind不一致、大文字小文字、真の未索引を検査する。`AttributeLabels`まで通して未索引／retrieval missingを区別する。
-- [ ] `rtk proxy go test ./internal/store ./internal/benchmark -run TestR10 -count=1`でREDを記録する。
-- [ ] `AttributionIdentities`の上限500の候補検索を直接identity取得へ置き換える。複数chunkによる重複はidentityでまとめ、schemaや既存のTargetRank/MRR定義を変更しない。
-- [ ] 同コマンドでGREENを確認する。benchmarkのattribution・required_symbols・report比較の既存テストを実行する。
-- [ ] R10をコミットする。
+- [x] `TestR10AttributionIdentityLookup`を追加する。同名502件の末尾、path-only、索引済みの空ファイル、同一ファイルの複数chunk、kind不一致、大文字小文字、真の未索引を検査する。`AttributeLabels`まで通して未索引／retrieval missingを区別する。
+- [x] `rtk proxy go test ./internal/store ./internal/benchmark -run TestR10 -count=1`でREDを記録する。
+- [x] `AttributionIdentities`の上限500の候補検索を直接identity取得へ置き換える。複数chunkによる重複はidentityでまとめ、schemaや既存のTargetRank/MRR定義を変更しない。
+- [x] 同コマンドでGREENを確認する。benchmarkのattribution・required_symbols・report比較の既存テストを実行する。
+- [x] R10をコミットする。
 
 ### Task R11 — 内容変更件数と再抽出回数を分離する
 
@@ -199,11 +199,11 @@ Impactの現行Evidence分類は変更候補を`change`、関係候補を`depend
 
 **Interfaces:** 現行IndexRunのフィールドを維持する。最初の走査とhash判定で決まったFilesAdded/FilesChanged/FilesUnchangedを、依存再抽出のキュー追加時に変更しない。
 
-- [ ] `TestR11ContentChangeCounts`を追加する。同名対象追加、既存対象変更、削除、競合追加の連鎖、複数経路からの同一依存元を検査する。追加だけの再現は`added=1, changed=0, unchanged=2`とし、返却と保存済みrunで同じ値を確認する。
-- [ ] `rtk proxy go test ./internal/indexer ./internal/app -run TestR11 -count=1`でREDを記録する。
-- [ ] 依存再抽出のためのchanged/unchangedの加減算を除き、重複抑止と関係再構築は維持する。別の公開統計フィールドは追加しない。
-- [ ] 同コマンドでGREENを確認し、関係集合が全索引と一致すること、FilesSeenの分類合計が正常なfixtureで一致することを確認する。
-- [ ] R11をコミットする。
+- [x] `TestR11ContentChangeCounts`を追加する。同名対象追加、既存対象変更、削除、競合追加の連鎖、複数経路からの同一依存元を検査する。追加だけの再現は`added=1, changed=0, unchanged=2`とし、返却と保存済みrunで同じ値を確認する。
+- [x] `rtk proxy go test ./internal/indexer ./internal/app -run TestR11 -count=1`でREDを記録する。
+- [x] 依存再抽出のためのchanged/unchangedの加減算を除き、重複抑止と関係再構築は維持する。別の公開統計フィールドは追加しない。
+- [x] 同コマンドでGREENを確認し、関係集合が全索引と一致すること、FilesSeenの分類合計が正常なfixtureで一致することを確認する。
+- [x] R11をコミットする。
 
 ### Task R09 — Impactへ構文上の依存元・関連テストを追加する
 
@@ -211,11 +211,11 @@ Impactの現行Evidence分類は変更候補を`change`、関係候補を`depend
 
 **Interfaces:** `impactCandidates`の返却型を維持する。内部`impactRelationCandidates(ctx context.Context, changed []model.RankedCandidate) ([]model.RankedCandidate, error)`を追加し、変更シンボルの既存handleから1段の関係を取得する。source検証は現行のScanner/hash確認を共通化し、変更対象と追加対象を同じ検証方針で扱う。
 
-- [ ] `TestR09ImpactRelations`を正式化する。変更関数、非変更Caller、関連Testの3ファイルが十分な予算で返ることを、旧形式・Evidence・MCPで確認する。変更関数を持つTSファイルへのmodule importも検査する。複数変更アンカー、循環、未解決候補、低予算、既知handle、削除ファイル、明示Git参照も検査する。
-- [ ] `rtk proxy go test ./internal/app ./internal/mcpserver -run TestR09 -count=1`でREDを記録する。既存Storeのcallers/tests取得で関係が存在することを対照にする。
-- [ ] 変更行と重なるシンボルをアンカーとし、callersおよびimports/exports/referencesの入方向、関連testsの入方向から1段の候補を得る。ファイル依存には同じ変更ファイルのmodule/package所有者も探索アンカーとして使い、所有者のoutline全体を変更本文として追加しない。既存RelationContextの方向・確定／候補・実際のAnchorHandleを保持し、重複を排除してから既存上限と順位を適用する。変更候補はChanged=trueを保ち、関係候補は変更扱いにしない。範囲内の変更候補が関係候補だけで押し出されないようにする。
-- [ ] 自動更新ONは検索前更新を維持する。OFFでは追加される非変更ファイルもhash・索引対象性を検証し、不一致／未索引は更新要求エラーとする。現存しないファイルの旧本文は返さない。共有ロックを最終revisionまで保持し、MCP原文一回・原文/行位置・既存role・実測wire予算・省略時の既存guidanceを検査してGREENを確認する。
-- [ ] R09をコミットする。既存のdirty MCPファイルへ無関係な変更を混ぜず、新しいテストから公開説明どおりの結果を確認する。
+- [x] `TestR09ImpactRelations`を正式化する。変更関数、非変更Caller、関連Testの3ファイルが十分な予算で返ることを、旧形式・Evidence・MCPで確認する。変更関数を持つTSファイルへのmodule importも検査する。複数変更アンカー、循環、未解決候補、低予算、既知handle、削除ファイル、明示Git参照も検査する。
+- [x] `rtk proxy go test ./internal/app ./internal/mcpserver -run TestR09 -count=1`でREDを記録する。既存Storeのcallers/tests取得で関係が存在することを対照にする。
+- [x] 変更行と重なるシンボルをアンカーとし、callersおよびimports/exports/referencesの入方向、関連testsの入方向から1段の候補を得る。ファイル依存には同じ変更ファイルのmodule/package所有者も探索アンカーとして使い、所有者のoutline全体を変更本文として追加しない。既存RelationContextの方向・確定／候補・実際のAnchorHandleを保持し、重複を排除してから既存上限と順位を適用する。変更候補はChanged=trueを保ち、関係候補は変更扱いにしない。範囲内の変更候補が関係候補だけで押し出されないようにする。
+- [x] 自動更新ONは検索前更新を維持する。OFFでは追加される非変更ファイルもhash・索引対象性を検証し、不一致／未索引は更新要求エラーとする。現存しないファイルの旧本文は返さない。共有ロックを最終revisionまで保持し、MCP原文一回・原文/行位置・既存role・実測wire予算・省略時の既存guidanceを検査してGREENを確認する。
+- [x] R09をコミットする。既存のdirty MCPファイルへ無関係な変更を混ぜず、新しいテストから公開説明どおりの結果を確認する。
 
 ## Validation and Acceptance
 
@@ -261,7 +261,7 @@ masterが進んでいた場合は変更を確認して作業ブランチへ取�
 
 ## Outcomes & Retrospective
 
-実装未着手。現在の成果は11件すべての方針・対象ファイル・RED/GREEN・受け入れ条件・統合手順を定義した計画書である。
+R01〜R11の実装・正式回帰テスト・問題別コミットを完了した。最終検証と統合の実測結果は本書末尾および検証記録へ記載する。
 
 実装完了時に、R01〜R11のcommit対応表、共有version更新、実測検証ログ、独立レビュー、master統合SHA、ブランチ削除結果、残る未確認ゲートをここへ記録する。将来の監査で残存ゼロを保証するものとはしない。
 
@@ -296,3 +296,37 @@ Execution 2026-10-18T06:07:04.278033+00:00: R01-review RED→GREEN; scoped packa
 Execution 2026-10-18T06:07:07.607525+00:00: R07-review RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
 
 Execution 2026-10-18T06:07:11.835767+00:00: R11-controls RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+
+
+## Execution evidence
+
+Base: `66d8ea87916cdda57d0d3c0ecd8fd26dfc91e07a`。
+専用worktreeの実装により元の未コミット11ファイルのbytesを保持した。
+
+| ID | 修正コミット | 正式回帰の主要箇所 |
+| --- | --- | --- |
+| R01 | 3061fd4, fb101f4 | jsts/residual11_test.go, app/residual11_test.go |
+| R02 | 365722a | jsts/residual11_test.go |
+| R03 | b818f0b, c625ebd | jsts/residual11_test.go |
+| R04 | 4299a21 | projectmeta/residual11_test.go, app/residual11_test.go |
+| R05 | cfcad62 | linker/residual11_test.go, app/residual11_test.go |
+| R06 | d8991f3 | ruby/residual11_test.go |
+| R07 | f48bc2f, b04b916 | ruby/residual11_test.go |
+| R08 | bb3d9f6 | python/residual11_test.go |
+| R09 | 09dae49 | app/impact_relations_test.go, mcpserver/residual11_test.go |
+| R10 | d82235a | store/residual11_test.go, benchmark/residual11_test.go |
+| R11 | 9035a64, b76c905 | indexer/residual11_test.go |
+
+共通version更新: `731d52c`、v18→v19を正規更新で一度だけ再抽出する回帰を追加。
+
+### 実行時の判断と補足
+
+1. WindowsではPOSIX補助手順をPython実行アダプタへ置換した。対象パス限定stage、RED/GREENの生ログ、BASE・SHA・作業記録を維持した。
+2. Goのキャッシュ付きテスト起動がパッケージ実行前に停止したため、`-count=1`を採用した。30秒の診断タイムアウトはapp全件には短く、最終検証は15分上限とした。初回全件では旧version固定テストとStore並行初期化のdeadline失敗が出た。前者を現行version比較へ修正、後者は対象再実行で成功し、最終全件で再確認する。
+3. F15の旧fixtureは設定ファイル外のimporterへalias適用を期待していた。importerを同じ設定配下へ移し、既存wildcard検査を保持した。隣接プロジェクトへの不適用は新規回帰で確認する。
+4. R09はGo所有者にchunkがない場合も含めるため内部SQL取得を追加し、legacy packerへ内部impact hintを渡した。MCPの公開入力へmodeは追加していない。focused応答で実際に出るsignatureの原文一回を検査し、本文全体の忠実性はapp source形式で別途検査する。
+5. 独立レビューは全差分を一度確認し、P2の3件（loop scope、匿名callback引数、Ruby複数行Regex）を指摘した。全件RED確認後に修正した。R01はレビュー担当へ2ファイル限定で修正を委譲し、親が差分を確認した。R07は親が修正し担当が独立読取り確認した。追加の全差分再レビューは行っていない。
+
+サイバーセキュリティ項目、supervisor EOF、push、稼働バイナリ置換は対象外。v19は今回のビルド成果物に含まれるが稼働プロセスには未配置。
+
+Execution 2026-10-18T06:11:27.193555+00:00: R01-typed-boundaries RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
