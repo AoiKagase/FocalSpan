@@ -41,7 +41,7 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 	if err != nil {
 		return model.Extraction{}, err
 	}
-	parsed, err := parseCPP(ctx, tokens)
+	parsed, err := parseCPP(ctx, tokens, file.Path)
 	if err != nil {
 		return model.Extraction{}, err
 	}

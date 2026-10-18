@@ -40,6 +40,7 @@ type parseResult struct {
 }
 
 type parser struct {
+	filePath  string
 	ctx       context.Context
 	tokens    []Token
 	sig       []int
@@ -48,8 +49,8 @@ type parser struct {
 	seenStart map[int]bool
 }
 
-func parseCPP(ctx context.Context, tokens []Token) (parseResult, error) {
-	p := &parser{ctx: ctx, tokens: tokens, matching: make(map[int]int), seenStart: make(map[int]bool)}
+func parseCPP(ctx context.Context, tokens []Token, filePath string) (parseResult, error) {
+	p := &parser{filePath: filePath, ctx: ctx, tokens: tokens, matching: make(map[int]int), seenStart: make(map[int]bool)}
 	p.result.Tokens = tokens
 	for index, token := range tokens {
 		if token.significant() {
@@ -168,7 +169,10 @@ func (p *parser) parseNamespace(position, hi int, parent *declaration, namespace
 		nameEnd++
 	}
 	name := joinTokens(p.tokens, p.sig[position+1:nameEnd])
-	if name == "" || name == "inline" {
+	if name == "" {
+		name = "(anonymous@" + strings.ReplaceAll(p.filePath, "\\", "/") + ")"
+	}
+	if name == "inline" {
 		return nil, position, false
 	}
 	open := nameEnd
