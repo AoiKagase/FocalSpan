@@ -214,8 +214,6 @@ func (i *Indexer) RunWithProgress(ctx context.Context, full bool, progress Progr
 					if file, ok := fileByPath[path]; ok {
 						next = append(next, file)
 						frontier = append(frontier, path)
-						run.FilesUnchanged--
-						run.FilesChanged++
 					}
 				}
 				if len(frontier) == 0 {
