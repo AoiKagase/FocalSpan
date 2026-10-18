@@ -14,10 +14,21 @@ import (
 )
 
 func TestR11ContentChangeCounts(t *testing.T) {
+	t.Run("single-consumer", func(t *testing.T) { checkR11ContentChangeCounts(t, false) })
+	t.Run("multiple-paths-and-chain", func(t *testing.T) { checkR11ContentChangeCounts(t, true) })
+}
+
+func checkR11ContentChangeCounts(t *testing.T, multiple bool) {
 	root := t.TempDir()
 	ctx := context.Background()
 	write(t, filepath.Join(root, "a.go"), "package p\nfunc Target() {}\n")
 	write(t, filepath.Join(root, "b.go"), "package p\nfunc Caller() { Target() }\n")
+	unchanged := 2
+	if multiple {
+		write(t, filepath.Join(root, "d.go"), "package p\nfunc Other() { Target(); Caller() }\n")
+		write(t, filepath.Join(root, "e.go"), "package p\nfunc Further() { Other(); Caller(); Target() }\n")
+		unchanged = 4
+	}
 	cfg := config.Default()
 	s, e := store.Open(root, cfg.IndexDirectory)
 	if e != nil {
@@ -33,7 +44,7 @@ func TestR11ContentChangeCounts(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer db.Close()
-	for phase, want := range [][4]int{{1, 0, 2, 0}, {0, 1, 2, 0}, {0, 0, 2, 1}} {
+	for phase, want := range [][4]int{{1, 0, unchanged, 0}, {0, 1, unchanged, 0}, {0, 0, unchanged, 1}, {1, 0, unchanged, 0}, {1, 0, unchanged + 1, 0}} {
 		switch phase {
 		case 0:
 			write(t, filepath.Join(root, "c.go"), "package q\nfunc Target() {}\n")
@@ -43,6 +54,10 @@ func TestR11ContentChangeCounts(t *testing.T) {
 			if e = os.Remove(filepath.Join(root, "c.go")); e != nil {
 				t.Fatal(e)
 			}
+		case 3:
+			write(t, filepath.Join(root, "c.go"), "package q\nfunc Target() {}\n")
+		case 4:
+			write(t, filepath.Join(root, "f.go"), "package r\nfunc Target() {}\n")
 		}
 		run, e := ix.Run(ctx, false)
 		if e != nil {

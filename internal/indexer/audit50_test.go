@@ -91,7 +91,7 @@ func TestAudit50ReindexesV17Metadata(t *testing.T) {
 		t.Fatalf("v17 extraction not refreshed: %+v", run)
 	}
 	version, err := st.Meta(ctx, "extractor_version")
-	if err != nil || version != "extractors-v18-audit50-extraction-linking" {
+	if err != nil || version != extractorVersion {
 		t.Fatalf("version=%q err=%v", version, err)
 	}
 	again, err := ix.Run(ctx, false)
