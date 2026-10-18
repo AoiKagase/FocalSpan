@@ -14,7 +14,7 @@
 
 数字区切り・BOM・template・namespace・関数宣言を理由に後続のシンボルが消える問題、関数の本文範囲が欠ける問題、同名関数への誤接続、正しい関係が検索に届かない問題を修正する。各IDについて修正前FAILと修正後PASSを残し、Query/Expand/Impactまで必要な経路を検証する。
 
-このファイルは**実行承認前の提案計画**である。現時点では完了済みルート`PLAN.md`を置き換えず、製品コードも変更しない。実装開始時に後述の計画移行を行う。
+2026-10-18の実装承認後、Task 0で完了済みPLANをバイト単位でarchiveし、本計画を有効化した。実装・検証の実績は末尾に記録する。元の提案版はdocs/superpowers/plansに保持する。
 
 ## Global Constraints
 
@@ -38,8 +38,8 @@
 
 - [x] 監査20件と再現fixture、既存の計画ポリシーを照合した。
 - [x] 修正順序、内部インターフェース、受け入れ条件を計画化した。
-- [ ] 実装承認後にTask 0を実施し、ここからルートPLANへ移行する。
-- [ ] Task 1〜20のRED→GREENとID別コミットを完了する。
+- [x] 実装承認後にTask 0を実施し、ここからルートPLANへ移行する。
+- [x] Task 1〜20のRED→GREENとID別コミットを完了する。
 - [ ] Task 21の更新移行・全検証・独立レビュー・統合を完了する。
 
 実行時はUTC日時、実際のコマンド、終了コード、証跡パスを追記する。未実行の検証を完了扱いにしない。
@@ -61,7 +61,7 @@
 
 ## Outcomes & Retrospective
 
-未実装。完了時に各CP ID、正式テスト名、RED/GREEN証跡、コミットSHA、全検証結果、独立レビュー結果、master到達SHA、今回branch削除結果を記録する。未確認項目があれば完了へ進めない。
+実装・全検証・独立レビュー完了。masterへの統合と今回branch削除は後述の統合記録に実行後追記する。
 
 ## Context and Orientation
 
@@ -91,11 +91,11 @@
 
 **Files:** ルート`PLAN.md`、本提案、`docs/superpowers/plans/completed/2026-10-18-residual11-before-cpp20.md`、監査MD/JSON、上記監査fixture。
 
-1. [ ] branch、HEAD、dirty/untracked、worktree、既存lockを記録する。元checkoutをreset/clean/stashしない。使用可能なmanaged worktreeを確認し、専用`codex/cpp-20-functional-fixes`を作る。ブランチが既存なら履歴を確認し、上書きしない。
-2. [ ] 実装に必要な監査資料とfixtureをバイト一致で作業先へ渡す。ユーザーの他のdirty変更は持ち込まない。監査基準から変化があれば各再現の有効性を確認する。
-3. [ ] 完了済みルートPLANをバイト単位でarchiveし、SHA-256一致を確認してから本計画をroot PLANとして有効化する。計画・監査証跡だけを明示stageして独立docsコミットにする。
-4. [ ] 元fixtureの27失敗条件・7成功対照をIDへ対応付ける。各タスクで正式テストを先に追加してREDを保存する。先行修正によって後続条件が既に通る場合は基準HEADの隔離検証先でFAILを確認し、理由を記録する。
-5. [ ] Progressへdirty基準、作業場所、実行証跡ディレクトリ、計画移行SHAを記録する。
+1. [x] branch、HEAD、dirty/untracked、worktree、既存lockを記録する。元checkoutをreset/clean/stashしない。使用可能なmanaged worktreeを確認し、専用`codex/cpp-20-functional-fixes`を作る。ブランチが既存なら履歴を確認し、上書きしない。
+2. [x] 実装に必要な監査資料とfixtureをバイト一致で作業先へ渡す。ユーザーの他のdirty変更は持ち込まない。監査基準から変化があれば各再現の有効性を確認する。
+3. [x] 完了済みルートPLANをバイト単位でarchiveし、SHA-256一致を確認してから本計画をroot PLANとして有効化する。計画・監査証跡だけを明示stageして独立docsコミットにする。
+4. [x] 元fixtureの27失敗条件・7成功対照をIDへ対応付ける。各タスクで正式テストを先に追加してREDを保存する。先行修正によって後続条件が既に通る場合は基準HEADの隔離検証先でFAILを確認し、理由を記録する。
+5. [x] Progressへdirty基準、作業場所、実行証跡ディレクトリ、計画移行SHAを記録する。
 
 以降の各タスクは表記順に実施する。RED/GREENコマンドは同一とし、REDが意図したassertionで失敗したことを確認する。新設package/APIがある場合はコンパイル可能な最小の型・宣言を先に用意し、package不在・未定義名をRED証拠にしない。実装後は対象package全体も実行する。共有テストファイルを累積更新するため、後続IDの未実装テストを先に追加してpackage全体を常時失敗させない。コミットは指定対象パスのみstageし、PLANのID・証跡・SHA表を更新する。
 
@@ -103,191 +103,191 @@
 
 **Files:** `internal/extract/cpp/lexer.go`、`cpp20_regression_test.go`。**Consumes:** 元source bytes。**Produces:** 先頭BOMを構文から除外した、元offset付きtoken。
 
-1. [ ] `TestCPP20_CP20/SourceOffsets`を追加。BOM+CRLFのfirst/second、非ASCII識別子、文字列内と先頭以外のU+FEFFを検査する。
-2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP20$' -count=1`。first欠落を確認する。
-3. [ ] byte0のUTF-8 BOMだけを読み飛ばす。入力全体の切り詰めやoffset補正の二重適用をしない。
-4. [ ] 同コマンドでGREEN。symbol/chunkの元バイト範囲と行位置を照合する。
-5. [ ] `fix(cpp): preserve declarations after UTF-8 BOM`として対象をコミットする。
+1. [x] `TestCPP20_CP20/SourceOffsets`を追加。BOM+CRLFのfirst/second、非ASCII識別子、文字列内と先頭以外のU+FEFFを検査する。
+2. [x] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP20$' -count=1`。first欠落を確認する。
+3. [x] byte0のUTF-8 BOMだけを読み飛ばす。入力全体の切り詰めやoffset補正の二重適用をしない。
+4. [x] 同コマンドでGREEN。symbol/chunkの元バイト範囲と行位置を照合する。
+5. [x] `fix(cpp): preserve declarations after UTF-8 BOM`として対象をコミットする。
 
 ### Task 2 — CP01: 数字区切り文字
 
 **Files:** `lexer.go`、`cpp20_regression_test.go`。**Produces:** 数字literal内部のapostropheを含むtoken。
 
-1. [ ] `TestCPP20_CP01`に`1'000`後のreal、hex/binary、exponent、隣接する本物のchar literalと`SourceOffsets`を追加する。
-2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP01$' -count=1`。後続関数欠落を確認する。
-3. [ ] 数字literalの走査規則を追加し、有効な数字間のseparatorをchar開始にしない。文字列・文字literalの規則は保持する。
-4. [ ] 同コマンドでGREEN。壊れたliteralでも無関係な後続宣言を過剰に飲み込まないことを確認する。
-5. [ ] `fix(cpp): lex digit separators without consuming declarations`をコミットする。
+1. [x] `TestCPP20_CP01`に`1'000`後のreal、hex/binary、exponent、隣接する本物のchar literalと`SourceOffsets`を追加する。
+2. [x] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP01$' -count=1`。後続関数欠落を確認する。
+3. [x] 数字literalの走査規則を追加し、有効な数字間のseparatorをchar開始にしない。文字列・文字literalの規則は保持する。
+4. [x] 同コマンドでGREEN。壊れたliteralでも無関係な後続宣言を過剰に飲み込まないことを確認する。
+5. [x] `fix(cpp): lex digit separators without consuming declarations`をコミットする。
 
 ### Task 3 — CP12: 継続行コメント
 
 **Files:** `lexer.go`、`cpp20_regression_test.go`。**Produces:** escaped newlineを含む正しいline-comment範囲。
 
-1. [ ] `TestCPP20_CP12`にLF/CRLFの`// ... \\`継続、phantom非抽出、継続終了後real抽出、`SourceOffsets`を追加する。
-2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP12$' -count=1`。phantomの誤抽出を確認する。
-3. [ ] line spliceをコメント終端判定に適用し、元sourceを改変せずline/byteを追跡する。macro評価は追加しない。
-4. [ ] 同コマンドでGREEN。raw string・通常string中の`//`対照も通す。
-5. [ ] `fix(cpp): honor escaped newlines in line comments`をコミットする。
+1. [x] `TestCPP20_CP12`にLF/CRLFの`// ... \\`継続、phantom非抽出、継続終了後real抽出、`SourceOffsets`を追加する。
+2. [x] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP12$' -count=1`。phantomの誤抽出を確認する。
+3. [x] line spliceをコメント終端判定に適用し、元sourceを改変せずline/byteを追跡する。macro評価は追加しない。
+4. [x] 同コマンドでGREEN。raw string・通常string中の`//`対照も通す。
+5. [x] `fix(cpp): honor escaped newlines in line comments`をコミットする。
 
 ### Task 4 — CP13: コメント付きinclude
 
 **Files:** `lexer.go`、`parser.go`、`cpp20_regression_test.go`。**Produces:** コメントを空白として扱うdirective解析。
 
-1. [ ] `TestCPP20_CP13`に先頭block comment、includeとoperand間comment、quote/angle、継続行、URL/raw string、`SourceOffsets`を追加する。
-2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP13$' -count=1`。dep.hpp欠落を確認する。
-3. [ ] directive開始位置とoperandをtokenから判断する。文字列をregex置換で壊さない。`include_next`は既存kindを維持し、macro operandは確定パスへ変換しない。
-4. [ ] 同コマンドでGREEN。include関係と元line、コメント内の偽include非抽出を確認する。
-5. [ ] `fix(cpp): parse include directives around comments`をコミットする。
+1. [x] `TestCPP20_CP13`に先頭block comment、includeとoperand間comment、quote/angle、継続行、URL/raw string、`SourceOffsets`を追加する。
+2. [x] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP13$' -count=1`。dep.hpp欠落を確認する。
+3. [x] directive開始位置とoperandをtokenから判断する。文字列をregex置換で壊さない。`include_next`は既存kindを維持し、macro operandは確定パスへ変換しない。
+4. [x] 同コマンドでGREEN。include関係と元line、コメント内の偽include非抽出を確認する。
+5. [x] `fix(cpp): parse include directives around comments`をコミットする。
 
 ### Task 5 — CP15: class修飾名の重複
 
 **Files:** `parser.go`、`cpp20_regression_test.go`。**Produces:** namespaceと型所有者を分けた宣言context。
 
-1. [ ] `TestCPP20_CP15`にglobal Item::run、constructor、n::Item::run、Outer::Inner::run、out-of-class定義を追加する。
-2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP15$' -count=1`。Item::Item::runを確認する。
-3. [ ] `namespaceFor`とparseScopeへのcontext引渡しを修正する。namespaceなしを空として扱い、型名を一度だけ付与する。
-4. [ ] 同コマンドでGREEN。既存F42 namespace関数・F44大文字小文字の回帰も通す。
-5. [ ] `fix(cpp): keep namespace and type qualification distinct`をコミットする。
+1. [x] `TestCPP20_CP15`にglobal Item::run、constructor、n::Item::run、Outer::Inner::run、out-of-class定義を追加する。
+2. [x] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP15$' -count=1`。Item::Item::runを確認する。
+3. [x] `namespaceFor`とparseScopeへのcontext引渡しを修正する。namespaceなしを空として扱い、型名を一度だけ付与する。
+4. [x] 同コマンドでGREEN。既存F42 namespace関数・F44大文字小文字の回帰も通す。
+5. [x] `fix(cpp): keep namespace and type qualification distinct`をコミットする。
 
 ### Task 6 — CP05: namespace alias/usingの終端
 
 **Files:** `parser.go`、`cpp20_regression_test.go`。**Produces:** alias/directiveとnamespace bodyの区別。
 
-1. [ ] `TestCPP20_CP05`にaliasとusing namespace後のlater、通常・nested namespace、文字列内namespaceを追加する。
-2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP05$' -count=1`。later欠落を確認する。
-3. [ ] namespace構文を解析し、aliasとusingは`;`で終了させる。`;`を越えた次の`{`をbodyにしない。
-4. [ ] 同コマンドでGREEN。aliasから架空のcontainerや確定callを生成しないことを確認する。
-5. [ ] `fix(cpp): stop namespace directives at their terminator`をコミットする。
+1. [x] `TestCPP20_CP05`にaliasとusing namespace後のlater、通常・nested namespace、文字列内namespaceを追加する。
+2. [x] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP05$' -count=1`。later欠落を確認する。
+3. [x] namespace構文を解析し、aliasとusingは`;`で終了させる。`;`を越えた次の`{`をbodyにしない。
+4. [x] 同コマンドでGREEN。aliasから架空のcontainerや確定callを生成しないことを確認する。
+5. [x] `fix(cpp): stop namespace directives at their terminator`をコミットする。
 
 ### Task 7 — CP06: 無名namespaceの所属
 
 **Files:** `parser.go`、`extractor.go`、`cpp20_regression_test.go`。**Produces:** 同一ファイル・同一親で再利用される無名namespace所有者。
 
-1. [ ] `TestCPP20_CP06`にhiddenのParentHandle、named namespace内、同一scope再open、別ファイル同名hidden、無関係な行挿入を追加する。
-2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP06$' -count=1`。所属なしを確認する。
-3. [ ] 正規化済み相対pathと親scopeから安定した内部識別名を作る（行番号をIDにしない）。表示名は無名namespaceと分かるものにする。同一scopeの再openを同じ所有者へ統合する。
-4. [ ] 同コマンドでGREEN。元ソースchunkを合成名で置換せず、別ファイルのprivate scopeを混同しない。
-5. [ ] `fix(cpp): retain anonymous namespace ownership`をコミットする。
+1. [x] `TestCPP20_CP06`にhiddenのParentHandle、named namespace内、同一scope再open、別ファイル同名hidden、無関係な行挿入を追加する。
+2. [x] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP06$' -count=1`。所属なしを確認する。
+3. [x] 正規化済み相対pathと親scopeから安定した内部識別名を作る（行番号をIDにしない）。表示名は無名namespaceと分かるものにする。同一scopeの再openを同じ所有者へ統合する。
+4. [x] 同コマンドでGREEN。元ソースchunkを合成名で置換せず、別ファイルのprivate scopeを混同しない。
+5. [x] `fix(cpp): retain anonymous namespace ownership`をコミットする。
 
 ### Task 8 — CP14: template型引数と本宣言
 
 **Files:** `parser.go`、必要なら`declaration_header.go`、`cpp20_regression_test.go`。**Produces:** template headerを消費した本宣言開始位置。
 
-1. [ ] `TestCPP20_CP14/DeclarationBoundary`にclass T/typename T、nested `>>`、non-type/template-template引数とBox::runを追加する。
-2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP14$' -count=1`。Box欠落・class T誤抽出を確認する。
-3. [ ] balanced template headerを読むhelperを追加し、内部の型引数をscope宣言にしない。実宣言へheaderを関連付ける。
-4. [ ] 同コマンドでGREEN。通常class/struct、既存template関数、比較・shift式の対照を通す。
-5. [ ] `fix(cpp): separate template parameters from declarations`をコミットする。
+1. [x] `TestCPP20_CP14/DeclarationBoundary`にclass T/typename T、nested `>>`、non-type/template-template引数とBox::runを追加する。
+2. [x] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP14$' -count=1`。Box欠落・class T誤抽出を確認する。
+3. [x] balanced template headerを読むhelperを追加し、内部の型引数をscope宣言にしない。実宣言へheaderを関連付ける。
+4. [x] 同コマンドでGREEN。通常class/struct、既存template関数、比較・shift式の対照を通す。
+5. [x] `fix(cpp): separate template parameters from declarations`をコミットする。
 
 ### Task 9 — CP02: constructor名を含む範囲
 
 **Files:** `parser.go`、`cpp20_regression_test.go`。**Consumes:** 修正済み型context。**Produces:** constructor名から始まるSignature/chunk。
 
-1. [ ] `TestCPP20_CP02`に先頭member constructor、後続method、名前付きnamespaceとglobal class、`DeclarationBoundary`を追加する。
-2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP02$' -count=1`。Signature=`() {`の欠落を確認する。
-3. [ ] constructor認識をheader棄却より先に行い、namePositionがheader開始前のparenを再採用しない。destructorとdefault/delete対照を保持する。
-4. [ ] 同コマンドでGREEN。constructor名・全body・独立したlaterの原文を照合する。
-5. [ ] `fix(cpp): include constructor names in declaration spans`をコミットする。
+1. [x] `TestCPP20_CP02`に先頭member constructor、後続method、名前付きnamespaceとglobal class、`DeclarationBoundary`を追加する。
+2. [x] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP02$' -count=1`。Signature=`() {`の欠落を確認する。
+3. [x] constructor認識をheader棄却より先に行い、namePositionがheader開始前のparenを再採用しない。destructorとdefault/delete対照を保持する。
+4. [x] 同コマンドでGREEN。constructor名・全body・独立したlaterの原文を照合する。
+5. [x] `fix(cpp): include constructor names in declaration spans`をコミットする。
 
 ### Task 10 — CP03: ユーザー定義戻り値型
 
 **Files:** `parser.go`、`declaration_header.go`、両正式回帰テスト。**Produces:** built-in whitelistに依存しない関数宣言判定。
 
-1. [ ] `TestCPP20_CP03`にItem make、qualified/template/pointer/reference戻り値、QueryEvidence、`DeclarationBoundary`を追加する。
-2. [ ] RED: `go test ./internal/extract/cpp ./internal/app -run '^TestCPP20_CP03$' -count=1`。makeのsymbolとsource欠落を確認する。
-3. [ ] declaration contextとbalanced declaratorから関数を認識する。変数初期化・function pointer・lambda・単なるcallを関数定義へ昇格しない。
-4. [ ] 同コマンドでGREEN。int known_function対照と既存modern declarationテストを通す。
-5. [ ] `fix(cpp): recognize functions with user-defined return types`をコミットする。
+1. [x] `TestCPP20_CP03`にItem make、qualified/template/pointer/reference戻り値、QueryEvidence、`DeclarationBoundary`を追加する。
+2. [x] RED: `go test ./internal/extract/cpp ./internal/app -run '^TestCPP20_CP03$' -count=1`。makeのsymbolとsource欠落を確認する。
+3. [x] declaration contextとbalanced declaratorから関数を認識する。変数初期化・function pointer・lambda・単なるcallを関数定義へ昇格しない。
+4. [x] 同コマンドでGREEN。int known_function対照と既存modern declarationテストを通す。
+5. [x] `fix(cpp): recognize functions with user-defined return types`をコミットする。
 
 ### Task 11 — CP07: operator宣言名
 
 **Files:** `parser.go`、`declaration_header.go`、`cpp20_regression_test.go`。**Produces:** 正規のoperator名と実parameter listの位置。
 
-1. [ ] `TestCPP20_CP07/DeclarationBoundary`にoperator[]/()/+/=、conversion bool、new/delete、qualified定義を追加する。
-2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP07$' -count=1`。欠落・`+`/`operator`への誤命名を確認する。
-3. [ ] operator名のtoken列とparameter listを分ける。`operator()`の最初のparenを引数と誤認しない。callable kindを既存規約にそろえる。
-4. [ ] 同コマンドでGREEN。各Name/QualifiedName/Signatureと原文位置、既存operator=成功対照を確認する。
-5. [ ] `fix(cpp): preserve operator and conversion function identities`をコミットする。
+1. [x] `TestCPP20_CP07/DeclarationBoundary`にoperator[]/()/+/=、conversion bool、new/delete、qualified定義を追加する。
+2. [x] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP07$' -count=1`。欠落・`+`/`operator`への誤命名を確認する。
+3. [x] operator名のtoken列とparameter listを分ける。`operator()`の最初のparenを引数と誤認しない。callable kindを既存規約にそろえる。
+4. [x] 同コマンドでGREEN。各Name/QualifiedName/Signatureと原文位置、既存operator=成功対照を確認する。
+5. [x] `fix(cpp): preserve operator and conversion function identities`をコミットする。
 
 ### Task 12 — CP18: typedef declaratorの名前
 
 **Files:** `parser.go`、`declaration_header.go`、`cpp20_regression_test.go`。**Produces:** 基底型とalias名の区別。
 
-1. [ ] `TestCPP20_CP18`にExisting Alias、qualified型、pointer/ref/array/function pointer、複数declarator、`DeclarationBoundary`を追加する。
-2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP18$' -count=1`。Alias欠落を確認する。
-3. [ ] typedefのdeclarator位置から名前を得る。解析不能な列を最初のidentifierへ置き換えない。using/conceptの既存経路を保持する。
-4. [ ] 同コマンドでGREEN。既存CallbackTypedefとfunction pointer対照を通す。
-5. [ ] `fix(cpp): extract typedef names from declarators`をコミットする。
+1. [x] `TestCPP20_CP18`にExisting Alias、qualified型、pointer/ref/array/function pointer、複数declarator、`DeclarationBoundary`を追加する。
+2. [x] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP18$' -count=1`。Alias欠落を確認する。
+3. [x] typedefのdeclarator位置から名前を得る。解析不能な列を最初のidentifierへ置き換えない。using/conceptの既存経路を保持する。
+4. [x] 同コマンドでGREEN。既存CallbackTypedefとfunction pointer対照を通す。
+5. [x] `fix(cpp): extract typedef names from declarators`をコミットする。
 
 ### Task 13 — CP04: 実bodyとhandlerの終端
 
 **Files:** `parser.go`、新規`function_body.go`、`cpp20_regression_test.go`。**Consumes:** Task 8〜11のheader位置。**Produces:** 実body開始と全function終端。
 
-1. [ ] `TestCPP20_CP04/DeclarationBoundary`にbrace initializer、requires-expression、function-try-blockの3再現と複合条件を追加する。
-2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP04$' -count=1`。consume/x.work/recoverが範囲外になることを確認する。
-3. [ ] post-parameter走査をinitializer/requires/noexcept/trailing-return/body/handlerに区別する。括弧対応を使い、最初の`{`で決定しない。80 tokenの探索打ち切りによる同種の欠落も回避する。
-4. [ ] 同コマンドでGREEN。全catch、最後のbody文字、内部call、次memberの独立範囲、default/delete/宣言のみを確認する。
-5. [ ] `fix(cpp): find complete function bodies and handlers`をコミットする。
+1. [x] `TestCPP20_CP04/DeclarationBoundary`にbrace initializer、requires-expression、function-try-blockの3再現と複合条件を追加する。
+2. [x] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP04$' -count=1`。consume/x.work/recoverが範囲外になることを確認する。
+3. [x] post-parameter走査をinitializer/requires/noexcept/trailing-return/body/handlerに区別する。括弧対応を使い、最初の`{`で決定しない。80 tokenの探索打ち切りによる同種の欠落も回避する。
+4. [x] 同コマンドでGREEN。全catch、最後のbody文字、内部call、次memberの独立範囲、default/delete/宣言のみを確認する。
+5. [x] `fix(cpp): find complete function bodies and handlers`をコミットする。
 
 ### Task 14 — CP11: 宣言・定義の型キー
 
 **Files:** 新規`signature.go`、`parser.go`、`extractor.go`、`cpp20_regression_test.go`。**Produces:** 内部canonical parameter key。
 
-1. [ ] `TestCPP20_CP11`にvalue/renamedの宣言定義、default引数、同名overload、cv/ref、variadic、function-pointer引数を追加する。
-2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP11$' -count=1`。必要なdeclares edge欠落を確認する。
-3. [ ] `canonicalParameterKey`を実装し、declarationKeyだけに適用する。member関数の後置cv/ref qualifierも別途内部キーへ保持する。型の異なるoverloadや異なるcv/refを統合せず、曖昧な候補へ確定edgeを作らない。
-4. [ ] 同コマンドでGREEN。元Signature、source bytes、public handle入力を勝手にcanonical keyで置換していないことを確認する。
-5. [ ] `fix(cpp): pair declarations by parameter types`をコミットする。
+1. [x] `TestCPP20_CP11`にvalue/renamedの宣言定義、default引数、同名overload、cv/ref、variadic、function-pointer引数を追加する。
+2. [x] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP11$' -count=1`。必要なdeclares edge欠落を確認する。
+3. [x] `canonicalParameterKey`を実装し、declarationKeyだけに適用する。member関数の後置cv/ref qualifierも別途内部キーへ保持する。型の異なるoverloadや異なるcv/refを統合せず、曖昧な候補へ確定edgeを作らない。
+4. [x] 同コマンドでGREEN。元Signature、source bytes、public handle入力を勝手にcanonical keyで置換していないことを確認する。
+5. [x] `fix(cpp): pair declarations by parameter types`をコミットする。
 
 ### Task 15 — CP17: template呼出し
 
 **Files:** 新規`call_target.go`、`extractor.go`、`cpp20_regression_test.go`。**Produces:** callTargetとtemplate引数を除いたcallee識別。
 
-1. [ ] `TestCPP20_CP17`にwork<int>()、nested `>>`、namespace qualification、dependent template、比較・shiftの対照を追加する。
-2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP17$' -count=1`。call自体の欠落を確認する。
-3. [ ] 既存callNameを`parseCallTarget`経由へ移す。balanced template引数を剥がし、曖昧なoverload/template依存は未解決のままとする。
-4. [ ] 同コマンドでGREEN。通常call・operatorの名前、比較式からの偽call非生成を確認する。
-5. [ ] `fix(cpp): recognize calls with explicit template arguments`をコミットする。
+1. [x] `TestCPP20_CP17`にwork<int>()、nested `>>`、namespace qualification、dependent template、比較・shiftの対照を追加する。
+2. [x] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP17$' -count=1`。call自体の欠落を確認する。
+3. [x] 既存callNameを`parseCallTarget`経由へ移す。balanced template引数を剥がし、曖昧なoverload/template依存は未解決のままとする。
+4. [x] 同コマンドでGREEN。通常call・operatorの名前、比較式からの偽call非生成を確認する。
+5. [x] `fix(cpp): recognize calls with explicit template arguments`をコミットする。
 
 ### Task 16 — CP08: parameter/local/callback遮蔽
 
 **Files:** 新規`bindings.go`、`extractor.go`、両正式回帰テスト、`internal/linker/cpp20_test.go`。**Produces:** 有効範囲付きbindingIndex。
 
-1. [ ] `TestCPP20_CP08/NoFalseEdgeAfterIndex`にfunction-pointer parameter、Callback handler、local/block/catch/for/lambda parameterとcapture、scope外のglobal成功対照を追加する。
-2. [ ] RED: `go test ./internal/extract/cpp ./internal/linker ./internal/app -run '^TestCPP20_CP08$' -count=1`。global calls/header references/callback referencesへの誤接続を確認する。
-3. [ ] header/bodyのbindingを一度作り、3経路で共有する。遮蔽された動的calleeはglobal leafの未解決関係も残さない。捕捉・可視範囲の解析が曖昧なら確定edgeを作らない。
-4. [ ] 同コマンドでGREEN。full index後にも誤edgeが復活せず、scope終了後の非遮蔽callは解決することを確認する。
-5. [ ] `fix(cpp): respect local bindings across relation extraction`をコミットする。
+1. [x] `TestCPP20_CP08/NoFalseEdgeAfterIndex`にfunction-pointer parameter、Callback handler、local/block/catch/for/lambda parameterとcapture、scope外のglobal成功対照を追加する。
+2. [x] RED: `go test ./internal/extract/cpp ./internal/linker ./internal/app -run '^TestCPP20_CP08$' -count=1`。global calls/header references/callback referencesへの誤接続を確認する。
+3. [x] header/bodyのbindingを一度作り、3経路で共有する。遮蔽された動的calleeはglobal leafの未解決関係も残さない。捕捉・可視範囲の解析が曖昧なら確定edgeを作らない。
+4. [x] 同コマンドでGREEN。full index後にも誤edgeが復活せず、scope終了後の非遮蔽callは解決することを確認する。
+5. [x] `fix(cpp): respect local bindings across relation extraction`をコミットする。
 
 ### Task 17 — CP09: receiver付きcallの分類
 
 **Files:** `call_target.go`、`extractor.go`、新規`internal/cppscope/scope.go`と`scope_test.go`、`linker.go`、両正式回帰テスト。**Produces:** member形式を保持した未解決target。
 
-1. [ ] `TestCPP20_CP09/NoFalseEdgeAfterIndex`にobject.target、pointer->target、this->target、同名global、別class同名methodを追加する。
-2. [ ] RED: `go test ./internal/extract/cpp ./internal/cppscope ./internal/linker ./internal/app -run '^TestCPP20_CP09$' -count=1`。global targetへの誤edgeを確認する。
-3. [ ] memberをnamespace修飾と区別する。確実な同一class/this以外はreceiver形式のまま未解決とし、linkerでleaf fallbackを禁止する。型推論やvirtual dispatchは追加しない。
-4. [ ] 同コマンドでGREEN。展開でもglobalのcallerに混入せず、既存F44のcase-sensitiveなreceiver対照を通す。
-5. [ ] `fix(cpp): avoid global fallback for member calls`をコミットする。
+1. [x] `TestCPP20_CP09/NoFalseEdgeAfterIndex`にobject.target、pointer->target、this->target、同名global、別class同名methodを追加する。
+2. [x] RED: `go test ./internal/extract/cpp ./internal/cppscope ./internal/linker ./internal/app -run '^TestCPP20_CP09$' -count=1`。global targetへの誤edgeを確認する。
+3. [x] memberをnamespace修飾と区別する。確実な同一class/this以外はreceiver形式のまま未解決とし、linkerでleaf fallbackを禁止する。型推論やvirtual dispatchは追加しない。
+4. [x] 同コマンドでGREEN。展開でもglobalのcallerに混入せず、既存F44のcase-sensitiveなreceiver対照を通す。
+5. [x] `fix(cpp): avoid global fallback for member calls`をコミットする。
 
 ### Task 18 — CP10: 明示namespace修飾call
 
 **Files:** `call_target.go`、`extractor.go`、`internal/cppscope/*`、`internal/linker/cpp20_test.go`、両正式回帰テスト。**Produces:** absolute/relative namespace探索規則。
 
-1. [ ] `TestCPP20_CP10/NoFalseEdgeAfterIndex`にexternal::work対other::work、先頭`::`、nested relative scope、成功対照を追加する。
-2. [ ] RED: `go test ./internal/extract/cpp ./internal/cppscope ./internal/linker ./internal/app -run '^TestCPP20_CP10$' -count=1`。誤った確定edgeとExpand callers混入を確認する。
-3. [ ] LookupLevels/Resolveを実装し、現在scopeから外側へC++の探索順を適用する。明示修飾の失敗をbare leafへ落とさない。未対応namespace aliasから推測しない。
-4. [ ] 同コマンドでGREEN。extractorだけでなく実DB・差分更新・旧形式/Evidence Expandでwrong callerが返らないことを確認する。
-5. [ ] `fix(cpp): resolve explicitly qualified calls within their scope`をコミットする。
+1. [x] `TestCPP20_CP10/NoFalseEdgeAfterIndex`にexternal::work対other::work、先頭`::`、nested relative scope、成功対照を追加する。
+2. [x] RED: `go test ./internal/extract/cpp ./internal/cppscope ./internal/linker ./internal/app -run '^TestCPP20_CP10$' -count=1`。誤った確定edgeとExpand callers混入を確認する。
+3. [x] LookupLevels/Resolveを実装し、現在scopeから外側へC++の探索順を適用する。明示修飾の失敗をbare leafへ落とさない。未対応namespace aliasから推測しない。
+4. [x] 同コマンドでGREEN。extractorだけでなく実DB・差分更新・旧形式/Evidence Expandでwrong callerが返らないことを確認する。
+5. [x] `fix(cpp): resolve explicitly qualified calls within their scope`をコミットする。
 
 ### Task 19 — CP19: 別ファイル関係のnamespace保持
 
 **Files:** `internal/cppscope/*`、`extractor.go`、`internal/linker/{linker.go,cpp20_test.go}`、`internal/store/{store.go,cpp20_test.go}`、`cpp20_integration_test.go`。**Produces:** linkingと関連候補検索で一致するC++探索規則。
 
-1. [ ] `TestCPP20_CP19`にn::Target/n::Caller、m::Target追加、`IncrementalParity`、`NoFalseEdgeAfterIndex`、未解決の曖昧対照を追加する。
-2. [ ] RED: `go test ./internal/cppscope ./internal/linker ./internal/store ./internal/app -run '^TestCPP20_CP19$' -count=1`。精度低下とm::Target callers混入を確認する。
-3. [ ] linkerで呼出し元ParentHandle/contextを使った共通Resolveを適用する。storeのC++未解決call候補にも共通Matchesを適用し、汎用leaf照合で拾った候補を無条件に採用しない。
-4. [ ] 同コマンドでGREEN。nの正関係維持、mへの非混入、追加・削除・namespace変更の差分/全索引一致、path/変更行条件と候補上限を検査する。
-5. [ ] `fix(cpp): preserve namespace lookup across linking and expansion`をコミットする。
+1. [x] `TestCPP20_CP19`にn::Target/n::Caller、m::Target追加、`IncrementalParity`、`NoFalseEdgeAfterIndex`、未解決の曖昧対照を追加する。
+2. [x] RED: `go test ./internal/cppscope ./internal/linker ./internal/store ./internal/app -run '^TestCPP20_CP19$' -count=1`。精度低下とm::Target callers混入を確認する。
+3. [x] linkerで呼出し元ParentHandle/contextを使った共通Resolveを適用する。storeのC++未解決call候補にも共通Matchesを適用し、汎用leaf照合で拾った候補を無条件に採用しない。
+4. [x] 同コマンドでGREEN。nの正関係維持、mへの非混入、追加・削除・namespace変更の差分/全索引一致、path/変更行条件と候補上限を検査する。
+5. [x] `fix(cpp): preserve namespace lookup across linking and expansion`をコミットする。
 
 store実装ではC++未解決callの候補をscope判定**前にLIMITしない**。既存確定edge・他言語のSQL経路は維持する。対象C++未解決edgeをsource/target symbol情報とともに取得し、共通Matchesで評価してから既存候補と重複排除・順位統合する。要求内でsymbol集合を再利用し、edgeごとのDB照会を避ける。大量同名候補で正候補が上限の後方にある回帰を置く。scope情報不足なら曖昧なままとし、別namespaceの確定callerとして扱わない。
 
@@ -295,11 +295,11 @@ store実装ではC++未解決callの候補をscope判定**前にLIMITしない**
 
 **Files:** 新規`modules.go`、`parser.go`、`extractor.go`、`internal/linker/{linker.go,cpp20_test.go}`、両正式回帰テスト。**Produces:** 論理module symbolと提供元translation_unitへのimport関係。
 
-1. [ ] `TestCPP20_CP16`にmodule宣言/import、論理名とfilenameの不一致、partition/header-unit、global/private fragment、重複providerと`IncrementalParity`を追加する。
-2. [ ] RED: `go test ./internal/extract/cpp ./internal/linker ./internal/app -run '^TestCPP20_CP16$' -count=1`。targetが行全体になることとExpand importsで提供元が欠落することを確認する。
-3. [ ] parseModuleDirectiveで論理名を正規化する。宣言からimportsを生成しない。論理名のmodule symbolを所有者配下に作り、linkerのC++専用経路で一意なproviderのtranslation_unitへ接続する。
-4. [ ] 同コマンドでGREEN。`import :part`を現在moduleから正規化し、literal header-unitは既存パス規則を使う。provider変更・削除・重複時に古い確定edgeを残さない。普通のidentifier module/importやstringをdirectiveにしない。
-5. [ ] `fix(cpp): link named module imports to provider files`をコミットする。
+1. [x] `TestCPP20_CP16`にmodule宣言/import、論理名とfilenameの不一致、partition/header-unit、global/private fragment、重複providerと`IncrementalParity`を追加する。
+2. [x] RED: `go test ./internal/extract/cpp ./internal/linker ./internal/app -run '^TestCPP20_CP16$' -count=1`。targetが行全体になることとExpand importsで提供元が欠落することを確認する。
+3. [x] parseModuleDirectiveで論理名を正規化する。宣言からimportsを生成しない。論理名のmodule symbolを所有者配下に作り、linkerのC++専用経路で一意なproviderのtranslation_unitへ接続する。
+4. [x] 同コマンドでGREEN。`import :part`を現在moduleから正規化し、literal header-unitは既存パス規則を使う。provider変更・削除・重複時に古い確定edgeを残さない。普通のidentifier module/importやstringをdirectiveにしない。
+5. [x] `fix(cpp): link named module imports to provider files`をコミットする。
 
 module symbolには所有者へ戻るParentHandleと元宣言範囲を持たせ、必要な宣言chunkだけを既存source規則で作る。translation_unitのName/QualifiedName=pathを変更しない。複数providerや未知のpartitionは未解決とし、同名namespace/functionへ接続しない。提供元sourceを返す際の重複とwire予算をTask 21で検査する。
 
@@ -307,36 +307,36 @@ module symbolには所有者へ戻るParentHandleと元宣言範囲を持たせ�
 
 **Files:** `internal/indexer/indexer.go`、新規`internal/app/cpp20_refresh_test.go`、`cpp20_integration_test.go`、必要な既存Evidence/wireテスト、`docs/design.md`、ルートPLAN。本タスクにCP IDを追加しない。
 
-1. [ ] extractor version移行テストを先に追加する。RED: `go test ./internal/app -run '^TestCPP20_(Refresh|EvidenceContract)$' -count=1`。v19の古い誤関係を保持した索引から通常更新だけでは修正が反映されない条件を確認する。その後versionを`extractors-v20-cpp-functional`へ一度更新し、同コマンドでGREENにする。通常更新で再抽出→誤edge除去→次回無変更の順を検査する。
-2. [ ] `EvidenceContract`でQuery/Expand/Impactの旧形式とEvidence、必要なMCP実wire経路を検証する。custom return、constructor/body/operator、template、moduleのsource bytes/行、role、既知handle、省略・予算・不変条件を確認する。既存wire helperを使い実際のJSON byte数を計測する。no-update、共有read leaseとrevision整合性の既存テストを通す。ユーザーdirtyのserver.go/context_v2_test.goを修正・取り込まない。
-3. [ ] 下記の全検証を完了し、ID別20行の対応表を埋める。新規コードを変更したら影響範囲と必要な全体検証を再実施する。製品コード・テスト・設計文書を対象別に明示stageしてコミットする。
-4. [ ] 独立reviewerに最終diff、20件表、RED/GREEN、全検証結果とReview Focusを渡す。対象は機能・回帰・source契約で、セキュリティ監査を依頼しない。指摘を修正し、該当テストと必要な全体検証、再レビューを通す。未解決の機能指摘がある間はマージしない。
+1. [x] extractor version移行テストを先に追加する。RED: `go test ./internal/app -run '^TestCPP20_(Refresh|EvidenceContract)$' -count=1`。v19の古い誤関係を保持した索引から通常更新だけでは修正が反映されない条件を確認する。その後versionを`extractors-v20-cpp-functional`へ一度更新し、同コマンドでGREENにする。通常更新で再抽出→誤edge除去→次回無変更の順を検査する。
+2. [x] `EvidenceContract`でQuery/Expand/Impactの旧形式とEvidence、必要なMCP実wire経路を検証する。custom return、constructor/body/operator、template、moduleのsource bytes/行、role、既知handle、省略・予算・不変条件を確認する。既存wire helperを使い実際のJSON byte数を計測する。no-update、共有read leaseとrevision整合性の既存テストを通す。ユーザーdirtyのserver.go/context_v2_test.goを修正・取り込まない。
+3. [x] 下記の全検証を完了し、ID別20行の対応表を埋める。新規コードを変更したら影響範囲と必要な全体検証を再実施する。製品コード・テスト・設計文書を対象別に明示stageしてコミットする。
+4. [x] 独立reviewerに最終diff、20件表、RED/GREEN、全検証結果とReview Focusを渡す。対象は機能・回帰・source契約で、セキュリティ監査を依頼しない。指摘を修正し、該当テストと必要な全体検証、再レビューを通す。未解決の機能指摘がある間はマージしない。
 5. [ ] 完了記録を含む作業HEADで全gateを確認し、masterが作業branchの祖先であることを確認して`--ff-only`でマージする。masterが進んでいれば履歴を上書きせず取り込み・再検証する。master到達を確認後、今回branchだけを削除しmanaged worktreeをarchiveする。元checkoutのdirty内容・ハッシュを照合して保持を確認する。
 
 ### ID・テスト・コミット対応表（実行時に埋める）
 
 | ID | Task | 正式テストの先頭名 | RED/GREEN証跡 | 修正コミット |
 |---|---:|---|---|---|
-| CP01 | 2 | TestCPP20_CP01 | 未実行 | 未実装 |
-| CP02 | 9 | TestCPP20_CP02 | 未実行 | 未実装 |
-| CP03 | 10 | TestCPP20_CP03 | 未実行 | 未実装 |
-| CP04 | 13 | TestCPP20_CP04 | 未実行 | 未実装 |
-| CP05 | 6 | TestCPP20_CP05 | 未実行 | 未実装 |
-| CP06 | 7 | TestCPP20_CP06 | 未実行 | 未実装 |
-| CP07 | 11 | TestCPP20_CP07 | 未実行 | 未実装 |
-| CP08 | 16 | TestCPP20_CP08 | 未実行 | 未実装 |
-| CP09 | 17 | TestCPP20_CP09 | 未実行 | 未実装 |
-| CP10 | 18 | TestCPP20_CP10 | 未実行 | 未実装 |
-| CP11 | 14 | TestCPP20_CP11 | 未実行 | 未実装 |
-| CP12 | 3 | TestCPP20_CP12 | 未実行 | 未実装 |
-| CP13 | 4 | TestCPP20_CP13 | 未実行 | 未実装 |
-| CP14 | 8 | TestCPP20_CP14 | 未実行 | 未実装 |
-| CP15 | 5 | TestCPP20_CP15 | 未実行 | 未実装 |
-| CP16 | 20 | TestCPP20_CP16 | 未実行 | 未実装 |
-| CP17 | 15 | TestCPP20_CP17 | 未実行 | 未実装 |
-| CP18 | 12 | TestCPP20_CP18 | 未実行 | 未実装 |
-| CP19 | 19 | TestCPP20_CP19 | 未実行 | 未実装 |
-| CP20 | 1 | TestCPP20_CP20 | 未実行 | 未実装 |
+| CP01 | 2 | TestCPP20_CP01 | formal-baseline-red / final-normal | 2c66c11 |
+| CP02 | 9 | TestCPP20_CP02 | formal-baseline-red / final-normal | 5e362a9 |
+| CP03 | 10 | TestCPP20_CP03 | formal-baseline-red / final-normal | 949fd97 |
+| CP04 | 13 | TestCPP20_CP04 | formal-baseline-red / final-normal | 88b8f2c |
+| CP05 | 6 | TestCPP20_CP05 | formal-baseline-red / final-normal | d4378a9 |
+| CP06 | 7 | TestCPP20_CP06 | formal-baseline-red / final-normal | e58b4e1 |
+| CP07 | 11 | TestCPP20_CP07 | formal-baseline-red / final-normal | 71592ed |
+| CP08 | 16 | TestCPP20_CP08 | formal-baseline-red / final-normal | 7940de2 |
+| CP09 | 17 | TestCPP20_CP09 | formal-baseline-red / final-normal | 1418186 |
+| CP10 | 18 | TestCPP20_CP10 | formal-baseline-red / final-normal | 54f1006 |
+| CP11 | 14 | TestCPP20_CP11 | formal-baseline-red / final-normal | 38345f3 |
+| CP12 | 3 | TestCPP20_CP12 | formal-baseline-red / final-normal | 46fc88b |
+| CP13 | 4 | TestCPP20_CP13 | formal-baseline-red / final-normal | 75567ea |
+| CP14 | 8 | TestCPP20_CP14 | formal-baseline-red / final-normal | 70abc8a |
+| CP15 | 5 | TestCPP20_CP15 | formal-baseline-red / final-normal | abf22c5 |
+| CP16 | 20 | TestCPP20_CP16 | formal-baseline-red / final-normal | 188ca49 |
+| CP17 | 15 | TestCPP20_CP17 | formal-baseline-red / final-normal | acbaacc |
+| CP18 | 12 | TestCPP20_CP18 | formal-baseline-red / final-normal | 3fe411d |
+| CP19 | 19 | TestCPP20_CP19 | formal-baseline-red / final-normal | 08bbf90 |
+| CP20 | 1 | TestCPP20_CP20 | formal-baseline-red / final-normal | 4dc49b9 |
 
 ## Validation and Acceptance
 
@@ -448,3 +448,48 @@ Execution 2026-10-18T08:06:12.217908+00:00: Task 21-acceptance GREEN, commit a2d
 Review at a2d8e39 found five functional issues: P1 requires conjunction body boundary; P1 mutable lambda/if-init shadowing; P2 qualified calls suppressed by leaf shadowing; P2 direct initializer misclassified as function; P2 mixed C/CPP unresolved relation filtering. Candidate-cap concern was withdrawn: no pre-filter limit exists in this path. Module owner/duplicate-provider checks passed. No cybersecurity review was performed.
 
 All five were transferred to normal Go regression tests. Formal RED: C:/Temp/cpp20-execution/review-formal-red.log. GREEN: review-formal-green.log and review-package-green.log. Additional same-root receiver and nested-if lifetime RED/GREEN are in review-complex-receiver-* and review-nested-scope-* logs. No minor findings were deferred. Final confirmation and full verification remain pending.
+
+Execution 2026-10-18T08:19:36.323351+00:00: Task 21-review GREEN, commit 61494910ec43757d68ce8d085d7cb00dfe65691a. See C:/Temp/cpp20-execution for command output.
+
+## 最終検証記録
+
+検証対象の製品コードHEAD: `61494910ec43757d68ce8d085d7cb00dfe65691a`。下記は全てexit 0。通常とraceは直列実行した。
+
+| Gate | Command | UTC start / end |
+|---|---|---|
+| `final-normal` | `go test ./... -count=1` | 2026-10-18T08:37:57.026968+00:00 / 2026-10-18T08:39:18.625859+00:00 |
+| `final-dirty-normal` | `go test -overlay C:\Temp\cpp20-execution\dirty-overlay.json ./internal/app ./internal/mcpserver -count=1` | 2026-10-18T08:22:58.063204+00:00 / 2026-10-18T08:24:12.699722+00:00 |
+| `final-race` | `go test -race ./... -count=1` | 2026-10-18T08:39:18.626858+00:00 / 2026-10-18T08:41:31.427659+00:00 |
+| `final-dirty-race` | `go test -race -overlay C:\Temp\cpp20-execution\dirty-overlay.json ./internal/app ./internal/mcpserver -count=1` | 2026-10-18T08:26:32.897879+00:00 / 2026-10-18T08:28:14.364735+00:00 |
+| `final-vet` | `go vet ./...` | 2026-10-18T08:41:31.428660+00:00 / 2026-10-18T08:41:34.463420+00:00 |
+| `build-native-focalspan` | `go build -o C:\Temp\cpp20-execution\build\focalspan-native.exe ./cmd/focalspan` | 2026-10-18T08:28:15.912508+00:00 / 2026-10-18T08:28:18.469718+00:00 |
+| `build-native-focalspan-bench` | `go build -o C:\Temp\cpp20-execution\build\focalspan-bench-native.exe ./cmd/focalspan-bench` | 2026-10-18T08:28:18.470721+00:00 / 2026-10-18T08:28:20.336420+00:00 |
+| `build-native-focalspan-eval` | `go build -o C:\Temp\cpp20-execution\build\focalspan-eval-native.exe ./cmd/focalspan-eval` | 2026-10-18T08:28:20.337418+00:00 / 2026-10-18T08:28:22.105456+00:00 |
+| `build-windows-amd64-focalspan` | `go build -o C:\Temp\cpp20-execution\build\focalspan-windows-amd64.exe ./cmd/focalspan` | 2026-10-18T08:28:22.105456+00:00 / 2026-10-18T08:28:24.147471+00:00 |
+| `build-windows-amd64-focalspan-bench` | `go build -o C:\Temp\cpp20-execution\build\focalspan-bench-windows-amd64.exe ./cmd/focalspan-bench` | 2026-10-18T08:28:24.148976+00:00 / 2026-10-18T08:28:26.054095+00:00 |
+| `build-windows-amd64-focalspan-eval` | `go build -o C:\Temp\cpp20-execution\build\focalspan-eval-windows-amd64.exe ./cmd/focalspan-eval` | 2026-10-18T08:28:26.054095+00:00 / 2026-10-18T08:28:27.923482+00:00 |
+| `build-linux-amd64-focalspan` | `go build -o C:\Temp\cpp20-execution\build\focalspan-linux-amd64 ./cmd/focalspan` | 2026-10-18T08:28:27.924851+00:00 / 2026-10-18T08:28:30.446046+00:00 |
+| `build-linux-amd64-focalspan-bench` | `go build -o C:\Temp\cpp20-execution\build\focalspan-bench-linux-amd64 ./cmd/focalspan-bench` | 2026-10-18T08:28:30.447052+00:00 / 2026-10-18T08:28:31.990379+00:00 |
+| `build-linux-amd64-focalspan-eval` | `go build -o C:\Temp\cpp20-execution\build\focalspan-eval-linux-amd64 ./cmd/focalspan-eval` | 2026-10-18T08:28:31.991376+00:00 / 2026-10-18T08:28:33.426012+00:00 |
+| `build-darwin-arm64-focalspan` | `go build -o C:\Temp\cpp20-execution\build\focalspan-darwin-arm64 ./cmd/focalspan` | 2026-10-18T08:28:33.426012+00:00 / 2026-10-18T08:28:36.223678+00:00 |
+| `build-darwin-arm64-focalspan-bench` | `go build -o C:\Temp\cpp20-execution\build\focalspan-bench-darwin-arm64 ./cmd/focalspan-bench` | 2026-10-18T08:28:36.224681+00:00 / 2026-10-18T08:28:37.970080+00:00 |
+| `build-darwin-arm64-focalspan-eval` | `go build -o C:\Temp\cpp20-execution\build\focalspan-eval-darwin-arm64 ./cmd/focalspan-eval` | 2026-10-18T08:28:37.970080+00:00 / 2026-10-18T08:28:39.431632+00:00 |
+
+独立レビュー: `/root/cpp20_final_review` が全diffを監査し機能5指摘を再現。`6149491`で修正し、独立の `go test -count=1 -run TestCPP20_Review ./internal/extract/cpp ./internal/store` と修正差分の再確認で5件解消、残存指摘なし。候補上限の懸念は撤回。保留したminor指摘なし。サイバーセキュリティは対象外。
+
+基準HEADへ正式テストを適用しCP01〜CP20の全IDで修正前FAIL、監査の7成功対照のPASSを再確認した。元dirty MCP二ファイルのバイト一致snapshotをoverlayで通常/race検証し、コミットには含めなかった。
+
+共有補正コミット: `08bbf90`（CP09/10/19）、`cb58ac8`（CP06/08/11/15/18等の境界）、`a2d8e39`（version移行・wire）、`6149491`（独立レビュー補正）。CP04は`88b8f2c`直後の既存requires回帰を`aa1d391`で補正しており、最終suiteは全てGREEN。
+
+### 実行上の判断
+
+- Ruling: Native Windows cannot run skill shell scripts directly; equivalent Python ledger and evidence commands used in C:/Temp, preserving task identity and command outputs. Cost if wrong: bookkeeping drift; root PLAN and git log cross-check it.
+- Ruling: CP06 fixture selects file-scoped qualified anonymous name rather than old global hidden; this preserves the planned scope identity. Cost if wrong: display-name compatibility, public fields unchanged.
+- Ruling: CP13 bare include remains dep.hpp, as existing normalizeInclude specifies. Test corrected rather than changing unrelated include normalization. Cost if wrong: no change to pre-existing bare include semantics.
+- Ruling: C++ support documentation is docs/cpp-extraction.md rather than the already dirty docs/design.md, preserving external edits. Cost if wrong: discoverability only.
+
+実行環境: 最初のraceはPATH上の32bit MinGWで開始できなかった。既存UCRT64のCC/CXX/PATHを検証用子プロセスだけに指定して全raceを通過した。環境設定ファイルは変更していない。実行記録処理はWindows上のPythonで行い、root PLAN・git log・実コマンド証跡を照合した。
+
+統合状況: 実装・検証・独立レビューは完了。これから検証済み履歴をmasterへFFし、到達確認後に今回branchだけを削除する。未実行の統合結果を先に記録しない。
+
+補足: キャッシュ有効の全体再確認ではGo本体の終了待ちが続いたため、親コマンド/PIDを照合した検証用Goプロセスだけを停止した。原因の断定や製品コード変更は行わず、`-count=1`で全通常・全raceを再実行して通過を確認した。130同名候補の末尾path/変更行限定検索も、基準FAILと通常/raceのPASSを記録した。12ビルドは埋込build metadataでもtargetとcross時CGO=0を照合した。
