@@ -16,6 +16,8 @@ func TestR01ShadowedCalls(t *testing.T) {
 		{"catch", "function caller() { try {} catch (target) { target(); } }"},
 		{"receiver", "function caller(obj) { obj.target(); }"},
 		{"nested", "function caller(target) { function inner() { target(); } inner(); }"},
+		{"loop", "function caller() { for (let target of values) { target(); } }"},
+		{"loop-branch", "function caller() { for (let target of values) if (condition) target(); else target(); }"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			x, e := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "a.ts", Language: "typescript", Content: []byte("function target() {}\n" + tc.body + "\n")})
@@ -41,6 +43,7 @@ func TestR01LexicalControls(t *testing.T) {
 		"function target() {} function caller() { { let target = external; } target(); }",
 		"function target() {} function caller() { function target() {} target(); }",
 		"function caller() { const target = () => {}; target(); }",
+		"function target() {} function caller() { values.forEach((target) => { target(); }); target(); }",
 	} {
 		x, e := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "a.ts", Language: "typescript", Content: []byte(source)})
 		if e != nil {
@@ -58,6 +61,55 @@ func TestR01LexicalControls(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("known target not resolved: %s; %+v", source, x.Relations)
+		}
+	}
+}
+
+func TestR01LoopBindingDoesNotEscape(t *testing.T) {
+	for _, loop := range []string{
+		"for (let target of values) { target(); }",
+		"for (const target of values) { target(); }",
+		"for (let target = callback; condition; next()) target();",
+	} {
+		x, e := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "a.ts", Language: "typescript", Content: []byte("function target() {} function caller() { " + loop + " target(); }")})
+		if e != nil {
+			t.Fatal(e)
+		}
+		names := map[string]string{}
+		for _, s := range x.Symbols {
+			names[s.Handle] = s.Name
+		}
+		found := false
+		for _, r := range x.Relations {
+			if names[r.FromHandle] == "caller" && r.Kind == "calls" && names[r.ToHandle] == "target" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("loop binding escaped: %s; %+v", loop, x.Relations)
+		}
+	}
+}
+
+func TestR01AnonymousCallbackBindings(t *testing.T) {
+	for _, callback := range []string{
+		"(target) => { target(); }",
+		"target => { target(); }",
+		"function(target) { target(); }",
+		"({target}) => { target(); }",
+	} {
+		x, e := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "a.ts", Language: "typescript", Content: []byte("function target() {} function caller() { values.forEach(" + callback + "); }")})
+		if e != nil {
+			t.Fatal(e)
+		}
+		names := map[string]string{}
+		for _, s := range x.Symbols {
+			names[s.Handle] = s.Name
+		}
+		for _, r := range x.Relations {
+			if r.Kind != "contains" && names[r.FromHandle] != "target" && (names[r.ToHandle] == "target" || r.UnresolvedTo == "target") {
+				t.Errorf("callback parameter leaked global relation: %s; %+v", callback, r)
+			}
 		}
 	}
 }

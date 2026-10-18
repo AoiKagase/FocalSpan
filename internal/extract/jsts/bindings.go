@@ -82,6 +82,11 @@ func buildBindingIndex(tokens []Token, declarations []*declaration) bindingIndex
 		text := tokens[raw].Text
 		if text == "let" || text == "const" || text == "var" {
 			start, end := b.scopeAt(tokens[raw].StartByte, text == "var")
+			if text != "var" {
+				if loopStart, loopEnd, ok := b.loopScope(p); ok {
+					start, end = loopStart, loopEnd
+				}
+			}
 			cursor := p + 1
 			for cursor < len(b.sig) {
 				after := b.pattern(cursor, len(b.sig), start, end)
@@ -126,7 +131,135 @@ func buildBindingIndex(tokens []Token, declarations []*declaration) bindingIndex
 			}
 		}
 	}
+	b.callbackParameters()
 	return b
+}
+
+// A lexical declaration in a for header belongs to that loop statement, not
+// to the surrounding brace block. The header itself is part of its scope.
+func (b bindingIndex) loopScope(position int) (int, int, bool) {
+	for open, close := range b.pairs {
+		if b.tokens[open].Text != "(" || open >= b.sig[position] || close <= b.sig[position] {
+			continue
+		}
+		p := b.position(open)
+		prior := p - 1
+		if prior >= 0 && b.tokens[b.sig[prior]].Text == "await" {
+			prior--
+		}
+		if prior < 0 || b.tokens[b.sig[prior]].Text != "for" {
+			continue
+		}
+		body := b.position(close) + 1
+		if body >= len(b.sig) {
+			continue
+		}
+		end := b.statementEnd(body)
+		return b.tokens[open].StartByte, b.tokens[b.sig[end]].EndByte, true
+	}
+	return 0, 0, false
+}
+
+func (b bindingIndex) statementEnd(position int) int {
+	if close, ok := b.pairs[b.sig[position]]; ok && b.tokens[b.sig[position]].Text == "{" {
+		return b.position(close)
+	}
+	switch b.tokens[b.sig[position]].Text {
+	case "if", "for", "while", "with", "switch":
+		header := position + 1
+		if header < len(b.sig) && b.tokens[b.sig[header]].Text == "await" {
+			header++
+		}
+		if header < len(b.sig) && b.tokens[b.sig[header]].Text == "(" {
+			if close, ok := b.pairs[b.sig[header]]; ok {
+				body := b.position(close) + 1
+				if body < len(b.sig) {
+					end := b.statementEnd(body)
+					if b.tokens[b.sig[position]].Text == "if" && end+2 < len(b.sig) && b.tokens[b.sig[end+1]].Text == "else" {
+						end = b.statementEnd(end + 2)
+					}
+					return end
+				}
+			}
+		}
+	}
+	for at := position; at < len(b.sig); at++ {
+		if close, ok := b.pairs[b.sig[at]]; ok {
+			at = b.position(close)
+			continue
+		}
+		if b.tokens[b.sig[at]].Text == ";" {
+			return at
+		}
+		if b.tokens[b.sig[at]].Text == "}" {
+			return at - 1
+		}
+		if at > position && b.tokens[b.sig[at]].StartLine > b.tokens[b.sig[at-1]].EndLine {
+			return at - 1
+		}
+	}
+	return len(b.sig) - 1
+}
+
+// Anonymous callbacks have no symbol declaration, but their parameters still
+// shadow outer names while scanning the enclosing declaration's body.
+func (b *bindingIndex) callbackParameters() {
+	for p, raw := range b.sig {
+		lo, hi, body := -1, -1, -1
+		switch b.tokens[raw].Text {
+		case "=>":
+			if p == 0 {
+				continue
+			}
+			if b.tokens[b.sig[p-1]].Text == ")" {
+				for open, close := range b.pairs {
+					if close == b.sig[p-1] && b.tokens[open].Text == "(" {
+						lo, hi = b.position(open)+1, p-1
+						break
+					}
+				}
+			} else if b.tokens[b.sig[p-1]].Kind == Identifier {
+				lo, hi = p-1, p
+			}
+			body = p + 1
+		case "function":
+			open := p + 1
+			if open < len(b.sig) && b.tokens[b.sig[open]].Text == "*" {
+				open++
+			}
+			if open < len(b.sig) && b.tokens[b.sig[open]].Kind == Identifier {
+				open++
+			}
+			if open >= len(b.sig) || b.tokens[b.sig[open]].Text != "(" {
+				continue
+			}
+			close, ok := b.pairs[b.sig[open]]
+			if !ok {
+				continue
+			}
+			lo, hi = open+1, b.position(close)
+			body = hi + 1
+		}
+		if lo < 0 || body < 0 || body >= len(b.sig) {
+			continue
+		}
+		end := body
+		if close, ok := b.pairs[b.sig[body]]; ok && b.tokens[b.sig[body]].Text == "{" {
+			end = b.position(close)
+		} else {
+			for end+1 < len(b.sig) {
+				if close, ok := b.pairs[b.sig[end]]; ok {
+					end = b.position(close)
+				}
+				next := b.tokens[b.sig[end+1]].Text
+				if next == "," || next == ";" || next == ")" || next == "]" || next == "}" {
+					break
+				}
+				end++
+			}
+		}
+		b.patternList(lo, hi, b.tokens[b.sig[body]].StartByte, b.tokens[b.sig[end]].EndByte)
+	}
 }
 
 func callableDeclaration(d *declaration) bool {
