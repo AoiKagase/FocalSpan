@@ -30,7 +30,7 @@ Use codex/csharp-functional-fixes in the managed isolated worktree. Preserve the
 - [x] 2026-10-18T12:25:24.562Z CS03 conservative scope: extraction and real-store linker RED witnessed; both packages GREEN. Baseline go test ./... GREEN before product changes (exit 0).
 - [x] 2026-10-18T12:27:06.521Z CS04 full property spans: missing modifier/type/attribute RED witnessed; all property variants and C# package GREEN.
 - [x] 2026-10-18T12:40:38.504Z Version migration RED/GREEN and public Query/Expand/Impact/Evidence integration GREEN.
-- [ ] Whole-branch review and final validation gates.
+- [x] 2026-10-18T13:01:06.064Z Whole-branch review closed; all final validation gates exit 0.
 
 ## Surprises & Discoveries
 - Tool output compression can hide source text; bounded source reads are used.
@@ -41,7 +41,7 @@ Use codex/csharp-functional-fixes in the managed isolated worktree. Preserve the
 - Leave the final commits on the task branch; merge/push/deploy were not requested.
 
 ## Outcomes & Retrospective
-Pending implementation and validation.
+Completed CS01-CS04 and two independent-review corrections. Final code commit: 430f2e0035289cf7ee96701b40626be19ee929a2. Public interfaces/schema unchanged. The task branch and managed worktree are retained; no merge, push or deployment. Original dirty checkout tracked files remain byte-identical (7/7), and the predecessor archive matches its original SHA-256.
 
 CS03 discovery: base is a keyword token, so call-name parsing must retain it instead of dropping the receiver.
 
@@ -56,3 +56,21 @@ CS03 discovery: base is a keyword token, so call-name parsing must retain it ins
 - 2026-10-18T12:47:00.540Z Fresh reviewer reported two Important findings: complex receivers were reinterpreted as bare calls; tuple type arguments prevented generic-call recovery. Both reproduced RED, then C# and linker suites passed GREEN.
 - Preserve an opaque <receiver> qualifier for unsupported receiver syntax so it cannot bind as a bare call; do not infer its type. Balance tuple/array delimiters while recovering generic names.
 - Final gates are rerun after these production changes. Initial race compile used 32-bit MinGW; rerun with existing C:/msys64/ucrt64/bin/gcc.exe (x86_64-w64-mingw32), process-local CC/PATH only.
+
+## Final Validation Evidence
+
+2026-10-18T13:01:06.064Z — all gates below completed on the final production code. Logs are in C:/Temp/focalspan-csharp-task/.
+
+| Gate | Result | Log |
+| --- | --- | --- |
+| go test -count=1 -json ./... | exit 0; 44 packages, 1461 tests/subtests passed | test-uncached.log |
+| go test -race -count=1 -json ./... | exit 0; 44 packages, 1461 tests/subtests passed | race-uncached.log |
+| go vet ./... | exit 0 | vet-final.log |
+| go build ./cmd/focalspan (output directed to scratch) | exit 0 | build-final.log |
+| CGO_ENABLED=0 Windows amd64 / Linux amd64 / Darwin arm64 | all exit 0 | windows-final.log / linux-final.log / darwin-final.log |
+
+- No network, dependency download, external LLM, or indexed C# compilation/execution was used. Race used the installed x64 UCRT GCC via process-local CC/PATH.
+- Cache-enabled full runs emitted successful test output but did not return promptly after app package completion; those task-owned processes were stopped. Fresh -count=1 runs then completed with exit 0. Test caching was bypassed, not test coverage.
+- Independent source review (read-only) found two Important issues; both received RED/GREEN regressions and a clean follow-up review. No remaining Critical/Important findings.
+- Evidence Validate and MeasureModelVisible budget checks passed at 512 and 1200 tokens for the C# fixture; Query/Expand/Impact and unchanged-source v20-to-v21 refresh passed.
+- Only documentation is changed after these gates; final documentation checks are git diff --check and targeted inspection.
