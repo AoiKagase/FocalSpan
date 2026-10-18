@@ -642,31 +642,9 @@ func nextSignificant(tokens []Token, position, end int) int {
 }
 
 func callName(tokens []Token, previous int) (string, string) {
-	name := tokens[previous].Text
-	if tokens[previous].Kind != Identifier && name != ")" {
+	c, ok := parseCallTarget(tokens, previous)
+	if !ok {
 		return "", ""
 	}
-	parts := []string{name}
-	for position := previous - 1; position >= 1; {
-		if !tokens[position].significant() {
-			position--
-			continue
-		}
-		operator := tokens[position].Text
-		if operator != "::" && operator != "->" && operator != "." {
-			break
-		}
-		left := previousSignificant(tokens, position)
-		if left < 0 {
-			break
-		}
-		parts = append([]string{tokens[left].Text, operator}, parts...)
-		previous = left
-		position = left - 1
-	}
-	full := strings.Join(parts, "")
-	if position := strings.LastIndexAny(full, ":->."); position >= 0 {
-		return full[position+1:], strings.ReplaceAll(full, "->", "::")
-	}
-	return name, ""
+	return c.Name, c.Qualified
 }
