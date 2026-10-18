@@ -268,3 +268,7 @@ masterが進んでいた場合は変更を確認して作業ブランチへ取�
 Execution 2026-10-18T05:17:28.789781+00:00: R02 RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
 
 Execution 2026-10-18T05:18:58.049592+00:00: R03 RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+
+Execution: R01 complete 3061fd4a27b2; R02 complete 365722a60b11; R03 initial b818f0bf plus export-symbol control follow-up. Full normal suite passed with -count=1 after R01/R02; cached baseline attempts were stopped without product failure assertion.
+
+Execution 2026-10-18T05:20:14.339816+00:00: R03-symbols RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.

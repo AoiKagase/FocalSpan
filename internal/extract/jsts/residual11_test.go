@@ -134,3 +134,29 @@ func TestR03ExportValueIsNotModule(t *testing.T) {
 		t.Error("dynamic import inside exported function lost")
 	}
 }
+
+func TestR03ExportSymbolsPreserved(t *testing.T) {
+	for _, tc := range []struct{ code, name string }{
+		{"export const value = './not-module';", "value"},
+		{"export function work() {}", "work"},
+		{"export async function work() {}", "work"},
+		{"export class Example {}", "Example"},
+		{"export type Choice = 'value';", "Choice"},
+		{"export default 1;", "default"},
+	} {
+		tokens, _, _ := Lex(context.Background(), []byte(tc.code))
+		p, e := parseJSTS(context.Background(), tokens)
+		if e != nil {
+			t.Fatal(e)
+		}
+		found := false
+		for _, m := range p.Modules {
+			if m.Source == "jsts:export-symbol" && m.Target == tc.name {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("export symbol %s missing from %s", tc.name, tc.code)
+		}
+	}
+}

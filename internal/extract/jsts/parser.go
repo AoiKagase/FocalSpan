@@ -702,16 +702,16 @@ func exportedDeclarationName(tokens []Token, sig []int, position int) string {
 	for cursor := position + 1; cursor < len(sig) && cursor < position+8; cursor++ {
 		text := tokens[sig[cursor]].Text
 		if text == "default" {
-			return ""
-		}
-		if text != "async" {
-			return ""
+			return "default"
 		}
 		if text == "function" || text == "class" || text == "interface" || text == "enum" || text == "type" || text == "const" || text == "let" || text == "var" {
 			if cursor+1 < len(sig) && tokens[sig[cursor+1]].Kind == Identifier {
 				return tokens[sig[cursor+1]].Text
 			}
-			return "default"
+			return ""
+		}
+		if text != "async" {
+			return ""
 		}
 	}
 	return ""
