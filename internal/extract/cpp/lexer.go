@@ -16,7 +16,11 @@ func Lex(ctx context.Context, content []byte) ([]Token, []model.Diagnostic, erro
 	active := true
 	conditionals := make([]conditionalFrame, 0)
 	lineStart := true
-	for index := 0; index < len(content); {
+	startOffset := 0
+	if len(content) >= 3 && string(content[:3]) == "\xef\xbb\xbf" {
+		startOffset = 3
+	}
+	for index := startOffset; index < len(content); {
 		if err := ctx.Err(); err != nil {
 			return nil, diagnostics, err
 		}
