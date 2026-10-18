@@ -39,4 +39,6 @@ R01の初回2指摘はレビュー担当へ限定修正を委譲し親が差分�
 
 ## 統合
 
-全ゲート通過。masterへfast-forward統合・統合後通常テスト・今回ブランチ削除を実行し、実測結果を追記する。
+統合完了（2026-10-18T06:31:41.231900+00:00）: masterへ`--ff-only`で`fb160fc71d015e6bb1474f91c7a15fade8106b74`を統合し、統合後の全通常テストがPASS。元の未コミット11ファイルのbytesを保持した。今回のmanaged worktreeを回復可能なsnapshot付きでarchiveし、`codex/residual-11-functional-fixes`だけを通常のmerged判定付きで削除した。push・稼働バイナリ置換なし。作業記録・生ログ・ビルドhashは`C:/Temp/fs11-evidence/`へ保持した。
+
+benchmark v2は2ケース・12行でcompatible=true、regressions=0。既存baselineは変更していない。

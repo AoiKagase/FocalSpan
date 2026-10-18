@@ -10,7 +10,7 @@
 
 **Spec:** `docs/audits/2026-10-18-residual-functional-audit.md`。R01〜R11のID・再現条件を維持する。
 
-**状態:** 11件の実装・全検証・独立レビュー完了、master統合待ち。唯一のactive ExecPlanは本書（ルート`PLAN.md`）。前PLANをcompleted/2026-10-18-audit48-before-residual11.mdへbyte-for-byte保存した。
+**状態:** 完了。11件の実装・全検証・独立レビュー・master統合・今回ブランチ削除を完了した。唯一のactive ExecPlanは本書（ルート`PLAN.md`）。前PLANをcompleted/2026-10-18-audit48-before-residual11.mdへbyte-for-byte保存した。
 
 ## Global Constraints
 
@@ -38,7 +38,7 @@
 - [x] 実装開始時のHEAD・差分を再確認し、専用ブランチ／作業場所を準備してPLANを切り替える。
 - [x] 下記の順序で11件を正式回帰テストへ移し、RED→GREENと問題別コミットを記録する。
 - [x] 全通常テスト→全race検査、vet、ビルド、OS確認、独立レビューを完了する。
-- [ ] 検証済み変更をmasterへfast-forward統合し、今回のブランチだけを削除して完了を記録する。
+- [x] 検証済み変更をmasterへfast-forward統合し、今回のブランチだけを削除して完了を記録する。
 
 実行開始後はUTC時刻、対象ID、RED/GREENコマンドとログ、commit SHA、レビュー結果をこのProgressに対応付ける。計画時点では修正・検証の成功を記録しない。
 
@@ -263,7 +263,7 @@ masterが進んでいた場合は変更を確認して作業ブランチへ取�
 
 R01〜R11の実装・正式回帰テスト・問題別コミットを完了した。最終検証と統合の実測結果は本書末尾および検証記録へ記載する。
 
-実装完了時に、R01〜R11のcommit対応表、共有version更新、実測検証ログ、独立レビュー、master統合SHA、ブランチ削除結果、残る未確認ゲートをここへ記録する。将来の監査で残存ゼロを保証するものとはしない。
+実装完了時に、R01〜R11のcommit対応表、共有version更新、実測検証ログ、独立レビュー、master統合SHA、ブランチ削除結果は本書末尾と検証記録へ記録済み。計画で要求した未確認ゲートは残っていない。将来の監査で残存ゼロを保証するものとはしない。
 
 Execution 2026-10-18T05:17:28.789781+00:00: R02 RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
 
@@ -335,3 +335,6 @@ Execution 2026-10-18T06:14:09.177355+00:00: R01-header-scope RED→GREEN; scoped
 
 
 全検証完了: 通常→race、vet、3 CLI native/4 target cross、WSL ext4、benchmark比較、ユーザーMCP差分overlay通常→race PASS。検証記録: docs/audits/2026-10-18-residual11-verification.md。
+
+
+統合完了（2026-10-18T06:31:41.231900+00:00）: masterへ`--ff-only`で`fb160fc71d015e6bb1474f91c7a15fade8106b74`を統合し、統合後の全通常テストがPASS。元の未コミット11ファイルのbytesを保持した。今回のmanaged worktreeを回復可能なsnapshot付きでarchiveし、`codex/residual-11-functional-fixes`だけを通常のmerged判定付きで削除した。push・稼働バイナリ置換なし。作業記録・生ログ・ビルドhashは`C:/Temp/fs11-evidence/`へ保持した。
