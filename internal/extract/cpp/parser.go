@@ -291,6 +291,12 @@ func (p *parser) parseFunction(position, hi int, parent *declaration, namespace,
 			break
 		}
 		if text == "(" {
+			if cursor > position && p.tokens[p.sig[cursor-1]].Text == "operator" {
+				if close := p.matching[p.sig[cursor]]; close > 0 {
+					cursor = p.positionOf(close)
+					continue
+				}
+			}
 			openPosition = cursor
 			namePosition = cursor - 1
 			break
@@ -409,6 +415,11 @@ func (p *parser) parseTest(position, hi int, parent *declaration, namespace stri
 
 func (p *parser) functionHeaderLikely(start, name, open int, currentType string) bool {
 	nameText := p.tokens[p.sig[name]].Text
+	for i := start; i <= name; i++ {
+		if p.tokens[p.sig[i]].Text == "operator" {
+			return true
+		}
+	}
 	if controlWords[nameText] || nameText == "sizeof" || nameText == "decltype" || nameText == "static_assert" {
 		return false
 	}
@@ -440,6 +451,30 @@ func (p *parser) functionHeaderLikely(start, name, open int, currentType string)
 
 func (p *parser) functionName(namePosition, start int, namespace, currentType string) (string, string) {
 	name := p.tokens[p.sig[namePosition]].Text
+	for i := start; i <= namePosition; i++ {
+		if p.tokens[p.sig[i]].Text == "operator" {
+			suffix := joinTokens(p.tokens, p.sig[i+1:namePosition+1])
+			compact := strings.ReplaceAll(suffix, " ", "")
+			name = "operator" + compact
+			if i+1 <= namePosition && (p.tokens[p.sig[i+1]].Kind == Identifier || typeWords[p.tokens[p.sig[i+1]].Text]) {
+				name = "operator " + strings.TrimSpace(suffix)
+			}
+			if compact == "new" || compact == "delete" || compact == "new[]" || compact == "delete[]" {
+				name = "operator " + compact
+			}
+			prefix := ""
+			for j := i - 1; j >= start+1 && p.tokens[p.sig[j]].Text == "::"; j -= 2 {
+				prefix = p.tokens[p.sig[j-1]].Text + "::" + prefix
+			}
+			if prefix != "" {
+				return name, joinQualified(namespace, prefix+name)
+			}
+			if currentType != "" {
+				return name, joinQualified(namespace, currentType+"::"+name)
+			}
+			return name, joinQualified(namespace, name)
+		}
+	}
 	if name == "=" || name == "(" {
 		for cursor := namePosition - 1; cursor >= start; cursor-- {
 			if p.tokens[p.sig[cursor]].Text == "operator" {
