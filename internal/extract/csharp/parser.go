@@ -9,18 +9,21 @@ import (
 	"github.com/focalspan/focalspan/internal/model"
 )
 
+type tokenRange struct{ Start, End int }
+
 type declaration struct {
-	Kind         string
-	Name         string
-	Qualified    string
-	Start        int
-	HeaderEnd    int
-	End          int
-	BodyOpen     int
-	BodyClose    int
-	Parent       *declaration
-	Namespace    string
-	SignatureKey string
+	Kind           string
+	Name           string
+	Qualified      string
+	Start          int
+	HeaderEnd      int
+	End            int
+	BodyOpen       int
+	BodyClose      int
+	Parent         *declaration
+	Namespace      string
+	ExpressionBody *tokenRange
+	SignatureKey   string
 }
 
 type importSpec struct{ Target, Source string }
@@ -311,6 +314,7 @@ func (p *parser) parseFunction(position, hi int, parent *declaration, namespace,
 	headerEnd := p.tokens[closeRaw].EndByte
 	endPosition := closePosition
 	bodyOpen, bodyClose := -1, -1
+	var expressionBody *tokenRange
 	for cursor := closePosition + 1; cursor < hi && cursor < closePosition+80; cursor++ {
 		text := p.tokens[p.sig[cursor]].Text
 		if text == "{" {
@@ -326,10 +330,11 @@ func (p *parser) parseFunction(position, hi int, parent *declaration, namespace,
 			break
 		}
 		if text == "=>" {
-			semi := p.findUntil(cursor+1, ";")
+			semi := p.expressionEnd(cursor+1, hi)
 			if semi >= 0 {
 				endPosition = semi
-				headerEnd = p.tokens[p.sig[semi]].EndByte
+				headerEnd = p.tokens[p.sig[cursor]].EndByte
+				expressionBody = &tokenRange{Start: p.sig[cursor] + 1, End: p.sig[semi]}
 			}
 			break
 		}
@@ -341,7 +346,7 @@ func (p *parser) parseFunction(position, hi int, parent *declaration, namespace,
 	if namePosition < openPosition-1 {
 		signatureKey = joinTokens(p.tokens, p.sig[namePosition+1:closePosition])
 	}
-	return &declaration{Kind: kind, Name: name, Qualified: qualified, Start: p.sig[position], HeaderEnd: headerEnd, End: p.endAfter(p.sig[endPosition], hi), BodyOpen: bodyOpen, BodyClose: bodyClose, Parent: parent, Namespace: namespace, SignatureKey: signatureKey}, endPosition, true
+	return &declaration{Kind: kind, Name: name, Qualified: qualified, Start: p.sig[position], HeaderEnd: headerEnd, End: p.endAfter(p.sig[endPosition], hi), BodyOpen: bodyOpen, BodyClose: bodyClose, Parent: parent, Namespace: namespace, SignatureKey: signatureKey, ExpressionBody: expressionBody}, endPosition, true
 }
 
 func (p *parser) hasOperatorKeyword(start, end int) bool {
@@ -570,4 +575,23 @@ func normalizeImport(target string) string {
 		return path.Clean(target)
 	}
 	return target
+}
+
+// expressionEnd finds the semicolon at expression depth, skipping nested blocks.
+func (p *parser) expressionEnd(start, hi int) int {
+	for pos := start; pos < hi; pos++ {
+		switch p.tokens[p.sig[pos]].Text {
+		case ";":
+			return pos
+		case "}":
+			return -1
+		case "(", "[", "{":
+			close, ok := p.matching[p.sig[pos]]
+			if !ok {
+				return -1
+			}
+			pos = p.positionOf(close)
+		}
+	}
+	return -1
 }

@@ -26,7 +26,7 @@ Use codex/csharp-functional-fixes in the managed isolated worktree. Preserve the
 ## Progress
 - [x] 2026-10-18T12:12:29.174Z Created isolated worktree; captured original dirty-file hashes.
 - [x] 2026-10-18T12:16:57.382Z CS01 generic names: witnessed missing Echo/Map and Value arity RED; C# package GREEN (exit 0).
-- [ ] CS02 expression calls.
+- [x] 2026-10-18T12:19:01.974Z CS02 expression calls: witnessed four missing relations and truncated lambda RED; C# package GREEN (exit 0).
 - [ ] CS03 conservative scope.
 - [ ] CS04 full property spans.
 - [ ] Version migration, integration, review and all validation.

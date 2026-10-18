@@ -175,7 +175,7 @@ func (b *builder) buildRelations() {
 	}
 	for decl, symbol := range b.byDecl {
 		b.buildReferences(index, decl, symbol)
-		if decl.BodyOpen >= 0 && (decl.Kind == "function" || decl.Kind == "method" || decl.Kind == "constructor" || decl.Kind == "destructor" || decl.Kind == "operator" || decl.Kind == "test") {
+		if (decl.BodyOpen >= 0 || decl.ExpressionBody != nil) && (decl.Kind == "function" || decl.Kind == "method" || decl.Kind == "constructor" || decl.Kind == "destructor" || decl.Kind == "operator" || decl.Kind == "test") {
 			b.buildBodyRelations(index, decl, symbol)
 		}
 	}
@@ -201,7 +201,11 @@ func (b *builder) buildReferences(index symbolIndex, decl *declaration, from mod
 }
 
 func (b *builder) buildBodyRelations(index symbolIndex, decl *declaration, from model.Symbol) {
-	for position := decl.BodyOpen + 1; position < decl.BodyClose; position++ {
+	start, end := decl.BodyOpen+1, decl.BodyClose
+	if decl.ExpressionBody != nil {
+		start, end = decl.ExpressionBody.Start, decl.ExpressionBody.End
+	}
+	for position := start; position < end; position++ {
 		if err := b.ctx.Err(); err != nil {
 			return
 		}
@@ -211,7 +215,7 @@ func (b *builder) buildBodyRelations(index symbolIndex, decl *declaration, from 
 		}
 		if token.Text == "+=" {
 			handlerPosition := nextSignificant(b.parsed.Tokens, position)
-			if handlerPosition >= 0 && handlerPosition < decl.BodyClose && b.parsed.Tokens[handlerPosition].Kind == Identifier {
+			if handlerPosition >= 0 && handlerPosition < end && b.parsed.Tokens[handlerPosition].Kind == Identifier {
 				name := b.parsed.Tokens[handlerPosition].Text
 				if target, ok := b.resolveCall(index, decl, name, ""); ok {
 					b.addRelation(model.Relation{FromHandle: from.Handle, ToHandle: target.Handle, Kind: "references", Confidence: .95, Source: "csharp-event"})
@@ -338,7 +342,7 @@ func preferredDeclarations(declarations []*declaration) map[string]*declaration 
 	for _, decl := range declarations {
 		key := declarationKey(decl)
 		old := result[key]
-		if old == nil || old.BodyOpen < 0 && decl.BodyOpen >= 0 {
+		if old == nil || old.BodyOpen < 0 && old.ExpressionBody == nil && (decl.BodyOpen >= 0 || decl.ExpressionBody != nil) {
 			result[key] = decl
 		}
 	}
