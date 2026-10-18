@@ -11,18 +11,19 @@ import (
 )
 
 type declaration struct {
-	Kind         string
-	Name         string
-	Qualified    string
-	Start        int
-	HeaderEnd    int
-	End          int
-	BodyOpen     int
-	BodyClose    int
-	Parent       *declaration
-	Namespace    string
-	Recovered    bool
-	SignatureKey string
+	Kind                  string
+	Name                  string
+	Qualified             string
+	Start                 int
+	HeaderEnd             int
+	End                   int
+	BodyOpen              int
+	BodyClose             int
+	Parent                *declaration
+	Namespace             string
+	Recovered             bool
+	ParamOpen, ParamClose int
+	SignatureKey          string
 }
 
 type include struct {
@@ -373,7 +374,7 @@ func (p *parser) parseFunction(position, hi int, parent *declaration, namespace,
 	if parent != nil && parent.Kind == "class" && (kind == "function" || kind == "method") {
 		kind = "method"
 	}
-	decl := &declaration{Kind: kind, Name: name, Qualified: qualified, Start: p.sig[position], HeaderEnd: headerEnd, End: p.endAfter(p.sig[endPosition], hi), BodyOpen: bodyOpen, BodyClose: bodyClose, Parent: parent, Namespace: namespace, SignatureKey: p.callableTypeKey(openPosition, closePosition, bodyOpen)}
+	decl := &declaration{ParamOpen: openRaw, ParamClose: closeRaw, Kind: kind, Name: name, Qualified: qualified, Start: p.sig[position], HeaderEnd: headerEnd, End: p.endAfter(p.sig[endPosition], hi), BodyOpen: bodyOpen, BodyClose: bodyClose, Parent: parent, Namespace: namespace, SignatureKey: p.callableTypeKey(openPosition, closePosition, bodyOpen)}
 	return decl, endPosition, true
 }
 

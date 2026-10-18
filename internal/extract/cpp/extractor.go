@@ -74,6 +74,7 @@ type builder struct {
 	result    model.Extraction
 	byDecl    map[*declaration]model.Symbol
 	owner     model.Symbol
+	bindings  map[*declaration]bindingIndex
 }
 
 func build(ctx context.Context, file model.SourceFile, parsed parseResult) model.Extraction {
@@ -308,6 +309,9 @@ func (b *builder) buildReferences(index symbolIndex, decl *declaration, from mod
 			continue
 		}
 		name := token.Text
+		if b.bindingFor(decl).shadows(name, token.StartByte) {
+			continue
+		}
 		if name == decl.Name || primitiveType[name] || controlWords[name] || name == "std" {
 			continue
 		}
@@ -379,6 +383,9 @@ func (b *builder) buildBodyRelations(index symbolIndex, decl *declaration, from 
 			continue
 		}
 		name, qualified := callName(b.parsed.Tokens, previous)
+		if b.bindingFor(decl).shadows(name, token.StartByte) {
+			continue
+		}
 		if name == "" || controlWords[name] || name == "sizeof" || name == "decltype" || name == "static_assert" {
 			continue
 		}
@@ -396,7 +403,7 @@ func (b *builder) buildBodyRelations(index symbolIndex, decl *declaration, from 
 			b.addRelation(model.Relation{FromHandle: from.Handle, UnresolvedTo: lexical, Kind: kind, Confidence: .25, Source: "cpp-call"})
 		}
 		if isCallbackRegistration(name) {
-			b.addCallbackReferences(index, from, position, end)
+			b.addCallbackReferences(index, from, position, end, b.bindingFor(decl))
 		}
 	}
 	for position := start; position+1 < end; position++ {
@@ -410,7 +417,7 @@ func (b *builder) buildBodyRelations(index symbolIndex, decl *declaration, from 
 	}
 }
 
-func (b *builder) addCallbackReferences(index symbolIndex, from model.Symbol, open, end int) {
+func (b *builder) addCallbackReferences(index symbolIndex, from model.Symbol, open, end int, bindings bindingIndex) {
 	close := matchingCallClose(b.parsed.Tokens, open, end)
 	if close <= open {
 		return
@@ -419,6 +426,9 @@ func (b *builder) addCallbackReferences(index symbolIndex, from model.Symbol, op
 	for position := open + 1; position < close; position++ {
 		token := b.parsed.Tokens[position]
 		if !token.significant() || token.Kind != Identifier {
+			continue
+		}
+		if bindings.shadows(token.Text, token.StartByte) {
 			continue
 		}
 		if _, exists := seen[token.Text]; exists {
