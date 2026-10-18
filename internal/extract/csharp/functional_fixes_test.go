@@ -80,3 +80,72 @@ func TestCS02ExpressionBodiesProduceCallAndTestRelations(t *testing.T) {
 		t.Errorf("Nested expression was truncated: %+v", nested)
 	}
 }
+
+func TestCS03CallsRespectReceiverAndDeclaringType(t *testing.T) {
+	for _, tc := range []struct{ name, ns, call, want string }{
+		{"bare", "namespace Demo;", "Save();", "Demo.Service.Save"},
+		{"global namespace", "", "Save();", "Service.Save"},
+		{"this", "namespace Demo;", "this.Save();", "Demo.Service.Save"},
+		{"explicit type", "namespace Demo;", "Other.Save();", "Demo.Other.Save"},
+		{"fully qualified type", "namespace Demo;", "Demo.Other.Save();", "Demo.Other.Save"},
+		{"unknown receiver", "namespace Demo;", "foreign.Save();", ""},
+		{"conditional receiver", "namespace Demo;", "foreign?.Save();", ""},
+		{"unknown base", "namespace Demo;", "base.Save();", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := tc.ns + "\nclass Service { void Save() {} void Run() { " + tc.call + " } }\nclass Other { public static void Save() {} }\n"
+			got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "Service.cs", Language: "csharp", Content: []byte(source)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			prefix := ""
+			if tc.ns != "" {
+				prefix = "Demo."
+			}
+			from := findSymbol(got.Symbols, prefix+"Service.Run", "method")
+			if from.Handle == "" {
+				t.Fatal("Run missing")
+			}
+			count := 0
+			for _, r := range got.Relations {
+				if r.FromHandle != from.Handle || r.Kind != "calls" {
+					continue
+				}
+				count++
+				if tc.want == "" {
+					if r.ToHandle != "" || r.UnresolvedTo == "" {
+						t.Errorf("unknown receiver resolved: %+v", r)
+					}
+				} else {
+					target := findSymbol(got.Symbols, tc.want, "method")
+					if target.Handle == "" || r.ToHandle != target.Handle {
+						t.Errorf("call=%+v, want %s", r, tc.want)
+					}
+				}
+			}
+			if count != 1 {
+				t.Errorf("calls=%d, want 1", count)
+			}
+		})
+	}
+}
+func TestCS03AmbiguousOverloadStaysUnresolved(t *testing.T) {
+	source := "class Service { void Save(int x) {} void Save(string x) {} void Run() { Save(1); } }"
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "Service.cs", Language: "csharp", Content: []byte(source)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	from := findSymbol(got.Symbols, "Service.Run", "method")
+	found := false
+	for _, r := range got.Relations {
+		if r.FromHandle == from.Handle && r.Kind == "calls" {
+			found = true
+			if r.ToHandle != "" || r.UnresolvedTo != "Save" {
+				t.Errorf("ambiguous call=%+v", r)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("missing unresolved Save call")
+	}
+}

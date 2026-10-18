@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/focalspan/focalspan/internal/csharpscope"
 	"github.com/focalspan/focalspan/internal/language"
 	"github.com/focalspan/focalspan/internal/model"
 	"github.com/focalspan/focalspan/internal/projectmeta"
@@ -58,6 +59,7 @@ func (l *Linker) LinkWithScope(ctx context.Context, facts []projectmeta.Fact, sc
 		return orderedFacts[i].Target < orderedFacts[j].Target
 	})
 	index := newSymbolIndex(symbols)
+	csharpScope := csharpscope.New(symbols)
 	links := make([]store.RelationLink, 0)
 	for indexRelation, relation := range relations {
 		if err := ctx.Err(); err != nil {
@@ -72,7 +74,7 @@ func (l *Linker) LinkWithScope(ctx context.Context, facts []projectmeta.Fact, sc
 		if from.Language == "cpp" && relation.Source == "cpp:module-import" {
 			candidatePool = symbols
 		}
-		if from.Language == "cpp" && (relation.Kind == "calls" || relation.Kind == "tests") {
+		if (from.Language == "cpp" || from.Language == "csharp") && (relation.Kind == "calls" || relation.Kind == "tests") {
 			candidatePool = symbols
 		}
 		if len(candidatePool) == 0 {
@@ -81,7 +83,12 @@ func (l *Linker) LinkWithScope(ctx context.Context, facts []projectmeta.Fact, sc
 			}
 			continue
 		}
-		candidates := resolveCandidates(from, relation.UnresolvedTo, candidatePool, activeFacts, relation.Kind)
+		var candidates []model.Symbol
+		if from.Language == "csharp" && (relation.Kind == "calls" || relation.Kind == "tests") {
+			candidates = csharpScope.Resolve(from, relation.UnresolvedTo)
+		} else {
+			candidates = resolveCandidates(from, relation.UnresolvedTo, candidatePool, activeFacts, relation.Kind)
+		}
 		candidates = preferModuleOwner(from, relation, candidates)
 		if from.Language == "cpp" && relation.Source == "cpp:module-import" {
 			candidates = resolveCPPModuleImport(relation.UnresolvedTo, symbols)

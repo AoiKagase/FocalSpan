@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/focalspan/focalspan/internal/csharpscope"
 	"github.com/focalspan/focalspan/internal/extract/sourceutil"
 	"github.com/focalspan/focalspan/internal/model"
 )
@@ -52,6 +53,7 @@ func (Extractor) Extract(ctx context.Context, file model.SourceFile) (model.Extr
 }
 
 type symbolIndex struct {
+	scope       *csharpscope.Resolver
 	byQualified map[string][]model.Symbol
 	byName      map[string][]model.Symbol
 }
@@ -161,7 +163,7 @@ func (b *builder) addChunk(decl *declaration, symbol model.Symbol) {
 }
 
 func (b *builder) buildRelations() {
-	index := symbolIndex{byQualified: make(map[string][]model.Symbol), byName: make(map[string][]model.Symbol)}
+	index := symbolIndex{scope: csharpscope.New(b.result.Symbols), byQualified: make(map[string][]model.Symbol), byName: make(map[string][]model.Symbol)}
 	for _, symbol := range b.result.Symbols {
 		if symbol.Handle == b.owner.Handle {
 			continue
@@ -253,19 +255,13 @@ func (b *builder) buildBodyRelations(index symbolIndex, decl *declaration, from 
 }
 
 func (b *builder) resolveCall(index symbolIndex, decl *declaration, name, qualified string) (model.Symbol, bool) {
-	if target, ok := unique(index.byQualified, qualified); ok {
-		return target, true
+	target := qualified
+	if target == "" {
+		target = name
 	}
-	if decl.Parent != nil && strings.Contains(decl.Parent.Qualified, ".") {
-		if target, ok := unique(index.byQualified, decl.Parent.Qualified+"."+name); ok {
-			return target, true
-		}
-	}
-	if target, ok := unique(index.byQualified, joinQualified(decl.Namespace, name)); ok {
-		return target, true
-	}
-	if target, ok := unique(index.byName, name); ok {
-		return target, true
+	candidates := index.scope.Resolve(b.byDecl[decl], target)
+	if len(candidates) == 1 {
+		return candidates[0], true
 	}
 	return model.Symbol{}, false
 }
@@ -384,11 +380,11 @@ func callName(tokens []Token, previous int) (string, string) {
 			position--
 			continue
 		}
-		if tokens[position].Text != "." && tokens[position].Text != "?" {
+		if tokens[position].Text != "." && tokens[position].Text != "?" && tokens[position].Text != "?." {
 			break
 		}
 		left := previousSignificant(tokens, position)
-		if left < 0 || tokens[left].Kind != Identifier {
+		if left < 0 || tokens[left].Kind != Identifier && tokens[left].Text != "this" && tokens[left].Text != "base" {
 			break
 		}
 		parts = append([]string{tokens[left].Text, "."}, parts...)
