@@ -196,3 +196,33 @@ func TestCS04PropertiesKeepCompleteDeclarationSource(t *testing.T) {
 		})
 	}
 }
+
+func TestCS03LocalFunctionsDoNotEscapeTheirMethod(t *testing.T) {
+	source := "class Service { void Owner() { void Local() {} Local(); } void Other() { Local(); Service.Local(); } }"
+	got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "Service.cs", Language: "csharp", Content: []byte(source)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := findSymbol(got.Symbols, "Service.Owner", "method")
+	other := findSymbol(got.Symbols, "Service.Other", "method")
+	local := findSymbol(got.Symbols, "Service.Local", "method")
+	own := false
+	outside := 0
+	for _, r := range got.Relations {
+		if r.Kind != "calls" {
+			continue
+		}
+		if r.FromHandle == owner.Handle && r.ToHandle == local.Handle {
+			own = true
+		}
+		if r.FromHandle == other.Handle {
+			outside++
+			if r.ToHandle != "" {
+				t.Errorf("local function escaped scope: %+v", r)
+			}
+		}
+	}
+	if !own || outside != 2 {
+		t.Errorf("own local=%v outside calls=%d", own, outside)
+	}
+}

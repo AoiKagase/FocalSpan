@@ -454,7 +454,7 @@ func (s *Store) replaceFileTx(ctx context.Context, tx *sql.Tx, file model.Source
 			if idErr != nil {
 				return fmt.Errorf("relation id: %w", idErr)
 			}
-			for keyKind, key := range relationLookupKeys(relation.UnresolvedTo) {
+			for keyKind, key := range sourceRelationLookupKeys(file.Language, relation) {
 				if key == "" {
 					continue
 				}
@@ -688,7 +688,7 @@ func extractionLookupKeys(file model.SourceFile, extraction model.Extraction) []
 		}
 	}
 	for _, relation := range extraction.Relations {
-		for _, key := range relationLookupKeys(relation.UnresolvedTo) {
+		for _, key := range sourceRelationLookupKeys(file.Language, relation) {
 			if key != "" {
 				set[key] = true
 			}

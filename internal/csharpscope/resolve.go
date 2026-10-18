@@ -26,11 +26,16 @@ func New(symbols []model.Symbol) *Resolver {
 		if !callable(s.Kind) {
 			continue
 		}
-		r.byQualified[s.QualifiedName] = append(r.byQualified[s.QualifiedName], s)
 		if r.children[s.ParentHandle] == nil {
 			r.children[s.ParentHandle] = map[string][]model.Symbol{}
 		}
 		r.children[s.ParentHandle][s.Name] = append(r.children[s.ParentHandle][s.Name], s)
+	}
+	for _, s := range symbols {
+		parent := r.byHandle[s.ParentHandle]
+		if s.Language == "csharp" && callable(s.Kind) && isType(parent.Kind) {
+			r.byQualified[s.QualifiedName] = append(r.byQualified[s.QualifiedName], s)
+		}
 	}
 	return r
 }

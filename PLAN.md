@@ -29,7 +29,8 @@ Use codex/csharp-functional-fixes in the managed isolated worktree. Preserve the
 - [x] 2026-10-18T12:19:01.974Z CS02 expression calls: witnessed four missing relations and truncated lambda RED; C# package GREEN (exit 0).
 - [x] 2026-10-18T12:25:24.562Z CS03 conservative scope: extraction and real-store linker RED witnessed; both packages GREEN. Baseline go test ./... GREEN before product changes (exit 0).
 - [x] 2026-10-18T12:27:06.521Z CS04 full property spans: missing modifier/type/attribute RED witnessed; all property variants and C# package GREEN.
-- [ ] Version migration, integration, review and all validation.
+- [x] 2026-10-18T12:40:38.504Z Version migration RED/GREEN and public Query/Expand/Impact/Evidence integration GREEN.
+- [ ] Whole-branch review and final validation gates.
 
 ## Surprises & Discoveries
 - Tool output compression can hide source text; bounded source reads are used.
@@ -43,3 +44,10 @@ Use codex/csharp-functional-fixes in the managed isolated worktree. Preserve the
 Pending implementation and validation.
 
 CS03 discovery: base is a keyword token, so call-name parsing must retain it instead of dropping the receiver.
+
+## Integration discoveries and rulings
+- 2026-10-18T12:40:38.504Z Ruling: add C# member dependency keys to existing relation_lookup projection, without schema changes. Full and incremental linker otherwise skip this.Save and relative type targets when future partial members live in differently named files. Both failures were witnessed before the lookup correction; linker suite GREEN after it.
+- Local functions remain in their enclosing callable scope and are excluded from type-member lookup; witnessed RED/GREEN.
+- Public Expand uses callees, not internal relation kind calls; corrected the integration test to the existing interface.
+- Baseline test script initially had shell environment quoting errors. Re-ran with explicit GOPROXY=off/GOSUMDB=off/GOTOOLCHAIN=local; clean baseline go test ./... completed with exit 0.
+- PLAN.md serves as this task's durable execution ledger under repository policy.
