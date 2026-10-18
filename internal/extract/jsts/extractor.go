@@ -74,10 +74,12 @@ type builder struct {
 	result    model.Extraction
 	byDecl    map[*declaration]model.Symbol
 	owner     model.Symbol
+	bindings  bindingIndex
 }
 
 func build(ctx context.Context, file model.SourceFile, parsed parseResult) model.Extraction {
 	b := &builder{ctx: ctx, file: file, parsed: parsed, mapa: sourceutil.NewSourceMap(file.Content), allocator: model.NewHandleAllocator(), byDecl: make(map[*declaration]model.Symbol)}
+	b.bindings = buildBindingIndex(parsed.Tokens, parsed.Declarations)
 	b.result.Diagnostics = append(b.result.Diagnostics, parsed.Diagnostics...)
 	b.owner = b.makeOwner()
 	b.result.Symbols = append(b.result.Symbols, b.owner)
@@ -199,6 +201,9 @@ func (b *builder) buildReferences(index symbolIndex, decl *declaration, from mod
 			continue
 		}
 		name := strings.TrimPrefix(token.Text, "#")
+		if b.bindings.names[token.StartByte] {
+			continue
+		}
 		if name == decl.Name || primitive[name] || name == "export" || name == "default" || name == "from" {
 			continue
 		}
@@ -221,6 +226,9 @@ func (b *builder) buildBodyRelations(index symbolIndex, decl *declaration, from 
 			continue
 		}
 		name, qualified := callName(b.parsed.Tokens, previous)
+		if !b.bindings.ownsCall(decl, token.StartByte) {
+			continue
+		}
 		if name == "" || control[name] || name == "function" || name == "import" || name == "require" {
 			continue
 		}
@@ -228,7 +236,15 @@ func (b *builder) buildBodyRelations(index symbolIndex, decl *declaration, from 
 		if from.Kind == "test" {
 			kind = "tests"
 		}
-		if target, ok := b.resolveCall(index, decl, name, qualified); ok {
+		boundDecl, bound := b.bindings.callBinding(token.StartByte, name, qualified)
+		if bound && boundDecl == nil {
+			continue
+		}
+		target, ok := b.byDecl[boundDecl]
+		if !bound {
+			target, ok = b.resolveCall(index, decl, name, qualified)
+		}
+		if ok {
 			b.addRelation(model.Relation{FromHandle: from.Handle, ToHandle: target.Handle, Kind: kind, Confidence: .95, Source: "jsts-call"})
 		} else {
 			lexical := qualified
