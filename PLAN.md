@@ -40,7 +40,7 @@
 - [x] 修正順序、内部インターフェース、受け入れ条件を計画化した。
 - [x] 実装承認後にTask 0を実施し、ここからルートPLANへ移行する。
 - [x] Task 1〜20のRED→GREENとID別コミットを完了する。
-- [ ] Task 21の更新移行・全検証・独立レビュー・統合を完了する。
+- [x] Task 21の更新移行・全検証・独立レビュー・統合を完了する。
 
 実行時はUTC日時、実際のコマンド、終了コード、証跡パスを追記する。未実行の検証を完了扱いにしない。
 
@@ -61,7 +61,7 @@
 
 ## Outcomes & Retrospective
 
-実装・全検証・独立レビュー完了。masterへの統合と今回branch削除は後述の統合記録に実行後追記する。
+実装・全検証・独立レビュー完了。masterへの統合と今回branch削除を完了し、末尾の統合記録に実績を追記した。
 
 ## Context and Orientation
 
@@ -311,7 +311,7 @@ module symbolには所有者へ戻るParentHandleと元宣言範囲を持たせ�
 2. [x] `EvidenceContract`でQuery/Expand/Impactの旧形式とEvidence、必要なMCP実wire経路を検証する。custom return、constructor/body/operator、template、moduleのsource bytes/行、role、既知handle、省略・予算・不変条件を確認する。既存wire helperを使い実際のJSON byte数を計測する。no-update、共有read leaseとrevision整合性の既存テストを通す。ユーザーdirtyのserver.go/context_v2_test.goを修正・取り込まない。
 3. [x] 下記の全検証を完了し、ID別20行の対応表を埋める。新規コードを変更したら影響範囲と必要な全体検証を再実施する。製品コード・テスト・設計文書を対象別に明示stageしてコミットする。
 4. [x] 独立reviewerに最終diff、20件表、RED/GREEN、全検証結果とReview Focusを渡す。対象は機能・回帰・source契約で、セキュリティ監査を依頼しない。指摘を修正し、該当テストと必要な全体検証、再レビューを通す。未解決の機能指摘がある間はマージしない。
-5. [ ] 完了記録を含む作業HEADで全gateを確認し、masterが作業branchの祖先であることを確認して`--ff-only`でマージする。masterが進んでいれば履歴を上書きせず取り込み・再検証する。master到達を確認後、今回branchだけを削除しmanaged worktreeをarchiveする。元checkoutのdirty内容・ハッシュを照合して保持を確認する。
+5. [x] 完了記録を含む作業HEADで全gateを確認し、masterが作業branchの祖先であることを確認して`--ff-only`でマージする。masterが進んでいれば履歴を上書きせず取り込み・再検証する。master到達を確認後、今回branchだけを削除しmanaged worktreeをarchiveする。元checkoutのdirty内容・ハッシュを照合して保持を確認する。
 
 ### ID・テスト・コミット対応表（実行時に埋める）
 
@@ -493,3 +493,7 @@ Execution 2026-10-18T08:19:36.323351+00:00: Task 21-review GREEN, commit 6149491
 統合状況: 実装・検証・独立レビューは完了。これから検証済み履歴をmasterへFFし、到達確認後に今回branchだけを削除する。未実行の統合結果を先に記録しない。
 
 補足: キャッシュ有効の全体再確認ではGo本体の終了待ちが続いたため、親コマンド/PIDを照合した検証用Goプロセスだけを停止した。原因の断定や製品コード変更は行わず、`-count=1`で全通常・全raceを再実行して通過を確認した。130同名候補の末尾path/変更行限定検索も、基準FAILと通常/raceのPASSを記録した。12ビルドは埋込build metadataでもtargetとcross時CGO=0を照合した。
+
+## 統合完了記録
+
+2026-10-18T08:46:26.198970+00:00: masterへ `7231aa7c3e1a5bec21abef74a2a2379401a1756f` をfast-forwardマージし、到達を確認した。`codex/cpp-20-functional-fixes` は `git branch -d` で削除し、存在しないことを確認した。元dirtyファイルと衝突した元untrackedファイルはバイト単位で保持した。マージ済みと同一のツリーと元dirty MCP overlayによる全通常テストもexit 0（2026-10-18T08:45:10.690252+00:00）。稼働DB・設定・バイナリは変更していない。pushは行っていない。この完了記録もmasterへFFして保存する。

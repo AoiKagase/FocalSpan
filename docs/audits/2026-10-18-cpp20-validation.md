@@ -23,3 +23,5 @@ Verified product code: `61494910ec43757d68ce8d085d7cb00dfe65691a`.
 | build-darwin-arm64-focalspan-eval | exit 0 | 2026-10-18T08:28:39.431632+00:00 |
 
 All 20 IDs fail on the audit baseline; seven audit controls pass. Independent review findings: five fixed and independently confirmed. Original dirty MCP files pass a separate normal/race overlay. No live DB/binary changes. Integration result is recorded in root PLAN after execution.
+
+Post-merge validation: full normal suite with the original dirty MCP overlay passed, exit 0 at 2026-10-18T08:45:10.690252+00:00. master reached 7231aa7c3e1a5bec21abef74a2a2379401a1756f by fast-forward; codex/cpp-20-functional-fixes was deleted after verification. Original dirty and collision files were preserved byte-for-byte.
