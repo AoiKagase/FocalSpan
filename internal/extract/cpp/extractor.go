@@ -481,6 +481,14 @@ func isCallableKind(kind string) bool {
 }
 
 func (b *builder) resolveCall(index symbolIndex, decl *declaration, name, qualified string) (model.Symbol, bool) {
+	if qualified != "" && (strings.Contains(qualified, ".") || strings.Contains(qualified, "->")) {
+		if strings.HasPrefix(qualified, "this->") {
+			if parent := b.receiverParent(decl); parent != nil {
+				return unique(index.byQualified, parent.Qualified+"::"+name)
+			}
+		}
+		return model.Symbol{}, false
+	}
 	if qualified != "" {
 		if target, ok := unique(index.byQualified, qualified); ok {
 			return target, true
