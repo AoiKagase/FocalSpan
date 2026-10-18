@@ -51,3 +51,8 @@ CS03 discovery: base is a keyword token, so call-name parsing must retain it ins
 - Public Expand uses callees, not internal relation kind calls; corrected the integration test to the existing interface.
 - Baseline test script initially had shell environment quoting errors. Re-ran with explicit GOPROXY=off/GOSUMDB=off/GOTOOLCHAIN=local; clean baseline go test ./... completed with exit 0.
 - PLAN.md serves as this task's durable execution ledger under repository policy.
+
+## Independent review corrections
+- 2026-10-18T12:47:00.540Z Fresh reviewer reported two Important findings: complex receivers were reinterpreted as bare calls; tuple type arguments prevented generic-call recovery. Both reproduced RED, then C# and linker suites passed GREEN.
+- Preserve an opaque <receiver> qualifier for unsupported receiver syntax so it cannot bind as a bare call; do not infer its type. Balance tuple/array delimiters while recovering generic names.
+- Final gates are rerun after these production changes. Initial race compile used 32-bit MinGW; rerun with existing C:/msys64/ucrt64/bin/gcc.exe (x86_64-w64-mingw32), process-local CC/PATH only.

@@ -226,3 +226,53 @@ func TestCS03LocalFunctionsDoNotEscapeTheirMethod(t *testing.T) {
 		t.Errorf("own local=%v outside calls=%d", own, outside)
 	}
 }
+
+func TestCS01TupleGenericCallArguments(t *testing.T) {
+	for _, call := range []string{"Echo<(int,int)>((1,2));", "Echo<(System.Collections.Generic.List<int>,int[])>((null,null));"} {
+		t.Run(call, func(t *testing.T) {
+			source := "class Service { public void Echo<T>(T value) {} public void Run() { " + call + " } }"
+			got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "Service.cs", Language: "csharp", Content: []byte(source)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			from := findSymbol(got.Symbols, "Service.Run", "method")
+			to := findSymbol(got.Symbols, "Service.Echo", "method")
+			found := false
+			for _, r := range got.Relations {
+				if from.Handle != "" && to.Handle != "" && r.FromHandle == from.Handle && r.ToHandle == to.Handle && r.Kind == "calls" {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatal("tuple generic Echo call missing")
+			}
+		})
+	}
+}
+func TestCS03ComplexReceiverNeverFallsBackToBareMethod(t *testing.T) {
+	for _, call := range []string{"GetForeign().Save();", "GetForeign()[0].Save();", "Other<int>.Save();", "GetForeign()?.Save();"} {
+		t.Run(call, func(t *testing.T) {
+			source := "class Service { void Save() {} public object GetForeign() { return null; } void Run() { " + call + " } } class Other<T> { public static void Save() {} }"
+			got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "Service.cs", Language: "csharp", Content: []byte(source)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			from := findSymbol(got.Symbols, "Service.Run", "method")
+			save := findSymbol(got.Symbols, "Service.Save", "method")
+			found := false
+			for _, r := range got.Relations {
+				if r.FromHandle == from.Handle && r.Kind == "calls" {
+					if r.ToHandle == save.Handle && save.Handle != "" {
+						t.Errorf("complex receiver bound to Service.Save: %+v", r)
+					}
+					if strings.Contains(r.UnresolvedTo, "Save") {
+						found = true
+					}
+				}
+			}
+			if !found {
+				t.Fatal("complex receiver's Save call was not kept unresolved")
+			}
+		})
+	}
+}

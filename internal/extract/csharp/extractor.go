@@ -385,7 +385,8 @@ func callName(tokens []Token, previous int) (string, string) {
 		}
 		left := previousSignificant(tokens, position)
 		if left < 0 || tokens[left].Kind != Identifier && tokens[left].Text != "this" && tokens[left].Text != "base" {
-			break
+			// An explicit but unsupported receiver must not become a bare call.
+			return name, "<receiver>." + strings.Join(parts, "")
 		}
 		parts = append([]string{tokens[left].Text, "."}, parts...)
 		position = left - 1
