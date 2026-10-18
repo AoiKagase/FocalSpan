@@ -1,0 +1,53 @@
+# Independent functional review
+
+Reviewed BASE `66d8ea87916cdda57d0d3c0ecd8fd26dfc91e07a` through HEAD `731d52c89addd23adabd0119a05a3a48104c1cc6` in the residual-11 worktree. Read-only review of product code, added regression tests, root PLAN.md and the residual audit. No Go build or tests were run during this review. Security topics were excluded. Findings below distinguish static tracing from executed evidence.
+
+## Findings
+
+1. **P2 — Loop-scoped let/const shadows calls after the loop** — `internal/extract/jsts/bindings.go:84-87`, `:150-170`. Static tracing with `function target() {} function caller() { for (let target of values) { target(); } target(); }`: scopeAt sees the containing function brace because the declaration precedes the loop body brace. The local binding therefore covers the entire caller body. Expected: the last call resolves to the global target. Actual by code path: lookup finds the dynamic loop binding and buildBodyRelations omits the last call. Fix: represent lexical for-header scope through the loop statement end, excluding following statements; add a regression asserting both suppression inside the loop and preservation outside it.
+
+2. **P2 — Anonymous callback parameters still connect to a global function** — `internal/extract/jsts/bindings.go:43-80`, `internal/extract/jsts/extractor.go:236-248`. Static tracing with `function target() {} function caller() { values.forEach((target) => { target(); }); }`: binding parameters are registered only for parsed named declarations. Anonymous callback functions are not declarations in parseScope, so the callback parameter is not present in bindingIndex. Expected: callback-local target produces no relation to the global target, including unresolved spelling that the linker could reconnect. Actual by code path: the enclosing caller scans target(), lookup misses the local parameter, and resolveCall selects the unique global target with confidence .95. Fix: register anonymous callback function/arrow parameter scopes independently of named symbols and preserve enclosing named-function ownership semantics.
+
+3. **P2 — Endless Ruby methods end before a multiline regex literal ends** — `internal/extract/ruby/extractor.go:91-95`, `internal/extract/ruby/endless.go:101-124`. Static tracing with `def first = /one\ntwo/\ndef second\nend\n`: Regex tokens are masked but excluded from LiteralEndLine recording. The first line's expression becomes spaces; the original suffix `/one` prevents the empty-expression continuation heuristic, so rubyEndlessEnd returns the first physical line. Expected: first includes both regex lines; actual by code path: its source span ends on line 1. Fix: include multiline Regex tokens in the literal-end tracking, with a source-fidelity regression. This was not executed by the reviewer; a targeted regression is requested before acceptance.
+
+## Requirement coverage
+
+R01 has the two material boundary gaps above. R02/R03 syntax gating, R04 nearest configuration boundaries including empty/invalid and same-directory priority, R05 unique file module owner resolution, R06 literal masking with raw source retained, R08 simple-statement import splitting, R09 one-hop incoming relations/current-source verification and provenance, R10 direct indexed identity, and the original R11 conflicting-relation statistics condition have coherent implementations and corresponding tests on inspection. R07 has the multiline Regex gap above.
+
+The v19 shared extractor version is wired into regular incremental re-extraction, stale status and subsequent idempotence testing. No public MCP/Evidence fields or DB schema changes appear in this diff. R09 adds wire/invariant/source-fidelity tests for legacy/Evidence/MCP v1/v2. This static review does not claim those tests passed; final execution belongs to the parent.
+
+Existing indexer behavior still counts version/config-triggered full re-extraction as changed files even if hashes are unchanged. This predates the diff and lies outside the audited R11 conflicting-relation reproduction; it is recorded as a scope limitation, not an additional blocker in this review.
+
+## Next action
+
+Run focused failing regressions for the three concrete inputs above. Parent delegated fixes for the first two only after this report; no product or test edits were made before this initial report.
+
+## R01 delegated remediation and executed evidence
+
+After the initial read-only review, the parent explicitly delegated `internal/extract/jsts/bindings.go` and `internal/extract/jsts/residual11_test.go` for findings 1 and 2. These two findings were reproduced by real extractor tests before their fixes. `review-r01-red.log` records the focused failures with GOPROXY=off, GOSUMDB=off and CGO_ENABLED=0. The first shell attempt had quoting errors in environment assignment; this log was replaced by the successful environment-fixed RED invocation.
+
+Loop let/const scopes now stop at the loop statement end, including brace bodies, single statements and nested if/else bodies. Anonymous arrow and function callback parameters now register lexical bindings independently of named declarations. Added controls retain outer target calls after loops/callbacks and suppress false relations inside callbacks/loops. A final branch-body control initially failed and was fixed before the final GREEN.
+
+`rtk proxy powershell -NoProfile -ExecutionPolicy Bypass -File C:/Temp/fs11-evidence/review-jsts-tests.ps1` completed with exit 0. That script fixes the three offline environment variables, runs gofmt on the two owned files, and runs `go test ./internal/extract/jsts -count=1 -v`. `review-r01-green.log` records the final entire JSTS package PASS, including R01/R02/R03 and existing F34/F35/F36 tests. Targeted `git diff --check` also passed. No commit was created. Broader tests and finding 3's Ruby regression remain assigned to the parent.
+
+The reviewer became the implementer for these two follow-up fixes, so the initial review was independent of the original HEAD; the R01 remediation itself has not received a second independent review in this report.
+
+## Follow-up closure check for the original three findings
+
+Read-only inspection after the parent's Ruby follow-up confirms `internal/extract/ruby/extractor.go:94` now includes `Regex` in LiteralEndLine registration. Masked multiline regex content therefore retains its physical end for rubyEndlessEnd; the original `def first = /one\ntwo/` input no longer takes the premature line-1 exit by the reviewed control flow. `TestR07RubyEndlessMethods` now includes that exact two-line regex input with expected EndLine 2. Its existing assertions also require first and second declarations to exist and second to remain independent. This check read the product line and the real extractor assertions; it did not execute Go. The parent reports the pre-fix RED with first.EndLine=1/want2 and owns the follow-up GREEN execution evidence.
+
+Original finding 1 (loop lexical scope) and finding 2 (anonymous callback parameter scope) are addressed by the delegated R01 changes and the executed JSTS package checks above. Original finding 3 (multiline Ruby regex range) is addressed on static reinspection with the exact regression now present. No remaining blocker among those three findings is identified by this bounded closure check, subject to the parent's final runtime checks passing.
+
+This is a closure check of the original findings only, not another whole-tree audit. The same reviewer implemented the R01 remediation, so its closure is self-verification rather than a second independent review. The R07 correction was implemented by the parent and reviewed here independently. No new product/test changes, Git mutations, or Go commands were performed during this follow-up.
+
+## Typed callback follow-up
+
+The parent's broader run subsequently caught a panic introduced by the reviewer's callbackParameters expression scan: a paired token at the file end moved `end` to the last significant token before an unchecked `end+1` access. The parent added a post-jump bound check, restricted function parameter registration to an actual brace body after return annotations, and recognized typed arrow parameter lists before the return-type colon. Read-only inspection confirms those changes and `TestR01TypedCallbackBoundaries`, which covers terminal typed functions, object/array expression arrows, typed function/arrow callback shadowing, and a typed function's binding not escaping into a following caller. The parent reports JSTS/shared extractor conformance/eval checks passed; this reviewer did not rerun them.
+
+One remaining static concern was reported immediately: the new backward search for a typed arrow parameter list crosses unrelated brace/call boundaries until `;`, `=` or `=>`. For `function target(){} function unrelated(x): void {} function caller(){ values.forEach(target => {target();}); }`, it can choose the earlier `unrelated(x):` parameter list for the single-parameter arrow, register x instead of target and restore the original global-target false call. This input is a requested focused regression, not reviewer-executed evidence. Restricting return-annotation discovery to the current arrow header is necessary before closing this follow-up. No Go execution or product/test edits were performed during this read-only check.
+
+## Final bounded closure (parent commit 959fb847)
+
+Read-only reinspection confirms the arrow return-annotation search now stops at `;`, `=`, `=>`, `(`, `{`, `}` or `,`. In the concrete reported input, the `values.forEach(` boundary is encountered before the unrelated typed function header, so `parameterEnd` stays on the arrow's own `target` parameter. The regression now places `function unrelated(x): void {}` before the caller and exercises the untyped `target => { target(); }` callback alongside the typed callback controls, asserting no resolved or unresolved calls to the global target.
+
+This closes the specific backward-search finding by static code and exact-input assertion inspection. The parent reports formal RED with the .95 false call followed by GREEN for JSTS/shared extractor/eval tests; those executions were not repeated by this reviewer. No remaining blocker among the concrete findings in this report is identified after this bounded check. Final whole-suite verification remains the parent's gate. The R01 implementation/self-verification limitation stated above remains applicable; subsequent parent fixes were independently read here. No product/test edits, Go execution, Git changes or additional whole-tree audit were performed in this final check.

@@ -10,7 +10,7 @@
 
 **Spec:** `docs/audits/2026-10-18-residual-functional-audit.md`。R01〜R11のID・再現条件を維持する。
 
-**状態:** 実装中。唯一のactive ExecPlanは本書（ルート`PLAN.md`）。前PLANをcompleted/2026-10-18-audit48-before-residual11.mdへbyte-for-byte保存した。
+**状態:** 11件の実装・全検証・独立レビュー完了、master統合待ち。唯一のactive ExecPlanは本書（ルート`PLAN.md`）。前PLANをcompleted/2026-10-18-audit48-before-residual11.mdへbyte-for-byte保存した。
 
 ## Global Constraints
 
@@ -37,7 +37,7 @@
 - [x] R01〜R11の監査根拠・現在の関連コード・既存の契約を照合し、修正方針と受け入れ条件を定義した。
 - [x] 実装開始時のHEAD・差分を再確認し、専用ブランチ／作業場所を準備してPLANを切り替える。
 - [x] 下記の順序で11件を正式回帰テストへ移し、RED→GREENと問題別コミットを記録する。
-- [ ] 全通常テスト→全race検査、vet、ビルド、OS確認、独立レビューを完了する。
+- [x] 全通常テスト→全race検査、vet、ビルド、OS確認、独立レビューを完了する。
 - [ ] 検証済み変更をmasterへfast-forward統合し、今回のブランチだけを削除して完了を記録する。
 
 実行開始後はUTC時刻、対象ID、RED/GREENコマンドとログ、commit SHA、レビュー結果をこのProgressに対応付ける。計画時点では修正・検証の成功を記録しない。
@@ -305,7 +305,7 @@ Base: `66d8ea87916cdda57d0d3c0ecd8fd26dfc91e07a`。
 
 | ID | 修正コミット | 正式回帰の主要箇所 |
 | --- | --- | --- |
-| R01 | 3061fd4, fb101f4 | jsts/residual11_test.go, app/residual11_test.go |
+| R01 | 3061fd4, fb101f4, 87c3a6f, 959fb84 | jsts/residual11_test.go, app/residual11_test.go |
 | R02 | 365722a | jsts/residual11_test.go |
 | R03 | b818f0b, c625ebd | jsts/residual11_test.go |
 | R04 | 4299a21 | projectmeta/residual11_test.go, app/residual11_test.go |
@@ -332,3 +332,6 @@ Base: `66d8ea87916cdda57d0d3c0ecd8fd26dfc91e07a`。
 Execution 2026-10-18T06:11:27.193555+00:00: R01-typed-boundaries RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
 
 Execution 2026-10-18T06:14:09.177355+00:00: R01-header-scope RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+
+
+全検証完了: 通常→race、vet、3 CLI native/4 target cross、WSL ext4、benchmark比較、ユーザーMCP差分overlay通常→race PASS。検証記録: docs/audits/2026-10-18-residual11-verification.md。
