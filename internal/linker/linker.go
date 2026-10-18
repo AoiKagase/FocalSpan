@@ -66,14 +66,15 @@ func (l *Linker) LinkWithScope(ctx context.Context, facts []projectmeta.Fact, sc
 			continue
 		}
 		from := byHandle[relation.FromHandle]
-		candidatePool := index.candidates(from, relation.UnresolvedTo, orderedFacts)
+		activeFacts := factsForSource(from.FilePath, orderedFacts)
+		candidatePool := index.candidates(from, relation.UnresolvedTo, activeFacts)
 		if len(candidatePool) == 0 {
 			if progress != nil {
 				progress(indexRelation+1, len(relations))
 			}
 			continue
 		}
-		candidates := resolveCandidates(from, relation.UnresolvedTo, candidatePool, orderedFacts, relation.Kind)
+		candidates := resolveCandidates(from, relation.UnresolvedTo, candidatePool, activeFacts, relation.Kind)
 		candidates = preferModuleOwner(from, relation, candidates)
 		if len(candidates) != 1 {
 			if progress != nil {
@@ -87,6 +88,16 @@ func (l *Linker) LinkWithScope(ctx context.Context, facts []projectmeta.Fact, sc
 		}
 	}
 	return l.Store.LinkRelations(ctx, links)
+}
+
+func factsForSource(sourcePath string, facts []projectmeta.Fact) []projectmeta.Fact {
+	active := make([]projectmeta.Fact, 0, len(facts))
+	for _, f := range facts {
+		if f.Kind != "path-alias" {
+			active = append(active, f)
+		}
+	}
+	return append(active, projectmeta.ApplicablePathAliases(sourcePath, facts)...)
 }
 
 // A file dependency identifies its module, not every declaration in it.

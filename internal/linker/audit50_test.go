@@ -144,7 +144,8 @@ func TestF15WildcardSuffixAndStore(t *testing.T) {
 	}
 	defer s.Close()
 	fsAuditCoreSeed(t, s, "src/foo/entry.ts", "dep", "entry", nil)
-	fsAuditCoreSeed(t, s, "src/main.ts", "main", "main", []model.Relation{{FromHandle: "main", UnresolvedTo: "@x/foo/tail", Kind: "imports", Confidence: 1, Source: "audit"}})
+	// The importer belongs to this config; the mapped target may be outside it.
+	fsAuditCoreSeed(t, s, "config/main.ts", "main", "main", []model.Relation{{FromHandle: "main", UnresolvedTo: "@x/foo/tail", Kind: "imports", Confidence: 1, Source: "audit"}})
 	if err := (&Linker{Store: s}).Link(ctx, []projectmeta.Fact{fact}); err != nil {
 		t.Fatal(err)
 	}

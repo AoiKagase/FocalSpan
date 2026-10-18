@@ -78,6 +78,9 @@ func (staticProvider) Parse(ctx context.Context, _ string, file model.SourceFile
 			return facts, []model.Diagnostic{{FilePath: file.Path, Level: "warning", Code: "metadata_toml_invalid", Message: "metadata TOML could not be parsed"}}, nil
 		}
 	case base == "package.json" || base == "tsconfig.json" || base == "jsconfig.json" || base == "composer.json":
+		if base == "tsconfig.json" || base == "jsconfig.json" {
+			add("project-config", base, "", 1)
+		}
 		if err := parseJSONMetadata(text, base, add); err != nil {
 			return facts, []model.Diagnostic{{FilePath: file.Path, Level: "warning", Code: "metadata_json_invalid", Message: "metadata JSON could not be parsed"}}, nil
 		}
