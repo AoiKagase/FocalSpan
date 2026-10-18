@@ -30,12 +30,15 @@ func canonicalParameterKey(tokens []Token) (string, bool) {
 				if t.Text == "(" || t.Text == "[" || t.Text == "<" {
 					d++
 				}
+				if t.Text == ">>" {
+					d -= 2
+				}
 				if t.Text == ")" || t.Text == "]" || t.Text == ">" {
 					d--
 				}
 				if t.Kind == Identifier && d == 0 {
 					idents++
-					if j == 0 || part[j-1].Text != "::" {
+					if (j == 0 || part[j-1].Text != "::") && (j+1 == len(part) || part[j+1].Text != "::") {
 						candidate = j
 					}
 				}
@@ -48,6 +51,36 @@ func canonicalParameterKey(tokens []Token) (string, bool) {
 			}
 			if candidate >= 0 && (idents > 1 || builtins) {
 				part[candidate].Text = ""
+			}
+
+			// Normalize parameter names inside function-pointer/function declarators,
+			// keeping the declarator parentheses and the source signature untouched.
+			for j := 1; j < len(part); j++ {
+				if part[j].Text == "(" && (part[j-1].Text == ")" || part[j-1].Text == "") {
+					depth := 1
+					k := j + 1
+					for k < len(part) && depth > 0 {
+						if part[k].Text == "(" {
+							depth++
+						}
+						if part[k].Text == ")" {
+							depth--
+						}
+						k++
+					}
+					if depth == 0 {
+						key, ok := canonicalParameterKey(part[j+1 : k-1])
+						if ok {
+							if j+1 < k-1 {
+								part[j+1].Text = key
+								for l := j + 2; l < k-1; l++ {
+									part[l].Text = ""
+								}
+							}
+						}
+						j = k - 1
+					}
+				}
 			}
 			var words []string
 			for _, t := range part {

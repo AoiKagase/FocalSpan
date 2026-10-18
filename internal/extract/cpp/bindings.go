@@ -30,7 +30,7 @@ func bindingName(ts []Token) int {
 	builtin := false
 	for i, t := range ts {
 		v := t.Text
-		if v == "return" || v == "throw" || v == "." || v == "->" || v == "&&" || v == "||" || controlWords[v] {
+		if v == "return" || v == "throw" || v == "." || v == "->" || v == "||" || controlWords[v] {
 			return -1
 		}
 		if v == "=" {
@@ -138,6 +138,61 @@ func buildBindingIndex(tokens []Token, decl *declaration) bindingIndex {
 	for i := close + 1; i < len(sig) && sig[i].StartByte < decl.End; i++ {
 		if decl.BodyOpen < 0 || sig[i].StartByte < tokens[decl.BodyOpen].StartByte {
 			continue
+		}
+
+		if sig[i].Text == "for" && i+1 < len(sig) && sig[i+1].Text == "(" {
+			op := i + 1
+			c, ok := pairs[op]
+			if ok {
+				end := op + 1
+				for end < c && sig[end].Text != ";" && sig[end].Text != ":" {
+					end++
+				}
+				if n := bindingName(sig[op+1 : end]); n >= 0 {
+					t := sig[op+1+n]
+					extent := decl.End
+					if c+1 < len(sig) && sig[c+1].Text == "{" {
+						if k, ok := pairs[c+1]; ok {
+							extent = sig[k].EndByte
+						}
+					} else {
+						for k := c + 1; k < len(sig); k++ {
+							if sig[k].Text == ";" {
+								extent = sig[k].EndByte
+								break
+							}
+						}
+					}
+					result = append(result, localBinding{t.Text, t.StartByte, extent})
+				}
+			}
+		}
+		if sig[i].Text == "[" {
+			if c, ok := pairs[i]; ok {
+				body := c + 1
+				if body < len(sig) && sig[body].Text == "(" {
+					if e, ok := pairs[body]; ok {
+						body = e + 1
+					}
+				}
+				for body < len(sig) && (sig[body].Text == "mutable" || sig[body].Text == "noexcept") {
+					body++
+				}
+				if body < len(sig) && sig[body].Text == "{" {
+					if end, ok := pairs[body]; ok {
+						for j := i + 1; j < c; j++ {
+							if sig[j].Kind == Identifier && (j == i+1 || sig[j-1].Text == "," || sig[j-1].Text == "&") {
+								result = append(result, localBinding{sig[j].Text, sig[j].StartByte, sig[end].EndByte})
+							}
+							if sig[j].Text == "=" {
+								for j+1 < c && sig[j+1].Text != "," {
+									j++
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 		// Parameters of catch clauses and lambdas have the following block's scope.
 		if sig[i].Text == "(" && i > 0 && (sig[i-1].Text == "catch" || sig[i-1].Text == "]") {

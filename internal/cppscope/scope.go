@@ -41,7 +41,9 @@ func Resolve(from model.Symbol, target string, symbols []model.Symbol) []model.S
 			if s.Language != "cpp" && s.Language != "c" {
 				continue
 			}
-			if s.QualifiedName != qualified {
+			prefix := strings.TrimSuffix(qualified, strings.TrimPrefix(target, "::"))
+			anonymous := prefix + "(anonymous@" + strings.ReplaceAll(from.FilePath, "\\", "/") + ")::" + strings.TrimPrefix(target, "::")
+			if s.QualifiedName != qualified && s.QualifiedName != anonymous {
 				continue
 			}
 			if strings.Contains(s.QualifiedName, "(anonymous@") && s.FilePath != from.FilePath {

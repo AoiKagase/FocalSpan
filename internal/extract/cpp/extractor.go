@@ -93,6 +93,14 @@ func build(ctx context.Context, file model.SourceFile, parsed parseResult) model
 			continue
 		}
 		if !chosen[decl] {
+			if decl.Kind == "namespace" {
+				for earlier, symbol := range b.byDecl {
+					if earlier.Kind == "namespace" && earlier.Qualified == decl.Qualified {
+						b.byDecl[decl] = symbol
+						break
+					}
+				}
+			}
 			continue
 		}
 		if symbol, ok := b.byDecl[decl]; ok {
@@ -137,6 +145,14 @@ func build(ctx context.Context, file model.SourceFile, parsed parseResult) model
 	}
 	for _, decl := range parsed.Declarations {
 		if !chosen[decl] {
+			if decl.Kind == "namespace" {
+				for earlier, symbol := range b.byDecl {
+					if earlier.Kind == "namespace" && earlier.Qualified == decl.Qualified {
+						b.byDecl[decl] = symbol
+						break
+					}
+				}
+			}
 			continue
 		}
 		symbol, ok := b.byDecl[decl]

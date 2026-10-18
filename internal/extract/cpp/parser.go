@@ -149,7 +149,11 @@ func (p *parser) parseScope(lo, hi int, parent *declaration, namespace, currentT
 			}
 		}
 		if isTypeKeyword(text) {
-			decl, close, ok := p.parseType(position, hi, parent, namespace)
+			typeScope := namespace
+			if currentType != "" && parent != nil {
+				typeScope = parent.Qualified
+			}
+			decl, close, ok := p.parseType(position, hi, parent, typeScope)
 			if ok {
 				p.addDeclaration(decl)
 				if decl.BodyOpen >= 0 && decl.BodyClose > decl.BodyOpen {
@@ -276,29 +280,18 @@ func (p *parser) parseAlias(position, hi int, parent *declaration, namespace str
 	}
 
 	if keyword == "typedef" {
-		name = ""
-		depth := 0
-		for cursor := position + 1; cursor < semi; cursor++ {
-			tok := p.tokens[p.sig[cursor]]
-			v := tok.Text
-			if v == "(" {
-				if cursor+2 < semi && (p.tokens[p.sig[cursor+1]].Text == "*" || p.tokens[p.sig[cursor+1]].Text == "&") && p.tokens[p.sig[cursor+2]].Kind == Identifier {
-					name = p.tokens[p.sig[cursor+2]].Text
-					break
-				}
-				if name != "" {
-					break
-				}
-				depth++
+		names := p.typedefNames(position+1, semi)
+		if len(names) > 0 {
+			name = p.tokens[p.sig[names[0]]].Text
+			for _, j := range names[1:] {
+				n := p.tokens[p.sig[j]].Text
+				p.addDeclaration(&declaration{Kind: kind, Name: n, Qualified: joinQualified(namespace, n), Start: p.sig[j], HeaderEnd: p.tokens[p.sig[semi]].EndByte, End: p.tokens[p.sig[semi]].EndByte, BodyOpen: -1, BodyClose: -1, Parent: parent, Namespace: namespace})
 			}
-			if v == "[" || v == "=" || v == "," {
-				break
-			}
-			if depth == 0 && tok.Kind == Identifier && (cursor+1 >= semi || p.tokens[p.sig[cursor+1]].Text != "::") {
-				name = v
-			}
+		} else {
+			name = ""
 		}
 	}
+
 	if name == "" {
 		return nil, position, false
 	}
@@ -644,4 +637,47 @@ func normalizeInclude(filePath, target string) (string, bool) {
 		return "", false
 	}
 	return clean, true
+}
+
+func (p *parser) typedefNames(lo, hi int) []int {
+	var result []int
+	start, depth, angle := lo, 0, 0
+	for i := lo; i <= hi; i++ {
+		if i == hi || (p.tokens[p.sig[i]].Text == "," && depth == 0 && angle == 0) {
+			candidate := -1
+			for j := start; j < i; j++ {
+				t := p.tokens[p.sig[j]]
+				if t.Text == "(" {
+					if j+2 < i && (p.tokens[p.sig[j+1]].Text == "*" || p.tokens[p.sig[j+1]].Text == "&") && p.tokens[p.sig[j+2]].Kind == Identifier {
+						candidate = j + 2
+					}
+					break
+				}
+				if t.Text == "[" {
+					break
+				}
+				if t.Kind == Identifier && (j+1 == i || p.tokens[p.sig[j+1]].Text != "::") {
+					candidate = j
+				}
+			}
+			if candidate >= 0 {
+				result = append(result, candidate)
+			}
+			start = i + 1
+			continue
+		}
+		switch p.tokens[p.sig[i]].Text {
+		case "(", "[":
+			depth++
+		case ")", "]":
+			depth--
+		case "<":
+			angle++
+		case ">":
+			angle--
+		case ">>":
+			angle -= 2
+		}
+	}
+	return result
 }
