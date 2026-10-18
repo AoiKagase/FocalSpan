@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/focalspan/focalspan/internal/cppscope"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -489,26 +490,13 @@ func (b *builder) resolveCall(index symbolIndex, decl *declaration, name, qualif
 		}
 		return model.Symbol{}, false
 	}
+	lexical := name
 	if qualified != "" {
-		if target, ok := unique(index.byQualified, qualified); ok {
-			return target, true
-		}
-		if target, ok := unique(index.byQualified, joinQualified(decl.Namespace, qualified)); ok {
-			return target, true
-		}
-
-		return model.Symbol{}, false
+		lexical = qualified
 	}
-	if parent := decl.Parent; parent != nil && (parent.Kind == "class" || parent.Kind == "struct") {
-		if target, ok := unique(index.byQualified, parent.Qualified+"::"+name); ok {
-			return target, true
-		}
-	}
-	if target, ok := unique(index.byQualified, joinQualified(decl.Namespace, name)); ok {
-		return target, true
-	}
-	if target, ok := unique(index.byName, name); ok {
-		return target, true
+	candidates := cppscope.Resolve(b.byDecl[decl], lexical, b.result.Symbols)
+	if len(candidates) == 1 {
+		return candidates[0], true
 	}
 	return model.Symbol{}, false
 }

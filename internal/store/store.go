@@ -1000,6 +1000,7 @@ func (s *Store) RelatedCandidateHits(ctx context.Context, handles []string, rela
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	result := make([]model.RelationHit, 0)
+	var cppFilter *cppRelationFilter
 	for _, handle := range handles {
 		camelPattern := ""
 		if relation == "callers" || relation == "tests" {
@@ -1018,6 +1019,21 @@ func (s *Store) RelatedCandidateHits(ctx context.Context, handles []string, rela
 		rows.Close()
 		if scanErr != nil {
 			return nil, scanErr
+		}
+
+		for _, hit := range hits {
+			if !hit.Context.Resolved && hit.Candidate.Language == "cpp" && (hit.Context.Kind == "callers" || hit.Context.Kind == "callees" || hit.Context.Kind == "tests" || hit.Context.Kind == "neighbors") {
+				if cppFilter == nil {
+					cppFilter, err = s.loadCPPRelationFilter(ctx)
+					if err != nil {
+						return nil, err
+					}
+				}
+				break
+			}
+		}
+		if cppFilter != nil {
+			hits = cppFilter.filter(handle, hits)
 		}
 		result = append(result, hits...)
 	}

@@ -3,6 +3,7 @@ package linker
 import (
 	"context"
 	"errors"
+	"github.com/focalspan/focalspan/internal/cppscope"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -68,6 +69,9 @@ func (l *Linker) LinkWithScope(ctx context.Context, facts []projectmeta.Fact, sc
 		from := byHandle[relation.FromHandle]
 		activeFacts := factsForSource(from.FilePath, orderedFacts)
 		candidatePool := index.candidates(from, relation.UnresolvedTo, activeFacts)
+		if from.Language == "cpp" && (relation.Kind == "calls" || relation.Kind == "tests") {
+			candidatePool = symbols
+		}
 		if len(candidatePool) == 0 {
 			if progress != nil {
 				progress(indexRelation+1, len(relations))
@@ -295,6 +299,12 @@ func linkerPythonPaths(importer, target string) []string {
 
 func resolveCandidates(from model.Symbol, target string, symbols []model.Symbol, facts []projectmeta.Fact, relationKind string) []model.Symbol {
 	target = strings.TrimSpace(target)
+	if from.Language == "cpp" && (relationKind == "calls" || relationKind == "tests") {
+		return cppscope.Resolve(from, target, symbols)
+	}
+	if from.Language == "cpp" && (relationKind == "calls" || relationKind == "tests") && (strings.Contains(target, ".") || strings.Contains(target, "->")) {
+		return nil
+	}
 	if target == "" {
 		return nil
 	}

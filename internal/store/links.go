@@ -31,6 +31,9 @@ func (s *Store) Relations(ctx context.Context) ([]model.Relation, error) {
 func (s *Store) Symbols(ctx context.Context) ([]model.Symbol, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	return s.symbolsUnlocked(ctx)
+}
+func (s *Store) symbolsUnlocked(ctx context.Context) ([]model.Symbol, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT symbols.handle, files.path, files.language, symbols.kind, symbols.name, symbols.qualified_name, symbols.signature, symbols.start_line, symbols.end_line, symbols.start_byte, symbols.end_byte, COALESCE(symbols.parent_handle, ''), symbols.confidence FROM symbols JOIN files ON files.id = symbols.file_id ORDER BY files.path, symbols.start_line, symbols.handle`)
 	if err != nil {
 		return nil, err
