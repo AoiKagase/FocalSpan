@@ -415,11 +415,14 @@ func (p *parser) functionHeaderLikely(start, name, open int, currentType string)
 	if nameText == "." || nameText == "->" || nameText == "*" || nameText == "&" || nameText == "]" || nameText == "[" {
 		return false
 	}
-	if name == start {
+	if name < start {
 		return false
 	}
 	if currentType != "" && (nameText == currentType || nameText == "~"+currentType) {
 		return true
+	}
+	if name == start {
+		return false
 	}
 	for cursor := start; cursor < name; cursor++ {
 		text := p.tokens[p.sig[cursor]].Text
