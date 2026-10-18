@@ -373,7 +373,7 @@ func (p *parser) parseFunction(position, hi int, parent *declaration, namespace,
 	if parent != nil && parent.Kind == "class" && (kind == "function" || kind == "method") {
 		kind = "method"
 	}
-	decl := &declaration{Kind: kind, Name: name, Qualified: qualified, Start: p.sig[position], HeaderEnd: headerEnd, End: p.endAfter(p.sig[endPosition], hi), BodyOpen: bodyOpen, BodyClose: bodyClose, Parent: parent, Namespace: namespace, SignatureKey: joinTokens(p.tokens, p.sig[openPosition+1:closePosition])}
+	decl := &declaration{Kind: kind, Name: name, Qualified: qualified, Start: p.sig[position], HeaderEnd: headerEnd, End: p.endAfter(p.sig[endPosition], hi), BodyOpen: bodyOpen, BodyClose: bodyClose, Parent: parent, Namespace: namespace, SignatureKey: p.callableTypeKey(openPosition, closePosition, bodyOpen)}
 	return decl, endPosition, true
 }
 
