@@ -45,7 +45,7 @@ const (
 	PhaseLinking  = "linking"
 	PhaseComplete = "complete"
 
-	extractorVersion = "extractors-v18-audit50-extraction-linking"
+	extractorVersion = "extractors-v19-residual11-functional"
 	// ExtractorVersion is the version required for a readable, current index.
 	ExtractorVersion = extractorVersion
 )
