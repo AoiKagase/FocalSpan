@@ -29,6 +29,7 @@ type rubyLine struct {
 	Start, End int
 	Indent     int
 	Text       string
+	Original   string
 }
 type rubyDeclaration struct {
 	Kind, Name, Qualified, Header string
@@ -75,7 +76,7 @@ func buildRuby(ctx context.Context, file model.SourceFile, tokens []Token, diagn
 	result.Chunks = append(result.Chunks, rubySyntheticChunk(file, owner, "module-outline", "module "+ownerName))
 	code := append([]byte(nil), file.Content...)
 	for _, token := range tokens {
-		if token.Kind == Heredoc || token.Kind == BlockComment {
+		if token.Kind == Heredoc || token.Kind == BlockComment || token.Kind == Comment || token.Kind == String || token.Kind == PercentLiteral || token.Kind == Regex || token.Kind == Interpolation {
 			for at := token.StartByte; at < token.EndByte; at++ {
 				if code[at] != '\n' && code[at] != '\r' {
 					code[at] = ' '
@@ -84,6 +85,10 @@ func buildRuby(ctx context.Context, file model.SourceFile, tokens []Token, diagn
 		}
 	}
 	lines := rubyLines(code)
+	originalLines := rubyLines(file.Content)
+	for index := range lines {
+		lines[index].Original = originalLines[index].Text
+	}
 	declarations := parseRuby(lines)
 	byDecl := make(map[*rubyDeclaration]model.Symbol)
 	for _, decl := range declarations {
@@ -109,9 +114,9 @@ func buildRuby(ctx context.Context, file model.SourceFile, tokens []Token, diagn
 	index := rubyIndex(result.Symbols)
 	for lineIndex, line := range lines {
 		text := strings.TrimSpace(line.Text)
-		if strings.HasPrefix(text, "require") || strings.HasPrefix(text, "require_relative") {
+		if rubyCodeStarts(text, "require", "require_relative") {
 			result.Chunks = append(result.Chunks, rubySourceChunk(file, owner, "import", line.Start, line.End, lineIndex+1, lineIndex+1))
-			if target := rubyRequireTarget(text); target != "" {
+			if target := rubyRequireLiteral(file.Content, tokens, line); target != "" {
 				addRubyRelation(&result, model.Relation{FromHandle: owner.Handle, UnresolvedTo: target, Kind: "imports", Confidence: .9, Source: "ruby-require"})
 			}
 		}
@@ -166,6 +171,10 @@ func parseRuby(lines []rubyLine) []*rubyDeclaration {
 	decorators := make([]string, 0)
 	for index, line := range lines {
 		text := strings.TrimSpace(line.Text)
+		raw := strings.TrimSpace(line.Original)
+		if line.Original == "" {
+			raw = text
+		}
 		if text == "" || strings.HasPrefix(text, "#") {
 			continue
 		}
@@ -202,13 +211,13 @@ func parseRuby(lines []rubyLine) []*rubyDeclaration {
 				kind = "test"
 			}
 			decl = &rubyDeclaration{Kind: kind, Name: name, Header: text, StartLine: index + 1, Depth: depth}
-		} else if match := rubyTest.FindStringSubmatch(text); len(match) >= 3 {
+		} else if match := rubyTest.FindStringSubmatch(raw); len(match) >= 3 && rubyCodeStarts(text, "it", "specify", "test") {
 			name := match[1]
 			if name == "" {
 				name = match[2]
 			}
 			decl = &rubyDeclaration{Kind: "test", Name: name, Header: text, StartLine: index + 1, Depth: depth}
-		} else if match := rubyAttr.FindStringSubmatch(text); len(match) == 2 {
+		} else if match := rubyAttr.FindStringSubmatch(raw); len(match) == 2 && rubyCodeStarts(text, "attr_reader", "attr_writer", "attr_accessor") {
 			name := strings.TrimSpace(strings.TrimPrefix(match[1], ":"))
 			name = strings.Trim(name, "\"'")
 			decl = &rubyDeclaration{Kind: "accessor", Name: name, Header: text, StartLine: index + 1, Depth: depth}
@@ -220,6 +229,7 @@ func parseRuby(lines []rubyLine) []*rubyDeclaration {
 			decl = &rubyDeclaration{Kind: "define_method", Name: match[1], Header: text, StartLine: index + 1, Depth: depth}
 		}
 		if decl != nil {
+			decl.Header = raw
 			if len(stack) > 0 {
 				parent := stack[len(stack)-1].decl
 				if parent != nil && parent.StartLine < decl.StartLine {
@@ -270,6 +280,33 @@ func parseRuby(lines []rubyLine) []*rubyDeclaration {
 		}
 	}
 	return declarations
+}
+
+func rubyCodeStarts(text string, names ...string) bool {
+	for _, name := range names {
+		if text == name || strings.HasPrefix(text, name+" ") || strings.HasPrefix(text, name+"\t") || strings.HasPrefix(text, name+"(") {
+			return true
+		}
+	}
+	return false
+}
+
+func rubyRequireLiteral(source []byte, tokens []Token, line rubyLine) string {
+	for _, token := range tokens {
+		if token.Kind != String || token.StartByte < line.Start || token.StartByte >= line.End {
+			continue
+		}
+		prefix := strings.TrimSpace(string(source[line.Start:token.StartByte]))
+		prefix = strings.TrimSpace(strings.TrimSuffix(prefix, "("))
+		if prefix != "require" && prefix != "require_relative" {
+			return ""
+		}
+		if strings.Contains(token.Text, "#{") {
+			return ""
+		}
+		return rubyRequireTarget(token.Text)
+	}
+	return ""
 }
 
 func rubyMethodName(header string) string {

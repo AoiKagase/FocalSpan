@@ -65,7 +65,7 @@ func Lex(ctx context.Context, source []byte) ([]Token, []model.Diagnostic, error
 			tokens = append(tokens, rubyToken(Symbol, source, start, at))
 			continue
 		}
-		if source[at] == '%' && at+2 < len(source) && (source[at+1] == 'w' || source[at+1] == 'i' || source[at+1] == 'q') {
+		if source[at] == '%' && at+2 < len(source) && strings.ContainsRune("wWiIqQrxs", rune(source[at+1])) {
 			end := percentEnd(source, at)
 			tokens = append(tokens, rubyToken(PercentLiteral, source, start, end))
 			at = end
