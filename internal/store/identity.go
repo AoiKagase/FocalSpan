@@ -25,3 +25,23 @@ func (s *Store) SymbolsForIdentity(ctx context.Context, path, name, kind string)
 	}
 	return result, rows.Err()
 }
+
+// Some file owners (notably Go packages) have no chunk of their own.
+func (s *Store) FileOwnerHandles(ctx context.Context, path string) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows, err := s.db.QueryContext(ctx, `SELECT symbols.handle FROM symbols JOIN files ON files.id=symbols.file_id WHERE files.path=? AND symbols.kind IN ('module','package') AND COALESCE(symbols.parent_handle,'')='' ORDER BY symbols.handle`, path)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	handles := []string{}
+	for rows.Next() {
+		var handle string
+		if err := rows.Scan(&handle); err != nil {
+			return nil, err
+		}
+		handles = append(handles, handle)
+	}
+	return handles, rows.Err()
+}

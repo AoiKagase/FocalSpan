@@ -267,7 +267,8 @@ func (s *Service) impactCandidates(ctx context.Context, base, head string) (cand
 			rangesByPath[file.Path] = append(rangesByPath[file.Path], file.Ranges...)
 		}
 	}
-	if err := s.validateImpactSources(ctx, rangesByPath); err != nil {
+	verification, err := s.validateImpactSources(ctx, rangesByPath)
+	if err != nil {
 		return candidateResult{}, err
 	}
 	paths := make([]string, 0, len(rangesByPath))
@@ -289,7 +290,26 @@ func (s *Service) impactCandidates(ctx context.Context, base, head string) (cand
 			}
 		}
 	}
+	related, err := s.impactRelationCandidates(ctx, selected)
+	if err != nil {
+		return candidateResult{}, err
+	}
+	seen := make(map[string]bool, len(selected))
+	for _, candidate := range selected {
+		seen[candidate.Handle] = true
+	}
+	for _, candidate := range related {
+		valid, err := verification.verify(ctx, s, candidate.Path)
+		if err != nil {
+			return candidateResult{}, err
+		}
+		if valid && !seen[candidate.Handle] {
+			seen[candidate.Handle] = true
+			selected = append(selected, candidate)
+		}
+	}
 	selected = rank.RankWithPlan(selected, plan)
+	sort.SliceStable(selected, func(i, j int) bool { return selected[i].Changed && !selected[j].Changed })
 	if len(selected) > s.Config.MaxCandidates {
 		selected = selected[:s.Config.MaxCandidates]
 	}

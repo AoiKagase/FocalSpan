@@ -71,6 +71,12 @@ func (p *Packer) Pack(req model.PackRequest) model.ContextBundle {
 	}
 	bundle := model.ContextBundle{Query: req.Query, IndexRevision: req.IndexRevision, BudgetTokens: budget, Items: make([]model.ContextItem, 0)}
 	testIntent := hasTestIntent(req.Query, req.IntentHints)
+	impactIntent := false
+	for _, hint := range req.IntentHints {
+		if hint == "impact" {
+			impactIntent = true
+		}
+	}
 	hasTestCandidate := false
 	hasNonDocumentationCandidate := false
 	hasStructuralCandidate := false
@@ -117,7 +123,7 @@ func (p *Packer) Pack(req model.PackRequest) model.ContextBundle {
 				continue
 			}
 			testItems++
-		} else if !testIntent && hasProductionCandidate && candidate.Language != "" && isTestCandidate(candidate) {
+		} else if !testIntent && !impactIntent && hasProductionCandidate && candidate.Language != "" && isTestCandidate(candidate) {
 			bundle.OmittedCount++
 			bundle.Truncated = true
 			continue

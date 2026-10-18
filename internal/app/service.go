@@ -277,7 +277,7 @@ func (s *Service) impactRead(ctx context.Context, base, head string, tokenBudget
 	if err != nil {
 		return model.ContextBundle{}, err
 	}
-	bundle, err := s.packWithSavings(ctx, model.PackRequest{Query: "Git impact", TokenBudget: tokenBudget, Mode: "source", Candidates: result.Candidates})
+	bundle, err := s.packWithSavings(ctx, model.PackRequest{Query: "Git impact", TokenBudget: tokenBudget, Mode: "source", Candidates: result.Candidates, IntentHints: []string{"impact"}})
 	if err != nil {
 		return model.ContextBundle{}, err
 	}
