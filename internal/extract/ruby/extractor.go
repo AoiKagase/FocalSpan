@@ -26,10 +26,11 @@ func (Extractor) Supports(path, language string) bool {
 }
 
 type rubyLine struct {
-	Start, End int
-	Indent     int
-	Text       string
-	Original   string
+	Start, End     int
+	Indent         int
+	Text           string
+	Original       string
+	LiteralEndLine int
 }
 type rubyDeclaration struct {
 	Kind, Name, Qualified, Header string
@@ -88,6 +89,13 @@ func buildRuby(ctx context.Context, file model.SourceFile, tokens []Token, diagn
 	originalLines := rubyLines(file.Content)
 	for index := range lines {
 		lines[index].Original = originalLines[index].Text
+	}
+	for _, token := range tokens {
+		if token.Kind == String || token.Kind == PercentLiteral || token.Kind == Heredoc {
+			if token.StartLine > 0 && token.StartLine <= len(lines) && token.EndLine > lines[token.StartLine-1].LiteralEndLine {
+				lines[token.StartLine-1].LiteralEndLine = token.EndLine
+			}
+		}
 	}
 	declarations := parseRuby(lines)
 	byDecl := make(map[*rubyDeclaration]model.Symbol)
@@ -169,7 +177,11 @@ func parseRuby(lines []rubyLine) []*rubyDeclaration {
 	}, 0)
 	depth := 0
 	decorators := make([]string, 0)
+	skipThrough := -1
 	for index, line := range lines {
+		if index <= skipThrough {
+			continue
+		}
 		text := strings.TrimSpace(line.Text)
 		raw := strings.TrimSpace(line.Original)
 		if line.Original == "" {
@@ -246,6 +258,13 @@ func parseRuby(lines []rubyLine) []*rubyDeclaration {
 			}
 			declarations = append(declarations, decl)
 			decorators = nil
+		}
+		if decl != nil {
+			if end, ok := rubyEndlessEnd(lines, index); ok {
+				decl.EndLine = end + 1
+				skipThrough = end
+				continue
+			}
 		}
 		delta := rubyDepthDelta(text)
 		depth += delta

@@ -68,3 +68,49 @@ func TestR06RubyLiteralConsumers(t *testing.T) {
 		}
 	}
 }
+
+func TestR07RubyEndlessMethods(t *testing.T) {
+	for _, tc := range []struct {
+		first string
+		end   int
+	}{
+		{"def first = 1\n", 1}, {"def first(x = 1) = x\n", 1}, {"def self.first(x) = x\n", 1},
+		{"def first = [\n  1,\n  2\n]\n", 4}, {"def first = begin\n  value()\nend\n", 3},
+		{"def first = \"one\ntwo\"\n", 2}, {"def first =\n  1\n", 2},
+	} {
+		source := tc.first + "def second\n  2\nend\n"
+		x, e := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "a.rb", Language: "ruby", Content: []byte(source)})
+		if e != nil {
+			t.Fatal(e)
+		}
+		first, second := false, false
+		for _, s := range x.Symbols {
+			if s.Name == "first" {
+				first = true
+				if s.EndLine != tc.end {
+					t.Errorf("%q first ends at %d want %d", tc.first, s.EndLine, tc.end)
+				}
+			}
+			if s.Name == "second" {
+				second = true
+				if s.ParentHandle != "" || s.QualifiedName != "second" {
+					t.Errorf("second is not independent: %+v", s)
+				}
+			}
+		}
+		if !first || !second {
+			t.Errorf("declarations missing: %+v", x.Symbols)
+		}
+	}
+	for _, first := range []string{"def first(x = 1)\n  x\nend\n", "def first x = 1\n  x\nend\n", "def value=(x)\n  @value = x\nend\n"} {
+		x, e := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "a.rb", Language: "ruby", Content: []byte(first + "def second\nend\n")})
+		if e != nil {
+			t.Fatal(e)
+		}
+		for _, s := range x.Symbols {
+			if s.StartLine == 1 && s.Kind != "module" && s.EndLine != 3 {
+				t.Errorf("normal method misread as endless: %+v", s)
+			}
+		}
+	}
+}
