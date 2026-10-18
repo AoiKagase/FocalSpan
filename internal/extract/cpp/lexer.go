@@ -70,7 +70,16 @@ func Lex(ctx context.Context, content []byte) ([]Token, []model.Diagnostic, erro
 		}
 		if value == '/' && index+1 < len(content) && content[index+1] == '/' {
 			index += 2
-			for index < len(content) && content[index] != '\n' {
+			for index < len(content) {
+				if content[index] == '\n' {
+					j := index - 1
+					if j >= start && content[j] == '\r' {
+						j--
+					}
+					if j < start || content[j] != '\\' {
+						break
+					}
+				}
 				index++
 			}
 			result = append(result, makeToken(LineComment, content, mapa, start, index, active))
