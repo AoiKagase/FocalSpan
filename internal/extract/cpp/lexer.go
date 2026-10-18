@@ -59,6 +59,7 @@ func Lex(ctx context.Context, content []byte) ([]Token, []model.Diagnostic, erro
 			lineStart = true
 			continue
 		}
+		wasLineStart := lineStart
 		lineStart = false
 		if value == ' ' || value == '\t' || value == '\r' || value == '\f' {
 			index++
@@ -100,6 +101,7 @@ func Lex(ctx context.Context, content []byte) ([]Token, []model.Diagnostic, erro
 				index = len(content)
 				diagnostics = append(diagnostics, model.Diagnostic{Level: "warning", Code: "cpp_unclosed_comment", Message: "block comment is not closed"})
 			}
+			lineStart = wasLineStart || strings.Contains(string(content[start:index]), "\n")
 			result = append(result, makeToken(BlockComment, content, mapa, start, index, active))
 			continue
 		}
@@ -348,4 +350,50 @@ func cppDirectiveFields(text string) []string {
 		at++
 	}
 	return strings.Fields(strings.TrimPrefix(strings.TrimSpace(code.String()), "#"))
+}
+
+// directiveWithoutComments treats comments and escaped newlines as whitespace while preserving quoted operands.
+func directiveWithoutComments(s string) string {
+	var out strings.Builder
+	for i := 0; i < len(s); {
+		if s[i] == '"' || s[i] == '\'' {
+			start := i
+			i = consumeQuoted([]byte(s), i)
+			if i <= start {
+				i = start + 1
+			}
+			out.WriteString(s[start:i])
+			continue
+		}
+		if i+1 < len(s) && s[i:i+2] == "/*" {
+			i += 2
+			for i+1 < len(s) && s[i:i+2] != "*/" {
+				i++
+			}
+			if i+1 < len(s) {
+				i += 2
+			} else {
+				i = len(s)
+			}
+			out.WriteByte(' ')
+			continue
+		}
+		if i+1 < len(s) && s[i:i+2] == "//" {
+			break
+		}
+		if s[i] == '\\' && i+1 < len(s) {
+			j := i + 1
+			if s[j] == '\r' {
+				j++
+			}
+			if j < len(s) && s[j] == '\n' {
+				out.WriteByte(' ')
+				i = j + 1
+				continue
+			}
+		}
+		out.WriteByte(s[i])
+		i++
+	}
+	return out.String()
 }

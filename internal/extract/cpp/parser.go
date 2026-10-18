@@ -431,7 +431,7 @@ func (p *parser) parseDirectives() {
 		if token.Kind != Preprocessor || !token.Active {
 			continue
 		}
-		line := strings.TrimSpace(token.Text)
+		line := strings.TrimSpace(directiveWithoutComments(token.Text))
 		if match := includePattern.FindStringSubmatch(line); len(match) == 4 {
 			source := "cpp:include:angle"
 			if match[2] == `"` {
