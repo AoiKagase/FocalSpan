@@ -1,340 +1,398 @@
-# 残存11件の機能・整合性修正 Implementation Plan
+# C++監査20件の機能修正 Implementation Plan
 
-> **For agentic workers:** `superpowers:executing-plans`で順次実装する。各問題の正式な回帰テストでRED→GREENを確認する。実装の並列化は前提にせず、最終の独立レビューは実装担当とは別のレビュー担当で行う。
+> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans` を使用し、以下を順に実行する。共有するパーサーを扱うため実装は直列とし、最後に独立レビューを行う。
 
-**Goal:** 監査R01〜R11の誤接続・依存欠落・範囲誤認・評価誤診断・統計不整合を修正する。
+**Goal:** 監査CP01〜CP20を正式回帰テストで修正し、C++の宣言・原文範囲・呼出し・モジュール関係と検索結果を一致させる。
 
-**Architecture:** 既存の抽出器、metadata facts、linker、範囲付き検索、共有読取りロック、Evidence compilerを拡張する。動的な束縛から確定関係を推測せず、ファイル依存と名前付きシンボルを区別する。Impactは現在の索引の構文関係を1段探索する。
+**Architecture:** 字句解析、宣言解析、呼出し分類、名前解決、公開検索の順に修正する。既存の静的・保守的解析を維持し、確定できない関係を同名シンボルへ推測接続しない。共有するC++名前探索規則を抽出・リンク・未解決関係の検索に適用する。
 
-**Tech Stack:** Go 1.26以上、既存SQLite・MCP SDK・各言語の静的抽出器。新規依存なし。
+**Tech Stack:** Go、既存C++トークンパーサー、SQLite/FTS5、既存Evidence/MCPテスト。新規依存なし。
 
-**Spec:** `docs/audits/2026-10-18-residual-functional-audit.md`。R01〜R11のID・再現条件を維持する。
-
-**状態:** 完了。11件の実装・全検証・独立レビュー・master統合・今回ブランチ削除を完了した。唯一のactive ExecPlanは本書（ルート`PLAN.md`）。前PLANをcompleted/2026-10-18-audit48-before-residual11.mdへbyte-for-byte保存した。
-
-## Global Constraints
-
-- セキュリティ監査・修正・新規の再現検証は対象外。以前除外したF02/F03、依存脆弱性評価、原因未確定のsupervisor EOFを含めない。今回のR01〜R11は機能・索引整合性の問題として扱う。
-- MCP公開フィールド、Evidence v1/v2、DBスキーマを維持する。原文bytes・行位置・非重複・実測wire予算・MCP stdoutのプロトコル専用性を守る。
-- 新規依存、ネットワーク、外部LLM、解析対象コードの実行、package restoreを追加しない。既存のローカルGo依存とGit fixtureを使い、Go検証では`GOPROXY=off`・`GOSUMDB=off`とする。
-- 既存の未コミット変更・設定・索引・他セッションの作業を保持する。専用の作業場所で実装し、対象パス／対象hunkだけをstageする。pushと稼働バイナリ置換は含めない。
-- 現在の共有／排他ロック、5秒待機、キャンセル、BusyError、未完了索引の検索拒否を維持する。通常テストとrace検査は直列で実行する。
-
-## Review Focus
-
-- 局所束縛を除外した呼出しが、後段linkerで同名大域関数へ再接続されないこと（R01）。抽出器だけでなく実索引の回帰テストを持つ。
-- aliasを持たない内側の設定も境界となり、外側・隣接プロジェクトのaliasを誤って継承しないこと（R04）。設定の追加・削除の増分更新も検証する。
-- 同じ対象ファイルにmodule・関数・型が同居しても、ファイル依存の解決と名前付きシンボルの解決を混同しないこと（R05）。
-- 非変更ファイルをImpactへ追加する際も現在の本文を検証し、複数アンカー・循環・予算不足で変更箇所やprovenanceを失わないこと（R09）。
-- 再抽出・索引済み判定・内容変更件数を分離し、候補上限や更新経路による評価・統計の変化をなくすこと（R10/R11）。
+**Spec:** `docs/audits/2026-10-18-cpp-focused-audit.md` および同名JSON。監査基準HEADは `ca46099c2b190ba03539dc092794d9473e21c5bd`。20件、失敗再現27条件、成功対照7条件。件数を増減させる再分類は行わない。
 
 ## Purpose / Big Picture
 
-前回の修正後の`master@66d8ea87916cdda57d0d3c0ecd8fd26dfc91e07a`と既存の未コミット変更を含む監査で、11件を再現した。修正後は偽の宣言・関係を減らし、通常の相対import、Impactの依存元・関連テスト、評価の索引済み判定を正しく返す。件数を合わせるための新規項目追加や、除外済み項目の再導入はしない。
+数字区切り・BOM・template・namespace・関数宣言を理由に後続のシンボルが消える問題、関数の本文範囲が欠ける問題、同名関数への誤接続、正しい関係が検索に届かない問題を修正する。各IDについて修正前FAILと修正後PASSを残し、Query/Expand/Impactまで必要な経路を検証する。
+
+このファイルは**実行承認前の提案計画**である。現時点では完了済みルート`PLAN.md`を置き換えず、製品コードも変更しない。実装開始時に後述の計画移行を行う。
+
+## Global Constraints
+
+1. サイバーセキュリティ項目、脆弱性診断、権限・境界対策の追加、原因未確定のsupervisor EOFを対象外とする。今回の20件はC++機能上の不整合である。
+2. MCP公開フィールド、Evidence形式、DBスキーマを維持する。原文のバイト列・行位置、wire予算、共有検索ロック、更新設定、候補範囲と順位の契約を維持する。
+3. 新規依存・ネットワーク・外部LLM・解析対象C++のコンパイル／実行・パッケージ復元を追加しない。通常のGo製品／テスト検証と、解析対象コードの実行を区別する。
+4. 既存dirtyファイル、稼働DB、設定、バイナリ、未知のロックを保持する。pushと`H:/bin/focalspan.exe`への再配置は行わない。
+5. 不明な型、動的receiver、macro展開、完全なoverload/virtual dispatch、template実体化、全C++規格の実装は行わない。解析不能・曖昧な入力は保守的に未解決とし、既存diagnostic経路が適用できる場合に記録する。
+
+## Review Focus
+
+以下の5観点には所有タスクで名前付き回帰テストを置く。
+
+1. **原文境界:** BOM・CRLF・数字区切り・コメント継続でも元バイト位置を保持する。Task 1〜4の`SourceOffsets`。
+2. **宣言と式の区別:** custom type、template header、operator、initializer、requires、catchの境界を誤認しない。Task 8〜13の`DeclarationBoundary`。
+3. **遮蔽と明示修飾:** parameter/local/block/callback/receiver/`::`で、後段linkerも誤接続を復活させない。Task 16〜19の`NoFalseEdgeAfterIndex`。
+4. **索引間の一致:** 同名関数の別namespace追加、module提供元の変更・削除で、差分索引と全索引が同じ意味上の関係集合になる。Task 19〜21の`IncrementalParity`。
+5. **公開原文契約:** Query/Expand/Impactのsource、行位置、role、既知handle、不変条件、実測wire予算が修正後も成立する。Task 21の`EvidenceContract`。
 
 ## Progress
 
-- [x] R01〜R11の監査根拠・現在の関連コード・既存の契約を照合し、修正方針と受け入れ条件を定義した。
-- [x] 実装開始時のHEAD・差分を再確認し、専用ブランチ／作業場所を準備してPLANを切り替える。
-- [x] 下記の順序で11件を正式回帰テストへ移し、RED→GREENと問題別コミットを記録する。
-- [x] 全通常テスト→全race検査、vet、ビルド、OS確認、独立レビューを完了する。
-- [x] 検証済み変更をmasterへfast-forward統合し、今回のブランチだけを削除して完了を記録する。
+- [x] 監査20件と再現fixture、既存の計画ポリシーを照合した。
+- [x] 修正順序、内部インターフェース、受け入れ条件を計画化した。
+- [ ] 実装承認後にTask 0を実施し、ここからルートPLANへ移行する。
+- [ ] Task 1〜20のRED→GREENとID別コミットを完了する。
+- [ ] Task 21の更新移行・全検証・独立レビュー・統合を完了する。
 
-実行開始後はUTC時刻、対象ID、RED/GREENコマンドとログ、commit SHA、レビュー結果をこのProgressに対応付ける。計画時点では修正・検証の成功を記録しない。
+実行時はUTC日時、実際のコマンド、終了コード、証跡パスを追記する。未実行の検証を完了扱いにしない。
 
 ## Surprises & Discoveries
 
-R04のalias誤適用は、対象ファイルにmodule以外の宣言があるとR05の解決不能によって隠れる。両方を単一fixtureで確認せず、moduleだけの対照と宣言付きの対照を分ける。
-
-R01は抽出時のToHandleだけを空にしても不十分である。同名のUnresolvedToを残せば後段linkerが確定接続できるため、局所束縛による動的呼出しを同名大域関数の候補として登録しない。
-
-Impactの現行Evidence分類は変更候補を`change`、関係候補を`dependent`とする。R09でもこの既存分類を維持し、test由来はRelationContext／既存whyコードで保持する。新たな公開roleやフィールドを増やさない。
-
-## Decision Log / 確定方針
-
-| 論点 | 決定 |
-|---|---|
-| R01の動的な局所呼出し | 大域関数への確定・名前だけの候補関係を生成しない。解釈できない束縛は保守的に扱い、解析対象コードを実行しない。 |
-| R02のモジュール式 | 引数が単独の静的文字列と確認できる場合だけモジュール候補を生成する。連結・変数・式から部分文字列を抽出しない。無置換templateは既存lexerが静的値として安全に取得できる場合に限る。 |
-| R04の設定選択 | 呼出し元を含む最も近い祖先ディレクトリのtsconfig/jsconfigを選ぶ。同じ階層ではtsconfigを優先する。設定にaliasがなくても外側設定へのfallbackはしない。`extends`、project references、include/excludeによる完全なTypeScript project解決は追加しない。 |
-| R05の解決単位 | JS/TSのファイル依存では一致した単一ファイルのmodule所有者を選ぶ。名前付きsymbol関係や他言語へ無条件に適用しない。候補ファイルが複数なら未解決のままにする。 |
-| R09の契約 | 説明を縮小するだけの対応は採らず、変更シンボルから既存の構文関係を1段探索して依存元・関連テストを追加する。推移閉包・実行時意味解析は追加しない。 |
-| R10の索引済み判定 | retrieval用の候補上限から切り離し、パス・シンボル・kindをDB上で直接判定する。レポートschemaと既存指標の定義は維持する。 |
-| R11の統計 | added/changed/unchangedはソースの存在とハッシュによる分類を維持する。関係再構築のための再抽出回数を加算しない。 |
-| 既存索引の移行 | 全抽出修正を含む共有のextractor version更新を1コミットで行う。既存索引は次の正規更新で再抽出される。DB migrationは追加しない。 |
-
-## Context and Orientation
-
-抽出結果のSymbols/Chunks/Relationsは`internal/extract/*`から`internal/indexer`へ渡り、`internal/store`へ保存され、`internal/linker`が未解決関係を解決する。metadata factsは`internal/projectmeta`が走査済みファイルから作り、manifest revisionが変わると再抽出・再リンクされる。
-
-`internal/app/evidence.go`の`impactCandidates`は旧形式ImpactとEvidence形式Impactの共通取得経路である。`internal/app/read.go`が取得から最終リビジョンまで共有ロックを保持する。R09はこの内側で行い、内部ヘルパーから共有ロックを重複取得しない。
-
-一時再現の入口は`C:/Temp/fs-residual-audit-20261018.py`、証拠は`C:/Temp/fs-residual-audit-20261018/`。正式テストの実行依存にはしない。fixtureとassertionをリポジトリへ移し、外部一時ファイルがなくても再現できる状態にする。
-
-## Plan of Work
-
-実装順序はR01→R02→R03→R05→R04→R06→R07→R08→R10→R11→R09。共有linker処理はR05を先に整え、R04とR09は前提となる関係の精度を確認してから実装する。
-
-各Taskの5段階を順に完了する。テスト名は固定し、既存の`audit50_test.go`を無関係に書き換えず、新しい回帰テストファイルへ追加する。複数IDの共有変更はcommitの責任範囲と依存関係を明記する。
-
-### 準備 — 作業場所とPLANの切替
-
-- [x] HEAD・master・既存差分・添付worktreeを確認し、既存ユーザーファイルのハッシュ／差分を記録する。計画時点のHEADを無条件に現在値と見なさない。
-- [x] `codex/residual-11-functional-fixes`をmasterから作り、管理された隔離worktreeで実装する。既存変更をreset・clean・stashしない。
-- [x] 現行の完了済み`PLAN.md`を`docs/superpowers/plans/completed/2026-10-18-audit48-before-residual11.md`へbyte-for-byte保存し、SHA256一致を確認する。同名ファイルが存在したら上書きしない。
-- [x] 承認された本計画をルート`PLAN.md`へ切り替え、監査報告を含む文書差分だけでPLAN切替をコミットする。候補ファイルは後続の編集元にせず、以後の進捗はルートPLANだけに記録する。
-- [x] 再現fixtureを`testdata/regressions/residual11/`、回帰テストを各packageの`residual11_test.go`へ移す。各IDの修正前FAILはそのIDの着手時に記録する。
-
-### Task R01 — JS/TSの束縛と呼出し先
-
-**Files:** `internal/extract/jsts/extractor.go`、`parser.go`、新規`bindings.go`、`internal/extract/jsts/residual11_test.go`、`internal/app/residual11_test.go`。
-
-**Interfaces:** Tokenのbyte位置とdeclarationの親子範囲から内部`bindingIndex`を作る。呼出し位置の名前が局所の動的束縛か、宣言された関数か、未束縛かを判定し、`resolveCall`と関係生成の両方で同じ判定を使う。MCP/model/DBへのフィールド追加はしない。
-
-- [x] `TestR01ShadowedCalls`を追加する。引数・default引数・destructuring・const/let/var・catch引数・内側ブロック・nested closureで同名の大域関数へ接続しないことを検査する。局所のobject引数への`obj.method()`も同名の無関係な関数へ接続しない。束縛範囲外、通常の局所関数宣言、宣言として認識できる局所arrow/function expressionは正しい対象へ接続する。
-- [x] `rtk proxy go test ./internal/extract/jsts -run TestR01 -count=1`でREDを記録する。実索引を通す`TestR01ShadowedCallsStayUnlinked`も追加し、後段linkerで誤接続が復活することを防ぐ。
-- [x] 束縛のスコープと宣言種別を判定し、動的な局所呼出しの同名関係は登録しない。varの関数スコープ、let/constのブロックスコープ、引数・型注釈・分割代入の区別を扱い、別関数の束縛を漏らさない。引数名等の宣言位置を型参照として同名大域関数へ接続せず、型注釈にある真の参照は保持する。
-- [x] `rtk proxy go test ./internal/extract/jsts ./internal/app -run TestR01 -count=1`でGREENを確認する。親子宣言、thisによるメソッド、import aliasの既存回帰も対象packageで検証する。
-- [x] 対象hunkだけをstageし、R01のテスト・修正・ログ対応を記録してコミットする。
-
-### Task R02 — 静的なモジュール引数だけを認識する
-
-**Files:** `internal/extract/jsts/parser.go`、`internal/extract/jsts/residual11_test.go`、JS/TS fixture。
-
-**Interfaces:** 内部`staticModuleArgument(tokens []Token, significant []int) (string, bool)`を追加する。入力は呼出し括弧の内側のsignificant token列とし、第一引数が単独の静的文字列の場合だけ値を返す。`import()`と既存`require()`のモジュール抽出で共有する。
-
-- [x] `TestR02StaticModuleArguments`を追加する。変数、連結、関数呼出し、置換付きtemplateから部分文字列を採用しない。単純な文字列、コメント、改行、importの第二引数options、末尾カンマを対照にする。
-- [x] `rtk proxy go test ./internal/extract/jsts -run TestR02 -count=1`でREDを記録する。
-- [x] `firstString`による式内探索を静的引数判定に置き換える。第二引数optionsの文字列をモジュール名として採用しない。実行時の式評価は行わない。
-- [x] 同コマンドでGREENを確認し、import／requireの既存回帰を実行する。
-- [x] R02を対象パス限定でコミットする。
-
-### Task R03 — exportの値と再export先を区別する
-
-**Files:** `internal/extract/jsts/parser.go`、`internal/extract/jsts/residual11_test.go`、JS/TS fixture。
-
-**Interfaces:** `parseModules`でモジュール指定として扱うのはexport構文の`from`直後の静的文字列だけとする。既存のexport-symbol関係は宣言名・aliasから生成する。関数body等の内部文字列を外部モジュールに変換しない。
-
-- [x] `TestR03ExportValueIsNotModule`を追加する。constの文字列、文字列union型、default値、関数内の文字列からmodule関係を作らず、`export * from`、`export {x as y} from`、ローカルの`export {x}`は保持する。export関数内の真のdynamic importも検査する。
-- [x] `rtk proxy go test ./internal/extract/jsts -run TestR03 -count=1`でREDを記録する。
-- [x] 文全体のstringLiterals列挙を構文別の読取りに置き換える。export宣言を読み飛ばして内部のimport/requireを取りこぼさないように、モジュール走査位置も修正する。
-- [x] 同コマンドでGREENを確認し、R02および前回F34の改行・セミコロン省略・文字列名importの回帰を再検証する。
-- [x] R03を対象パス限定でコミットする。
-
-### Task R05 — ファイルimportのmodule所有者を選ぶ
-
-**Files:** `internal/linker/linker.go`、`internal/linker/residual11_test.go`、`internal/app/residual11_test.go`、TS依存fixture。
-
-**Interfaces:** 内部`preferModuleOwner(from model.Symbol, relation model.Relation, candidates []model.Symbol) []model.Symbol`を追加し、`LinkWithScope`の最終一意性判定前に使う。SourceでJS/TSのモジュール関係とexport/import-symbol関係を区別する。
-
-- [x] `TestR05ModuleOwnerResolution`と`TestR05RelativeImportIntegration`を追加する。参照先にmodule＋複数の関数／型があってもmoduleへ接続し、宣言なしの対照も維持する。相対パス、拡張子省略、index.ts、require、reexport、名前付きimport、複数ファイルの曖昧性を検査する。
-- [x] `rtk proxy go test ./internal/linker ./internal/app -run TestR05 -count=1`でREDを記録する。
-- [x] JS/TSのファイル依存で候補が単一の実ファイルを指す場合だけ、そのファイルの一意なmodule所有者へ絞る。名前付きsymbol、calls/tests、他言語の解決をこの規則で置換しない。module所有者不在や複数ファイルでは根拠なく1件を選ばない。
-- [x] 同コマンドでGREENを確認し、全リンクと増分リンクの結果を比較する。前回F15/F17/F18/F21の回帰も維持する。
-- [x] R05をコミットし、R04/R09がこのmodule選択に依存することをPLANへ記録する。
-
-### Task R04 — aliasの所属設定を限定する
-
-**Files:** `internal/projectmeta/discover.go`、新規`internal/projectmeta/scope.go`、`internal/linker/linker.go`、両packageとappの`residual11_test.go`。
-
-**Interfaces:** 走査されたtsconfig/jsconfigごとに内部Factの`Kind="project-config"`を生成する。空の設定にもSourcePathを保持し、不正JSONの場合も境界の存在は保持して既存の解析診断を返す。`projectmeta.ApplicablePathAliases(sourcePath string, facts []Fact) []Fact`を追加し、最も近い設定のpath-aliasだけを返す。Fact構造とDBスキーマは変更しない。
-
-- [x] `TestR04ApplicableAliases`と`TestR04AliasScopeIntegration`を追加する。隣接A/B、祖先設定、より近い設定、aliasなし／不正JSONの内側設定、同階層tsconfig/jsconfig、設定の追加／削除／alias変更を検査する。対象TSファイルはmoduleだけ／宣言付きの両方を用意する。
-- [x] `rtk proxy go test ./internal/projectmeta ./internal/linker ./internal/app -run TestR04 -count=1`でREDを記録する。
-- [x] alias候補化と最終解決の両方に同じ適用設定の判定を使う。設定のパスとbaseUrlによる既存のターゲット正規化、完全一致・wildcardを維持する。無関係なproject-config factをリンク先と解釈しない。新Factは既存manifest revisionに反映する。
-- [x] 同コマンドでGREENを確認する。設定だけを変更した増分索引と新規全索引の関係集合が一致し、通常のGo/Composer等のfactsへ影響しないことを検査する。
-- [x] R04を対象パス限定でコミットする。
-
-### Task R06 — Ruby文字列内の宣言・呼出しを除外する
-
-**Files:** `internal/extract/ruby/extractor.go`、必要な場合のみ`lexer.go`、`internal/extract/ruby/residual11_test.go`、Ruby fixture。
-
-**Interfaces:** lexerのTokenのbyte範囲を利用して構造解析用のcode viewを作る。改行・byte長を保ち、通常String等の本文を構造解析から除く。require・test DSL等で必要な値は元Tokenまたは原文から取得し、Evidence用の原文は変更しない。
-
-- [x] `TestR06RubyStringRegions`を追加する。単／二重引用符、複数行、escape、percent literal、heredocの中のdef/class/end/呼出しを除外する。文字列外の宣言、通常require、test DSL、改行・byte位置を対照にする。
-- [x] `rtk proxy go test ./internal/extract/ruby -run TestR06 -count=1`でREDを記録する。
-- [x] 行ベースparserへ渡すcode viewと値抽出用の原文を分離する。文字列を空白化するだけでrequireやtest名まで消す修正にはしない。補間式を解析できない場合、本文から確定関係を推測しない。
-- [x] 同コマンドでGREENを確認する。前回heredoc修正と共通の原文・行位置・byte範囲の回帰を実行する。
-- [x] R06をコミットする。
-
-### Task R07 — Ruby endless methodの終端
-
-**Files:** `internal/extract/ruby/extractor.go`、`internal/extract/ruby/residual11_test.go`、Ruby fixture。
-
-**Interfaces:** 宣言headerの引数括弧・token境界から、引数のdefault値や`foo=`というsetter名とendless bodyの`=`を区別する。endless bodyは1つの論理式の末尾までとし、通常defのend待ちstackへ積まない。
-
-- [x] `TestR07RubyEndlessMethods`を追加する。単純な式、引数付き、self.method、次の独立宣言、括弧／配列やbegin/endで継続する複数行式を検査する。通常defのdefault引数、setter名、比較演算子を誤認しないことも確認する。
-- [x] `rtk proxy go test ./internal/extract/ruby -run TestR07 -count=1`でREDを記録する。
-- [x] endless methodの宣言終端・親子関係・修飾名を論理式に合わせて計算する。後続メソッドのendを使って閉じない。曖昧な未完了式から後続宣言を確定的に子へ分類しない。
-- [x] 同コマンドとR06回帰でGREENを確認し、原文の連続slice・行位置を検査する。
-- [x] R07をコミットする。
-
-### Task R08 — Python simple statementの分割
-
-**Files:** `internal/extract/python/imports.go`、必要な場合のみ`code_view.go`、`internal/extract/python/residual11_test.go`、Python fixture。
-
-**Interfaces:** `pythonImportRecords`の返却型`map[int][]string`を維持する。同一物理行の複数importを同じ行のrecordsへ追加し、文字列／コメントと括弧内を除くセミコロン境界でsimple statementを分割する。import後の実行文をモジュール名へ混ぜない。
-
-- [x] `TestR08SemicolonImports`を追加する。`import os; import sys`、from/import alias、カンマ形式、後続の代入／呼出し、`if flag: import os; import sys`の単純suite、文字列・コメント中の`;`、既存の括弧付き複数行とbackslash継続を検査する。
-- [x] `rtk proxy go test ./internal/extract/python -run TestR08 -count=1`でREDを記録する。
-- [x] マスク済みcode viewとtoken境界を使ってsimple statementを分割し、各importを既存のrecordsへ追加する。各statementでownerや行番号を取り直して誤ったsource範囲を生成しない。
-- [x] 同コマンドでGREENを確認する。複数import・scope lifetime・遮蔽・原文位置の既存回帰も実行する。
-- [x] R08をコミットする。
-
-### Task R10 — 評価のidentity判定を直接取得へ切り替える
-
-**Files:** `internal/benchmark/engine.go`、新規`internal/store/identity.go`、`internal/store/residual11_test.go`、`internal/benchmark/residual11_test.go`。
-
-**Interfaces:** Storeへ`SymbolsForIdentity(ctx context.Context, path, name, kind string) ([]model.Symbol, error)`を追加する。SQLでパス・名前・指定kindを条件化し、retrieval候補上限を使わず決定的順序で返す。pathだけの存在確認には既存`FileHash`のfoundを用い、benchmark型をStoreから参照しない。
-
-- [x] `TestR10AttributionIdentityLookup`を追加する。同名502件の末尾、path-only、索引済みの空ファイル、同一ファイルの複数chunk、kind不一致、大文字小文字、真の未索引を検査する。`AttributeLabels`まで通して未索引／retrieval missingを区別する。
-- [x] `rtk proxy go test ./internal/store ./internal/benchmark -run TestR10 -count=1`でREDを記録する。
-- [x] `AttributionIdentities`の上限500の候補検索を直接identity取得へ置き換える。複数chunkによる重複はidentityでまとめ、schemaや既存のTargetRank/MRR定義を変更しない。
-- [x] 同コマンドでGREENを確認する。benchmarkのattribution・required_symbols・report比較の既存テストを実行する。
-- [x] R10をコミットする。
-
-### Task R11 — 内容変更件数と再抽出回数を分離する
-
-**Files:** `internal/indexer/indexer.go`、`internal/indexer/residual11_test.go`、`internal/app/residual11_test.go`。
-
-**Interfaces:** 現行IndexRunのフィールドを維持する。最初の走査とhash判定で決まったFilesAdded/FilesChanged/FilesUnchangedを、依存再抽出のキュー追加時に変更しない。
-
-- [x] `TestR11ContentChangeCounts`を追加する。同名対象追加、既存対象変更、削除、競合追加の連鎖、複数経路からの同一依存元を検査する。追加だけの再現は`added=1, changed=0, unchanged=2`とし、返却と保存済みrunで同じ値を確認する。
-- [x] `rtk proxy go test ./internal/indexer ./internal/app -run TestR11 -count=1`でREDを記録する。
-- [x] 依存再抽出のためのchanged/unchangedの加減算を除き、重複抑止と関係再構築は維持する。別の公開統計フィールドは追加しない。
-- [x] 同コマンドでGREENを確認し、関係集合が全索引と一致すること、FilesSeenの分類合計が正常なfixtureで一致することを確認する。
-- [x] R11をコミットする。
-
-### Task R09 — Impactへ構文上の依存元・関連テストを追加する
-
-**Files:** `internal/app/evidence.go`、新規`internal/app/impact_relations.go`、`impact_freshness.go`、`internal/app/residual11_test.go`、新規`internal/mcpserver/residual11_test.go`、必要なEvidence回帰テスト。
-
-**Interfaces:** `impactCandidates`の返却型を維持する。内部`impactRelationCandidates(ctx context.Context, changed []model.RankedCandidate) ([]model.RankedCandidate, error)`を追加し、変更シンボルの既存handleから1段の関係を取得する。source検証は現行のScanner/hash確認を共通化し、変更対象と追加対象を同じ検証方針で扱う。
-
-- [x] `TestR09ImpactRelations`を正式化する。変更関数、非変更Caller、関連Testの3ファイルが十分な予算で返ることを、旧形式・Evidence・MCPで確認する。変更関数を持つTSファイルへのmodule importも検査する。複数変更アンカー、循環、未解決候補、低予算、既知handle、削除ファイル、明示Git参照も検査する。
-- [x] `rtk proxy go test ./internal/app ./internal/mcpserver -run TestR09 -count=1`でREDを記録する。既存Storeのcallers/tests取得で関係が存在することを対照にする。
-- [x] 変更行と重なるシンボルをアンカーとし、callersおよびimports/exports/referencesの入方向、関連testsの入方向から1段の候補を得る。ファイル依存には同じ変更ファイルのmodule/package所有者も探索アンカーとして使い、所有者のoutline全体を変更本文として追加しない。既存RelationContextの方向・確定／候補・実際のAnchorHandleを保持し、重複を排除してから既存上限と順位を適用する。変更候補はChanged=trueを保ち、関係候補は変更扱いにしない。範囲内の変更候補が関係候補だけで押し出されないようにする。
-- [x] 自動更新ONは検索前更新を維持する。OFFでは追加される非変更ファイルもhash・索引対象性を検証し、不一致／未索引は更新要求エラーとする。現存しないファイルの旧本文は返さない。共有ロックを最終revisionまで保持し、MCP原文一回・原文/行位置・既存role・実測wire予算・省略時の既存guidanceを検査してGREENを確認する。
-- [x] R09をコミットする。既存のdirty MCPファイルへ無関係な変更を混ぜず、新しいテストから公開説明どおりの結果を確認する。
-
-## Validation and Acceptance
-
-各IDは一時overlayを必要としない正式な回帰テストで修正前FAIL・修正後PASSを確認する。fixtureは`testdata/regressions/residual11/`、Git作業場所・DBは`t.TempDir()`へ置く。対象コードを実行せず、抽出結果・実DB・Evidence／MCP応答を比較する。
-
-抽出修正の終了後、`internal/indexer/indexer.go`のextractor versionを一度更新する共有コミットを作る。旧バージョンmetadataの既存索引について、Status/Healthが更新必要を示し、通常の増分更新で全対象を再抽出して誤った既存関係を除去し、その次の更新では不要な再抽出をしないことを検査する。version更新はR01〜R08の該当する抽出変更の共通前提として台帳へ記録する。
-
-最終検証は以下の順序で行う。`rtk`を全shellコマンドへ付け、開始時に各processの環境を設定する。Go raceに必要なローカルC toolchainを確認し、不足時にインストールせず未確認ゲートとして記録する。
-
-| 順序 | 検証 | 合格条件 |
-|---|---|---|
-| 1 | `rtk proxy go test ./...` | 全通常テストPASS。R01〜R11と既存F項目の回帰を含む |
-| 2 | 通常終了後に`rtk proxy go test -race ./...` | 全race検査PASS。通常と並列実行しない |
-| 3 | `rtk proxy go vet ./...` | 指摘なし |
-| 4 | ネイティブの`go build` | `./cmd/focalspan`、`./cmd/focalspan-bench`、`./cmd/focalspan-eval`を別出力先へビルド成功 |
-| 5 | `CGO_ENABLED=0`のクロスビルド | Windows amd64/arm64・Linux amd64・Darwin arm64で上記3実行ファイルがビルド成功 |
-| 6 | 利用可能なWSL-Ubuntuで対象テスト | case-sensitive FS上でR04/R05/R10の対象テストがPASS。環境を使用できない場合は成功扱いせず記録 |
-| 7 | 既存ローカルbenchmark smoke | R09の関連候補追加を含め、結果変化をIDと期待値へ対応付ける。品質低下をbaselineの上書きで隠さない |
-| 8 | 独立した非セキュリティレビュー | 11件の仕様充足、境界条件、既存契約、差分・検証を確認し、未解決の機能不具合指摘がない |
-
-R09でEvidenceの内容・選択が変わるため、`internal/evidence`のwire-budget・不変条件テスト、MCPのv1/v2・stdout・原文重複のテストを省略しない。新規公開フィールドやランキングdebug値は追加しない。
-
-隔離worktreeのコミット対象ツリーを検証した後、元の作業ツリーに残るユーザー所有MCP変更との組合せも一時overlayで検証する。これらの未コミット変更を今回のコミットへ含めることとは区別する。統合前に必要なレビュー／検証が失敗・未実行なら、masterへマージしない。
-
-## Idempotence and Recovery
-
-R04の設定追加・削除およびversion更新の再実行は、同じ関係集合へ収束することを確認する。失敗・キャンセル時は既存のlinking_pending回復と未完了索引の検索拒否を維持する。テストは稼働索引やユーザー設定をfixtureとして使わない。
-
-masterが進んでいた場合は変更を確認して作業ブランチへ取り込み、変わったコードへ必要な検証・レビューをやり直す。ユーザー差分を消す操作やforce mergeは行わない。修正取り消しは今回の対象コミットだけをrevertする。
-
-完了時は検証済みの作業ブランチを`master`へ`--ff-only`で統合し、HEAD到達とユーザー差分の保持を確認する。その後、今回作成したブランチだけを通常のmerged判定付き削除で削除する。他のブランチ／worktreeを一括削除しない。push・再配置は行わない。
-
-## Interfaces and Dependencies
-
-| 内部インターフェース | 所有Task | 利用者／制約 |
-|---|---|---|
-| JS/TS bindingIndex | R01 | 呼出し位置のbyte offsetを基準にスコープ判定。局所動的束縛を大域候補として残さない |
-| staticModuleArgument | R02 | import()/require()の静的な第一引数だけを返す。R03の内部import走査と両立する |
-| preferModuleOwner | R05 | JS/TS module関係の最終一意性判定。R04のalias候補にも適用される |
-| project-config Fact / ApplicablePathAliases | R04 | 候補収集・最終解決・manifest revisionで共有。SourcePathは設定位置のまま保持 |
-| SymbolsForIdentity | R10 | benchmark engine専用の用途。Storeにbenchmark型やretrieval上限を持ち込まない |
-| impactRelationCandidates / source検証共通化 | R09 | 既存共有ロックの内側で実行。旧形式とEvidence形式の共通候補取得へ接続 |
+- 27の失敗条件を20問題へ集約している。CP04はinitializer/requires/function-try-blockの3条件を含む。
+- CP19は未解決関係のnamespace情報不足と検索精度低下であり、CP10の誤った確定関係とは別問題である。
+- rootのclassだけで修飾名が重複するCP15が他の再現を隠すため、元fixtureは名前付きnamespaceで問題を分離している。その分離を残す。
+- include関係の内部状態だけでは公開機能の不具合と断定できない。監査で撤回したC18は追加対象にしない。
+
+## Decision Log
+
+- 2026-10-18: 修正対象をCP01〜CP20に限定。サイバーセキュリティを継続除外する。
+- 2026-10-18: 共通の字句／scope修正を先に直列実施し、関係解決の修正を後に行う。
+- 2026-10-18: 公開Signatureと原文は保持し、宣言・定義照合用の型キーを内部に分離する。
+- 2026-10-18: namespace alias/usingは後続宣言を飲み込まないところまでを必須とし、未対応のalias展開・using集合から確定関係を推測しない。
+- 2026-10-18: C++ moduleは既存のsymbol種別`module`で論理名を表し、既存`translation_unit`所有者を残す。importの到達先は提供ファイルの所有者にする。DB列やMCPフィールドを増やさない。
 
 ## Outcomes & Retrospective
 
-R01〜R11の実装・正式回帰テスト・問題別コミットを完了した。最終検証と統合の実測結果は本書末尾および検証記録へ記載する。
+未実装。完了時に各CP ID、正式テスト名、RED/GREEN証跡、コミットSHA、全検証結果、独立レビュー結果、master到達SHA、今回branch削除結果を記録する。未確認項目があれば完了へ進めない。
 
-実装完了時に、R01〜R11のcommit対応表、共有version更新、実測検証ログ、独立レビュー、master統合SHA、ブランチ削除結果は本書末尾と検証記録へ記録済み。計画で要求した未確認ゲートは残っていない。将来の監査で残存ゼロを保証するものとはしない。
+## Context and Orientation
 
-Execution 2026-10-18T05:17:28.789781+00:00: R02 RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+主な修正箇所は`internal/extract/cpp/{lexer,parser,extractor,token}.go`。現在は字句解析結果から宣言・chunk・relationを生成する。名前解決は`internal/linker/linker.go`、未解決関係を含む関連候補検索は`internal/store/store.go`、公開受け入れは`internal/app`と`internal/mcpserver`にある。
 
-Execution 2026-10-18T05:18:58.049592+00:00: R03 RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+監査fixtureは`testdata/audits/cpp-focused-20261018/{extractor_test.go,app_test.go,run.py,README.md}`。一時overlayで実行される監査テストを、通常`go test`で走る正式テストへ移す。元の期待結果を弱めず、fixture本体は文字列または`testdata/`配下に置く。実行依存としてoverlayを残さない。
 
-Execution: R01 complete 3061fd4a27b2; R02 complete 365722a60b11; R03 initial b818f0bf plus export-symbol control follow-up. Full normal suite passed with -count=1 after R01/R02; cached baseline attempts were stopped without product failure assertion.
+正式回帰テストの主ファイルを`internal/extract/cpp/cpp20_regression_test.go`、`internal/app/cpp20_integration_test.go`とする。各IDをトップレベル`TestCPP20_CPxx`、追加条件をsubtestとする。複数packageに同じIDのテストを置いてよい。新規の共有規則は`internal/cppscope/scope.go`と`scope_test.go`、複雑なC++専用処理は後述のprivate helperファイルに分ける。
 
-Execution 2026-10-18T05:20:14.339816+00:00: R03-symbols RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+現状の未コミットMCP変更（`internal/mcpserver/server.go`、`context_v2_test.go`等）は今回の修正に含めない。実行時に正確な差分を再確認し、元checkoutでの追加検証にだけ適用する。
 
-Execution 2026-10-18T05:23:17.520667+00:00: R05 RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+## Interfaces and Dependencies
 
-Execution 2026-10-18T05:26:40.274101+00:00: R04 RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+以下は新設する内部契約。実装開始後に必要な変更が判明した場合、先にDecision Logと全利用箇所を更新する。
 
-Execution 2026-10-18T05:29:40.584047+00:00: R06 RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+1. `cpp/call_target.go`: private `callTarget{Kind callTargetKind; Name, Qualified string; Absolute bool}`。Kindはunqualified/namespace/member。`parseCallTarget(tokens []Token, beforeParen int) (callTarget, bool)`がtemplate引数・operator名を扱う。明示namespaceとmemberの失敗時はunqualifiedへ変換しない。
+2. `cpp/bindings.go`: private `bindingIndex`と`buildBindingIndex(tokens []Token, decl *declaration) bindingIndex`、`(bindingIndex).shadows(name string, atByte int) bool`。元バイト位置と有効範囲を使用し、header参照・body呼出し・callback参照が同じ判定を使う。
+3. `cpp/signature.go`: `canonicalParameterKey(tokens []Token) (string, bool)`。型・pointer/reference・cv/ref・variadic・nested declaratorを保持し、引数名とdefault値を除く。失敗時は曖昧な宣言を確定ペアにしない。公開Signatureやhandle生成用の既存原文Signatureをこのキーで上書きしない。
+4. `internal/cppscope`: `LookupLevels(namespace, target string, absolute bool) []string`、`Resolve(from model.Symbol, target string, symbols []model.Symbol) []model.Symbol`、`Matches(from model.Symbol, target string, anchor model.Symbol, symbols []model.Symbol) bool`。親symbol列からnamespaceと型の所属を得る。最も近い有効な宣言集合で探索を止め、曖昧なら複数候補のままとする。先頭`::`はglobal限定。member形式はleaf一致にしない。無名namespaceは同一ファイルに限定する。C++のみに適用する。
+5. `cpp/modules.go`: private `moduleDirective{Kind, Name string; Start, End int}`と`parseModuleDirective(tokens []Token, start int) (moduleDirective, bool)`。named declaration/import/header-unit/global-fragment/private-fragmentを区別する。module symbolはtranslation_unitをParentHandleに持つ。linkerは一致するmodule providerが一意の場合だけ同ファイル所有者へ接続する。
 
-Execution 2026-10-18T05:32:48.041030+00:00: R07 RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+共有ヘルパーはmodelだけに依存させ、cpp→linker→storeの循環依存を作らない。既存`model.Relation`に列を追加しない。receiverは`.`/`->`の識別を未解決targetにも保持し、linker/storeの共通規則が誤ったbare-name一致を拒否する。
 
-Execution 2026-10-18T05:34:49.931996+00:00: R08 RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+## Plan of Work
 
-Execution 2026-10-18T05:37:12.552113+00:00: R10 RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+### Task 0 — 実行開始・計画移行・正式再現の準備
 
-Execution 2026-10-18T05:38:37.584238+00:00: R11 RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+**Files:** ルート`PLAN.md`、本提案、`docs/superpowers/plans/completed/2026-10-18-residual11-before-cpp20.md`、監査MD/JSON、上記監査fixture。
 
-Execution 2026-10-18T05:56:03.062121+00:00: R09 RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+1. [ ] branch、HEAD、dirty/untracked、worktree、既存lockを記録する。元checkoutをreset/clean/stashしない。使用可能なmanaged worktreeを確認し、専用`codex/cpp-20-functional-fixes`を作る。ブランチが既存なら履歴を確認し、上書きしない。
+2. [ ] 実装に必要な監査資料とfixtureをバイト一致で作業先へ渡す。ユーザーの他のdirty変更は持ち込まない。監査基準から変化があれば各再現の有効性を確認する。
+3. [ ] 完了済みルートPLANをバイト単位でarchiveし、SHA-256一致を確認してから本計画をroot PLANとして有効化する。計画・監査証跡だけを明示stageして独立docsコミットにする。
+4. [ ] 元fixtureの27失敗条件・7成功対照をIDへ対応付ける。各タスクで正式テストを先に追加してREDを保存する。先行修正によって後続条件が既に通る場合は基準HEADの隔離検証先でFAILを確認し、理由を記録する。
+5. [ ] Progressへdirty基準、作業場所、実行証跡ディレクトリ、計画移行SHAを記録する。
 
-Execution 2026-10-18T05:56:55.382604+00:00: extractor-version RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+以降の各タスクは表記順に実施する。RED/GREENコマンドは同一とし、REDが意図したassertionで失敗したことを確認する。新設package/APIがある場合はコンパイル可能な最小の型・宣言を先に用意し、package不在・未定義名をRED証拠にしない。実装後は対象package全体も実行する。共有テストファイルを累積更新するため、後続IDの未実装テストを先に追加してpackage全体を常時失敗させない。コミットは指定対象パスのみstageし、PLANのID・証跡・SHA表を更新する。
 
-Execution 2026-10-18T06:07:04.278033+00:00: R01-review RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+### Task 1 — CP20: UTF-8 BOM
 
-Execution 2026-10-18T06:07:07.607525+00:00: R07-review RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+**Files:** `internal/extract/cpp/lexer.go`、`cpp20_regression_test.go`。**Consumes:** 元source bytes。**Produces:** 先頭BOMを構文から除外した、元offset付きtoken。
 
-Execution 2026-10-18T06:07:11.835767+00:00: R11-controls RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+1. [ ] `TestCPP20_CP20/SourceOffsets`を追加。BOM+CRLFのfirst/second、非ASCII識別子、文字列内と先頭以外のU+FEFFを検査する。
+2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP20$' -count=1`。first欠落を確認する。
+3. [ ] byte0のUTF-8 BOMだけを読み飛ばす。入力全体の切り詰めやoffset補正の二重適用をしない。
+4. [ ] 同コマンドでGREEN。symbol/chunkの元バイト範囲と行位置を照合する。
+5. [ ] `fix(cpp): preserve declarations after UTF-8 BOM`として対象をコミットする。
 
+### Task 2 — CP01: 数字区切り文字
 
-## Execution evidence
+**Files:** `lexer.go`、`cpp20_regression_test.go`。**Produces:** 数字literal内部のapostropheを含むtoken。
 
-Base: `66d8ea87916cdda57d0d3c0ecd8fd26dfc91e07a`。
-専用worktreeの実装により元の未コミット11ファイルのbytesを保持した。
+1. [ ] `TestCPP20_CP01`に`1'000`後のreal、hex/binary、exponent、隣接する本物のchar literalと`SourceOffsets`を追加する。
+2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP01$' -count=1`。後続関数欠落を確認する。
+3. [ ] 数字literalの走査規則を追加し、有効な数字間のseparatorをchar開始にしない。文字列・文字literalの規則は保持する。
+4. [ ] 同コマンドでGREEN。壊れたliteralでも無関係な後続宣言を過剰に飲み込まないことを確認する。
+5. [ ] `fix(cpp): lex digit separators without consuming declarations`をコミットする。
 
-| ID | 修正コミット | 正式回帰の主要箇所 |
-| --- | --- | --- |
-| R01 | 3061fd4, fb101f4, 87c3a6f, 959fb84 | jsts/residual11_test.go, app/residual11_test.go |
-| R02 | 365722a | jsts/residual11_test.go |
-| R03 | b818f0b, c625ebd | jsts/residual11_test.go |
-| R04 | 4299a21 | projectmeta/residual11_test.go, app/residual11_test.go |
-| R05 | cfcad62 | linker/residual11_test.go, app/residual11_test.go |
-| R06 | d8991f3 | ruby/residual11_test.go |
-| R07 | f48bc2f, b04b916 | ruby/residual11_test.go |
-| R08 | bb3d9f6 | python/residual11_test.go |
-| R09 | 09dae49 | app/impact_relations_test.go, mcpserver/residual11_test.go |
-| R10 | d82235a | store/residual11_test.go, benchmark/residual11_test.go |
-| R11 | 9035a64, b76c905 | indexer/residual11_test.go |
+### Task 3 — CP12: 継続行コメント
 
-共通version更新: `731d52c`、v18→v19を正規更新で一度だけ再抽出する回帰を追加。
+**Files:** `lexer.go`、`cpp20_regression_test.go`。**Produces:** escaped newlineを含む正しいline-comment範囲。
 
-### 実行時の判断と補足
+1. [ ] `TestCPP20_CP12`にLF/CRLFの`// ... \\`継続、phantom非抽出、継続終了後real抽出、`SourceOffsets`を追加する。
+2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP12$' -count=1`。phantomの誤抽出を確認する。
+3. [ ] line spliceをコメント終端判定に適用し、元sourceを改変せずline/byteを追跡する。macro評価は追加しない。
+4. [ ] 同コマンドでGREEN。raw string・通常string中の`//`対照も通す。
+5. [ ] `fix(cpp): honor escaped newlines in line comments`をコミットする。
 
-1. WindowsではPOSIX補助手順をPython実行アダプタへ置換した。対象パス限定stage、RED/GREENの生ログ、BASE・SHA・作業記録を維持した。
-2. Goのキャッシュ付きテスト起動がパッケージ実行前に停止したため、`-count=1`を採用した。30秒の診断タイムアウトはapp全件には短く、最終検証は15分上限とした。初回全件では旧version固定テストとStore並行初期化のdeadline失敗が出た。前者を現行version比較へ修正、後者は対象再実行で成功し、最終全件で再確認する。
-3. F15の旧fixtureは設定ファイル外のimporterへalias適用を期待していた。importerを同じ設定配下へ移し、既存wildcard検査を保持した。隣接プロジェクトへの不適用は新規回帰で確認する。
-4. R09はGo所有者にchunkがない場合も含めるため内部SQL取得を追加し、legacy packerへ内部impact hintを渡した。MCPの公開入力へmodeは追加していない。focused応答で実際に出るsignatureの原文一回を検査し、本文全体の忠実性はapp source形式で別途検査する。
-5. 独立レビューは全差分を一度確認し、P2の3件（loop scope、匿名callback引数、Ruby複数行Regex）を指摘した。全件RED確認後に修正した。R01はレビュー担当へ2ファイル限定で修正を委譲し、親が差分を確認した。R07は親が修正し担当が独立読取り確認した。追加の全差分再レビューは行っていない。
+### Task 4 — CP13: コメント付きinclude
 
-サイバーセキュリティ項目、supervisor EOF、push、稼働バイナリ置換は対象外。v19は今回のビルド成果物に含まれるが稼働プロセスには未配置。
+**Files:** `lexer.go`、`parser.go`、`cpp20_regression_test.go`。**Produces:** コメントを空白として扱うdirective解析。
 
-Execution 2026-10-18T06:11:27.193555+00:00: R01-typed-boundaries RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+1. [ ] `TestCPP20_CP13`に先頭block comment、includeとoperand間comment、quote/angle、継続行、URL/raw string、`SourceOffsets`を追加する。
+2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP13$' -count=1`。dep.hpp欠落を確認する。
+3. [ ] directive開始位置とoperandをtokenから判断する。文字列をregex置換で壊さない。`include_next`は既存kindを維持し、macro operandは確定パスへ変換しない。
+4. [ ] 同コマンドでGREEN。include関係と元line、コメント内の偽include非抽出を確認する。
+5. [ ] `fix(cpp): parse include directives around comments`をコミットする。
 
-Execution 2026-10-18T06:14:09.177355+00:00: R01-header-scope RED→GREEN; scoped package checks passed. Evidence: C:/Temp/fs11-evidence/. Commit identity: git log and SDD ledger.
+### Task 5 — CP15: class修飾名の重複
 
+**Files:** `parser.go`、`cpp20_regression_test.go`。**Produces:** namespaceと型所有者を分けた宣言context。
 
-全検証完了: 通常→race、vet、3 CLI native/4 target cross、WSL ext4、benchmark比較、ユーザーMCP差分overlay通常→race PASS。検証記録: docs/audits/2026-10-18-residual11-verification.md。
+1. [ ] `TestCPP20_CP15`にglobal Item::run、constructor、n::Item::run、Outer::Inner::run、out-of-class定義を追加する。
+2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP15$' -count=1`。Item::Item::runを確認する。
+3. [ ] `namespaceFor`とparseScopeへのcontext引渡しを修正する。namespaceなしを空として扱い、型名を一度だけ付与する。
+4. [ ] 同コマンドでGREEN。既存F42 namespace関数・F44大文字小文字の回帰も通す。
+5. [ ] `fix(cpp): keep namespace and type qualification distinct`をコミットする。
 
+### Task 6 — CP05: namespace alias/usingの終端
 
-統合完了（2026-10-18T06:31:41.231900+00:00）: masterへ`--ff-only`で`fb160fc71d015e6bb1474f91c7a15fade8106b74`を統合し、統合後の全通常テストがPASS。元の未コミット11ファイルのbytesを保持した。今回のmanaged worktreeを回復可能なsnapshot付きでarchiveし、`codex/residual-11-functional-fixes`だけを通常のmerged判定付きで削除した。push・稼働バイナリ置換なし。作業記録・生ログ・ビルドhashは`C:/Temp/fs11-evidence/`へ保持した。
+**Files:** `parser.go`、`cpp20_regression_test.go`。**Produces:** alias/directiveとnamespace bodyの区別。
+
+1. [ ] `TestCPP20_CP05`にaliasとusing namespace後のlater、通常・nested namespace、文字列内namespaceを追加する。
+2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP05$' -count=1`。later欠落を確認する。
+3. [ ] namespace構文を解析し、aliasとusingは`;`で終了させる。`;`を越えた次の`{`をbodyにしない。
+4. [ ] 同コマンドでGREEN。aliasから架空のcontainerや確定callを生成しないことを確認する。
+5. [ ] `fix(cpp): stop namespace directives at their terminator`をコミットする。
+
+### Task 7 — CP06: 無名namespaceの所属
+
+**Files:** `parser.go`、`extractor.go`、`cpp20_regression_test.go`。**Produces:** 同一ファイル・同一親で再利用される無名namespace所有者。
+
+1. [ ] `TestCPP20_CP06`にhiddenのParentHandle、named namespace内、同一scope再open、別ファイル同名hidden、無関係な行挿入を追加する。
+2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP06$' -count=1`。所属なしを確認する。
+3. [ ] 正規化済み相対pathと親scopeから安定した内部識別名を作る（行番号をIDにしない）。表示名は無名namespaceと分かるものにする。同一scopeの再openを同じ所有者へ統合する。
+4. [ ] 同コマンドでGREEN。元ソースchunkを合成名で置換せず、別ファイルのprivate scopeを混同しない。
+5. [ ] `fix(cpp): retain anonymous namespace ownership`をコミットする。
+
+### Task 8 — CP14: template型引数と本宣言
+
+**Files:** `parser.go`、必要なら`declaration_header.go`、`cpp20_regression_test.go`。**Produces:** template headerを消費した本宣言開始位置。
+
+1. [ ] `TestCPP20_CP14/DeclarationBoundary`にclass T/typename T、nested `>>`、non-type/template-template引数とBox::runを追加する。
+2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP14$' -count=1`。Box欠落・class T誤抽出を確認する。
+3. [ ] balanced template headerを読むhelperを追加し、内部の型引数をscope宣言にしない。実宣言へheaderを関連付ける。
+4. [ ] 同コマンドでGREEN。通常class/struct、既存template関数、比較・shift式の対照を通す。
+5. [ ] `fix(cpp): separate template parameters from declarations`をコミットする。
+
+### Task 9 — CP02: constructor名を含む範囲
+
+**Files:** `parser.go`、`cpp20_regression_test.go`。**Consumes:** 修正済み型context。**Produces:** constructor名から始まるSignature/chunk。
+
+1. [ ] `TestCPP20_CP02`に先頭member constructor、後続method、名前付きnamespaceとglobal class、`DeclarationBoundary`を追加する。
+2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP02$' -count=1`。Signature=`() {`の欠落を確認する。
+3. [ ] constructor認識をheader棄却より先に行い、namePositionがheader開始前のparenを再採用しない。destructorとdefault/delete対照を保持する。
+4. [ ] 同コマンドでGREEN。constructor名・全body・独立したlaterの原文を照合する。
+5. [ ] `fix(cpp): include constructor names in declaration spans`をコミットする。
+
+### Task 10 — CP03: ユーザー定義戻り値型
+
+**Files:** `parser.go`、`declaration_header.go`、両正式回帰テスト。**Produces:** built-in whitelistに依存しない関数宣言判定。
+
+1. [ ] `TestCPP20_CP03`にItem make、qualified/template/pointer/reference戻り値、QueryEvidence、`DeclarationBoundary`を追加する。
+2. [ ] RED: `go test ./internal/extract/cpp ./internal/app -run '^TestCPP20_CP03$' -count=1`。makeのsymbolとsource欠落を確認する。
+3. [ ] declaration contextとbalanced declaratorから関数を認識する。変数初期化・function pointer・lambda・単なるcallを関数定義へ昇格しない。
+4. [ ] 同コマンドでGREEN。int known_function対照と既存modern declarationテストを通す。
+5. [ ] `fix(cpp): recognize functions with user-defined return types`をコミットする。
+
+### Task 11 — CP07: operator宣言名
+
+**Files:** `parser.go`、`declaration_header.go`、`cpp20_regression_test.go`。**Produces:** 正規のoperator名と実parameter listの位置。
+
+1. [ ] `TestCPP20_CP07/DeclarationBoundary`にoperator[]/()/+/=、conversion bool、new/delete、qualified定義を追加する。
+2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP07$' -count=1`。欠落・`+`/`operator`への誤命名を確認する。
+3. [ ] operator名のtoken列とparameter listを分ける。`operator()`の最初のparenを引数と誤認しない。callable kindを既存規約にそろえる。
+4. [ ] 同コマンドでGREEN。各Name/QualifiedName/Signatureと原文位置、既存operator=成功対照を確認する。
+5. [ ] `fix(cpp): preserve operator and conversion function identities`をコミットする。
+
+### Task 12 — CP18: typedef declaratorの名前
+
+**Files:** `parser.go`、`declaration_header.go`、`cpp20_regression_test.go`。**Produces:** 基底型とalias名の区別。
+
+1. [ ] `TestCPP20_CP18`にExisting Alias、qualified型、pointer/ref/array/function pointer、複数declarator、`DeclarationBoundary`を追加する。
+2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP18$' -count=1`。Alias欠落を確認する。
+3. [ ] typedefのdeclarator位置から名前を得る。解析不能な列を最初のidentifierへ置き換えない。using/conceptの既存経路を保持する。
+4. [ ] 同コマンドでGREEN。既存CallbackTypedefとfunction pointer対照を通す。
+5. [ ] `fix(cpp): extract typedef names from declarators`をコミットする。
+
+### Task 13 — CP04: 実bodyとhandlerの終端
+
+**Files:** `parser.go`、新規`function_body.go`、`cpp20_regression_test.go`。**Consumes:** Task 8〜11のheader位置。**Produces:** 実body開始と全function終端。
+
+1. [ ] `TestCPP20_CP04/DeclarationBoundary`にbrace initializer、requires-expression、function-try-blockの3再現と複合条件を追加する。
+2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP04$' -count=1`。consume/x.work/recoverが範囲外になることを確認する。
+3. [ ] post-parameter走査をinitializer/requires/noexcept/trailing-return/body/handlerに区別する。括弧対応を使い、最初の`{`で決定しない。80 tokenの探索打ち切りによる同種の欠落も回避する。
+4. [ ] 同コマンドでGREEN。全catch、最後のbody文字、内部call、次memberの独立範囲、default/delete/宣言のみを確認する。
+5. [ ] `fix(cpp): find complete function bodies and handlers`をコミットする。
+
+### Task 14 — CP11: 宣言・定義の型キー
+
+**Files:** 新規`signature.go`、`parser.go`、`extractor.go`、`cpp20_regression_test.go`。**Produces:** 内部canonical parameter key。
+
+1. [ ] `TestCPP20_CP11`にvalue/renamedの宣言定義、default引数、同名overload、cv/ref、variadic、function-pointer引数を追加する。
+2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP11$' -count=1`。必要なdeclares edge欠落を確認する。
+3. [ ] `canonicalParameterKey`を実装し、declarationKeyだけに適用する。member関数の後置cv/ref qualifierも別途内部キーへ保持する。型の異なるoverloadや異なるcv/refを統合せず、曖昧な候補へ確定edgeを作らない。
+4. [ ] 同コマンドでGREEN。元Signature、source bytes、public handle入力を勝手にcanonical keyで置換していないことを確認する。
+5. [ ] `fix(cpp): pair declarations by parameter types`をコミットする。
+
+### Task 15 — CP17: template呼出し
+
+**Files:** 新規`call_target.go`、`extractor.go`、`cpp20_regression_test.go`。**Produces:** callTargetとtemplate引数を除いたcallee識別。
+
+1. [ ] `TestCPP20_CP17`にwork<int>()、nested `>>`、namespace qualification、dependent template、比較・shiftの対照を追加する。
+2. [ ] RED: `go test ./internal/extract/cpp -run '^TestCPP20_CP17$' -count=1`。call自体の欠落を確認する。
+3. [ ] 既存callNameを`parseCallTarget`経由へ移す。balanced template引数を剥がし、曖昧なoverload/template依存は未解決のままとする。
+4. [ ] 同コマンドでGREEN。通常call・operatorの名前、比較式からの偽call非生成を確認する。
+5. [ ] `fix(cpp): recognize calls with explicit template arguments`をコミットする。
+
+### Task 16 — CP08: parameter/local/callback遮蔽
+
+**Files:** 新規`bindings.go`、`extractor.go`、両正式回帰テスト、`internal/linker/cpp20_test.go`。**Produces:** 有効範囲付きbindingIndex。
+
+1. [ ] `TestCPP20_CP08/NoFalseEdgeAfterIndex`にfunction-pointer parameter、Callback handler、local/block/catch/for/lambda parameterとcapture、scope外のglobal成功対照を追加する。
+2. [ ] RED: `go test ./internal/extract/cpp ./internal/linker ./internal/app -run '^TestCPP20_CP08$' -count=1`。global calls/header references/callback referencesへの誤接続を確認する。
+3. [ ] header/bodyのbindingを一度作り、3経路で共有する。遮蔽された動的calleeはglobal leafの未解決関係も残さない。捕捉・可視範囲の解析が曖昧なら確定edgeを作らない。
+4. [ ] 同コマンドでGREEN。full index後にも誤edgeが復活せず、scope終了後の非遮蔽callは解決することを確認する。
+5. [ ] `fix(cpp): respect local bindings across relation extraction`をコミットする。
+
+### Task 17 — CP09: receiver付きcallの分類
+
+**Files:** `call_target.go`、`extractor.go`、新規`internal/cppscope/scope.go`と`scope_test.go`、`linker.go`、両正式回帰テスト。**Produces:** member形式を保持した未解決target。
+
+1. [ ] `TestCPP20_CP09/NoFalseEdgeAfterIndex`にobject.target、pointer->target、this->target、同名global、別class同名methodを追加する。
+2. [ ] RED: `go test ./internal/extract/cpp ./internal/cppscope ./internal/linker ./internal/app -run '^TestCPP20_CP09$' -count=1`。global targetへの誤edgeを確認する。
+3. [ ] memberをnamespace修飾と区別する。確実な同一class/this以外はreceiver形式のまま未解決とし、linkerでleaf fallbackを禁止する。型推論やvirtual dispatchは追加しない。
+4. [ ] 同コマンドでGREEN。展開でもglobalのcallerに混入せず、既存F44のcase-sensitiveなreceiver対照を通す。
+5. [ ] `fix(cpp): avoid global fallback for member calls`をコミットする。
+
+### Task 18 — CP10: 明示namespace修飾call
+
+**Files:** `call_target.go`、`extractor.go`、`internal/cppscope/*`、`internal/linker/cpp20_test.go`、両正式回帰テスト。**Produces:** absolute/relative namespace探索規則。
+
+1. [ ] `TestCPP20_CP10/NoFalseEdgeAfterIndex`にexternal::work対other::work、先頭`::`、nested relative scope、成功対照を追加する。
+2. [ ] RED: `go test ./internal/extract/cpp ./internal/cppscope ./internal/linker ./internal/app -run '^TestCPP20_CP10$' -count=1`。誤った確定edgeとExpand callers混入を確認する。
+3. [ ] LookupLevels/Resolveを実装し、現在scopeから外側へC++の探索順を適用する。明示修飾の失敗をbare leafへ落とさない。未対応namespace aliasから推測しない。
+4. [ ] 同コマンドでGREEN。extractorだけでなく実DB・差分更新・旧形式/Evidence Expandでwrong callerが返らないことを確認する。
+5. [ ] `fix(cpp): resolve explicitly qualified calls within their scope`をコミットする。
+
+### Task 19 — CP19: 別ファイル関係のnamespace保持
+
+**Files:** `internal/cppscope/*`、`extractor.go`、`internal/linker/{linker.go,cpp20_test.go}`、`internal/store/{store.go,cpp20_test.go}`、`cpp20_integration_test.go`。**Produces:** linkingと関連候補検索で一致するC++探索規則。
+
+1. [ ] `TestCPP20_CP19`にn::Target/n::Caller、m::Target追加、`IncrementalParity`、`NoFalseEdgeAfterIndex`、未解決の曖昧対照を追加する。
+2. [ ] RED: `go test ./internal/cppscope ./internal/linker ./internal/store ./internal/app -run '^TestCPP20_CP19$' -count=1`。精度低下とm::Target callers混入を確認する。
+3. [ ] linkerで呼出し元ParentHandle/contextを使った共通Resolveを適用する。storeのC++未解決call候補にも共通Matchesを適用し、汎用leaf照合で拾った候補を無条件に採用しない。
+4. [ ] 同コマンドでGREEN。nの正関係維持、mへの非混入、追加・削除・namespace変更の差分/全索引一致、path/変更行条件と候補上限を検査する。
+5. [ ] `fix(cpp): preserve namespace lookup across linking and expansion`をコミットする。
+
+store実装ではC++未解決callの候補をscope判定**前にLIMITしない**。既存確定edge・他言語のSQL経路は維持する。対象C++未解決edgeをsource/target symbol情報とともに取得し、共通Matchesで評価してから既存候補と重複排除・順位統合する。要求内でsymbol集合を再利用し、edgeごとのDB照会を避ける。大量同名候補で正候補が上限の後方にある回帰を置く。scope情報不足なら曖昧なままとし、別namespaceの確定callerとして扱わない。
+
+### Task 20 — CP16: module targetとimports展開
+
+**Files:** 新規`modules.go`、`parser.go`、`extractor.go`、`internal/linker/{linker.go,cpp20_test.go}`、両正式回帰テスト。**Produces:** 論理module symbolと提供元translation_unitへのimport関係。
+
+1. [ ] `TestCPP20_CP16`にmodule宣言/import、論理名とfilenameの不一致、partition/header-unit、global/private fragment、重複providerと`IncrementalParity`を追加する。
+2. [ ] RED: `go test ./internal/extract/cpp ./internal/linker ./internal/app -run '^TestCPP20_CP16$' -count=1`。targetが行全体になることとExpand importsで提供元が欠落することを確認する。
+3. [ ] parseModuleDirectiveで論理名を正規化する。宣言からimportsを生成しない。論理名のmodule symbolを所有者配下に作り、linkerのC++専用経路で一意なproviderのtranslation_unitへ接続する。
+4. [ ] 同コマンドでGREEN。`import :part`を現在moduleから正規化し、literal header-unitは既存パス規則を使う。provider変更・削除・重複時に古い確定edgeを残さない。普通のidentifier module/importやstringをdirectiveにしない。
+5. [ ] `fix(cpp): link named module imports to provider files`をコミットする。
+
+module symbolには所有者へ戻るParentHandleと元宣言範囲を持たせ、必要な宣言chunkだけを既存source規則で作る。translation_unitのName/QualifiedName=pathを変更しない。複数providerや未知のpartitionは未解決とし、同名namespace/functionへ接続しない。提供元sourceを返す際の重複とwire予算をTask 21で検査する。
+
+### Task 21 — 索引移行・全検証・独立レビュー・統合
+
+**Files:** `internal/indexer/indexer.go`、新規`internal/app/cpp20_refresh_test.go`、`cpp20_integration_test.go`、必要な既存Evidence/wireテスト、`docs/design.md`、ルートPLAN。本タスクにCP IDを追加しない。
+
+1. [ ] extractor version移行テストを先に追加する。RED: `go test ./internal/app -run '^TestCPP20_(Refresh|EvidenceContract)$' -count=1`。v19の古い誤関係を保持した索引から通常更新だけでは修正が反映されない条件を確認する。その後versionを`extractors-v20-cpp-functional`へ一度更新し、同コマンドでGREENにする。通常更新で再抽出→誤edge除去→次回無変更の順を検査する。
+2. [ ] `EvidenceContract`でQuery/Expand/Impactの旧形式とEvidence、必要なMCP実wire経路を検証する。custom return、constructor/body/operator、template、moduleのsource bytes/行、role、既知handle、省略・予算・不変条件を確認する。既存wire helperを使い実際のJSON byte数を計測する。no-update、共有read leaseとrevision整合性の既存テストを通す。ユーザーdirtyのserver.go/context_v2_test.goを修正・取り込まない。
+3. [ ] 下記の全検証を完了し、ID別20行の対応表を埋める。新規コードを変更したら影響範囲と必要な全体検証を再実施する。製品コード・テスト・設計文書を対象別に明示stageしてコミットする。
+4. [ ] 独立reviewerに最終diff、20件表、RED/GREEN、全検証結果とReview Focusを渡す。対象は機能・回帰・source契約で、セキュリティ監査を依頼しない。指摘を修正し、該当テストと必要な全体検証、再レビューを通す。未解決の機能指摘がある間はマージしない。
+5. [ ] 完了記録を含む作業HEADで全gateを確認し、masterが作業branchの祖先であることを確認して`--ff-only`でマージする。masterが進んでいれば履歴を上書きせず取り込み・再検証する。master到達を確認後、今回branchだけを削除しmanaged worktreeをarchiveする。元checkoutのdirty内容・ハッシュを照合して保持を確認する。
+
+### ID・テスト・コミット対応表（実行時に埋める）
+
+| ID | Task | 正式テストの先頭名 | RED/GREEN証跡 | 修正コミット |
+|---|---:|---|---|---|
+| CP01 | 2 | TestCPP20_CP01 | 未実行 | 未実装 |
+| CP02 | 9 | TestCPP20_CP02 | 未実行 | 未実装 |
+| CP03 | 10 | TestCPP20_CP03 | 未実行 | 未実装 |
+| CP04 | 13 | TestCPP20_CP04 | 未実行 | 未実装 |
+| CP05 | 6 | TestCPP20_CP05 | 未実行 | 未実装 |
+| CP06 | 7 | TestCPP20_CP06 | 未実行 | 未実装 |
+| CP07 | 11 | TestCPP20_CP07 | 未実行 | 未実装 |
+| CP08 | 16 | TestCPP20_CP08 | 未実行 | 未実装 |
+| CP09 | 17 | TestCPP20_CP09 | 未実行 | 未実装 |
+| CP10 | 18 | TestCPP20_CP10 | 未実行 | 未実装 |
+| CP11 | 14 | TestCPP20_CP11 | 未実行 | 未実装 |
+| CP12 | 3 | TestCPP20_CP12 | 未実行 | 未実装 |
+| CP13 | 4 | TestCPP20_CP13 | 未実行 | 未実装 |
+| CP14 | 8 | TestCPP20_CP14 | 未実行 | 未実装 |
+| CP15 | 5 | TestCPP20_CP15 | 未実行 | 未実装 |
+| CP16 | 20 | TestCPP20_CP16 | 未実行 | 未実装 |
+| CP17 | 15 | TestCPP20_CP17 | 未実行 | 未実装 |
+| CP18 | 12 | TestCPP20_CP18 | 未実行 | 未実装 |
+| CP19 | 19 | TestCPP20_CP19 | 未実行 | 未実装 |
+| CP20 | 1 | TestCPP20_CP20 | 未実行 | 未実装 |
+
+## Validation and Acceptance
+
+### 1. ID別受け入れ
+
+監査の27失敗条件を正式テストでGREENにし、7成功対照も維持する。symbol件数だけでなく名前・所有者・Signature・原文範囲・正関係の存在・誤関係の不在を確認する。各タスクの正例／負例を同じ入力集合に置き、元fixtureのassertionを単なる「未解決でも可」に弱めない。
+
+### 2. 関係・検索の受け入れ
+
+CP03はQueryEvidence、CP09/10/19は実索引後のRelatedCandidateHitsと旧形式/Evidence Expand callers、CP16はExpand importsを必須にする。CP08はheader/body/callbackの全経路を検査する。CP04はbody内のcallも検査する。CP19とmodule変更はfull/incrementalのhandle依存でない意味上の関係集合を比較する。Impactでは変更したC++の現行原文とdependentが得られ、削除ファイルの原文を捏造しない。
+
+### 3. 全体検証（通常テストとraceは直列）
+
+Windowsでshell環境を記録し、リポジトリ規約に従って実行コマンドを`rtk`経由にする。以下の表示はGo側のコマンド本体。
+
+```text
+go test ./...
+go test -race ./...
+go vet ./...
+go build -o <task-temp>/focalspan-native.exe ./cmd/focalspan
+```
+
+次に`CGO_ENABLED=0`で下表をビルドする。環境変数は検証用子プロセスに限定する。出力はtask-tempに置き、稼働バイナリを上書きしない。
+
+| GOOS | GOARCH | 出力例 |
+|---|---|---|
+| windows | amd64 | focalspan-windows-amd64.exe |
+| linux | amd64 | focalspan-linux-amd64 |
+| darwin | arm64 | focalspan-darwin-arm64 |
+
+benchmark/evalの既存cmdも一覧を確認し、native build対象に含める（該当実行ファイルの`go build -o <task-temp>/... ./cmd/...`）。package restoreやネットワークを発生させず、依存が不足する場合は不足gateとして記録し、成功とみなさない。
+
+実symlink等で既存通常テストが権限不足になる場合は、利用可能なWSL-Ubuntuで該当gateと必要な全体検証を実行し、Windowsの実行結果と区別して記録する。不要な権限変更・セキュリティ作業には広げない。利用不能なgateをskipに変えてマージしない。
+
+### 4. dirty overlay・独立レビュー
+
+clean作業branchで全検証を完了した後、元checkoutの既存dirty MCP差分を保持した状態でも影響packageのテストを行う。必要なら別の一時検証先に元差分のバイト一致コピーを適用する。コミットにユーザー差分を混ぜない。clean合格とdirty合格を別の証跡として記録する。
+
+レビューでは特にraw source fidelity、shared helperとSQL候補上限の順序、他言語への非波及、module所有者、未知入力の誤確定を確認する。レビュー担当の指摘と対処、最終判定を保存する。
+
+### 5. 計画・完了記録
+
+`git diff --check`、CP01〜CP20の重複／欠落、正式テストの実在、全検証結果、コミット対象、master ancestry、branch削除、元dirty保存を照合する。実装計画に沿った修正を終えるまでは「20件完了」と記録しない。
+
+## Idempotence and Recovery
+
+1. 再開時はroot PLANのProgressと最後のcommit、実際のdirtyを照合する。既存テスト・branch・archiveを上書きせず、成功済みREDの証跡を再利用する。
+2. テストは一時DB/Git repositoryだけを使う。稼働`.focalspan/index.db`を再構築しない。CP version更新による実環境再抽出は将来そのバイナリを利用した時の通常動作であり、今回の検証でlive DBへ適用しない。
+3. archiveは元PLANと一致しなければ計画移行を止めて原因を確認する。未知のlockを削除しない。競合は元編集を保持して解消する。
+4. 統合時に元checkoutのuntracked監査資料／本提案と追跡ファイルが衝突する場合は、内容比較とバックアップを先に行う。必要な一時renameは可逆にし、差分を失わず復元する。元dirtyへマージ結果を反映できない場合はforceせず統合gateを未完了として報告する。
+5. FFできない場合はmasterの新しい変更を取り込み、影響検証とレビューを更新する。履歴の書換えや無関係branch削除をしない。全gate通過前のマージ・push・再配置は行わない。
+
+## 実行前セルフレビュー
+
+- [x] CP01〜CP20が1回ずつタスクと対応表に現れ、27条件と7対照の継承を明記した。
+- [x] 5つのReview Focusを所有タスクの名前付きテストへ割り当てた。
+- [x] 共有インターフェース、ファイル責務、RED/GREENコマンド、段階コミット、索引移行を指定した。
+- [x] 公開形式・原文・予算・未解決関係・full/incremental・dirty保存の受け入れを指定した。
+- [x] セキュリティ除外、全検証、独立レビュー、FF統合と今回branchだけの削除を明記した。

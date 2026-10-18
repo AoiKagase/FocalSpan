@@ -1,0 +1,450 @@
+{
+  "scope": "C++ focused functional audit; cybersecurity excluded",
+  "source_head": "ca46099c2b190ba03539dc092794d9473e21c5bd",
+  "utc": "2026-10-18T07:07:48.402262+00:00",
+  "finding_count": 20,
+  "negative_subtests": 27,
+  "positive_subtests": 7,
+  "evidence_directory": "C:\\Temp\\focalspan-cpp-audit-20261018",
+  "baseline_packages": [
+    "internal/extract/cpp",
+    "internal/linker"
+  ],
+  "production_code_modified": false,
+  "findings": [
+    {
+      "id": "CP01",
+      "case": "C01_digit_separator",
+      "severity": "P1",
+      "title": "数字区切り文字で後続の宣言が消える",
+      "trigger": "constexpr int count=1'000; void real() {}",
+      "expected": "realを関数として抽出する",
+      "actual": "アポストロフィを文字リテラル開始として扱い、realがSymbols/Chunksに存在しない",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/lexer.go",
+          "line": 130
+        },
+        {
+          "path": "internal/extract/cpp/lexer.go",
+          "line": 103
+        }
+      ],
+      "verification": "extractor only"
+    },
+    {
+      "id": "CP02",
+      "case": "C02_first_constructor",
+      "severity": "P2",
+      "title": "コンストラクタ名が原文範囲から脱落する",
+      "trigger": "namespace n { struct Item { Item() {} }; }",
+      "expected": "署名とchunkをItem()から開始する",
+      "actual": "constructor自体は存在するがSignatureは() {、chunkは() {}になる。名前付きnamespaceで検査しCP15との混同を除いた",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 378
+        },
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 242
+        }
+      ],
+      "verification": "extractor only"
+    },
+    {
+      "id": "CP03",
+      "case": "C03_custom_return_type",
+      "severity": "P1",
+      "title": "ユーザー定義型を返す普通の関数を抽出しない",
+      "trigger": "struct Item {}; Item make() { return {}; }",
+      "expected": "makeのsymbol/source chunkを生成し検索で返す",
+      "actual": "makeが未抽出。QueryEvidence(make)も該当原文を返さない。int known_function()の同じAPI対照は成功",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 384
+        }
+      ],
+      "verification": "extractor + QueryEvidence"
+    },
+    {
+      "id": "CP04",
+      "case": "C04_braced_initializer_span / C04_requires_expression_body / C04_function_try_block",
+      "severity": "P1",
+      "title": "関数定義の開始・終端を取り違え本文が欠ける",
+      "trigger": "explicit Item(int x): value{x} { consume(); } / requires requires(T y) { y.work(); } { return x.work(); } / void work() try {} catch(int) { recover(); }",
+      "expected": "初期化リストやrequires式を実bodyと区別し、function-try-blockのhandlerまで含める",
+      "actual": "constructorはvalue{x}で終了、requires版は制約式で終了、function-try-blockはcatch/recoverを含まない。同じ境界判定問題として3条件を1件に集約",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 279
+        },
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 285
+        }
+      ],
+      "verification": "extractor only"
+    },
+    {
+      "id": "CP05",
+      "case": "C05_namespace_alias / C05_using_namespace",
+      "severity": "P1",
+      "title": "namespace alias/using directiveが後続関数を飲み込む",
+      "trigger": "namespace original {} namespace alias=original; void later() {} / using namespace original; void later() {}",
+      "expected": "文末;で宣言を完了しlaterを独立抽出する",
+      "actual": "parseNamespaceが;を越えて次の{をnamespace bodyに採用し、laterのsymbol/chunkが消える",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 151
+        },
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 160
+        }
+      ],
+      "verification": "extractor only"
+    },
+    {
+      "id": "CP06",
+      "case": "C06_anonymous_namespace",
+      "severity": "P2",
+      "title": "無名namespaceの所属が失われる",
+      "trigger": "namespace { void hidden() {} } void visible() {}",
+      "expected": "無名namespaceをコンテナとして区別してhiddenに紐付ける",
+      "actual": "hiddenはQualifiedName=hidden、ParentHandle空で抽出され、namespaceの区別がない。別ファイルでの誤解決まではこの条件では主張しない",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 157
+        },
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 96
+        }
+      ],
+      "verification": "extractor only"
+    },
+    {
+      "id": "CP07",
+      "case": "C08_operators",
+      "severity": "P2",
+      "title": "複数の演算子宣言が欠落・誤命名される",
+      "trigger": "operator[] / operator+ / operator bool / operator()",
+      "expected": "それぞれを演算子の名前・kindで抽出する",
+      "actual": "operator[]と変換演算子が欠落、operator+はName=+のmethod、operator()はName=operatorになる。operator=の正常対照は成功",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 375
+        },
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 393
+        }
+      ],
+      "verification": "extractor only"
+    },
+    {
+      "id": "CP08",
+      "case": "C09_parameter_shadow / C09_callback_argument_shadow",
+      "severity": "P1",
+      "title": "局所callback引数を同名の大域関数へ接続する",
+      "trigger": "void target() {} void caller(void (*target)()) { target(); } / install(Callback handler) { register_callback(handler); }",
+      "expected": "動的な引数から大域関数の確定関係を作らない",
+      "actual": "callsは大域targetへconfidence=.95。callback引数でも大域handlerへのreferences=.9が生成される。header参照とcallback参照も束縛確認対象",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/extractor.go",
+          "line": 363
+        },
+        {
+          "path": "internal/extract/cpp/extractor.go",
+          "line": 473
+        },
+        {
+          "path": "internal/extract/cpp/extractor.go",
+          "line": 298
+        },
+        {
+          "path": "internal/extract/cpp/extractor.go",
+          "line": 413
+        }
+      ],
+      "verification": "extractor only"
+    },
+    {
+      "id": "CP09",
+      "case": "C10_receiver_method",
+      "severity": "P1",
+      "title": "object.method()を無関係な自由関数へ接続する",
+      "trigger": "void target() {} namespace n { struct Object { void target(); }; } void caller(n::Object& object) { object.target(); }",
+      "expected": "receiverを解決できない場合は未解決に保ち、大域targetを選ばない",
+      "actual": "callerから自由関数targetへconfidence=.95のcallsが生成される。Objectは名前付きnamespaceに置きCP15との混同を除いた",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/extractor.go",
+          "line": 473
+        },
+        {
+          "path": "internal/extract/cpp/extractor.go",
+          "line": 644
+        }
+      ],
+      "verification": "extractor only"
+    },
+    {
+      "id": "CP10",
+      "case": "C11_external_qualified_call / C11_wrong_qualified_call_indexed",
+      "severity": "P1",
+      "title": "明示的な別namespaceの呼出しを同名関数へ確定接続する",
+      "trigger": "#include \"external.hpp\"; namespace other { void work() {} } void caller() { external::work(); }",
+      "expected": "external::workへ限定し、other::workへfallbackしない",
+      "actual": "同一ファイルのother::workへconfidence=.95で確定接続。external.hppに実際のexternal::work宣言を置いても索引に残り、other::workのcallers Evidenceにcallerが出る",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/extractor.go",
+          "line": 473
+        },
+        {
+          "path": "internal/extract/cpp/extractor.go",
+          "line": 490
+        }
+      ],
+      "verification": "extractor + real index + RelatedCandidateHits + ExpandEvidence"
+    },
+    {
+      "id": "CP11",
+      "case": "C12_parameter_names_in_pair",
+      "severity": "P2",
+      "title": "仮引数名の違いだけで宣言・定義の対応が消える",
+      "trigger": "void target(int value); void target(int renamed) {}",
+      "expected": "同じ関数の宣言と定義をdeclaresで対応付ける",
+      "actual": "SignatureKeyに引数名を含めてグループ化し、同一ファイル・単一候補でもdeclaresが生成されない",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 336
+        },
+        {
+          "path": "internal/extract/cpp/extractor.go",
+          "line": 321
+        },
+        {
+          "path": "internal/extract/cpp/extractor.go",
+          "line": 231
+        }
+      ],
+      "verification": "extractor only"
+    },
+    {
+      "id": "CP12",
+      "case": "C13_spliced_line_comment",
+      "severity": "P2",
+      "title": "行継続された//コメントから偽の関数を抽出する",
+      "trigger": "// note \\ followed by newline, then void phantom() {}",
+      "expected": "継続行をコメントとして扱い、phantomを生成しない",
+      "actual": "改行だけでLineCommentを終了し、コメント内のphantomを実関数として生成する",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/lexer.go",
+          "line": 67
+        }
+      ],
+      "verification": "extractor only"
+    },
+    {
+      "id": "CP13",
+      "case": "C14_commented_include_prefix",
+      "severity": "P2",
+      "title": "コメントを伴う有効な#includeを落とす",
+      "trigger": "/* note */ #include \"dep.hpp\" / #include /* note */ \"dep.hpp\"",
+      "expected": "コメントを空白相当としてimportsを生成する",
+      "actual": "前者はlexerのlineStart判定、後者はinclude正規表現で脱落し、両方importsが生成されない",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/lexer.go",
+          "line": 29
+        },
+        {
+          "path": "internal/extract/cpp/lexer.go",
+          "line": 58
+        },
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 428
+        }
+      ],
+      "verification": "extractor only"
+    },
+    {
+      "id": "CP14",
+      "case": "C15_template_type_parameter",
+      "severity": "P1",
+      "title": "templateのclass型引数を本物のclass宣言と誤認する",
+      "trigger": "namespace n { template<class T> struct Box { void run() {} }; }",
+      "expected": "n::Boxとn::Box::runを抽出する",
+      "actual": "型引数Tをclassとして抽出してBoxのbodyを取り込み、Boxとrunの本来の所有者が失われる。templateの実体化を要求しているのではなく字句上の宣言判定の問題",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 116
+        },
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 173
+        }
+      ],
+      "verification": "extractor only"
+    },
+    {
+      "id": "CP15",
+      "case": "C16_global_class_qualification",
+      "severity": "P2",
+      "title": "グローバルclassの修飾名にclass名が重複する",
+      "trigger": "struct Item { void run() {} };",
+      "expected": "QualifiedName=Item::run",
+      "actual": "実際はItem::Item::run。constructorはItem::Item::Itemとなる。namespace n内のn::Item::runは正常対照として成功",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 121
+        },
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 555
+        },
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 421
+        }
+      ],
+      "verification": "extractor only"
+    },
+    {
+      "id": "CP16",
+      "case": "C17_module_target / C17_module_expansion",
+      "severity": "P2",
+      "title": "C++ moduleの依存先が文全体になり展開できない",
+      "trigger": "export module utilities; / import utilities;",
+      "expected": "module宣言を依存と区別し、importのTargetをutilitiesへ正規化する",
+      "actual": "Target=import utilities ;などの文全体を保存し、module-declarationもimports関係にする。utilities.cppmを置いてもimports ExpandEvidenceにproviderが出ない",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 449
+        },
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 467
+        },
+        {
+          "path": "internal/extract/cpp/extractor.go",
+          "line": 220
+        }
+      ],
+      "verification": "extractor + real index + ExpandEvidence"
+    },
+    {
+      "id": "CP17",
+      "case": "C19_template_call",
+      "severity": "P2",
+      "title": "テンプレート呼出しが関係候補にも現れない",
+      "trigger": "template<class T> void work() {} void caller() { work<int>(); }",
+      "expected": "少なくともworkへの未解決callsを残す",
+      "actual": "(の直前が>なのでcallNameが空を返し、callsが丸ごと欠落する。型引数やoverloadの意味解析による確定解決は要求していない",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/extractor.go",
+          "line": 381
+        },
+        {
+          "path": "internal/extract/cpp/extractor.go",
+          "line": 644
+        }
+      ],
+      "verification": "extractor only"
+    },
+    {
+      "id": "CP18",
+      "case": "C20_typedef_custom_type",
+      "severity": "P2",
+      "title": "既存型からのtypedefでalias名を誤る",
+      "trigger": "struct Existing {}; typedef Existing Alias;",
+      "expected": "aliasの名前はAlias",
+      "actual": "aliasをExistingという名前で作り、Aliasのsymbolがない。最初のIdentifierを別名として採用している",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 200
+        },
+        {
+          "path": "internal/extract/cpp/parser.go",
+          "line": 216
+        }
+      ],
+      "verification": "extractor only"
+    },
+    {
+      "id": "CP19",
+      "case": "C21_cross_file_namespace_after_addition",
+      "severity": "P2",
+      "title": "無関係なnamespaceの追加で呼出しが未解決へ退化する",
+      "trigger": "a.hpp: n::Target, b.cpp: n::Caller->{Target()}, later add unrelated.hpp: m::Target",
+      "expected": "同じnamespaceとincludeに基づくn::Targetの区別を保持する",
+      "actual": "追加前のn::Caller->n::Target確定を対照確認。追加後はUnresolvedTo=Targetとなり、m::Targetのcallers EvidenceにもCallerが混ざる。confidence=.25/Resolved=falseであり、CP10の誤った確定接続とは区別する。増分と全再構築の関係集合自体は一致",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/extractor.go",
+          "line": 392
+        },
+        {
+          "path": "internal/extract/cpp/extractor.go",
+          "line": 473
+        },
+        {
+          "path": "internal/linker/linker.go",
+          "line": 308
+        },
+        {
+          "path": "internal/store/store.go",
+          "line": 1110
+        }
+      ],
+      "verification": "real index + incremental/full parity control + RelatedCandidateHits + ExpandEvidence"
+    },
+    {
+      "id": "CP20",
+      "case": "C22_utf8_bom",
+      "severity": "P2",
+      "title": "UTF-8 BOM付きファイルの先頭関数を落とす",
+      "trigger": "UTF-8 BOM + void first() {} CRLF void second() {}",
+      "expected": "BOMを識別子へ取り込まずfirstとsecondを抽出する",
+      "actual": "先頭firstが未抽出、後続secondは存在する。BOMなしの日本語識別子とCRLFは正常対照として成功",
+      "sources": [
+        {
+          "path": "internal/extract/cpp/lexer.go",
+          "line": 12
+        },
+        {
+          "path": "internal/extract/cpp/lexer.go",
+          "line": 118
+        },
+        {
+          "path": "internal/extract/cpp/lexer.go",
+          "line": 203
+        }
+      ],
+      "verification": "extractor only"
+    }
+  ],
+  "fixture_sha256": {
+    "testdata\\audits\\cpp-focused-20261018\\app_test.go": "f7b18adc7b16d07a0992b95cc0124083e657cc56902291a8f99fe55d45e09aa1",
+    "testdata\\audits\\cpp-focused-20261018\\extractor_test.go": "1c6d6063d3a159b33775226e0f6d05d279abe14cd0addae1d934fdbdf0fc303c",
+    "testdata\\audits\\cpp-focused-20261018\\README.md": "5fa21f11bca18a14597c53f7f7598614b7f4ddcf3998fe38fdd3783317b1e399",
+    "testdata\\audits\\cpp-focused-20261018\\run.py": "9850aa384bfde9239dfa52a388907257e15cb4400e849c8d1ca8fe2ad56c9bc6"
+  }
+}
