@@ -21,7 +21,7 @@ Public APIs, Evidence Packet fields, and database schema remain unchanged. Inter
 Each defect needs a witnessed RED to GREEN cycle using real extraction. Cases: generic nesting and normal/operator controls; expression lambdas/initializers; bare/this/static/unknown/ambiguous receivers across files; attributed/multiline/expression/indexer/explicit-interface properties and exact bytes. Integration fixtures under testdata; test source slices and wire budgets/invariants. Run go test ./..., go test -race ./..., go vet ./..., go build ./cmd/focalspan; CGO_ENABLED=0 cross-build Windows amd64, Linux amd64, Darwin arm64. Set GOPROXY=off and GOSUMDB=off. Report unavailable prerequisites instead of downloading dependencies.
 
 ## Idempotence and Recovery
-Use codex/csharp-functional-fixes in the managed isolated worktree. Preserve the original dirty checkout and its baseline hashes. Stage explicit task paths only. Never reset, clean, stash, push or deploy. Commit each verified defect separately; record remaining work here.
+Use codex/csharp-functional-fixes in the managed isolated worktree. Preserve the original dirty checkout and its baseline hashes. Stage explicit task paths only. Never reset, clean, stash or push. Deployment is authorized by the 2026-10-18 follow-up below. Commit each verified defect separately; record remaining work here.
 
 ## Progress
 - [x] 2026-10-18T12:12:29.174Z Created isolated worktree; captured original dirty-file hashes.
@@ -38,10 +38,10 @@ Use codex/csharp-functional-fixes in the managed isolated worktree. Preserve the
 ## Decision Log
 - 2026-10-18T12:12:29.174Z Execute serially because all four changes share the C# parser and builder. One fresh whole-branch reviewer follows implementation.
 - Unknown receivers and overload ambiguity remain unresolved; no type inference or compiler is introduced.
-- Leave the final commits on the task branch; merge/push/deploy were not requested.
+- Initial implementation retained its task branch. The subsequent user request explicitly authorized commit, merge and binary redeployment; push remains outside scope.
 
 ## Outcomes & Retrospective
-Completed CS01-CS04 and two independent-review corrections. Final code commit: 430f2e0035289cf7ee96701b40626be19ee929a2. Public interfaces/schema unchanged. The task branch and managed worktree are retained; no merge, push or deployment. Original dirty checkout tracked files remain byte-identical (7/7), and the predecessor archive matches its original SHA-256.
+Completed CS01-CS04 and two independent-review corrections. Final code commit: 430f2e0035289cf7ee96701b40626be19ee929a2. Public interfaces/schema unchanged. The code was subsequently fast-forward merged to master and deployed under the explicit 2026-10-18 follow-up authorization. The merged task worktree was archived; push was not requested. Original dirty checkout tracked files remain byte-identical (7/7), and the predecessor archive matches its original SHA-256.
 
 CS03 discovery: base is a keyword token, so call-name parsing must retain it instead of dropping the receiver.
 
@@ -74,3 +74,18 @@ CS03 discovery: base is a keyword token, so call-name parsing must retain it ins
 - Independent source review (read-only) found two Important issues; both received RED/GREEN regressions and a clean follow-up review. No remaining Critical/Important findings.
 - Evidence Validate and MeasureModelVisible budget checks passed at 512 and 1200 tokens for the C# fixture; Query/Expand/Impact and unchanged-source v20-to-v21 refresh passed.
 - Only documentation is changed after these gates; final documentation checks are git diff --check and targeted inspection.
+
+## Commit / Merge / Deployment Follow-up
+
+Authorization: user requested commit, merge, and redeployment on 2026-10-18.
+
+- [x] 2026-10-18T13:17:57.043Z Fast-forward merged codex/csharp-functional-fixes into master at 67063998d4920d9dd47c79693bf0981e22749acf; original dirty files retained.
+- [x] Built the Windows amd64 CGO-disabled executable from that master revision, including the pre-existing local MCP changes (vcs.modified=true). Candidate path: C:/Temp/focalspan-csharp-deploy/focalspan.exe.
+- [x] Existing MCP overlay: go test -count=1 -json ./internal/mcpserver and go test -race -count=1 -json ./internal/mcpserver both exit 0. Race used the installed x64 UCRT GCC.
+- [x] 2026-10-18T13:13:17.0334561Z Atomically replaced H:/bin/focalspan.exe via File.Replace. New SHA-256: dffd651bd385ae2caddfd02ebba7076008b948b27f46349d385a6f15ab77583e. Previous SHA-256: 09546a2b2145d8ff80e9724cf4c7ebb040cea855a75756ccd5d281881e7649fb. Backup: H:/bin/focalspan.previous-20261018T131010Z.exe.
+- [x] Fresh installed-binary MCP connection: all six tools exposed; complete C# DisplayName declaration appeared once on wire; Echo<T> source returned; ready=true, index_fresh=true, stale=false on the isolated one-file C# deployment fixture. This is fresh-process verification, not a claim that old host workers were replaced.
+- [x] Merged managed worktree archived and task branch cleanup performed. Original tracked/untracked file hashes retained (10/10).
+
+Deployment evidence: C:/Temp/focalspan-csharp-deploy/deployment.json, build-info.txt, candidate-mcp.json, installed-mcp.json, build.log, mcp.log, mcp-race.log.
+
+Deployment discoveries: Get-FileHash was unavailable in the command environment; the first attempt stopped before copying or replacing any binary. A read-only .NET SHA256 probe matched independent Node hashes, then File.Replace and both post-swap hashes passed. A lowbox-hosted Node probe timed out on installed-binary initialization; the same smoke protocol run in the normal host environment succeeded and closed cleanly. No repository configuration or existing project worker was changed/stopped. Existing host MCP connections require reconnecting to load the replaced executable.
