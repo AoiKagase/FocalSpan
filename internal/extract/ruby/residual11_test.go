@@ -77,6 +77,7 @@ func TestR07RubyEndlessMethods(t *testing.T) {
 		{"def first = 1\n", 1}, {"def first(x = 1) = x\n", 1}, {"def self.first(x) = x\n", 1},
 		{"def first = [\n  1,\n  2\n]\n", 4}, {"def first = begin\n  value()\nend\n", 3},
 		{"def first = \"one\ntwo\"\n", 2}, {"def first =\n  1\n", 2},
+		{"def first = /one\ntwo/\n", 2},
 	} {
 		source := tc.first + "def second\n  2\nend\n"
 		x, e := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "a.rb", Language: "ruby", Content: []byte(source)})

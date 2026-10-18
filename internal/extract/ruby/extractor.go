@@ -91,7 +91,7 @@ func buildRuby(ctx context.Context, file model.SourceFile, tokens []Token, diagn
 		lines[index].Original = originalLines[index].Text
 	}
 	for _, token := range tokens {
-		if token.Kind == String || token.Kind == PercentLiteral || token.Kind == Heredoc {
+		if token.Kind == String || token.Kind == PercentLiteral || token.Kind == Heredoc || token.Kind == Regex {
 			if token.StartLine > 0 && token.StartLine <= len(lines) && token.EndLine > lines[token.StartLine-1].LiteralEndLine {
 				lines[token.StartLine-1].LiteralEndLine = token.EndLine
 			}
