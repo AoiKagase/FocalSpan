@@ -35,15 +35,14 @@ func (p *parser) functionTail(close, hi int) (end, open, last, header int, ok bo
 			return end, open, last, header, false
 		case "requires":
 			i++
-			if text(i) == "requires" {
+			expression := text(i) == "requires"
+			if expression {
 				i++
 			}
 			if text(i) == "(" {
 				i = skip(i)
-				if text(i) == "{" {
-					i = skip(i)
-				}
-			} else if text(i) == "{" {
+			}
+			if expression && text(i) == "{" {
 				i = skip(i)
 			}
 		case ":":
