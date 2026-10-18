@@ -74,6 +74,7 @@ func (l *Linker) LinkWithScope(ctx context.Context, facts []projectmeta.Fact, sc
 			continue
 		}
 		candidates := resolveCandidates(from, relation.UnresolvedTo, candidatePool, orderedFacts, relation.Kind)
+		candidates = preferModuleOwner(from, relation, candidates)
 		if len(candidates) != 1 {
 			if progress != nil {
 				progress(indexRelation+1, len(relations))
@@ -86,6 +87,38 @@ func (l *Linker) LinkWithScope(ctx context.Context, facts []projectmeta.Fact, sc
 		}
 	}
 	return l.Store.LinkRelations(ctx, links)
+}
+
+// A file dependency identifies its module, not every declaration in it.
+// Symbol imports and other languages retain their existing resolution rules.
+func preferModuleOwner(from model.Symbol, relation model.Relation, candidates []model.Symbol) []model.Symbol {
+	switch from.Language {
+	case "javascript", "typescript", "jsx", "tsx":
+	default:
+		return candidates
+	}
+	switch relation.Source {
+	case "jsts:import", "jsts:dynamic-import", "jsts:require", "jsts:reexport", "jsts:export":
+	default:
+		return candidates
+	}
+	if relation.Kind != "imports" && relation.Kind != "exports" {
+		return candidates
+	}
+	paths := make(map[string]bool)
+	for _, symbol := range candidates {
+		paths[symbol.FilePath] = true
+	}
+	if len(paths) != 1 {
+		return candidates
+	}
+	owners := make([]model.Symbol, 0, 1)
+	for _, symbol := range candidates {
+		if symbol.Kind == "module" && symbol.ParentHandle == "" {
+			owners = append(owners, symbol)
+		}
+	}
+	return owners
 }
 
 type symbolIndex struct {
