@@ -91,25 +91,30 @@ func (engine *appEngine) QueryEvidenceAttributed(ctx context.Context, req app.Ev
 
 func (engine *appEngine) AttributionIdentities(ctx context.Context, expectations []AttributionExpectation) ([]AttributionIdentity, error) {
 	identities := make([]AttributionIdentity, 0, len(expectations))
-	for _, expectation := range expectations {
-		var candidates []model.RankedCandidate
-		var err error
-		if expectation.Expectation == "required_path" {
-			candidates, err = engine.service.Store.SearchPaths(ctx, []string{expectation.Path}, 500)
-		} else {
-			candidates, err = engine.service.Store.SearchExactSymbols(ctx, []string{expectation.Symbol}, 500)
+	seen := make(map[AttributionIdentity]bool)
+	add := func(identity AttributionIdentity) {
+		if !seen[identity] {
+			seen[identity] = true
+			identities = append(identities, identity)
 		}
+	}
+	for _, expectation := range expectations {
+		if expectation.Expectation == "required_path" {
+			_, found, err := engine.service.Store.FileHash(ctx, expectation.Path)
+			if err != nil {
+				return nil, err
+			}
+			if found {
+				add(AttributionIdentity{Path: expectation.Path})
+			}
+			continue
+		}
+		candidates, err := engine.service.Store.SymbolsForIdentity(ctx, expectation.Path, expectation.Symbol, expectation.Kind)
 		if err != nil {
 			return nil, err
 		}
 		for _, candidate := range candidates {
-			if candidate.Path != expectation.Path {
-				continue
-			}
-			if expectation.Expectation != "required_path" && (candidate.Symbol != expectation.Symbol || expectation.Kind != "" && candidate.Kind != expectation.Kind) {
-				continue
-			}
-			identities = append(identities, AttributionIdentity{Path: candidate.Path, Symbol: candidate.Symbol, Kind: candidate.Kind})
+			add(AttributionIdentity{Path: candidate.FilePath, Symbol: candidate.Name, Kind: candidate.Kind})
 		}
 	}
 	return identities, nil
