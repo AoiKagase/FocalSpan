@@ -330,6 +330,9 @@ func (p *parser) parseFunction(position, hi int, parent *declaration, namespace,
 		return nil, position, false
 	}
 	closePosition := p.positionOf(closeRaw)
+	if !p.parametersLikely(openPosition+1, closePosition) {
+		return nil, position, false
+	}
 	if !p.functionHeaderLikely(position, namePosition, openPosition, currentType) {
 		return nil, position, false
 	}

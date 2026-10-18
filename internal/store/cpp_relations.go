@@ -24,7 +24,7 @@ func (s *Store) loadCPPRelationFilter(ctx context.Context) (*cppRelationFilter, 
 	for _, v := range symbols {
 		f.byHandle[v.Handle] = v
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT c.handle,c.symbol_handle FROM chunks c JOIN files f ON f.id=c.file_id WHERE f.language='cpp'`)
+	rows, err := s.db.QueryContext(ctx, `SELECT c.handle,c.symbol_handle FROM chunks c JOIN files f ON f.id=c.file_id WHERE f.language IN ('c','cpp')`)
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +73,10 @@ func (f *cppRelationFilter) filter(handle string, hits []model.RelationHit) []mo
 		from, to := anchor, f.symbol(h.Candidate.Handle)
 		if h.Context.Direction == "incoming" {
 			from, to = to, anchor
+		}
+		if from.Language != "cpp" {
+			result = append(result, h)
+			continue
 		}
 		keep := false
 		for _, e := range f.edges[from.Handle] {

@@ -406,7 +406,7 @@ func (b *builder) buildBodyRelations(index symbolIndex, decl *declaration, from 
 			continue
 		}
 		name, qualified := callName(b.parsed.Tokens, previous)
-		if b.bindingFor(decl).shadows(name, token.StartByte) {
+		if qualified == "" && b.bindingFor(decl).shadows(name, token.StartByte) {
 			continue
 		}
 		if name == "" || controlWords[name] || name == "sizeof" || name == "decltype" || name == "static_assert" {
@@ -451,17 +451,28 @@ func (b *builder) addCallbackReferences(index symbolIndex, from model.Symbol, op
 		if !token.significant() || token.Kind != Identifier {
 			continue
 		}
-		if bindings.shadows(token.Text, token.StartByte) {
+
+		name, qualified := callName(b.parsed.Tokens, position)
+		if qualified == "" && bindings.shadows(name, token.StartByte) {
 			continue
 		}
-		if _, exists := seen[token.Text]; exists {
+		lexical := name
+		if qualified != "" {
+			lexical = qualified
+		}
+		if _, exists := seen[lexical]; exists {
 			continue
 		}
-		seen[token.Text] = struct{}{}
-		target, ok := unique(index.byName, token.Text)
-		if !ok || !isCallableKind(target.Kind) || target.Handle == from.Handle {
+		seen[lexical] = struct{}{}
+		candidates := cppscope.Resolve(from, lexical, b.result.Symbols)
+		if len(candidates) != 1 {
 			continue
 		}
+		target := candidates[0]
+		if !isCallableKind(target.Kind) || target.Handle == from.Handle {
+			continue
+		}
+
 		b.addRelation(model.Relation{FromHandle: from.Handle, ToHandle: target.Handle, Kind: "references", Confidence: .65, Source: "cpp:callback"})
 	}
 }

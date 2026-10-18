@@ -440,3 +440,11 @@ Execution 2026-10-18T07:53:23.888448+00:00: Task 19 GREEN, commit 08bbf905839c30
 Execution 2026-10-18T07:54:51.622166+00:00: Task 20 GREEN, commit 188ca496d45d05ea0076898380c93cb9ed4605a1. See C:/Temp/cpp20-execution for command output.
 
 Execution 2026-10-18T08:06:11.843187+00:00: Task boundary-followups GREEN, commit cb58ac87f9fc18c677509936b0d393933067e5dc. See C:/Temp/cpp20-execution for command output.
+
+Execution 2026-10-18T08:06:12.217908+00:00: Task 21-acceptance GREEN, commit a2d8e39505b9ace65c88b6427f269ffb4f307c78. See C:/Temp/cpp20-execution for command output.
+
+## Independent review findings and fix pass
+
+Review at a2d8e39 found five functional issues: P1 requires conjunction body boundary; P1 mutable lambda/if-init shadowing; P2 qualified calls suppressed by leaf shadowing; P2 direct initializer misclassified as function; P2 mixed C/CPP unresolved relation filtering. Candidate-cap concern was withdrawn: no pre-filter limit exists in this path. Module owner/duplicate-provider checks passed. No cybersecurity review was performed.
+
+All five were transferred to normal Go regression tests. Formal RED: C:/Temp/cpp20-execution/review-formal-red.log. GREEN: review-formal-green.log and review-package-green.log. Additional same-root receiver and nested-if lifetime RED/GREEN are in review-complex-receiver-* and review-nested-scope-* logs. No minor findings were deferred. Final confirmation and full verification remain pending.

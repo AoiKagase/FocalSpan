@@ -42,7 +42,7 @@ func parseCallTarget(tokens []Token, beforeParen int) (callTarget, bool) {
 				end = previousSignificant(tokens, end)
 			}
 		}
-		if end < 0 || tokens[end].Kind != Identifier {
+		if end < 0 || (tokens[end].Kind != Identifier && tokens[end].Text != "this") {
 			return "", end, false
 		}
 		return tokens[end].Text, end, true
@@ -61,6 +61,11 @@ func parseCallTarget(tokens []Token, beforeParen int) (callTarget, bool) {
 		left := previousSignificant(tokens, i)
 		v, j, found := part(left)
 		if !found {
+			if op == "." || op == "->" {
+				result.Kind = memberCall
+				full = "(expression)" + op + full
+			}
+
 			if op == "::" {
 				result.Absolute = true
 				full = "::" + full

@@ -18,6 +18,7 @@ func (p *parser) functionTail(close, hi int) (end, open, last, header int, ok bo
 		}
 		return hi
 	}
+	sawConstraint := false
 	for i := close + 1; i < hi; {
 		switch text(i) {
 		case ";":
@@ -35,8 +36,9 @@ func (p *parser) functionTail(close, hi int) (end, open, last, header int, ok bo
 			return end, open, last, header, false
 		case "requires":
 			i++
-			expression := text(i) == "requires"
-			if expression {
+			expression := sawConstraint || text(i) == "requires"
+			sawConstraint = true
+			if text(i) == "requires" {
 				i++
 			}
 			if text(i) == "(" {
