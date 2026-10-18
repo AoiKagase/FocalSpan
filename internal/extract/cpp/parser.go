@@ -273,6 +273,31 @@ func (p *parser) parseAlias(position, hi int, parent *declaration, namespace str
 			break
 		}
 	}
+
+	if keyword == "typedef" {
+		name = ""
+		depth := 0
+		for cursor := position + 1; cursor < semi; cursor++ {
+			tok := p.tokens[p.sig[cursor]]
+			v := tok.Text
+			if v == "(" {
+				if cursor+2 < semi && (p.tokens[p.sig[cursor+1]].Text == "*" || p.tokens[p.sig[cursor+1]].Text == "&") && p.tokens[p.sig[cursor+2]].Kind == Identifier {
+					name = p.tokens[p.sig[cursor+2]].Text
+					break
+				}
+				if name != "" {
+					break
+				}
+				depth++
+			}
+			if v == "[" || v == "=" || v == "," {
+				break
+			}
+			if depth == 0 && tok.Kind == Identifier && (cursor+1 >= semi || p.tokens[p.sig[cursor+1]].Text != "::") {
+				name = v
+			}
+		}
+	}
 	if name == "" {
 		return nil, position, false
 	}
