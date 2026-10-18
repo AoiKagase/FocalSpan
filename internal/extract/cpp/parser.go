@@ -310,7 +310,7 @@ func (p *parser) parseFunction(position, hi int, parent *declaration, namespace,
 	}
 	openPosition := -1
 	namePosition := -1
-	for cursor := position; cursor < hi && cursor < position+80; cursor++ {
+	for cursor := position; cursor < hi; cursor++ {
 		text := p.tokens[p.sig[cursor]].Text
 		if text == ";" || text == "{" || text == "}" {
 			break
@@ -343,42 +343,11 @@ func (p *parser) parseFunction(position, hi int, parent *declaration, namespace,
 	if name == "" {
 		return nil, position, false
 	}
-	endPosition := closePosition
-	bodyOpen := -1
-	bodyClose := -1
-	headerEnd := p.tokens[closeRaw].EndByte
-	for cursor := closePosition + 1; cursor < hi && cursor < closePosition+80; cursor++ {
-		text := p.tokens[p.sig[cursor]].Text
-		if text == "{" {
-			bodyOpen = p.sig[cursor]
-			bodyClose = p.matching[bodyOpen]
-			if bodyClose > 0 {
-				endPosition = p.positionOf(bodyClose)
-			} else {
-				endPosition = hi - 1
-			}
-			headerEnd = p.tokens[bodyOpen].EndByte
-			break
-		}
-		if text == ";" {
-			endPosition = cursor
-			headerEnd = p.tokens[p.sig[cursor]].EndByte
-			break
-		}
-		if text == "=" {
-			if cursor+1 < hi && p.tokens[p.sig[cursor+1]].Text == "default" {
-				semi := p.findToken(cursor+1, cursor+2, hi, ";")
-				if semi >= 0 {
-					endPosition = semi
-					headerEnd = p.tokens[p.sig[semi]].EndByte
-				}
-			}
-			break
-		}
-	}
-	if endPosition <= closePosition && bodyOpen < 0 {
+	endPosition, bodyOpen, bodyClose, headerEnd, ok := p.functionTail(closePosition, hi)
+	if !ok {
 		return nil, position, false
 	}
+
 	kind := "function"
 	if currentType != "" {
 		kind = "method"
