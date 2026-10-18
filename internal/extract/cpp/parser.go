@@ -100,7 +100,21 @@ func (p *parser) parseScope(lo, hi int, parent *declaration, namespace, currentT
 		}
 		raw := p.sig[position]
 		text := p.tokens[raw].Text
+		if text == "using" && position+1 < hi && p.tokens[p.sig[position+1]].Text == "namespace" {
+			for position < hi && p.tokens[p.sig[position]].Text != ";" {
+				position++
+			}
+			continue
+		}
 		if text == "namespace" {
+			alias := position + 1
+			for alias < hi && p.tokens[p.sig[alias]].Text != ";" && p.tokens[p.sig[alias]].Text != "{" {
+				alias++
+			}
+			if alias < hi && p.tokens[p.sig[alias]].Text == ";" {
+				position = alias
+				continue
+			}
 			decl, close, ok := p.parseNamespace(position, hi, parent, namespace)
 			if ok {
 				p.addDeclaration(decl)
@@ -157,7 +171,10 @@ func (p *parser) parseNamespace(position, hi int, parent *declaration, namespace
 	if name == "" || name == "inline" {
 		return nil, position, false
 	}
-	open := p.findToken(nameEnd, nameEnd, hi, "{")
+	open := nameEnd
+	if open >= hi || p.tokens[p.sig[open]].Text != "{" {
+		return nil, position, false
+	}
 	if open < 0 {
 		return nil, position, false
 	}
