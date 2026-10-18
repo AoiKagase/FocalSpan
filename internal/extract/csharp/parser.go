@@ -153,7 +153,7 @@ func (p *parser) parseScope(lo, hi int, parent *declaration, namespace, currentT
 		// indexer parameter can contain a type keyword (for example int in
 		// this[int index]); treating that keyword as a declaration would swallow
 		// the indexer before parseProperty gets a chance to recognize it.
-		if decl, close, ok := p.parseProperty(position, hi, parent, namespace); ok {
+		if decl, close, ok := p.parseProperty(position, hi, lo, parent, namespace); ok {
 			p.add(decl)
 			position = close
 			continue
@@ -247,7 +247,7 @@ func (p *parser) parseFunction(position, hi int, parent *declaration, namespace,
 	openPosition := -1
 	for cursor := position; cursor < hi && cursor < position+80; cursor++ {
 		text := p.tokens[p.sig[cursor]].Text
-		if text == ";" || text == "{" || text == "}" {
+		if text == ";" || text == "{" || text == "}" || text == "=>" {
 			break
 		}
 		if text == "(" {
@@ -358,37 +358,66 @@ func (p *parser) hasOperatorKeyword(start, end int) bool {
 	return false
 }
 
-func (p *parser) parseProperty(position, hi int, parent *declaration, namespace string) (*declaration, int, bool) {
+func (p *parser) parseProperty(position, hi, lo int, parent *declaration, namespace string) (*declaration, int, bool) {
 	if position+1 >= hi || p.tokens[p.sig[position]].Kind != Identifier && p.tokens[p.sig[position]].Text != "this" {
 		return nil, position, false
 	}
-	if p.tokens[p.sig[position+1]].Text == "[" && p.matching[p.sig[position+1]] > 0 {
-		closeBracket := p.matching[p.sig[position+1]]
-		closePosition := p.positionOf(closeBracket)
-		if closePosition+1 < hi && p.tokens[p.sig[closePosition+1]].Text == "{" {
-			open := p.sig[closePosition+1]
-			close := p.matching[open]
-			if close > 0 && p.rangeContainsProperty(close) {
-				return &declaration{Kind: "property", Name: "this[]", Qualified: memberQualified(parent, namespace, "this[]"), Start: p.sig[position], HeaderEnd: p.tokens[open].EndByte, End: p.endAfter(close, hi), BodyOpen: open, BodyClose: close, Parent: parent, Namespace: namespace}, p.positionOfOr(close, closePosition+1), true
-			}
+	name := p.tokens[p.sig[position]].Text
+	next := position + 1
+	if name == "this" && p.tokens[p.sig[next]].Text == "[" {
+		close, ok := p.matching[p.sig[next]]
+		if !ok {
+			return nil, position, false
 		}
+		next = p.positionOf(close) + 1
+		name = "this[]"
 	}
-	if p.tokens[p.sig[position+1]].Text == "=>" {
-		semi := p.findUntil(position+2, ";")
+	if next >= hi {
+		return nil, position, false
+	}
+	start := p.memberStart(position, lo)
+	switch p.tokens[p.sig[next]].Text {
+	case "=>":
+		semi := p.expressionEnd(next+1, hi)
 		if semi < 0 {
 			return nil, position, false
 		}
-		return &declaration{Kind: "property", Name: p.tokens[p.sig[position]].Text, Qualified: memberQualified(parent, namespace, p.tokens[p.sig[position]].Text), Start: p.sig[position], HeaderEnd: p.tokens[p.sig[semi]].EndByte, End: p.tokens[p.sig[semi]].EndByte, BodyOpen: -1, BodyClose: -1, Parent: parent, Namespace: namespace}, semi, true
+		return &declaration{Kind: "property", Name: name, Qualified: memberQualified(parent, namespace, name), Start: p.sig[start], HeaderEnd: p.tokens[p.sig[next]].EndByte, End: p.tokens[p.sig[semi]].EndByte, BodyOpen: -1, BodyClose: -1, Parent: parent, Namespace: namespace}, semi, true
+	case "{":
+		open := p.sig[next]
+		close, ok := p.matching[open]
+		if !ok || !p.rangeContainsProperty(close) {
+			return nil, position, false
+		}
+		endPosition := p.positionOf(close)
+		end := p.endAfter(close, hi)
+		if endPosition+1 < hi && p.tokens[p.sig[endPosition+1]].Text == "=" {
+			if semi := p.expressionEnd(endPosition+2, hi); semi >= 0 {
+				endPosition = semi
+				end = p.tokens[p.sig[semi]].EndByte
+			}
+		}
+		return &declaration{Kind: "property", Name: name, Qualified: memberQualified(parent, namespace, name), Start: p.sig[start], HeaderEnd: p.tokens[open].EndByte, End: end, BodyOpen: open, BodyClose: close, Parent: parent, Namespace: namespace}, endPosition, true
 	}
-	if p.tokens[p.sig[position+1]].Text != "{" {
-		return nil, position, false
+	return nil, position, false
+}
+
+// memberStart includes the declaration's attributes, modifiers and type, while
+// stopping at the previous member or the containing scope's opening boundary.
+func (p *parser) memberStart(position, lo int) int {
+	start := position
+	for cursor := position - 1; cursor >= lo; cursor-- {
+		switch p.tokens[p.sig[cursor]].Text {
+		case ";", "{", "}":
+			return start
+		case "]", ")":
+			if open, ok := p.matching[p.sig[cursor]]; ok {
+				cursor = p.positionOf(open)
+			}
+		}
+		start = cursor
 	}
-	open := p.sig[position+1]
-	close := p.matching[open]
-	if close == 0 || !p.rangeContainsProperty(close) {
-		return nil, position, false
-	}
-	return &declaration{Kind: "property", Name: p.tokens[p.sig[position]].Text, Qualified: memberQualified(parent, namespace, p.tokens[p.sig[position]].Text), Start: p.sig[position], HeaderEnd: p.tokens[open].EndByte, End: p.endAfter(close, hi), BodyOpen: open, BodyClose: close, Parent: parent, Namespace: namespace}, p.positionOfOr(close, position+1), true
+	return start
 }
 
 func (p *parser) parseEvent(position, hi int, parent *declaration, namespace string) (*declaration, int, bool) {

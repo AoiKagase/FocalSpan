@@ -149,3 +149,50 @@ func TestCS03AmbiguousOverloadStaysUnresolved(t *testing.T) {
 		t.Fatal("missing unresolved Save call")
 	}
 }
+
+func TestCS04PropertiesKeepCompleteDeclarationSource(t *testing.T) {
+	cases := []struct{ name, member, symbol string }{
+		{"required", "public required string Name { get; init; }", "Name"},
+		{"attributes", "[Label(\"name\")]\n public string Name { get; set; }", "Name"},
+		{"multiline type", "public\n System.Collections.Generic.Dictionary<string, int>\n Name { get; }", "Name"},
+		{"expression", "public string Name => Format();", "Name"},
+		{"indexer", "public string this[int index] { get => Format(); }", "this[]"},
+		{"expression indexer", "public string this[int index] => Format();", "this[]"},
+		{"explicit interface", "string IName.Name { get; }", "Name"},
+		{"initializer", "public string[] Name { get; } = new[] { \"x\", \"y\" };", "Name"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			source := "class Service {\n private int prior;\n // unrelated comment\n " + tc.member + "\n void After() {}\n string Format() { return \"\"; }\n}\n"
+			got, err := NewExtractor().Extract(context.Background(), model.SourceFile{Path: "Service.cs", Language: "csharp", Content: []byte(source)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			property := findSymbol(got.Symbols, "Service."+tc.symbol, "property")
+			if property.Handle == "" {
+				t.Fatal("property missing")
+			}
+			if actual := source[property.StartByte:property.EndByte]; actual != tc.member {
+				t.Errorf("property source=%q, want %q", actual, tc.member)
+			}
+			if !strings.HasPrefix(property.Signature, strings.Split(tc.member, " {")[0]) && !strings.HasPrefix(tc.member, property.Signature) {
+				t.Errorf("incomplete signature %q", property.Signature)
+			}
+			found := false
+			for _, chunk := range got.Chunks {
+				if chunk.SymbolHandle == property.Handle {
+					found = true
+					if chunk.Content != tc.member {
+						t.Errorf("chunk=%q, want %q", chunk.Content, tc.member)
+					}
+				}
+			}
+			if !found {
+				t.Fatal("property chunk missing")
+			}
+			if findSymbol(got.Symbols, "Service.After", "method").Handle == "" {
+				t.Fatal("following member lost")
+			}
+		})
+	}
+}

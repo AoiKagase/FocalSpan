@@ -28,7 +28,7 @@ Use codex/csharp-functional-fixes in the managed isolated worktree. Preserve the
 - [x] 2026-10-18T12:16:57.382Z CS01 generic names: witnessed missing Echo/Map and Value arity RED; C# package GREEN (exit 0).
 - [x] 2026-10-18T12:19:01.974Z CS02 expression calls: witnessed four missing relations and truncated lambda RED; C# package GREEN (exit 0).
 - [x] 2026-10-18T12:25:24.562Z CS03 conservative scope: extraction and real-store linker RED witnessed; both packages GREEN. Baseline go test ./... GREEN before product changes (exit 0).
-- [ ] CS04 full property spans.
+- [x] 2026-10-18T12:27:06.521Z CS04 full property spans: missing modifier/type/attribute RED witnessed; all property variants and C# package GREEN.
 - [ ] Version migration, integration, review and all validation.
 
 ## Surprises & Discoveries
