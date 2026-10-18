@@ -133,7 +133,7 @@ func Lex(ctx context.Context, content []byte) ([]Token, []model.Diagnostic, erro
 		}
 		if value >= '0' && value <= '9' {
 			index++
-			for index < len(content) && (isIdentPart(content[index]) || content[index] == '.') {
+			for index < len(content) && (isIdentPart(content[index]) || content[index] == '.' || (content[index] == '\'' && index+1 < len(content) && isIdentPart(content[index-1]) && isIdentPart(content[index+1])) || ((content[index] == '+' || content[index] == '-') && strings.ContainsRune("eEpP", rune(content[index-1])))) {
 				index++
 			}
 			result = append(result, makeToken(Number, content, mapa, start, index, active))
