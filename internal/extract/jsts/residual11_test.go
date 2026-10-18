@@ -61,3 +61,32 @@ func TestR01LexicalControls(t *testing.T) {
 		}
 	}
 }
+
+func TestR02StaticModuleArguments(t *testing.T) {
+	for _, call := range []string{"import", "require"} {
+		for _, tc := range []struct{ arg, want string }{
+			{"name + './dep'", ""}, {"resolve('./dep')", ""}, {"name, {type: './wrong'}", ""}, {"`${name}/dep`", ""},
+			{"'./dep'", "./dep"}, {" /* before */ './dep' /* after */ ", "./dep"}, {"'./dep', {with: {type: 'json'}}", "./dep"}, {"'./dep',", "./dep"},
+		} {
+			t.Run(call+tc.arg, func(t *testing.T) {
+				tokens, _, e := Lex(context.Background(), []byte(call+"("+tc.arg+");"))
+				if e != nil {
+					t.Fatal(e)
+				}
+				p, e := parseJSTS(context.Background(), tokens)
+				if e != nil {
+					t.Fatal(e)
+				}
+				got := ""
+				for _, m := range p.Modules {
+					if m.Source == "jsts:dynamic-import" || m.Source == "jsts:require" {
+						got = m.Target
+					}
+				}
+				if got != tc.want {
+					t.Fatalf("module=%q want %q", got, tc.want)
+				}
+			})
+		}
+	}
+}

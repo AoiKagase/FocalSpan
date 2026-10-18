@@ -93,7 +93,7 @@ func (p *parser) parseModules() {
 			if position+1 < len(p.sig) && p.tokens[p.sig[position+1]].Text == "(" {
 				close := p.matching[p.sig[position+1]]
 				if close > 0 {
-					if target := firstString(p.tokens, p.sig[position+2:p.positionOf(close)]); target != "" {
+					if target, ok := staticModuleArgument(p.tokens, p.sig[position+2:p.positionOf(close)]); ok {
 						p.result.Modules = append(p.result.Modules, moduleRelation{Target: target, Source: "jsts:dynamic-import"})
 					}
 				}
@@ -159,7 +159,7 @@ func (p *parser) parseModules() {
 		if close == 0 {
 			continue
 		}
-		if target := firstString(p.tokens, p.sig[position+2:p.positionOf(close)]); target != "" {
+		if target, ok := staticModuleArgument(p.tokens, p.sig[position+2:p.positionOf(close)]); ok {
 			p.result.Modules = append(p.result.Modules, moduleRelation{Target: target, Source: "jsts:require"})
 		}
 	}
@@ -176,6 +176,19 @@ func (p *parser) parseModules() {
 		}
 		position = end
 	}
+}
+
+// staticModuleArgument accepts a literal as the complete first argument.
+// Strings in computed expressions or options are not module identities.
+func staticModuleArgument(tokens []Token, significant []int) (string, bool) {
+	if len(significant) == 0 || tokens[significant[0]].Kind != StringLiteral {
+		return "", false
+	}
+	if len(significant) > 1 && tokens[significant[1]].Text != "," {
+		return "", false
+	}
+	value := strings.Trim(tokens[significant[0]].Text, "\"'")
+	return value, value != ""
 }
 
 func (p *parser) parseScope(lo, hi int, parent *declaration, namespace, currentType string) error {
