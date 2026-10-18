@@ -496,6 +496,8 @@ func (b *builder) resolveCall(index symbolIndex, decl *declaration, name, qualif
 		if target, ok := unique(index.byQualified, joinQualified(decl.Namespace, qualified)); ok {
 			return target, true
 		}
+
+		return model.Symbol{}, false
 	}
 	if parent := decl.Parent; parent != nil && (parent.Kind == "class" || parent.Kind == "struct") {
 		if target, ok := unique(index.byQualified, parent.Qualified+"::"+name); ok {
