@@ -261,6 +261,9 @@ func (p *parser) parseFunction(position, hi int, parent *declaration, namespace,
 	}
 	closePosition := p.positionOf(closeRaw)
 	namePosition := openPosition - 1
+	if !p.hasOperatorKeyword(position, namePosition) {
+		namePosition = p.positionOf(genericNameBefore(p.tokens, p.sig[namePosition]))
+	}
 	name := p.tokens[p.sig[namePosition]].Text
 	if name == "=" || p.tokens[p.sig[namePosition]].Kind == Operator || p.hasOperatorKeyword(position, namePosition) {
 		for cursor := namePosition - 1; cursor >= position; cursor-- {
@@ -334,7 +337,11 @@ func (p *parser) parseFunction(position, hi int, parent *declaration, namespace,
 	if endPosition <= closePosition && bodyOpen < 0 {
 		return nil, position, false
 	}
-	return &declaration{Kind: kind, Name: name, Qualified: qualified, Start: p.sig[position], HeaderEnd: headerEnd, End: p.endAfter(p.sig[endPosition], hi), BodyOpen: bodyOpen, BodyClose: bodyClose, Parent: parent, Namespace: namespace, SignatureKey: joinTokens(p.tokens, p.sig[openPosition+1:closePosition])}, endPosition, true
+	signatureKey := joinTokens(p.tokens, p.sig[openPosition+1:closePosition])
+	if namePosition < openPosition-1 {
+		signatureKey = joinTokens(p.tokens, p.sig[namePosition+1:closePosition])
+	}
+	return &declaration{Kind: kind, Name: name, Qualified: qualified, Start: p.sig[position], HeaderEnd: headerEnd, End: p.endAfter(p.sig[endPosition], hi), BodyOpen: bodyOpen, BodyClose: bodyClose, Parent: parent, Namespace: namespace, SignatureKey: signatureKey}, endPosition, true
 }
 
 func (p *parser) hasOperatorKeyword(start, end int) bool {

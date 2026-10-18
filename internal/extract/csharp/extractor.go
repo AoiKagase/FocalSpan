@@ -369,6 +369,7 @@ func nextSignificant(tokens []Token, position int) int {
 	return -1
 }
 func callName(tokens []Token, previous int) (string, string) {
+	previous = genericNameBefore(tokens, previous)
 	if previous < 0 || tokens[previous].Kind != Identifier {
 		return "", ""
 	}
