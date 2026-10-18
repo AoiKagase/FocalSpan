@@ -556,7 +556,7 @@ func namespaceFor(value string) string {
 	if position := strings.LastIndex(value, "::"); position >= 0 {
 		return value[:position]
 	}
-	return value
+	return ""
 }
 
 func testName(args string) string {
