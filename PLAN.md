@@ -67,8 +67,14 @@ Original checkout dirty-file hashes match 13/13; predecessor archive is byte-ide
 Authorization: user requested commit, merge, and redeployment on 2026-10-19. Preserve unrelated master changes and do not push.
 
 - [x] Baseline rechecked: master and task worktree share base 0054c2c; original dirty-file hashes still match 13/13; no top-level Git lock found.
-- [ ] Commit the plan transition separately, then the 16 explicit product/test/fixture paths.
-- [ ] Fast-forward master; verify merged working tree including existing MCP overlay; preserve original dirty files.
-- [ ] Build Windows amd64 CGO-disabled candidate from merged master; validate it on isolated PHP/INC fixture through a fresh MCP process.
-- [ ] Back up and atomically replace H:/bin/focalspan.exe; verify hashes and fresh installed-binary MCP behavior; record exact revision and modified-source status.
-- [ ] Record final results, archive the merged task worktree, and remove the merged task branch.
+- [x] Plan-transition commit 8af748c; product commit 1e64151119a4019e76134e7a5cbd0174d20e5264 contains only the 16 explicit product/test/fixture paths. Fresh precommit verification: 5 packages, 337 tests/subtests, exit 0.
+- [x] Fast-forward merged master from 0054c2c to 1e64151. Merged working-tree go test -count=1 -json ./... exit 0: 44 packages, 1494 tests/subtests; MCP overlay race test exit 0: 24 tests/subtests. Original 13 dirty files retained byte-for-byte.
+- [x] Built Windows amd64 CGO-disabled candidate from master 1e64151, including pre-existing local MCP changes (vcs.modified=true). Candidate fresh-MCP verification passed on isolated three-file PHP/INC fixture.
+- [x] 2026-10-19T02:15:37.717Z Atomically replaced H:/bin/focalspan.exe; candidate/installed SHA256 7345539f43be6d0010a1c9a17d111d6a64e21486895e0141a7ab0b472e0c9bfa. Backup H:/bin/focalspan.previous-20261019T021536Z.exe matches previous SHA256 dffd651bd385ae2caddfd02ebba7076008b948b27f46349d385a6f15ab77583e. Fresh installed-binary MCP verification passed.
+- [x] 2026-10-19T02:16Z Recorded final results; native managed worktree is archived/recoverable, and merged codex/php-functional-fixes branch was safely deleted after archive completion. Follow-up changes are documentation only.
+
+Follow-up evidence: C:/Temp/focalspan-php-precommit.jsonl, focalspan-php-merged-tests.jsonl, focalspan-php-merged-mcp-race.jsonl, and C:/Temp/focalspan-php-deploy/{build.log,build-info.txt,source-commit.txt,predeployment.json,deployment.json,candidate-mcp.json,installed-mcp.json,smoke.mjs,deploy.ps1}.
+
+Both candidate and installed fresh MCP processes exposed all six tools; the exact attributed typed-constant declaration appeared once on the wire; grouped imported function and INC global fallback were returned by callee expansion; ready=true, mcp_ready=true, index_fresh=true, stale=false, file_count=3. This verifies fresh processes on the isolated fixture, not replacement of any pre-existing host worker or reindexing of the main repository. Existing host/MCP connections need reconnecting to load the replaced executable. No global MCP registration/configuration was changed, and no push occurred.
+
+Cleanup discovery: archive_worktree returned queued. The initial branch deletion was safely refused while the checkout was still registered. list_artifacts then confirmed archived_worktree and worktree inventory confirmed removal; the subsequent safe branch deletion succeeded. Other worktrees were left untouched.
