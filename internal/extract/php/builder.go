@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/focalspan/focalspan/internal/model"
+	"github.com/focalspan/focalspan/internal/phpscope"
 )
 
 type phpBuilder struct {
@@ -377,7 +378,7 @@ func (b *phpBuilder) isPHPUnitTestCaseReference(namespace, target string) bool {
 			continue
 		}
 		for _, imported := range b.importsInRange(use.Start, use.End) {
-			if strings.EqualFold(imported.Alias, target) && strings.EqualFold(imported.Target, testCase) {
+			if imported.Kind == "class" && strings.EqualFold(imported.Alias, target) && strings.EqualFold(imported.Target, testCase) {
 				return true
 			}
 		}
@@ -476,10 +477,11 @@ type phpImport struct {
 }
 
 type phpSymbolIndex struct {
-	byQualified map[string]model.Symbol
-	byName      map[string][]model.Symbol
-	byDecl      map[*phpDecl]model.Symbol
-	aliases     map[string]map[string]string
+	byQualified      map[string]model.Symbol
+	typesByQualified map[string][]model.Symbol
+	byName           map[string][]model.Symbol
+	byDecl           map[*phpDecl]model.Symbol
+	aliases          map[string]map[string]map[string]string
 }
 
 func (b *phpBuilder) buildRelations() {
@@ -505,11 +507,11 @@ func (b *phpBuilder) buildRelations() {
 		owner := b.ownerForNamespace(index, use.Namespace)
 		for _, imported := range b.importsInRange(use.Start, use.End) {
 			target := imported.Target
-			if resolved, ok := index.byQualified[normalizeLookup(target)]; ok {
-				b.addRelation(model.Relation{FromHandle: owner.Handle, ToHandle: resolved.Handle, Kind: "imports", Confidence: .9, Source: "php-structural"})
+			if matches := phpscope.ResolveReference(target, imported.Kind, b.result.Symbols); len(matches) == 1 {
+				b.addRelation(model.Relation{FromHandle: owner.Handle, ToHandle: matches[0].Handle, Kind: "imports", Confidence: .9, Source: "php-structural"})
 				continue
 			}
-			b.addRelation(model.Relation{FromHandle: owner.Handle, UnresolvedTo: target, Kind: "imports", Confidence: .55, Source: "php-structural"})
+			b.addRelation(model.Relation{FromHandle: owner.Handle, UnresolvedTo: target, Kind: "imports", Confidence: .55, Source: "php-import-" + imported.Kind})
 		}
 	}
 }
@@ -573,7 +575,7 @@ func (b *phpBuilder) buildDeclarationTypeRelations(index phpSymbolIndex, decl *p
 		if resolved, ok := resolveType(index, decl.Namespace, target); ok {
 			b.addRelation(model.Relation{FromHandle: symbol.Handle, ToHandle: resolved.Handle, Kind: "references", Confidence: .25, Source: "phpdoc-type"})
 		} else {
-			b.addRelation(model.Relation{FromHandle: symbol.Handle, UnresolvedTo: target, Kind: "references", Confidence: .2, Source: "phpdoc-type"})
+			b.addRelation(model.Relation{FromHandle: symbol.Handle, UnresolvedTo: resolveAlias(index, decl.Namespace, target), Kind: "references", Confidence: .2, Source: "phpdoc-type"})
 		}
 	}
 }
@@ -591,7 +593,7 @@ func phpDocTypes(doc string) []string {
 		for _, value := range strings.Split(match[2], "|") {
 			value = strings.Trim(value, "?&")
 			value = strings.TrimSuffix(value, "[]")
-			value = canonicalName(value)
+			value = strings.TrimSpace(value)
 			if value == "" || strings.EqualFold(value, "mixed") || strings.EqualFold(value, "null") || seen[strings.ToLower(value)] {
 				continue
 			}
@@ -603,22 +605,33 @@ func phpDocTypes(doc string) []string {
 }
 
 func (b *phpBuilder) indexSymbols() phpSymbolIndex {
-	index := phpSymbolIndex{byQualified: make(map[string]model.Symbol), byName: make(map[string][]model.Symbol), byDecl: b.byDecl, aliases: make(map[string]map[string]string)}
+	index := phpSymbolIndex{typesByQualified: make(map[string][]model.Symbol), byQualified: make(map[string]model.Symbol), byName: make(map[string][]model.Symbol), byDecl: b.byDecl, aliases: make(map[string]map[string]map[string]string)}
 	for _, symbol := range b.result.Symbols {
 		if symbol.Kind == "file" {
 			continue
 		}
 		index.byQualified[normalizeLookup(symbol.QualifiedName)] = symbol
+		if isClassLike(symbol.Kind) {
+			key := normalizeLookup(symbol.QualifiedName)
+			index.typesByQualified[key] = append(index.typesByQualified[key], symbol)
+		}
 		index.byName[strings.ToLower(symbol.Name)] = append(index.byName[strings.ToLower(symbol.Name)], symbol)
 	}
 	for _, use := range b.parsed.Uses {
 		for _, imported := range b.importsInRange(use.Start, use.End) {
 			aliases := index.aliases[use.Namespace]
 			if aliases == nil {
-				aliases = make(map[string]string)
+				aliases = make(map[string]map[string]string)
 				index.aliases[use.Namespace] = aliases
 			}
-			aliases[strings.ToLower(imported.Alias)] = imported.Target
+			if aliases[imported.Kind] == nil {
+				aliases[imported.Kind] = make(map[string]string)
+			}
+			key := imported.Alias
+			if imported.Kind != "const" {
+				key = strings.ToLower(key)
+			}
+			aliases[imported.Kind][key] = imported.Target
 		}
 	}
 	return index
@@ -665,13 +678,13 @@ func (b *phpBuilder) buildBodyRelations(index phpSymbolIndex, decl *phpDecl, sym
 			return
 		}
 		text := strings.ToLower(compact[position].Text)
-		if position+2 < len(compact) && compact[position+1].Text == "::" && strings.EqualFold(compact[position+2].Text, "class") {
+		if compact[position].Kind == KindIdentifier || compact[position].Text == "\\" || strings.EqualFold(compact[position].Text, "namespace") {
 			name, next := qualifiedNameAt(compact, position, len(compact))
-			if name != "" {
+			if name != "" && next+1 < len(compact) && compact[next].Text == "::" && strings.EqualFold(compact[next+1].Text, "class") {
 				b.addResolvedOrUnresolved(index, symbol, decl.Namespace, name, "references", "class-reference")
-				position = next
+				position = next + 1
+				continue
 			}
-			continue
 		}
 		if text == "include" || text == "include_once" || text == "require" || text == "require_once" {
 			semi := nextCompactTokenText(compact, position+1, ";")
@@ -700,18 +713,19 @@ func (b *phpBuilder) buildBodyRelations(index phpSymbolIndex, decl *phpDecl, sym
 				position = next - 1
 				continue
 			}
+			target = b.normalizeCallTarget(index, decl, target)
 			if resolved, ok := b.resolveCall(index, decl, target); ok {
 				kind := "calls"
 				if symbol.Kind == "test" {
 					kind = "tests"
 				}
-				b.addRelation(model.Relation{FromHandle: symbol.Handle, ToHandle: resolved.Handle, Kind: kind, Confidence: .85, Source: source})
+				b.addRelation(model.Relation{FromHandle: symbol.Handle, ToHandle: resolved.Handle, UnresolvedTo: target, Kind: kind, Confidence: .85, Source: source})
 			} else {
 				kind := "calls"
 				if symbol.Kind == "test" {
 					kind = "tests"
 				}
-				b.addRelation(model.Relation{FromHandle: symbol.Handle, UnresolvedTo: terminalCallName(target), Kind: kind, Confidence: .3, Source: source})
+				b.addRelation(model.Relation{FromHandle: symbol.Handle, UnresolvedTo: target, Kind: kind, Confidence: .3, Source: source})
 			}
 			position = next - 1
 		}
@@ -723,127 +737,96 @@ func (b *phpBuilder) addResolvedOrUnresolved(index phpSymbolIndex, from model.Sy
 		b.addRelation(model.Relation{FromHandle: from.Handle, ToHandle: resolved.Handle, Kind: kind, Confidence: .8, Source: source})
 		return
 	}
-	b.addRelation(model.Relation{FromHandle: from.Handle, UnresolvedTo: canonicalName(target), Kind: kind, Confidence: .35, Source: source})
+	b.addRelation(model.Relation{FromHandle: from.Handle, UnresolvedTo: resolveAlias(index, namespace, target), Kind: kind, Confidence: .35, Source: source})
+}
+
+func (b *phpBuilder) normalizeCallTarget(index phpSymbolIndex, decl *phpDecl, target string) string {
+	class := classParent(decl)
+	if strings.HasPrefix(target, "$this->") {
+		if class == nil {
+			return target
+		}
+		return "\\" + qualifiedName(class) + "::" + strings.TrimPrefix(target, "$this->")
+	}
+	if strings.Contains(target, "->") {
+		return target
+	}
+	if parts := strings.SplitN(target, "::", 2); len(parts) == 2 {
+		switch strings.ToLower(parts[0]) {
+		case "self", "static":
+			if class == nil {
+				return "<unknown>::" + parts[1]
+			}
+			return "\\" + qualifiedName(class) + "::" + parts[1]
+		case "parent":
+			if class == nil || len(class.Extends) != 1 {
+				return "<parent>::" + parts[1]
+			}
+			return "\\" + resolveAlias(index, decl.Namespace, class.Extends[0]) + "::" + parts[1]
+		}
+		return "\\" + resolveAlias(index, decl.Namespace, parts[0]) + "::" + parts[1]
+	}
+	if strings.HasPrefix(target, "\\") {
+		return target
+	}
+	if !strings.Contains(target, "\\") {
+		if alias := index.aliases[decl.Namespace]["function"][strings.ToLower(target)]; alias != "" {
+			return "\\" + alias
+		}
+		return target
+	}
+	return "\\" + resolveAlias(index, decl.Namespace, target)
 }
 
 func (b *phpBuilder) resolveCall(index phpSymbolIndex, decl *phpDecl, target string) (model.Symbol, bool) {
-	class := classParent(decl)
-	rawTarget := strings.TrimSpace(target)
-	absolute := strings.HasPrefix(rawTarget, "\\")
-	target = canonicalName(rawTarget)
-	lookup := target
-	if strings.HasPrefix(strings.ToLower(target), "self::") || strings.HasPrefix(strings.ToLower(target), "static::") {
-		if class == nil {
-			return model.Symbol{}, false
-		}
-		lookup = qualifiedName(class) + target[strings.Index(target, "::"):]
-	} else if strings.HasPrefix(strings.ToLower(target), "parent::") {
-		if class == nil || len(class.Extends) == 0 {
-			return model.Symbol{}, false
-		}
-		lookup = resolveAlias(index, decl.Namespace, class.Extends[0]) + target[strings.Index(target, "::"):]
-	} else if strings.Contains(target, "::") {
-		parts := strings.SplitN(target, "::", 2)
-		for _, candidate := range callNameCandidates(index, decl.Namespace, parts[0], absolute) {
-			if resolved, ok := index.byQualified[normalizeLookup(candidate+"::"+parts[1])]; ok && isCallableSymbol(resolved.Kind) {
-				return resolved, true
-			}
-		}
-		return model.Symbol{}, false
-	} else if strings.HasPrefix(target, "$this->") {
-		if class == nil {
-			return model.Symbol{}, false
-		}
-		lookup = qualifiedName(class) + "::" + strings.TrimPrefix(target, "$this->")
-	} else {
-		for _, candidateName := range callNameCandidates(index, decl.Namespace, target, absolute) {
-			if resolved, ok := index.byQualified[normalizeLookup(candidateName)]; ok && isCallableSymbol(resolved.Kind) {
-				return resolved, true
-			}
-		}
-		if !absolute && !strings.Contains(target, "\\") {
-			matches := make([]model.Symbol, 0, len(index.byName[strings.ToLower(lastName(target))]))
-			for _, candidate := range index.byName[strings.ToLower(lastName(target))] {
-				if isCallableSymbol(candidate.Kind) {
-					matches = append(matches, candidate)
-				}
-			}
-			if len(matches) == 1 {
-				return matches[0], true
-			}
-		}
+	from := b.byDecl[decl]
+	matches := phpscope.Resolve(from, target, b.result.Symbols)
+	if len(matches) != 1 {
 		return model.Symbol{}, false
 	}
-	resolved, ok := index.byQualified[normalizeLookup(lookup)]
-	return resolved, ok && isCallableSymbol(resolved.Kind)
+	// Global fallback must wait until the linker has considered other files.
+	names := phpscope.Candidates(from, target)
+	if len(names) > 1 && !strings.EqualFold(matches[0].QualifiedName, names[0]) {
+		return model.Symbol{}, false
+	}
+	return matches[0], true
 }
 
 func isCallableSymbol(kind string) bool {
 	return kind == "function" || kind == "method" || kind == "test"
 }
 
-func callNameCandidates(index phpSymbolIndex, namespace, target string, absolute bool) []string {
-	target = canonicalName(target)
-	if absolute {
-		return []string{target}
-	}
-	result := make([]string, 0, 3)
-	appendUnique := func(value string) {
-		if value == "" {
-			return
-		}
-		for _, existing := range result {
-			if strings.EqualFold(existing, value) {
-				return
-			}
-		}
-		result = append(result, value)
-	}
-	appendUnique(resolveAlias(index, namespace, target))
-	if namespace != "" {
-		appendUnique(namespace + "\\" + target)
-	}
-	appendUnique(target)
-	return result
-}
-
 func resolveType(index phpSymbolIndex, namespace, target string) (model.Symbol, bool) {
 	lookup := resolveAlias(index, namespace, target)
-	if symbol, ok := index.byQualified[normalizeLookup(lookup)]; ok {
-		return symbol, true
+	matches := index.typesByQualified[normalizeLookup(lookup)]
+	if len(matches) != 1 {
+		return model.Symbol{}, false
 	}
-	for _, symbol := range index.byName[strings.ToLower(strings.TrimPrefix(lookup, "\\"))] {
-		if isClassLike(symbol.Kind) {
-			return symbol, true
-		}
-	}
-	return model.Symbol{}, false
+	return matches[0], true
 }
 
 func resolveAlias(index phpSymbolIndex, namespace, target string) string {
-	target = canonicalName(target)
-	if target == "" {
+	if strings.HasPrefix(target, "\\") {
+		return canonicalName(target)
+	}
+	if strings.HasPrefix(strings.ToLower(target), "namespace\\") {
+		target = target[len("namespace\\"):]
+		if namespace != "" {
+			return namespace + "\\" + target
+		}
 		return target
 	}
-	if strings.Contains(target, "\\") {
-		first, rest := target, ""
-		if slash := strings.IndexByte(target, '\\'); slash >= 0 {
-			first, rest = target[:slash], target[slash+1:]
-		}
-		if alias := index.aliases[namespace][strings.ToLower(first)]; alias != "" {
-			if rest != "" {
-				return alias + "\\" + rest
-			}
-			return alias
-		}
+	first, rest := target, ""
+	if slash := strings.IndexByte(target, '\\'); slash >= 0 {
+		first, rest = target[:slash], target[slash:]
 	}
-	if alias := index.aliases[namespace][strings.ToLower(target)]; alias != "" {
-		return alias
+	if alias := index.aliases[namespace]["class"][strings.ToLower(first)]; alias != "" {
+		return alias + rest
 	}
-	if strings.Contains(target, "\\") || namespace == "" {
-		return target
+	if namespace != "" {
+		return namespace + "\\" + target
 	}
-	return namespace + "\\" + target
+	return target
 }
 
 func (b *phpBuilder) importsInRange(start, end int) []phpImport {
@@ -851,116 +834,155 @@ func (b *phpBuilder) importsInRange(start, end int) []phpImport {
 	if len(values) == 0 || !strings.EqualFold(values[0].Text, "use") {
 		return nil
 	}
-	position := 1
-	kind := "class"
+	position, defaultKind := 1, "class"
 	if position < len(values) && (strings.EqualFold(values[position].Text, "function") || strings.EqualFold(values[position].Text, "const")) {
-		kind = strings.ToLower(values[position].Text)
+		defaultKind = strings.ToLower(values[position].Text)
 		position++
 	}
-	result := make([]phpImport, 0)
+	var result []phpImport
+	prefix := ""
+	grouped := false
 	for position < len(values) {
-		base := make([]string, 0)
-		for position < len(values) && values[position].Text != "," && values[position].Text != ";" && values[position].Text != "{" && !strings.EqualFold(values[position].Text, "as") {
-			base = append(base, values[position].Text)
-			position++
+		if b.ctx.Err() != nil {
+			return result
 		}
-		if position < len(values) && values[position].Text == "{" {
-			prefix := strings.TrimSuffix(strings.Join(base, ""), "\\")
-			position++
-			for position < len(values) && values[position].Text != "}" {
-				name := values[position].Text
-				position++
-				if name == "," {
-					continue
-				}
-				alias := lastName(name)
-				if position+1 < len(values) && strings.EqualFold(values[position].Text, "as") {
-					alias = values[position+1].Text
-					position += 2
-				}
-				result = append(result, phpImport{Kind: kind, Target: canonicalName(prefix + "\\" + name), Alias: alias})
-			}
-			if position < len(values) && values[position].Text == "}" {
-				position++
-			}
-		} else {
-			name := strings.Join(base, "")
-			alias := lastName(name)
-			if position < len(values) && strings.EqualFold(values[position].Text, "as") && position+1 < len(values) {
-				alias = values[position+1].Text
-				position += 2
-			}
-			if name != "" {
-				result = append(result, phpImport{Kind: kind, Target: canonicalName(name), Alias: alias})
-			}
+		if values[position].Text == ";" {
+			break
 		}
-		for position < len(values) && values[position].Text != "," && values[position].Text != ";" {
-			position++
-		}
-		if position < len(values) && values[position].Text == "," {
+		if values[position].Text == "," || values[position].Text == "}" {
 			position++
 			continue
 		}
-		break
+		kind := defaultKind
+		if grouped && (strings.EqualFold(values[position].Text, "function") || strings.EqualFold(values[position].Text, "const")) {
+			kind = strings.ToLower(values[position].Text)
+			position++
+		}
+		first := position
+		for position < len(values) && (values[position].Kind == KindIdentifier || values[position].Text == "\\") {
+			position++
+		}
+		if position == first {
+			break
+		}
+		name := joinTokenTexts(values[first:position])
+		if position < len(values) && values[position].Text == "{" {
+			prefix = strings.TrimSuffix(name, "\\")
+			grouped = true
+			position++
+			continue
+		}
+		alias := lastName(name)
+		if position+1 < len(values) && strings.EqualFold(values[position].Text, "as") {
+			alias = values[position+1].Text
+			position += 2
+		}
+		if grouped {
+			name = prefix + "\\" + name
+		}
+		result = append(result, phpImport{Kind: kind, Target: canonicalName(name), Alias: alias})
 	}
 	return result
 }
 
 func (b *phpBuilder) resolveInclude(start, end int, decl *phpDecl) (string, bool) {
 	values := significantTokensInRange(b.parsed.Tokens, start, end)
-	if len(values) == 0 {
-		return "", false
+	position := 0
+	var expression func() (string, bool, bool)
+	var term func() (string, bool, bool)
+	term = func() (string, bool, bool) {
+		if position >= len(values) || b.ctx.Err() != nil {
+			return "", false, false
+		}
+		token := values[position]
+		position++
+		switch {
+		case token.Text == "(":
+			value, base, ok := expression()
+			if !ok || position >= len(values) || values[position].Text != ")" {
+				return "", false, false
+			}
+			position++
+			return value, base, true
+		case token.Kind == KindSingleQuotedString || token.Kind == KindDoubleQuotedString:
+			value, ok := includeLiteral(token.Text)
+			return value, false, ok
+		case strings.EqualFold(token.Text, "__DIR__"):
+			return path.Dir(b.file.Path), true, true
+		case strings.EqualFold(token.Text, "__FILE__"):
+			return b.file.Path, true, true
+		case strings.EqualFold(token.Text, "dirname"):
+			if position+2 >= len(values) || values[position].Text != "(" || !strings.EqualFold(values[position+1].Text, "__FILE__") || values[position+2].Text != ")" {
+				return "", false, false
+			}
+			position += 3
+			return path.Dir(b.file.Path), true, true
+		}
+		return "", false, false
 	}
-	result := ""
-	baseApplied := false
-	for position := 0; position < len(values); position++ {
-		value := values[position].Text
-		if value == "." {
-			continue
-		}
-		if strings.HasPrefix(value, "'") || strings.HasPrefix(value, "\"") {
-			unquoted, err := strconv.Unquote(value)
-			if err != nil {
-				unquoted = strings.Trim(value, "'\"")
+	expression = func() (string, bool, bool) {
+		value, base, ok := term()
+		for ok && position < len(values) && values[position].Text == "." {
+			position++
+			next, nextBase, nextOK := term()
+			if !nextOK {
+				return "", false, false
 			}
-			result += unquoted
-			continue
+			value += next
+			base = base || nextBase
 		}
-		switch strings.ToLower(value) {
-		case "__dir__":
-			result += path.Dir(b.file.Path)
-			baseApplied = true
-		case "__file__":
-			result += b.file.Path
-			baseApplied = true
-		default:
-			compact := strings.ToLower(strings.Join(tokenTexts(values), ""))
-			if strings.HasPrefix(compact, "dirname(__file__)") {
-				result += path.Dir(b.file.Path)
-				baseApplied = true
-				position++
-				for position < len(values) && values[position].Text != "." {
-					position++
-				}
-				position--
-				continue
-			}
-			return strings.TrimSpace(shortExpression(b.parsed.Tokens, start, end)), false
-		}
+		return value, base, ok
+	}
+	result, base, ok := expression()
+	if !ok || position != len(values) {
+		return "", false
 	}
 	result = strings.ReplaceAll(result, "\\", "/")
 	if isAbsoluteIncludePath(result) {
 		return "", false
 	}
-	if !baseApplied {
+	if !base {
 		result = path.Join(path.Dir(b.file.Path), result)
 	} else {
 		result = path.Clean(result)
 	}
-	if result == "." || result == "" || result == ".." || strings.HasPrefix(result, "../") || strings.HasPrefix(result, "/") {
+	if result == "." || result == "" || result == ".." || strings.HasPrefix(result, "../") {
 		return "", false
 	}
 	return result, true
+}
+
+func includeLiteral(text string) (string, bool) {
+	if len(text) < 2 || text[0] != text[len(text)-1] {
+		return "", false
+	}
+	quote := text[0]
+	text = text[1 : len(text)-1]
+	var value strings.Builder
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if quote == '"' && c == '$' {
+			return "", false
+		}
+		if c == '\\' && i+1 < len(text) {
+			next := text[i+1]
+			if next == '\\' || next == quote || quote == '"' && next == '$' {
+				value.WriteByte(next)
+				i++
+				continue
+			}
+			if quote == '"' {
+				escape := map[byte]byte{'n': '\n', 'r': '\r', 't': '\t', 'v': '\v', 'e': 27, 'f': '\f'}
+				if decoded, ok := escape[next]; ok {
+					value.WriteByte(decoded)
+					i++
+					continue
+				}
+			}
+		}
+		value.WriteByte(c)
+	}
+	return value.String(), true
 }
 
 func isAbsoluteIncludePath(value string) bool {
@@ -993,7 +1015,7 @@ func namesInRawRange(tokens []Token, start, end int) []string {
 	result := make([]string, 0)
 	current := make([]string, 0)
 	flush := func() {
-		if value := canonicalName(strings.Join(current, "")); value != "" {
+		if value := strings.Join(current, ""); value != "" {
 			result = append(result, value)
 		}
 		current = current[:0]
@@ -1078,7 +1100,7 @@ func attributeName(values []Token, start int) string {
 	for position += 1; position+1 < len(values) && values[position].Text == "\\" && values[position+1].Kind == KindIdentifier; position += 2 {
 		name += "\\" + values[position+1].Text
 	}
-	return canonicalName(name)
+	return name
 }
 
 func propertyTypesInHeader(tokens []Token, start, end int) []string {
@@ -1168,7 +1190,7 @@ func typeNames(tokens []Token, start, end int) []string {
 		for position < end && (tokens[position].Text == "\\" || isTypeNameToken(tokens[position])) {
 			position++
 		}
-		name := canonicalName(joinTokenTexts(tokens[begin:position]))
+		name := joinTokenTexts(tokens[begin:position])
 		if name != "" && !phpBuiltinTypes[strings.ToLower(name)] {
 			result = append(result, name)
 		}
@@ -1195,7 +1217,10 @@ func qualifiedNameBefore(tokens []Token, end int) string {
 	for start >= 2 && tokens[start-1].Text == "\\" && isTypeNameToken(tokens[start-2]) {
 		start -= 2
 	}
-	return canonicalName(joinTokenTexts(tokens[start:end]))
+	if start > 0 && tokens[start-1].Text == "\\" {
+		start--
+	}
+	return joinTokenTexts(tokens[start:end])
 }
 
 func matchingToken(tokens []Token, open int, opening, closing string) int {
@@ -1240,7 +1265,7 @@ func qualifiedNameAt(tokens []Token, start, end int) (string, int) {
 		}
 		break
 	}
-	return canonicalName(strings.Join(parts, "")), position
+	return strings.Join(parts, ""), position
 }
 
 func callAt(tokens []Token, position, end int) (string, int, string, bool) {
@@ -1248,10 +1273,14 @@ func callAt(tokens []Token, position, end int) (string, int, string, bool) {
 		return "", position, "", false
 	}
 	text := tokens[position].Text
+	if position > 0 && (tokens[position-1].Text == "->" || tokens[position-1].Text == "?->" || tokens[position-1].Text == "::") && position+1 < end && tokens[position+1].Text == "(" {
+		return "<receiver>->" + text, position + 2, "<receiver>->" + text, true
+	}
+	qualifiedStart := tokens[position].Kind == KindIdentifier || text == "\\" || strings.EqualFold(text, "namespace") && position+1 < end && tokens[position+1].Text == "\\"
 	if tokens[position].Kind == KindVariable && position+3 < end && tokens[position+1].Text == "->" && tokens[position+2].Kind == KindIdentifier && tokens[position+3].Text == "(" {
 		return text + "->" + tokens[position+2].Text, position + 4, text + "->" + tokens[position+2].Text, true
 	}
-	if tokens[position].Kind == KindIdentifier || tokens[position].Text == "\\" {
+	if qualifiedStart {
 		name, next := qualifiedNameAt(tokens, position, end)
 		if name != "" && next+3 < end && tokens[next].Text == "::" && tokens[next+1].Kind == KindIdentifier && tokens[next+2].Text == "(" {
 			rawName := joinTokenTexts(tokens[position:next])
@@ -1262,7 +1291,7 @@ func callAt(tokens []Token, position, end int) (string, int, string, bool) {
 	if position+3 < end && (text == "self" || text == "static" || text == "parent" || tokens[position].Kind == KindIdentifier) && tokens[position+1].Text == "::" && tokens[position+2].Kind == KindIdentifier && tokens[position+3].Text == "(" {
 		return text + "::" + tokens[position+2].Text, position + 4, text + "::" + tokens[position+2].Text, true
 	}
-	if tokens[position].Kind == KindIdentifier || tokens[position].Text == "\\" {
+	if qualifiedStart {
 		name, next := qualifiedNameAt(tokens, position, end)
 		if name != "" && next < end && tokens[next].Text == "(" && !phpKeywords[strings.ToLower(lastName(name))] {
 			rawName := joinTokenTexts(tokens[position:next])

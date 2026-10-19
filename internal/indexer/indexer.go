@@ -45,7 +45,7 @@ const (
 	PhaseLinking  = "linking"
 	PhaseComplete = "complete"
 
-	extractorVersion = "extractors-v21-csharp-functional"
+	extractorVersion = "extractors-v22-php-functional"
 	// ExtractorVersion is the version required for a readable, current index.
 	ExtractorVersion = extractorVersion
 )

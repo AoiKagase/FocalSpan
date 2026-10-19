@@ -11,6 +11,7 @@ import (
 	"github.com/focalspan/focalspan/internal/csharpscope"
 	"github.com/focalspan/focalspan/internal/language"
 	"github.com/focalspan/focalspan/internal/model"
+	"github.com/focalspan/focalspan/internal/phpscope"
 	"github.com/focalspan/focalspan/internal/projectmeta"
 	"github.com/focalspan/focalspan/internal/store"
 )
@@ -77,6 +78,16 @@ func (l *Linker) LinkWithScope(ctx context.Context, facts []projectmeta.Fact, sc
 		if (from.Language == "cpp" || from.Language == "csharp") && (relation.Kind == "calls" || relation.Kind == "tests") {
 			candidatePool = symbols
 		}
+		if from.Language == "php" && (relation.Kind == "calls" || relation.Kind == "tests") {
+			candidatePool = symbols
+		}
+		phpReferenceKind := ""
+		if from.Language == "php" && (relation.Kind == "imports" || relation.Kind == "references") {
+			phpReferenceKind = phpscope.ReferenceKind(relation.Source)
+		}
+		if phpReferenceKind != "" {
+			candidatePool = symbols
+		}
 		if len(candidatePool) == 0 {
 			if progress != nil {
 				progress(indexRelation+1, len(relations))
@@ -84,7 +95,11 @@ func (l *Linker) LinkWithScope(ctx context.Context, facts []projectmeta.Fact, sc
 			continue
 		}
 		var candidates []model.Symbol
-		if from.Language == "csharp" && (relation.Kind == "calls" || relation.Kind == "tests") {
+		if from.Language == "php" && (relation.Kind == "calls" || relation.Kind == "tests") {
+			candidates = phpscope.Resolve(from, relation.UnresolvedTo, symbols)
+		} else if phpReferenceKind != "" {
+			candidates = phpscope.ResolveReference(relation.UnresolvedTo, phpReferenceKind, symbols)
+		} else if from.Language == "csharp" && (relation.Kind == "calls" || relation.Kind == "tests") {
 			candidates = csharpScope.Resolve(from, relation.UnresolvedTo)
 		} else {
 			candidates = resolveCandidates(from, relation.UnresolvedTo, candidatePool, activeFacts, relation.Kind)

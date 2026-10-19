@@ -445,6 +445,12 @@ func (s *Store) replaceFileTx(ctx context.Context, tx *sql.Tx, file model.Source
 		}
 	}
 	for _, relation := range extraction.Relations {
+		// A same-file PHP match is provisional: another file may provide a
+		// higher-priority namespaced function or an ambiguous declaration.
+		// Keep lexical dependency keys, and let the linker see the whole index.
+		if file.Language == "php" && (relation.Kind == "calls" || relation.Kind == "tests") && relation.UnresolvedTo != "" {
+			relation.ToHandle = ""
+		}
 		result, err := tx.ExecContext(ctx, `INSERT INTO relations(from_handle, to_handle, unresolved_to, kind, confidence, source) VALUES(?, ?, ?, ?, ?, ?)`, relation.FromHandle, nullable(relation.ToHandle), nullable(relation.UnresolvedTo), relation.Kind, relation.Confidence, relation.Source)
 		if err != nil {
 			return fmt.Errorf("insert relation: %w", err)

@@ -120,12 +120,15 @@ func (p *phpParser) parseScope(start, end int, namespace string, parent *phpDecl
 			continue
 		case "use":
 			if !classScope {
-				if delimiter := p.findSemicolon(position+1, end); delimiter >= 0 {
+				delimiter, next := p.findUseEnd(position+1, end)
+				if delimiter >= 0 {
 					p.result.Uses = append(p.result.Uses, phpUse{Start: p.declarationStart(position, start), End: p.sig[delimiter] + 1, Namespace: currentNamespace})
 					position = delimiter + 1
 					continue
 				}
 				p.addDiagnostic("php_malformed_declaration", "PHP use declaration has no terminator", raw)
+				position = next
+				continue
 			}
 		case "class", "interface", "trait", "enum":
 			if next := position + 1; next < end && p.isIdentifier(p.sig[next]) {
@@ -375,6 +378,10 @@ func (p *phpParser) parseClassMembers(position, end int, namespace string, paren
 	semi := p.findSemicolon(position, end)
 	if semi < 0 {
 		return false, position + 1
+	}
+	if p.containsKeyword(position, semi, "const") {
+		p.appendConstants(position, semi, namespace, parent)
+		return true, semi + 1
 	}
 	for cursor := position; cursor < semi; cursor++ {
 		if err := p.ctx.Err(); err != nil {
@@ -647,7 +654,7 @@ func (p *phpParser) nameAfter(start, end int, stop map[string]bool) string {
 			break
 		}
 	}
-	return canonicalName(strings.Join(parts, ""))
+	return strings.Join(parts, "")
 }
 
 func (p *phpParser) namesUntil(start, end int, stop map[string]bool) []string {

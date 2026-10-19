@@ -285,10 +285,10 @@ function normalize_token(string $value): string { return $value; }
 	if !hasRelation(got.Relations, validate.Handle, helper.Handle, "calls") || !hasRelation(got.Relations, caller.Handle, validate.Handle, "calls") {
 		t.Fatalf("resolved calls missing: %+v", got.Relations)
 	}
-	if !hasUnresolvedRelation(got.Relations, validate.Handle, "validateToken", "calls") || !hasUnresolvedRelation(got.Relations, caller.Handle, "$dynamicPath", "imports") {
+	if !hasUnresolvedRelation(got.Relations, validate.Handle, "$service->validateToken", "calls") || !hasUnresolvedRelation(got.Relations, caller.Handle, "$dynamicPath", "imports") {
 		t.Fatalf("unresolved relations missing: %+v", got.Relations)
 	}
-	if !hasUnresolvedRelation(got.Relations, callerClass.Handle, "SomeTrait", "references") {
+	if !hasUnresolvedRelation(got.Relations, callerClass.Handle, "App\\Auth\\SomeTrait", "references") {
 		t.Fatalf("trait reference missing: %+v", got.Relations)
 	}
 	if (!hasUnresolvedTarget(got.Relations, "App\\Auth\\TokenService", "imports") && !hasResolvedTarget(got.Relations, service.Handle, "imports")) || !hasUnresolvedRelation(got.Relations, caller.Handle, "src/Auth/bootstrap.inc", "imports") {
