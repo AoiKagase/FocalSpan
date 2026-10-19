@@ -1,91 +1,74 @@
-# C# functional fixes Implementation Plan
+# PHP / INC functional fixes
 
 ## Purpose / Big Picture
-Fix four approved C# extraction defects: generic member names, expression-body calls, receiver resolution, and complete property source spans. This plan is the executable specification of the approved 2026-10-18 chat plan.
+Implement five approved fixes: scoped calls, grouped use, import-kind isolation, typed constants, parenthesized includes. Preserve CLI/MCP fields and DB schema. No PHP/Composer execution, network, or new dependencies. The initial scope excluded commits/merge/deployment; the 2026-10-19 follow-up explicitly authorizes committing, merging into master, and redeploying the Windows binary. Push is outside scope.
 
 ## Context and Orientation
-Production parsing is in internal/extract/csharp. Cross-file calls are resolved in internal/linker. internal/indexer versions invalidate stale extraction. The previous completed C++ plan is archived byte-for-byte.
+PHP parser/builder: internal/extract/php. Cross-file resolution: internal/linker. Dependency projection: internal/store. Version refresh: internal/indexer. Fixtures: testdata.
 
 ## Interfaces and Dependencies
-Public APIs, Evidence Packet fields, and database schema remain unchanged. Internal declaration ranges and C# scope helpers may change. No new dependencies, network access, external LLM, or compilation/execution of indexed C# source. Product Go tests/builds are authorized.
+Preserve model.Relation and schema. Keep lexical call targets; imported/absolute targets retain leading backslash. Shared PHP helpers serve extraction/linking/dependency keys. Product Go verification explicitly authorized.
 
 ## Plan of Work
-1. Archive predecessor; activate this plan in a documentation-only commit.
-2. CS01: add failing generic declaration/call tests; recover names across nested angle arguments; preserve operators; pass and commit.
-3. CS02: add failing expression method/test relation tests; store optional expression range and reuse bounded call extraction; pass and commit.
-4. CS03: add failing scope/receiver/linker tests; share conservative C# resolution across extraction/linking, leave unknown/ambiguous calls unresolved; pass and commit.
-5. CS04: add failing property source/signature tests; include attributes, modifiers and types without preceding members/comments; pass and commit.
-6. Advance extractor version to extractors-v21-csharp-functional; verify unchanged-file reindex and public Query/Expand/Impact/Evidence behavior; review whole branch and record gates.
+1. Add five deterministic failing regression groups before production changes.
+2. Fix grouped use, typed constants, include parentheses, and separate import aliases; observe PHP GREEN.
+3. Fix scoped extraction/linking and dependency projection; verify full/incremental parity, ambiguity and target-only changes.
+4. Public Query/Expand/Impact/Evidence acceptance with source fidelity and budget/invariant checks. Advance to extractors-v22-php-functional; verify unchanged-source refresh.
+5. Offline full tests/race/vet/build and Windows amd64/Linux amd64/Darwin arm64 CGO-disabled builds; independent review.
 
 ## Validation and Acceptance
-Each defect needs a witnessed RED to GREEN cycle using real extraction. Cases: generic nesting and normal/operator controls; expression lambdas/initializers; bare/this/static/unknown/ambiguous receivers across files; attributed/multiline/expression/indexer/explicit-interface properties and exact bytes. Integration fixtures under testdata; test source slices and wire budgets/invariants. Run go test ./..., go test -race ./..., go vet ./..., go build ./cmd/focalspan; CGO_ENABLED=0 cross-build Windows amd64, Linux amd64, Darwin arm64. Set GOPROXY=off and GOSUMDB=off. Report unavailable prerequisites instead of downloading dependencies.
+Observe RED then GREEN for each behavior. Validate negative and positive names, aliases, unknown receivers, duplicates, group recovery, constant source, static/dynamic/outside includes. GOPROXY=off, GOSUMDB=off, GOTOOLCHAIN=local. Never claim unrun gates pass.
 
 ## Idempotence and Recovery
-Use codex/csharp-functional-fixes in the managed isolated worktree. Preserve the original dirty checkout and its baseline hashes. Stage explicit task paths only. Never reset, clean, stash or push. Deployment is authorized by the 2026-10-18 follow-up below. Commit each verified defect separately; record remaining work here.
+Worktree C:/Users/SandS/.codex/worktrees/php-functional-fixes/FocalSpan; branch codex/php-functional-fixes. Original 13 dirty-file hashes in C:/Temp/focalspan-php-original-hashes.json. No reset/clean/stash. Predecessor archived byte-for-byte at docs/superpowers/plans/completed/2026-10-18-csharp-functional-fixes.md.
 
 ## Progress
-- [x] 2026-10-18T12:12:29.174Z Created isolated worktree; captured original dirty-file hashes.
-- [x] 2026-10-18T12:16:57.382Z CS01 generic names: witnessed missing Echo/Map and Value arity RED; C# package GREEN (exit 0).
-- [x] 2026-10-18T12:19:01.974Z CS02 expression calls: witnessed four missing relations and truncated lambda RED; C# package GREEN (exit 0).
-- [x] 2026-10-18T12:25:24.562Z CS03 conservative scope: extraction and real-store linker RED witnessed; both packages GREEN. Baseline go test ./... GREEN before product changes (exit 0).
-- [x] 2026-10-18T12:27:06.521Z CS04 full property spans: missing modifier/type/attribute RED witnessed; all property variants and C# package GREEN.
-- [x] 2026-10-18T12:40:38.504Z Version migration RED/GREEN and public Query/Expand/Impact/Evidence integration GREEN.
-- [x] 2026-10-18T13:01:06.064Z Whole-branch review closed; all final validation gates exit 0.
+- [x] Worktree/branch, original dirty-file hash baseline, predecessor archive.
+- [x] Five regression groups written before production changes.
+- [x] Syntax/import/include RED witnessed (five regression groups); main tests GREEN.
+- [x] Scoped extraction/linking and incremental dependency regressions RED then GREEN.
+- [x] Public Query/Expand/Impact/Evidence and full/incremental parity GREEN in host app suite; version v21-to-v22 RED witnessed and indexer suite GREEN.
+- [x] 2026-10-19T02:09:24Z Final offline normal/race tests each exit 0: 44 packages, 1494 tests/subtests passed; vet, native build and all three CGO-disabled cross-builds exit 0.
+- [x] Bounded independent static review completed with no established Critical/Important findings. Reviewer did not independently execute tests; an approval-stalled diff command limited exhaustive diff coverage. Parent executed all final gates.
 
 ## Surprises & Discoveries
-- Tool output compression can hide source text; bounded source reads are used.
+Generic linking can undo conservative extraction: fix both layers. Native worktree Git/copy requires approved host permissions.
+- Sandbox Go package tests could not create Git fixture configs or rename SQLite upgrade files. Host runs passed app/store/indexer/linker; these are environment restrictions, not waived assertions.
+- Additional scope regression found namespace-relative calls and opaque receivers becoming bare calls; RED witnessed and PHP suite GREEN after correction.
+- Post-implementation alias review: external class aliases were discarded when no local type existed, and lexical readers erased absolute type prefixes. Added actual linker RED plus five absolute-reference RED cases (inheritance/property/signature/new/class literal), then fixed kind-aware type/import linking and lexical spelling. PHP+linker targeted suites GREEN in focalspan-php-types-green2.log.
 
 ## Decision Log
-- 2026-10-18T12:12:29.174Z Execute serially because all four changes share the C# parser and builder. One fresh whole-branch reviewer follows implementation.
-- Unknown receivers and overload ambiguity remain unresolved; no type inference or compiler is introduced.
-- Initial implementation retained its task branch. The subsequent user request explicitly authorized commit, merge and binary redeployment; push remains outside scope.
+- 2026-10-19: Initial implementation excluded commits, overriding the PLANS.md documentation-transition commit rule. The follow-up now authorizes separate documentation-transition and product commits, merge, and deployment.
+- 2026-10-19: Execute inline; final independent reviewer required by executing-plans skill.
+- 2026-10-19 Ruling: same-file PHP calls keep their lexical target even when locally resolved. Store persists them unresolved so the linker evaluates all files; lookup projection survives linking and causes reextraction on additions/removals/ambiguity. No schema change.
+- 2026-10-19 Ruling: defer namespaced global fallback until linking; a preferred declaration may live in another file. Type alias normalization now respects absolute and namespace-relative names.
+- 2026-10-19 Ruling: preserve import kind on unresolved import Source using php-import-class/function/const. This uses the existing relation fields and no schema/public shape change. Class references retain expanded aliases and absolute lexical spelling; class/function identical qualified names remain distinct lookup kinds.
 
 ## Outcomes & Retrospective
-Completed CS01-CS04 and two independent-review corrections. Final code commit: 430f2e0035289cf7ee96701b40626be19ee929a2. Public interfaces/schema unchanged. The code was subsequently fast-forward merged to master and deployed under the explicit 2026-10-18 follow-up authorization. The merged task worktree was archived; push was not requested. Original dirty checkout tracked files remain byte-identical (7/7), and the predecessor archive matches its original SHA-256.
+All five approved behaviors are implemented and verified, including follow-up class-alias/absolute-type and receiver/recovery corrections. Public CLI/MCP field shapes and DB schema are unchanged. Extraction version is extractors-v22-php-functional. The initial implementation completed without indexed PHP/Composer execution, network/dependency fetch, product commits, merge, push, or deployment. The authorized integration follow-up is recorded below.
 
-CS03 discovery: base is a keyword token, so call-name parsing must retain it instead of dropping the receiver.
+Final evidence (all commands set GOPROXY=off, GOSUMDB=off, GOTOOLCHAIN=local):
 
-## Integration discoveries and rulings
-- 2026-10-18T12:40:38.504Z Ruling: add C# member dependency keys to existing relation_lookup projection, without schema changes. Full and incremental linker otherwise skip this.Save and relative type targets when future partial members live in differently named files. Both failures were witnessed before the lookup correction; linker suite GREEN after it.
-- Local functions remain in their enclosing callable scope and are excluded from type-member lookup; witnessed RED/GREEN.
-- Public Expand uses callees, not internal relation kind calls; corrected the integration test to the existing interface.
-- Baseline test script initially had shell environment quoting errors. Re-ran with explicit GOPROXY=off/GOSUMDB=off/GOTOOLCHAIN=local; clean baseline go test ./... completed with exit 0.
-- PLAN.md serves as this task's durable execution ledger under repository policy.
-
-## Independent review corrections
-- 2026-10-18T12:47:00.540Z Fresh reviewer reported two Important findings: complex receivers were reinterpreted as bare calls; tuple type arguments prevented generic-call recovery. Both reproduced RED, then C# and linker suites passed GREEN.
-- Preserve an opaque <receiver> qualifier for unsupported receiver syntax so it cannot bind as a bare call; do not infer its type. Balance tuple/array delimiters while recovering generic names.
-- Final gates are rerun after these production changes. Initial race compile used 32-bit MinGW; rerun with existing C:/msys64/ucrt64/bin/gcc.exe (x86_64-w64-mingw32), process-local CC/PATH only.
-
-## Final Validation Evidence
-
-2026-10-18T13:01:06.064Z — all gates below completed on the final production code. Logs are in C:/Temp/focalspan-csharp-task/.
-
-| Gate | Result | Log |
+| Gate | Result | Evidence |
 | --- | --- | --- |
-| go test -count=1 -json ./... | exit 0; 44 packages, 1461 tests/subtests passed | test-uncached.log |
-| go test -race -count=1 -json ./... | exit 0; 44 packages, 1461 tests/subtests passed | race-uncached.log |
-| go vet ./... | exit 0 | vet-final.log |
-| go build ./cmd/focalspan (output directed to scratch) | exit 0 | build-final.log |
-| CGO_ENABLED=0 Windows amd64 / Linux amd64 / Darwin arm64 | all exit 0 | windows-final.log / linux-final.log / darwin-final.log |
+| go test -count=1 -json ./... | exit 0; 44 packages, 1494 tests/subtests passed, zero failures | C:/Temp/focalspan-php-test-final2.jsonl |
+| go test -race -count=1 -json ./... | exit 0; same 1494 tests/subtests, zero failures; installed x64 UCRT GCC | C:/Temp/focalspan-php-race-final2.jsonl |
+| go vet ./... | exit 0 | C:/Temp/focalspan-php-vet-final2.log |
+| go build ./cmd/focalspan (scratch output) | exit 0 | C:/Temp/focalspan-php-build-final2.log |
+| CGO_ENABLED=0 Windows amd64 / Linux amd64 / Darwin arm64 builds | all exit 0 | C:/Temp/focalspan-php-windows-final2.log / focalspan-php-linux-final2.log / focalspan-php-darwin-final2.log |
+| git diff --check | exit 0 | Final worktree inspection |
 
-- No network, dependency download, external LLM, or indexed C# compilation/execution was used. Race used the installed x64 UCRT GCC via process-local CC/PATH.
-- Cache-enabled full runs emitted successful test output but did not return promptly after app package completion; those task-owned processes were stopped. Fresh -count=1 runs then completed with exit 0. Test caching was bypassed, not test coverage.
-- Independent source review (read-only) found two Important issues; both received RED/GREEN regressions and a clean follow-up review. No remaining Critical/Important findings.
-- Evidence Validate and MeasureModelVisible budget checks passed at 512 and 1200 tokens for the C# fixture; Query/Expand/Impact and unchanged-source v20-to-v21 refresh passed.
-- Only documentation is changed after these gates; final documentation checks are git diff --check and targeted inspection.
+Public acceptance exercises typed constant Query/self Expand, imported function callee Expand, changed INC Impact, Evidence Validate, verbatim bytes and MeasureModelVisible budgets at 512/1200 tokens. Target-only addition, duplicate ambiguity, and deletion produce the same call relations under incremental and full indexing. Generic old extraction is refreshed for unchanged INC source from v21 to v22, and a subsequent run is unchanged.
+
+Original checkout dirty-file hashes match 13/13; predecessor archive is byte-identical to original PLAN.md. Initial delivery retained uncommitted changes on codex/php-functional-fixes in the managed worktree above. Earlier final logs without the final2 suffix predate the type-reference correction and are superseded. Documentation updates follow the successful final gates and require only documentation-scoped inspection.
 
 ## Commit / Merge / Deployment Follow-up
 
-Authorization: user requested commit, merge, and redeployment on 2026-10-18.
+Authorization: user requested commit, merge, and redeployment on 2026-10-19. Preserve unrelated master changes and do not push.
 
-- [x] 2026-10-18T13:17:57.043Z Fast-forward merged codex/csharp-functional-fixes into master at 67063998d4920d9dd47c79693bf0981e22749acf; original dirty files retained.
-- [x] Built the Windows amd64 CGO-disabled executable from that master revision, including the pre-existing local MCP changes (vcs.modified=true). Candidate path: C:/Temp/focalspan-csharp-deploy/focalspan.exe.
-- [x] Existing MCP overlay: go test -count=1 -json ./internal/mcpserver and go test -race -count=1 -json ./internal/mcpserver both exit 0. Race used the installed x64 UCRT GCC.
-- [x] 2026-10-18T13:13:17.0334561Z Atomically replaced H:/bin/focalspan.exe via File.Replace. New SHA-256: dffd651bd385ae2caddfd02ebba7076008b948b27f46349d385a6f15ab77583e. Previous SHA-256: 09546a2b2145d8ff80e9724cf4c7ebb040cea855a75756ccd5d281881e7649fb. Backup: H:/bin/focalspan.previous-20261018T131010Z.exe.
-- [x] Fresh installed-binary MCP connection: all six tools exposed; complete C# DisplayName declaration appeared once on wire; Echo<T> source returned; ready=true, index_fresh=true, stale=false on the isolated one-file C# deployment fixture. This is fresh-process verification, not a claim that old host workers were replaced.
-- [x] Merged managed worktree archived and task branch cleanup performed. Original tracked/untracked file hashes retained (10/10).
-
-Deployment evidence: C:/Temp/focalspan-csharp-deploy/deployment.json, build-info.txt, candidate-mcp.json, installed-mcp.json, build.log, mcp.log, mcp-race.log.
-
-Deployment discoveries: Get-FileHash was unavailable in the command environment; the first attempt stopped before copying or replacing any binary. A read-only .NET SHA256 probe matched independent Node hashes, then File.Replace and both post-swap hashes passed. A lowbox-hosted Node probe timed out on installed-binary initialization; the same smoke protocol run in the normal host environment succeeded and closed cleanly. No repository configuration or existing project worker was changed/stopped. Existing host MCP connections require reconnecting to load the replaced executable.
+- [x] Baseline rechecked: master and task worktree share base 0054c2c; original dirty-file hashes still match 13/13; no top-level Git lock found.
+- [ ] Commit the plan transition separately, then the 16 explicit product/test/fixture paths.
+- [ ] Fast-forward master; verify merged working tree including existing MCP overlay; preserve original dirty files.
+- [ ] Build Windows amd64 CGO-disabled candidate from merged master; validate it on isolated PHP/INC fixture through a fresh MCP process.
+- [ ] Back up and atomically replace H:/bin/focalspan.exe; verify hashes and fresh installed-binary MCP behavior; record exact revision and modified-source status.
+- [ ] Record final results, archive the merged task worktree, and remove the merged task branch.
